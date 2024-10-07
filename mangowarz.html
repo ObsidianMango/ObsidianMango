@@ -424,6 +424,7 @@
     <p>Final Debt: <span id="finalDebt"></span></p>
     <p>Total Profit: <span id="totalProfit"></span></p>
     <p>Total Quantity Sold: <span id="totalQuantitySold"></span></p>
+    <p>Total Value of Drugs Sold: <span id="totalValueSold"></span></p>
     <p>Assets Owned:</p>
     <ul id="assetsOwned"></ul>
     <button id="playAgainButton">Play Again</button>
@@ -438,6 +439,7 @@
         totalRevenue: 0,
         totalQuantityBought: 0,
         totalQuantitySold: 0,
+        totalValueSold: 0,  // Track total value of drugs sold
         assets: {
             vehicle: {},
             realEstate: {},
@@ -448,56 +450,15 @@
     };
 
     const goods = {
-        weed: { name: "Weed", minPrice: 10, maxPrice: 30, quantity: 0 },
-        cocaine: { name: "Cocaine", minPrice: 120, maxPrice: 300, quantity: 0 },
-        heroin: { name: "Heroin", minPrice: 50, maxPrice: 150, quantity: 0 },
-        acid: { name: "Acid", minPrice: 15, maxPrice: 45, quantity: 0 },
-        mushrooms: { name: "Mushrooms", minPrice: 25, maxPrice: 75, quantity: 0 },
-        ecstasy: { name: "Ecstasy", minPrice: 10, maxPrice: 40, quantity: 0 },
-        meth: { name: "Meth", minPrice: 60, maxPrice: 180, quantity: 0 },
-        opium: { name: "Opium", minPrice: 40, maxPrice: 120, quantity: 0 }
+        weed: { name: "Weed", minPrice: 10, maxPrice: 30, quantity: 0, totalSold: 0 },
+        cocaine: { name: "Cocaine", minPrice: 120, maxPrice: 300, quantity: 0, totalSold: 0 },
+        heroin: { name: "Heroin", minPrice: 50, maxPrice: 150, quantity: 0, totalSold: 0 },
+        acid: { name: "Acid", minPrice: 15, maxPrice: 45, quantity: 0, totalSold: 0 },
+        mushrooms: { name: "Mushrooms", minPrice: 25, maxPrice: 75, quantity: 0, totalSold: 0 },
+        ecstasy: { name: "Ecstasy", minPrice: 10, maxPrice: 40, quantity: 0, totalSold: 0 },
+        meth: { name: "Meth", minPrice: 60, maxPrice: 180, quantity: 0, totalSold: 0 },
+        opium: { name: "Opium", minPrice: 40, maxPrice: 120, quantity: 0, totalSold: 0 }
     };
-
-    const cities = ['New York', 'Los Angeles', 'Miami', 'Houston', 'Chicago', 'Philadelphia', 'Newark'];
-
-    function displayGoods() {
-        const table = document.getElementById('goodsTable');
-        
-        // Clear table before adding new content
-        table.innerHTML = '';
-
-        // Add table headers
-        table.innerHTML = `
-            <tr>
-                <th>Drug</th>
-                <th>Price</th>
-                <th>Stock</th>
-                <th>Buy</th>
-                <th>Sell</th>
-            </tr>`;
-
-        // Populate the table rows
-        Object.keys(goods).forEach(drug => {
-            const row = table.insertRow(-1); // Create a new row
-
-            // Insert data cells for the drug
-            row.insertCell(0).innerText = goods[drug].name;
-            row.insertCell(1).innerText = `$${goods[drug].currentPrice || 0}`;
-            row.insertCell(2).innerText = goods[drug].quantity;
-
-            // Create Buy and Sell buttons for each item
-            row.insertCell(3).innerHTML = `
-                <button onclick="buySell('${drug}', 1, 'buy')">Buy 1</button>
-                <button onclick="buySell('${drug}', 5, 'buy')">Buy 5</button>
-                <button onclick="buySell('${drug}', 'max', 'buy')">Buy Max</button>
-            `;
-            row.insertCell(4).innerHTML = `
-                <button onclick="buySell('${drug}', 1, 'sell')">Sell 1</button>
-                <button onclick="buySell('${drug}', 5, 'sell')">Sell 5</button>
-                <button onclick="buySell('${drug}', 'max', 'sell')">Sell Max</button>
-            `;
-        });
-    }
 
     function buySell(drug, amount, type) {
         const currentPrice = goods[drug].currentPrice || 10; // Default price if not set
@@ -517,6 +478,8 @@
             goods[drug].quantity -= amount;
             player.totalRevenue += currentPrice * amount;
             player.totalQuantitySold += amount;
+            goods[drug].totalSold += amount;  // Track total sold for the drug
+            player.totalValueSold += currentPrice * amount;  // Update total value of drugs sold
         }
 
         updateDisplay();
@@ -537,6 +500,7 @@
         const totalProfit = player.totalRevenue - player.totalExpenses;
         document.getElementById('totalProfit').innerText = '$' + totalProfit;
         document.getElementById('totalQuantitySold').innerText = player.totalQuantitySold;
+        document.getElementById('totalValueSold').innerText = '$' + player.totalValueSold;  // Display total value of drugs sold
 
         const assetsOwned = document.getElementById('assetsOwned');
         assetsOwned.innerHTML = '';
@@ -561,64 +525,17 @@
         player.totalRevenue = 0;
         player.totalQuantityBought = 0;
         player.totalQuantitySold = 0;
+        player.totalValueSold = 0;
 
         Object.keys(goods).forEach(drug => {
             goods[drug].quantity = 0;
+            goods[drug].totalSold = 0;  // Reset total sold for each drug
         });
 
         document.getElementById('gameContent').style.display = 'block';
         document.getElementById('finalScreen').style.display = 'none';
 
         updateDisplay();
-    }
-
-    // Simulate loading screen and start game
-    window.onload = function() {
-        const loadingScreen = document.getElementById('loadingScreen');
-        const loadingBar = document.getElementById('loadingBar');
-        const loadingPercentage = document.getElementById('loadingPercentage');
-        const gameContent = document.getElementById('gameContent');
-
-        let width = 0;
-        const loadingInterval = setInterval(() => {
-            if (width >= 100) {
-                clearInterval(loadingInterval);
-                loadingScreen.style.display = 'none';
-                gameContent.style.display = 'block';
-                startGame(); // Start the game and populate city buttons
-            } else {
-                width += 1;
-                loadingBar.style.width = width + "%";
-                loadingPercentage.innerText = width + "%";
-            }
-        }, 50);
-    };
-
-    function startGame() {
-        updatePrices();
-        displayGoods();
-        updateDisplay();
-    }
-
-    function updatePrices() {
-        for (let drug in goods) {
-            const marketFactor = Math.random() + 0.5;
-            goods[drug].currentPrice = Math.floor((Math.random() * (goods[drug].maxPrice - goods[drug].minPrice + 1) + goods[drug].minPrice) * marketFactor);
-        }
-        checkSpecialEvent();
-    }
-
-    function checkSpecialEvent() {
-        if (Math.random() < 0.1) {
-            let eventFactor = Math.random() < 0.05 ? 2 : 0.5;
-            for (let drug in goods) {
-                goods[drug].currentPrice = Math.floor(goods[drug].currentPrice * eventFactor);
-            }
-            const message = eventFactor === 2 ? "There's been a bust, prices have skyrocketed!" : "The market's been flooded, prices have bottomed out!";
-            document.getElementById('events').innerHTML = `<p>${message}</p>`;
-        } else {
-            document.getElementById('events').innerHTML = '';
-        }
     }
 
     function updateDisplay() {
@@ -757,6 +674,94 @@
         alert(`You sold ${assetName} for $${cashGain}.`);
         updateDisplay();
         openLiquidate();
+    }
+
+    // Simulate loading screen and start game
+    window.onload = function() {
+        const loadingScreen = document.getElementById('loadingScreen');
+        const loadingBar = document.getElementById('loadingBar');
+        const loadingPercentage = document.getElementById('loadingPercentage');
+        const gameContent = document.getElementById('gameContent');
+
+        let width = 0;
+        const loadingInterval = setInterval(() => {
+            if (width >= 100) {
+                clearInterval(loadingInterval);
+                loadingScreen.style.display = 'none';
+                gameContent.style.display = 'block';
+                startGame(); // Start the game and populate city buttons
+            } else {
+                width += 1;
+                loadingBar.style.width = width + "%";
+                loadingPercentage.innerText = width + "%";
+            }
+        }, 50);
+    };
+
+    function startGame() {
+        updatePrices();
+        displayGoods();
+        updateDisplay();
+    }
+
+    function updatePrices() {
+        for (let drug in goods) {
+            const marketFactor = Math.random() + 0.5;
+            goods[drug].currentPrice = Math.floor((Math.random() * (goods[drug].maxPrice - goods[drug].minPrice + 1) + goods[drug].minPrice) * marketFactor);
+        }
+        checkSpecialEvent();
+    }
+
+    function checkSpecialEvent() {
+        if (Math.random() < 0.1) {
+            let eventFactor = Math.random() < 0.05 ? 2 : 0.5;
+            for (let drug in goods) {
+                goods[drug].currentPrice = Math.floor(goods[drug].currentPrice * eventFactor);
+            }
+            const message = eventFactor === 2 ? "There's been a bust, prices have skyrocketed!" : "The market's been flooded, prices have bottomed out!";
+            document.getElementById('events').innerHTML = `<p>${message}</p>`;
+        } else {
+            document.getElementById('events').innerHTML = '';
+        }
+    }
+
+    function displayGoods() {
+        const table = document.getElementById('goodsTable');
+        
+        // Clear table before adding new content
+        table.innerHTML = '';
+
+        // Add table headers
+        table.innerHTML = `
+            <tr>
+                <th>Drug</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Buy</th>
+                <th>Sell</th>
+            </tr>`;
+
+        // Populate the table rows
+        Object.keys(goods).forEach(drug => {
+            const row = table.insertRow(-1); // Create a new row
+
+            // Insert data cells for the drug
+            row.insertCell(0).innerText = goods[drug].name;
+            row.insertCell(1).innerText = `$${goods[drug].currentPrice || 0}`;
+            row.insertCell(2).innerText = goods[drug].quantity;
+
+            // Create Buy and Sell buttons for each item
+            row.insertCell(3).innerHTML = `
+                <button onclick="buySell('${drug}', 1, 'buy')">Buy 1</button>
+                <button onclick="buySell('${drug}', 5, 'buy')">Buy 5</button>
+                <button onclick="buySell('${drug}', 'max', 'buy')">Buy Max</button>
+            `;
+            row.insertCell(4).innerHTML = `
+                <button onclick="buySell('${drug}', 1, 'sell')">Sell 1</button>
+                <button onclick="buySell('${drug}', 5, 'sell')">Sell 5</button>
+                <button onclick="buySell('${drug}', 'max', 'sell')">Sell Max</button>
+            `;
+        });
     }
 
 </script>
