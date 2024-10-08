@@ -12,10 +12,6 @@ Welcome to **MangoWars**! This project is a **dynamic web-based game** where pla
 
 ---
 
-## 🌟 Features
-- **Real-Time Battles**: Engage with enemies and friends in fruit-themed skirmishes.
-
----
 
 ## 👥 Team
 
