@@ -1,4 +1,4 @@
-# 🥭 MangoWarz 🎮 [Play Now!](https://obsidianmango.github.io/ObsidianMango/mangowarz.html) 
+# 🥭 MangoWarz    🎮 [Play Now!](https://obsidianmango.github.io/ObsidianMango/mangowarz.html) 
 
 Welcome to **MangoWars**! This project is a **dynamic web-based game** where players can engage in goods trading around the world as well as buy exciting  assets that can be sold for a chance of loss or profit. 🌴🐉
 
