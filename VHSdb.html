@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VHS Database Search</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Ensure proper scaling on mobile -->
+<style>
+  /* General Styles */
+  body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  h1 {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  /* Input and Button Styles */
+  .search-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+
+  input#searchInput {
+    flex: 1 1 300px;
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    min-width: 200px;
+  }
+
+  button {
+    padding: 10px 20px;
+    margin-left: 10px;
+    font-size: 16px;
+    background-color: #007BFF;
+    border: none;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  button:hover {
+    background-color: #0056b3;
+  }
+
+  /* Search Results */
+  .search-results {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .search-results div {
+    width: 100%;
+    max-width: 800px;
+    margin-bottom: 10px;
+    padding: 15px;
+    background-color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .search-results div:hover {
+    background-color: #e0e0e0;
+  }
+
+  /* Modal Styles */
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000; /* Ensure it sits above other elements */
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5);
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .modal-content {
+    background-color: #fefefe;
+    margin: auto;
+    padding: 20px;
+    border-radius: 6px;
+    width: 100%;
+    max-width: 600px;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  .close {
+    color: #aaa;
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s ease;
+  }
+
+  .close:hover,
+  .close:focus {
+    color: black;
+    text-decoration: none;
+  }
+
+  /* Pagination Styles */
+  .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 20px;
+  }
+
+  .pagination button {
+    padding: 10px 15px;
+    margin: 5px;
+    font-size: 16px;
+    background-color: #007BFF;
+    border: none;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .pagination button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+
+  .pagination button:hover:not(:disabled) {
+    background-color: #0056b3;
+  }
+
+  .pagination #pageInfo {
+    margin: 0 10px;
+    font-size: 16px;
+  }
+
+  /* Responsive Styles */
+  @media (max-width: 600px) {
+    .search-container {
+      flex-direction: column;
+      align-items: center;
+    }
+
+    button {
+      margin: 10px 0 0 0;
+      width: 100%;
+      max-width: 300px;
+    }
+
+    .modal-content {
+      width: 100%;
+      max-width: 90%;
+      margin: 50% auto;
+    }
+
+    .search-results div {
+      padding: 10px;
+    }
+
+    .pagination button {
+      flex: 1 1 100px;
+      max-width: 45%;
+    }
+
+    .pagination #pageInfo {
+      width: 100%;
+      text-align: center;
+      margin: 10px 0 0 0;
+    }
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+</head>
+<body>
+  <h1>VHSdb 📼🔎</h1>
+  <div class="search-container">
+    <input type="text" id="searchInput" placeholder="Enter Title, Genre, Year, or Decade" oninput="searchOnEnter()" aria-label="Search VHS database">
+    <button onclick="searchDatabase()" aria-label="Search">Search</button>
+  </div>
+  <div id="results" class="search-results"></div>
+  <div class="pagination">
+    <button id="prevPage" onclick="prevPage()" disabled>Previous</button>
+    <span id="pageInfo">Page 1</span>
+    <button id="nextPage" onclick="nextPage()" disabled>Next</button>
+  </div>
+  <div id="myModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <p id="modalText"></p>
+    </div>
+  </div>
+
+<script>
+  let vhsData = [];
+  let timeout = null;
+  let filteredData = []; // Store filtered search results
+  let currentPage = 1;
+  const resultsPerPage = 10;
+
+  window.onload = function() {
+    displayLoading(true); // Show loading message
+    Papa.parse("https://docs.google.com/spreadsheets/d/e/2PACX-1vRPyq44lTQj4-vP7UHDm1lZNuIxntGpnMECEkqBXQ_ZKH0f5oGLgNH1A2gsmbMcJEX-515XDFm8abm_/pub?output=csv", {
+      download: true,
+      header: true,
+      complete: function(results) {
+        vhsData = results.data.map(item => ({
+          ...item,
+          Year: parseInt(item.Year) || 0 // Ensure Year is a number for comparison
+        }));
+        displayLoading(false); // Hide loading message
+      },
+      error: function(err) {
+        console.error("Error loading VHS data:", err);
+        alert("Failed to load data. Please try again later.");
+        displayLoading(false);
+      }
+    });
+  };
+
+  function displayLoading(isLoading) {
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = isLoading ? '<div>Loading data...</div>' : '';
+    // Disable pagination buttons while loading
+    document.getElementById('prevPage').disabled = isLoading;
+    document.getElementById('nextPage').disabled = isLoading;
+  }
+
+  function searchDatabase() {
+    let searchInput = document.getElementById('searchInput').value.toLowerCase();
+    let searchTerms = searchInput.split(' ').filter(term => term.trim() !== '');
+
+    let yearFilter = searchTerms.find(term => isYearOrDecade(term)); // Find year or decade term
+    let genreAndTitleFilter = searchTerms.filter(term => !isYearOrDecade(term)); // Filters out non-year terms
+
+    filteredData = vhsData.filter(item => {
+      const matchesYear = yearFilter ? matchYearOrDecade(item.Year, yearFilter) : true;
+      const matchesGenreOrTitle = genreAndTitleFilter.every(term => item.Title.toLowerCase().includes(term) || item.Genre.toLowerCase().includes(term));
+      return matchesYear && matchesGenreOrTitle;
+    });
+
+    currentPage = 1; // Reset to first page on new search
+    displayResults(filteredData, currentPage);
+  }
+
+  function searchOnEnter() {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      searchDatabase();
+    }, 300); // Executes search 300 ms after the user stops typing
+  }
+
+  // Check if the term is a year or a decade (e.g., "1980s")
+  function isYearOrDecade(term) {
+    return !isNaN(term) || /^\d{4}s$/.test(term); // Checks for 4-digit year or decade
+  }
+
+  // Match the year to the exact year or decade
+  function matchYearOrDecade(year, searchTerm) {
+    if (isNaN(searchTerm)) {
+      let decadeMatch = searchTerm.match(/(\d{4})s/); // Check for decade format like "1980s"
+      if (decadeMatch) {
+        let startYear = parseInt(decadeMatch[1]);
+        let endYear = startYear + 9;
+        return year >= startYear && year <= endYear;
+      }
+      return false;
+    }
+    return year === parseInt(searchTerm); // Direct match for exact year
+  }
+
+  function displayResults(data, page) {
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = '';
+
+    if (data.length === 0) {
+      resultsDiv.innerHTML = '<div>No results found.</div>';
+      updatePaginationButtons(page, data.length);
+      return;
+    }
+
+    const startIndex = (page - 1) * resultsPerPage;
+    const endIndex = Math.min(startIndex + resultsPerPage, data.length);
+    const currentResults = data.slice(startIndex, endIndex);
+
+    currentResults.forEach(item => {
+      const div = document.createElement('div');
+      div.textContent = `${item.Title} (${item.Year}) - ${item.Genre}`;
+      div.onclick = function() {
+        showModal(item);
+      };
+      resultsDiv.appendChild(div);
+    });
+
+    updatePaginationButtons(page, data.length);
+  }
+
+  function updatePaginationButtons(page, totalResults) {
+    const totalPages = Math.ceil(totalResults / resultsPerPage);
+
+    document.getElementById('pageInfo').textContent = `Page ${page} of ${totalPages || 1}`;
+    document.getElementById('prevPage').disabled = (page === 1);
+    document.getElementById('nextPage').disabled = (page === totalPages || totalPages === 0);
+  }
+
+  function nextPage() {
+    if ((currentPage * resultsPerPage) < filteredData.length) {
+      currentPage++;
+      displayResults(filteredData, currentPage);
+      scrollToTop(); // Optional: Scroll to top on page change
+    }
+  }
+
+  function prevPage() {
+    if (currentPage > 1) {
+      currentPage--;
+      displayResults(filteredData, currentPage);
+      scrollToTop(); // Optional: Scroll to top on page change
+    }
+  }
+
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function showModal(item) {
+    const modal = document.getElementById('myModal');
+    const modalText = document.getElementById('modalText');
+    modalText.innerHTML = `
+      <strong>Title:</strong> ${sanitizeHTML(item.Title)}<br>
+      <strong>Year:</strong> ${sanitizeHTML(item.Year)}<br>
+      <strong>VHS Year:</strong> ${sanitizeHTML(item['VHS Year'])}<br>
+      <strong>Rating:</strong> ${sanitizeHTML(item.Rating)}<br>
+      <strong>Runtime:</strong> ${sanitizeHTML(item.Runtime)} min<br>
+      <strong>Studio:</strong> ${sanitizeHTML(item.Studio)}<br>
+      <strong>Genre:</strong> ${sanitizeHTML(item.Genre)}<br>
+      <strong>Tape #:</strong> ${sanitizeHTML(item['Tape #'])}<br>
+    `;
+    modal.style.display = "block";
+
+    // Close button functionality
+    document.querySelector('.close').onclick = function() {
+      modal.style.display = "none";
+    };
+
+    // Click outside to close modal
+    window.onclick = function(event) {
+      if (event.target == modal) {
+        modal.style.display = "none";
+      }
+    };
+
+    // Press ESC key to close modal
+    document.onkeydown = function(event) {
+      if (event.key === "Escape") { // Use event.key to support modern browsers
+        modal.style.display = "none";
+      }
+    };
+  }
+
+  // Sanitize HTML to prevent XSS attacks
+  function sanitizeHTML(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#039;");
+  }
+
+  function checkEmpty(value) {
+    return value ? sanitizeHTML(value) : ''; // Returns the sanitized value if not undefined or empty, otherwise returns an empty string
+  }
+</script>
+</body>
+</html>
