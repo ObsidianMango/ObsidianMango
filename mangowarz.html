@@ -338,6 +338,37 @@
         .liquidate-asset button:hover {
             background-color: #8b1a1a;
         }
+        .info-item {
+    background-color: #fff;
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 1rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    position: relative;
+    transition: transform 0.2s;
+}
+
+.info-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.info-item span {
+    display: block;
+    font-weight: bold;
+    margin-top: 5px;
+    font-size: 1.2rem;
+    color: #228B22;
+}
+
+.info-item::before {
+    content: attr(data-icon);
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 5px;
+}
+
 
         /* Sell Message */
         #sellMessageContainer {
@@ -450,12 +481,13 @@
 
     <!-- Info Grid -->
     <div id="infoGrid">
-        <div class="info-item">💰 Cash<span id="cash">$2000</span></div>
-        <div class="info-item">💸 Debt<span id="debt">$20000</span></div>
-        <div class="info-item">🚗 Vehicle<span id="vehicle"><em>None</em></span></div>
-        <div class="info-item">🏠 Real Estate<span id="realEstate"><em>None</em></span></div>
-        <div class="info-item">👥 Associates<span id="hired"><em>None</em></span></div>
-        <div class="info-item">📅 Days Left<span id="days">30</span></div>
+        <div class="info-item" data-icon="💰">Cash<span id="cash">$2000</span></div>
+        <div class="info-item" data-icon="💸">Debt<span id="debt">$20000</span></div>
+        <div class="info-item" data-icon="🚗">Vehicle<span id="vehicle"><em>None</em></span></div>
+        <div class="info-item" data-icon="🏠">Real Estate<span id="realEstate"><em>None</em></span></div>
+        <div class="info-item" data-icon="👥">Associates<span id="hired"><em>None</em></span></div>
+        <div class="info-item" data-icon="📅">Days Left<span id="days">30</span></div>
+
     </div>
 
     <!-- Buttons Container -->
@@ -586,15 +618,16 @@
     };
 
     const goods = {
-        weed: { name: "Weed🌿", minPrice: 10, maxPrice: 30, quantity: 0 },
-        cocaine: { name: "Cocaine❄️", minPrice: 120, maxPrice: 300, quantity: 0 },
-        heroin: { name: "Heroin💉", minPrice: 50, maxPrice: 150, quantity: 0 },
-        acid: { name: "Acid🎨", minPrice: 15, maxPrice: 45, quantity: 0 },
-        mushrooms: { name: "Shrooms🍄", minPrice: 25, maxPrice: 75, quantity: 0 },
-        ecstasy: { name: "Ecstasy💊", minPrice: 10, maxPrice: 40, quantity: 0 },
-        meth: { name: "Meth⚗️", minPrice: 60, maxPrice: 180, quantity: 0 },
-        opium: { name: "Opium🧪", minPrice: 40, maxPrice: 120, quantity: 0 }
-    };
+    weed: { name: "Weed🌿", minPrice: 10, maxPrice: 30, quantity: 0, totalSold: 0, totalRevenue: 0 },
+    cocaine: { name: "Cocaine❄️", minPrice: 120, maxPrice: 300, quantity: 0, totalSold: 0, totalRevenue: 0 },
+    heroin: { name: "Heroin💉", minPrice: 50, maxPrice: 150, quantity: 0, totalSold: 0, totalRevenue: 0 },
+    acid: { name: "Acid🎨", minPrice: 15, maxPrice: 45, quantity: 0, totalSold: 0, totalRevenue: 0 },
+    mushrooms: { name: "Shrooms🍄", minPrice: 25, maxPrice: 75, quantity: 0, totalSold: 0, totalRevenue: 0 },
+    ecstasy: { name: "Ecstasy💊", minPrice: 10, maxPrice: 40, quantity: 0, totalSold: 0, totalRevenue: 0 },
+    meth: { name: "Meth⚗️", minPrice: 60, maxPrice: 180, quantity: 0, totalSold: 0, totalRevenue: 0 },
+    opium: { name: "Opium🧪", minPrice: 40, maxPrice: 120, quantity: 0, totalSold: 0, totalRevenue: 0 }
+};
+
 
     function startGame() {
         const cityLinksDiv = document.getElementById('cityLinks');
@@ -650,24 +683,27 @@
     }
 
     function buySell(drug, amount, type) {
-        let totalCost = 0;
-        let maxAmount = type === 'buy' ? Math.floor(player.cash / goods[drug].currentPrice) : goods[drug].quantity;
-        if (amount === 'max') {
-            amount = maxAmount;
-        }
-        totalCost = goods[drug].currentPrice * amount;
-
-        if (type === 'buy' && player.cash >= totalCost && amount > 0) {
-            player.cash -= totalCost;
-            goods[drug].quantity += amount;
-        } else if (type === 'sell' && goods[drug].quantity >= amount && amount > 0) {
-            player.cash += totalCost;
-            goods[drug].quantity -= amount;
-        } else {
-            alert("Transaction not possible.");
-        }
-        updateDisplay();
+    let totalCost = goods[drug].currentPrice * amount;
+    let maxAmount = type === 'buy' ? Math.floor(player.cash / goods[drug].currentPrice) : goods[drug].quantity;
+    if (amount === 'max') {
+        amount = maxAmount;
     }
+
+    if (type === 'buy' && player.cash >= totalCost && amount > 0) {
+        player.cash -= totalCost;
+        goods[drug].quantity += amount;
+    } else if (type === 'sell' && goods[drug].quantity >= amount && amount > 0) {
+        player.cash += totalCost;
+        goods[drug].quantity -= amount;
+        // Update totalSold and totalRevenue
+        goods[drug].totalSold += amount;
+        goods[drug].totalRevenue += totalCost;
+    } else {
+        alert("Transaction not possible.");
+    }
+    updateDisplay();
+}
+
 
     function changeCity(city) {
         if (player.currentCity !== city) {
@@ -693,32 +729,46 @@
     }
 
     function endGame() {
-        // Sell all remaining goods
-        let totalGoodsValue = 0;
-        for (let drug in goods) {
-            const value = goods[drug].quantity * goods[drug].currentPrice;
-            totalGoodsValue += value;
+    // Sell all remaining goods
+    let totalGoodsValue = 0;
+    let salesDetails = '';
+    for (let drug in goods) {
+        // Sell remaining quantity
+        if (goods[drug].quantity > 0) {
+            let value = goods[drug].quantity * goods[drug].currentPrice;
+            player.cash += value;
+            goods[drug].totalSold += goods[drug].quantity;
+            goods[drug].totalRevenue += value;
             goods[drug].quantity = 0;
         }
-        player.cash += totalGoodsValue;
+        totalGoodsValue += goods[drug].totalRevenue;
 
-        let finalMessage = player.cash >= player.debt ? 'Congratulations! You paid off your debt! You win!' : 'Game Over! You failed to pay off your debt.';
-        const assetsList = generateAssetsList();
-
-        document.body.innerHTML = `
-            <div style="text-align: center; padding: 20px;">
-                <h1>${finalMessage}</h1>
-                <h2>Final Stats</h2>
-                <div style="text-align: left; max-width: 600px; margin: 0 auto;">
-                    <p><strong>Total Cash:</strong> $${player.cash}</p>
-                    <p><strong>Debt:</strong> $${player.debt}</p>
-                    <p><strong>Total Value of Goods Sold:</strong> $${totalGoodsValue}</p>
-                    <p><strong>Owned Assets:</strong></p>
-                    <ul>${assetsList}</ul>
-                </div>
-                <button onclick="window.location.reload()" style="padding: 10px 20px; margin-top: 20px; font-size: 1rem;">Play Again</button>
-            </div>`;
+        // Prepare sales details
+        if (goods[drug].totalSold > 0) {
+            salesDetails += `<li>${goods[drug].name}: Sold ${goods[drug].totalSold} units for $${goods[drug].totalRevenue}</li>`;
+        }
     }
+
+    let finalMessage = player.cash >= player.debt ? 'Congratulations! You paid off your debt! You win!' : 'Game Over! You failed to pay off your debt.';
+    const assetsList = generateAssetsList();
+
+    document.body.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <h1>${finalMessage}</h1>
+            <h2>Final Stats</h2>
+            <div style="text-align: left; max-width: 600px; margin: 0 auto;">
+                <p><strong>Total Cash:</strong> $${player.cash}</p>
+                <p><strong>Debt:</strong> $${player.debt}</p>
+                <p><strong>Total Value of Goods Sold:</strong> $${totalGoodsValue}</p>
+                <p><strong>Sales Breakdown:</strong></p>
+                <ul>${salesDetails || '<li>No goods were sold.</li>'}</ul>
+                <p><strong>Owned Assets:</strong></p>
+                <ul>${assetsList}</ul>
+            </div>
+            <button onclick="window.location.reload()" style="padding: 10px 20px; margin-top: 20px; font-size: 1rem;">Play Again</button>
+        </div>`;
+}
+
 
     function generateAssetsList() {
         let assetsList = '';
