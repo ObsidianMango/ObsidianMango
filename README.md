@@ -26,7 +26,7 @@ Did you know mangoes have been cultivated for over 4,000 years?
 
 ---
 
-📼 [VHS](https://obsidianmango.github.io/ObsidianMangoVHSdb.html)
+📼 [VHS](https://obsidianmango.github.io/ObsidianMango/VHSdb.html)
 
 
 <!---
