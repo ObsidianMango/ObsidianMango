@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wine Searchable Database</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #search-container {
+            margin-bottom: 20px;
+        }
+        input, select {
+            margin-right: 10px;
+            padding: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .tags {
+            display: inline-block;
+            margin-right: 10px;
+            background-color: #f2f2f2;
+            padding: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .tags:hover {
+            background-color: #ddd;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Wine Searchable Database</h1>
+    <div id="search-container">
+        <input type="text" id="search-wine" placeholder="Search by Wine Name">
+        <select id="search-color">
+            <option value="">Color</option>
+            <option value="Red">Red</option>
+            <option value="White">White</option>
+            <option value="Rosé">Rosé</option>
+        </select>
+        <select id="search-type">
+            <option value="">Type</option>
+            <option value="Still">Still</option>
+            <option value="Sparkling">Sparkling</option>
+        </select>
+        <input type="text" id="search-cuisine" placeholder="Cuisine">
+        <input type="text" id="search-flavor" placeholder="Search by Flavor (e.g., Spicy, Fruits)">
+        <button id="search-btn">Search</button>
+    </div>
+
+    <div>
+        <h3>Popular Tags:</h3>
+        <span class="tags" data-flavor="Fruits">Fruits</span>
+        <span class="tags" data-flavor="Floral">Floral</span>
+        <span class="tags" data-flavor="Herbal">Herbal</span>
+        <span class="tags" data-flavor="Spicy">Spicy</span>
+        <span class="tags" data-flavor="Earthy">Earthy</span>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Wine</th>
+                <th>Color</th>
+                <th>Type</th>
+                <th>Cuisine</th>
+                <th>Flavors</th>
+            </tr>
+        </thead>
+        <tbody id="results-body">
+            <!-- Results will be inserted here -->
+        </tbody>
+    </table>
+
+    <script>
+        // Fetch the CSV data
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ1zW16VYUie_DePNokpF9ek8qz6sZnCEowjF9ME1iKP1ugu15RCelOqmsBwDrXP9I8WvZZaZevlmjP/pub?gid=1395162557&single=true&output=csv';
+
+        // Function to parse CSV data
+        function parseCSV(data) {
+            const rows = data.split("\n").slice(1); // Remove header row
+            return rows.map(row => {
+                const [sku, wine, bottleSize, color, type, stock, packSize, bottle, caseQty, totalUnit, protein, cookingStyle, cuisine, drySweet, body, acidity, tannins, fruits, floral, herbal, vegetal, spicy, earthy, mineral, oaky] = row.split(",");
+                return { wine, color, type, cuisine, flavors: [fruits, floral, herbal, spicy, earthy].filter(Boolean).join(', ') };
+            });
+        }
+
+        // Function to render results in the table
+        function renderResults(data) {
+            const resultsBody = document.getElementById('results-body');
+            resultsBody.innerHTML = ''; // Clear previous results
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.wine}</td>
+                    <td>${row.color}</td>
+                    <td>${row.type}</td>
+                    <td>${row.cuisine}</td>
+                    <td>${row.flavors}</td>
+                `;
+                resultsBody.appendChild(tr);
+            });
+        }
+
+        // Function to filter the data based on search inputs
+        function filterData(data, wine, color, type, cuisine, flavor) {
+            return data.filter(row => {
+                return (!wine || row.wine.toLowerCase().includes(wine.toLowerCase())) &&
+                    (!color || row.color.toLowerCase().includes(color.toLowerCase())) &&
+                    (!type || row.type.toLowerCase().includes(type.toLowerCase())) &&
+                    (!cuisine || row.cuisine.toLowerCase().includes(cuisine.toLowerCase())) &&
+                    (!flavor || row.flavors.toLowerCase().includes(flavor.toLowerCase()));
+            });
+        }
+
+        // Event listener for search button
+        document.getElementById('search-btn').addEventListener('click', () => {
+            const wine = document.getElementById('search-wine').value;
+            const color = document.getElementById('search-color').value;
+            const type = document.getElementById('search-type').value;
+            const cuisine = document.getElementById('search-cuisine').value;
+            const flavor = document.getElementById('search-flavor').value;
+
+            fetch(csvUrl)
+                .then(response => response.text())
+                .then(data => {
+                    const parsedData = parseCSV(data);
+                    const filteredData = filterData(parsedData, wine, color, type, cuisine, flavor);
+                    renderResults(filteredData);
+                })
+                .catch(error => console.error('Error fetching the CSV:', error));
+        });
+
+        // Event listener for tags (flavor clicks)
+        document.querySelectorAll('.tags').forEach(tag => {
+            tag.addEventListener('click', function() {
+                const flavorInput = document.getElementById('search-flavor');
+                const newFlavor = this.getAttribute('data-flavor');
+
+                // Check if flavor is already in the input field
+                if (!flavorInput.value.includes(newFlavor)) {
+                    if (flavorInput.value) {
+                        flavorInput.value += `, ${newFlavor}`;
+                    } else {
+                        flavorInput.value = newFlavor;
+                    }
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
