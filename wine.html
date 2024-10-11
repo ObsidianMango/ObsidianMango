@@ -39,31 +39,6 @@
         #search-button:hover {
             background-color: #a12a30;
         }
-        #tags-container {
-            display: none;
-            margin-bottom: 20px;
-            background-color: #f4ece7;
-            padding: 10px;
-            border-radius: 5px;
-        }
-        #toggle-tags {
-            cursor: pointer;
-            color: #8b0000;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
-        .tag {
-            display: inline-block;
-            background-color: #8b0000;
-            color: white;
-            padding: 5px 10px;
-            margin: 5px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .tag:hover {
-            background-color: #a12a30;
-        }
         #results {
             margin-top: 20px;
         }
@@ -126,26 +101,8 @@
 
     <h1>Wine Search</h1>
     <div id="search-bar">
-        <input type="text" id="search-input" placeholder="Search for red, white, type, country...">
+        <input type="text" id="search-input" placeholder="Search for attributes like dry, medium, red, Italian...">
         <button id="search-button" onclick="searchWines()">Search</button>
-    </div>
-    
-    <div id="toggle-tags">Search Tags &#9662;</div>
-    <div id="tags-container">
-        <!-- Available tags -->
-        <div class="tag" onclick="addTag('Red')">Red</div>
-        <div class="tag" onclick="addTag('White')">White</div>
-        <div class="tag" onclick="addTag('France')">France</div>
-        <div class="tag" onclick="addTag('Italy')">Italy</div>
-        <div class="tag" onclick="addTag('Spain')">Spain</div>
-        <div class="tag" onclick="addTag('USA')">USA</div>
-        <div class="tag" onclick="addTag('Dry')">Dry</div>
-        <div class="tag" onclick="addTag('Sweet')">Sweet</div>
-        <div class="tag" onclick="addBooleanTag('Floral')">Floral</div>
-        <div class="tag" onclick="addBooleanTag('Spicy')">Spicy</div>
-        <div class="tag" onclick="addBooleanTag('Earthy')">Earthy</div>
-        <div class="tag" onclick="addBooleanTag('Mineral')">Mineral</div>
-        <div class="tag" onclick="addBooleanTag('Oaky')">Oaky</div>
     </div>
 
     <div id="results"></div>
@@ -171,27 +128,6 @@
         let wines = [];
         let currentPage = 1;
         const resultsPerPage = 10;
-        let booleanTags = [];
-
-        document.getElementById('toggle-tags').addEventListener('click', function() {
-            const tags = document.getElementById('tags-container');
-            tags.style.display = tags.style.display === 'none' ? 'block' : 'none';
-        });
-
-        function addTag(tag) {
-            const input = document.getElementById('search-input');
-            if (!input.value.toLowerCase().includes(tag.toLowerCase())) {
-                input.value += tag + ' ';
-            }
-            searchWines();
-        }
-
-        function addBooleanTag(tag) {
-            if (!booleanTags.includes(tag)) {
-                booleanTags.push(tag);
-            }
-            searchWines();
-        }
 
         async function loadWineData() {
             try {
@@ -200,8 +136,16 @@
                 const parsedData = Papa.parse(data, { header: true }).data;
 
                 // Clean parsed data to remove empty rows or undefined values
-                wines = parsedData.filter(wine => wine.Wine && wine.Wine.trim() !== '');
-                
+                wines = parsedData.map(wine => {
+                    const cleanedWine = {};
+                    for (let key in wine) {
+                        if (wine.hasOwnProperty(key)) {
+                            cleanedWine[key.trim()] = wine[key] ? wine[key].trim().toLowerCase() : '';
+                        }
+                    }
+                    return cleanedWine;
+                }).filter(wine => wine.wine && wine.wine !== '');
+
                 console.log("Parsed Data: ", wines); // Debugging - check if data is loading correctly
             } catch (error) {
                 console.error("Error loading data: ", error);
@@ -212,14 +156,14 @@
             const input = document.getElementById('search-input').value.toLowerCase().trim();
             console.log("Search input: ", input); // Debugging - check search input
 
+            // Split the input string into individual keywords
+            const searchKeywords = input.split(' ').filter(keyword => keyword);
+
             const filteredWines = wines.filter(wine => {
-                // Check name and other text fields for search input
-                const textMatch = Object.values(wine).some(value => value && value.toString().toLowerCase().includes(input));
-
-                // Check if all boolean tags match
-                const booleanMatch = booleanTags.every(tag => wine[tag] && (wine[tag].toLowerCase() === 'true' || wine[tag] === true));
-
-                return textMatch && booleanMatch;
+                // Check if all keywords are present in any field of the wine object
+                return searchKeywords.every(keyword => {
+                    return Object.values(wine).some(value => value && value.includes(keyword));
+                });
             });
 
             console.log("Filtered Wines: ", filteredWines); // Debugging - check filtered data
@@ -246,7 +190,7 @@
             winesToDisplay.forEach(wine => {
                 const div = document.createElement('div');
                 div.classList.add('result-item');
-                div.textContent = `${wine.Wine} - ${wine.Country} - ${wine.Type}`;
+                div.textContent = `${wine.wine} - ${wine.country} - ${wine.type}`;
                 div.onclick = () => showPopup(wine);
                 resultsContainer.appendChild(div);
             });
@@ -267,18 +211,18 @@
         }
 
         function showPopup(wine) {
-            document.getElementById('wine-name').textContent = wine.Wine;
-            document.getElementById('wine-country').textContent = wine.Country;
-            document.getElementById('wine-type').textContent = wine.Type;
-            document.getElementById('wine-dry-sweet').textContent = wine['Dry/Sweet'];
-            document.getElementById('wine-fruits').textContent = wine.Fruits;
+            document.getElementById('wine-name').textContent = wine.wine;
+            document.getElementById('wine-country').textContent = wine.country;
+            document.getElementById('wine-type').textContent = wine.type;
+            document.getElementById('wine-dry-sweet').textContent = wine['dry/sweet'];
+            document.getElementById('wine-fruits').textContent = wine.fruits;
 
             // Display optional headings based on truthy values
-            document.getElementById('wine-floral').style.display = wine.Floral ? 'block' : 'none';
-            document.getElementById('wine-spicy').style.display = wine.Spicy ? 'block' : 'none';
-            document.getElementById('wine-earthy').style.display = wine.Earthy ? 'block' : 'none';
-            document.getElementById('wine-mineral').style.display = wine.Mineral ? 'block' : 'none';
-            document.getElementById('wine-oaky').style.display = wine.Oaky ? 'block' : 'none';
+            document.getElementById('wine-floral').style.display = wine.floral === 'true' ? 'block' : 'none';
+            document.getElementById('wine-spicy').style.display = wine.spicy === 'true' ? 'block' : 'none';
+            document.getElementById('wine-earthy').style.display = wine.earthy === 'true' ? 'block' : 'none';
+            document.getElementById('wine-mineral').style.display = wine.mineral === 'true' ? 'block' : 'none';
+            document.getElementById('wine-oaky').style.display = wine.oaky === 'true' ? 'block' : 'none';
 
             document.getElementById('popup').style.display = 'block';
         }
