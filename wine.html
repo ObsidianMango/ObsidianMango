@@ -123,14 +123,17 @@
         <span id="popup-close">Close</span>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <script>
         const dataUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ1zW16VYUie_DePNokpF9ek8qz6sZnCEowjF9ME1iKP1ugu15RCelOqmsBwDrXP9I8WvZZaZevlmjP/pub?gid=1546911055&single=true&output=csv";
         let wines = [];
         let currentPage = 1;
         const resultsPerPage = 10;
 
+        // Load wine data from Google Sheets CSV
         async function loadWineData() {
             try {
+                console.log("Fetching data from Google Sheets...");
                 const response = await fetch(dataUrl);
                 const data = await response.text();
                 const parsedData = Papa.parse(data, { header: true }).data;
@@ -140,37 +143,45 @@
                     const cleanedWine = {};
                     for (let key in wine) {
                         if (wine.hasOwnProperty(key)) {
-                            cleanedWine[key.trim()] = wine[key] ? wine[key].trim().toLowerCase() : '';
+                            cleanedWine[key.trim().toLowerCase()] = wine[key] ? wine[key].trim().toLowerCase() : '';
                         }
                     }
                     return cleanedWine;
-                }).filter(wine => wine.wine && wine.wine !== '');
+                }).filter(wine => wine['wine'] && wine['wine'] !== '');
 
-                console.log("Parsed Data: ", wines); // Debugging - check if data is loading correctly
+                console.log("Parsed Data Loaded Successfully: ", wines); // Debugging - check if data is loading correctly
             } catch (error) {
                 console.error("Error loading data: ", error);
             }
         }
 
+        // Search function to find wines based on user input
         function searchWines() {
             const input = document.getElementById('search-input').value.toLowerCase().trim();
-            console.log("Search input: ", input); // Debugging - check search input
+            console.log("Search input received: ", input); // Debugging - check search input
+
+            if (input === "") {
+                alert("Please enter search terms");
+                return;
+            }
 
             // Split the input string into individual keywords
             const searchKeywords = input.split(' ').filter(keyword => keyword);
+            console.log("Search keywords: ", searchKeywords); // Debugging - check parsed keywords
 
+            // Filter wines based on each keyword matching any value in the wine object
             const filteredWines = wines.filter(wine => {
-                // Check if all keywords are present in any field of the wine object
                 return searchKeywords.every(keyword => {
                     return Object.values(wine).some(value => value && value.includes(keyword));
                 });
             });
 
-            console.log("Filtered Wines: ", filteredWines); // Debugging - check filtered data
+            console.log("Filtered Wines Result: ", filteredWines); // Debugging - check filtered data
 
             renderResults(filteredWines);
         }
 
+        // Function to render search results
         function renderResults(filteredWines) {
             const resultsContainer = document.getElementById('results');
             const paginationContainer = document.getElementById('pagination');
@@ -184,13 +195,15 @@
 
             const totalPages = Math.ceil(filteredWines.length / resultsPerPage);
             const startIndex = (currentPage - 1) * resultsPerPage;
+            const endIndex = startIndex + resultsPer
             const endIndex = startIndex + resultsPerPage;
             const winesToDisplay = filteredWines.slice(startIndex, endIndex);
 
+            // Render each wine item to the results container
             winesToDisplay.forEach(wine => {
                 const div = document.createElement('div');
                 div.classList.add('result-item');
-                div.textContent = `${wine.wine} - ${wine.country} - ${wine.type}`;
+                div.textContent = `${wine['wine']} - ${wine['country']} - ${wine['type']}`;
                 div.onclick = () => showPopup(wine);
                 resultsContainer.appendChild(div);
             });
@@ -210,23 +223,25 @@
             }
         }
 
+        // Function to show popup with detailed wine information
         function showPopup(wine) {
-            document.getElementById('wine-name').textContent = wine.wine;
-            document.getElementById('wine-country').textContent = wine.country;
-            document.getElementById('wine-type').textContent = wine.type;
+            document.getElementById('wine-name').textContent = wine['wine'];
+            document.getElementById('wine-country').textContent = wine['country'];
+            document.getElementById('wine-type').textContent = wine['type'];
             document.getElementById('wine-dry-sweet').textContent = wine['dry/sweet'];
-            document.getElementById('wine-fruits').textContent = wine.fruits;
+            document.getElementById('wine-fruits').textContent = wine['fruits'];
 
             // Display optional headings based on truthy values
-            document.getElementById('wine-floral').style.display = wine.floral === 'true' ? 'block' : 'none';
-            document.getElementById('wine-spicy').style.display = wine.spicy === 'true' ? 'block' : 'none';
-            document.getElementById('wine-earthy').style.display = wine.earthy === 'true' ? 'block' : 'none';
-            document.getElementById('wine-mineral').style.display = wine.mineral === 'true' ? 'block' : 'none';
-            document.getElementById('wine-oaky').style.display = wine.oaky === 'true' ? 'block' : 'none';
+            document.getElementById('wine-floral').style.display = wine['floral'] === 'true' ? 'block' : 'none';
+            document.getElementById('wine-spicy').style.display = wine['spicy'] === 'true' ? 'block' : 'none';
+            document.getElementById('wine-earthy').style.display = wine['earthy'] === 'true' ? 'block' : 'none';
+            document.getElementById('wine-mineral').style.display = wine['mineral'] === 'true' ? 'block' : 'none';
+            document.getElementById('wine-oaky').style.display = wine['oaky'] === 'true' ? 'block' : 'none';
 
             document.getElementById('popup').style.display = 'block';
         }
 
+        // Close popup window
         document.getElementById('popup-close').addEventListener('click', function() {
             document.getElementById('popup').style.display = 'none';
         });
@@ -234,9 +249,6 @@
         // Load wine data when the page loads
         window.onload = loadWineData;
     </script>
-
-    <!-- Include PapaParse for CSV parsing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 
 </body>
 </html>
