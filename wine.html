@@ -113,6 +113,7 @@
         <h2 id="wine-name"></h2>
         <p><strong>Country:</strong> <span id="wine-country"></span></p>
         <p><strong>Type:</strong> <span id="wine-type"></span></p>
+        <p><strong>Color:</strong> <span id="wine-color"></span></p>
         <p><strong>Dry/Sweet:</strong> <span id="wine-dry-sweet"></span></p>
         <p><strong>Fruits:</strong> <span id="wine-fruits"></span></p>
         <p id="wine-floral"><strong>Floral</strong></p>
@@ -130,29 +131,32 @@
         let currentPage = 1;
         const resultsPerPage = 10;
 
+        // Country mapping for search by nationality
+        const countryMap = {
+            "france": ["french", "france"],
+            "italy": ["italian", "italy"],
+            "spain": ["spanish", "spain"],
+            "germany": ["german", "germany"],
+            // Add more as needed
+        };
+
         // Load wine data from Google Sheets CSV
         async function loadWineData() {
             try {
                 console.log("Fetching data from Google Sheets...");
                 const response = await fetch(dataUrl);
                 
-                // If response is not OK, log error
                 if (!response.ok) {
                     console.error("Network response was not ok: ", response.statusText);
                     return;
                 }
 
                 const data = await response.text();
-                console.log("Raw CSV Data Fetched: ", data.slice(0, 100)); // Show part of the raw CSV data
+                console.log("Raw CSV Data Fetched: ", data.slice(0, 100));
 
                 const parsedData = Papa.parse(data, { header: true }).data;
 
-                // Check parsed data for correct format
-                console.log("Parsed Data: ", parsedData); 
-
-                // Store original data to preserve capitalization
                 wines = parsedData.map(wine => {
-                    // Normalize keys to lowercase for consistent access, but keep original values for display
                     const cleanedWine = {};
                     for (let key in wine) {
                         if (wine.hasOwnProperty(key)) {
@@ -162,7 +166,7 @@
                     return cleanedWine;
                 }).filter(wine => wine['wine'] && wine['wine'] !== '');
 
-                console.log("Cleaned and Processed Wine Data: ", wines); // Debugging - check if data is loading correctly
+                console.log("Cleaned and Processed Wine Data: ", wines);
             } catch (error) {
                 console.error("Error loading data: ", error);
             }
@@ -171,31 +175,37 @@
         // Search function to find wines based on user input
         function searchWines() {
             const input = document.getElementById('search-input').value.toLowerCase().trim();
-            console.log("Search input received: ", input); // Debugging - check search input
+            console.log("Search input received: ", input);
 
             if (input === "") {
                 alert("Please enter search terms");
                 return;
             }
 
-            // Split the input string into individual keywords
             const searchKeywords = input.split(' ').filter(keyword => keyword);
-            console.log("Search keywords: ", searchKeywords); // Debugging - check parsed keywords
+            console.log("Search keywords: ", searchKeywords);
 
-            // Filter wines based on each keyword matching any value in the wine object
             const filteredWines = wines.filter(wine => {
                 return searchKeywords.every(keyword => {
-                    // Handle true/false search keywords like "earthy"
+                    // Handle country nationality mapping
+                    for (let country in countryMap) {
+                        if (countryMap[country].includes(keyword)) {
+                            keyword = country;
+                            break;
+                        }
+                    }
+
+                    // Handle true/false search keywords
                     if (['floral', 'spicy', 'earthy', 'mineral', 'oaky'].includes(keyword)) {
                         return wine[keyword] && wine[keyword].toLowerCase() === 'true';
                     }
+
                     // General attribute matching
                     return Object.values(wine).some(value => value && value.toLowerCase().includes(keyword));
                 });
             });
 
-            console.log("Filtered Wines Result: ", filteredWines); // Debugging - check filtered data
-
+            console.log("Filtered Wines Result: ", filteredWines);
             renderResults(filteredWines);
         }
 
@@ -244,6 +254,7 @@
             document.getElementById('wine-name').textContent = wine['wine'];
             document.getElementById('wine-country').textContent = wine['country'];
             document.getElementById('wine-type').textContent = wine['type'];
+            document.getElementById('wine-color').textContent = wine['color'];
             document.getElementById('wine-dry-sweet').textContent = wine['dry/sweet'];
             document.getElementById('wine-fruits').textContent = wine['fruits'];
 
