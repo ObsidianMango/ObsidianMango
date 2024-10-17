@@ -257,7 +257,7 @@
         <span id="popup-close"><i class="fas fa-times"></i> Close</span>
     </div>
 
-   <!-- Filter Menu -->
+    <!-- Filter Menu -->
     <div id="filter-menu">
         <h3>Filter Options</h3>
 
@@ -487,7 +487,7 @@
                     const searchInput = document.getElementById('search-input');
                     if (searchInput) {
                         searchInput.value = wineToSearch; // Populate the search input with the decoded wine type
-                        searchWines(); // Trigger search after data is loaded
+                        debouncedSearch(); // Trigger search after data is loaded
                         document.getElementById('clear-button').style.display = 'inline'; // Show clear button
                     }
                 }
@@ -496,9 +496,15 @@
             }
         }
 
+        // Capitalize the first letter of a string
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
         // Trigger the search with the current input and filters
         function searchWines() {
             const input = document.getElementById('search-input').value.toLowerCase().trim();
+            const searchTerms = input.split(' ').map(term => countryAliases[term] || term).filter(term => term);
             const resultsContainer = document.getElementById('results');
             resultsContainer.innerHTML = ''; // Clear previous results
             currentResults = 0; // Reset results counter
@@ -513,33 +519,18 @@
                 }
             });
 
-            // Create a regex for exact phrase matching with flexibility
-            let searchRegex = null;
-            if (input) {
-                // Escape special regex characters in input
-                const escapedInput = input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                // Create regex to match the entire phrase, allowing for additional words before or after
-                searchRegex = new RegExp(`\\b${escapedInput}\\b`, 'i'); // Case-insensitive
-            }
-
-            // Filter wines based on search input and selected filters
+            // Filter wines based on search terms and selected filters
             wines = originalWines.filter(wine => {
-                const wineName = wine['wine'] ? wine['wine'].toLowerCase().trim() : '';
+                // Check if all search terms are present in any of the wine's attributes
+                const matchesSearch = searchTerms.every(term => {
+                    return Object.values(wine).some(value => value && value.toLowerCase().includes(term));
+                });
 
-                // Match search input
-                let matchesSearch = true;
-                if (searchRegex) {
-                    matchesSearch = searchRegex.test(wineName);
-                }
-
-                // Match filters
-                let matchesFilters = true;
-                Object.keys(selectedFilters).forEach(key => {
+                // Check if all selected filters match the wine's attributes
+                const matchesFilters = Object.keys(selectedFilters).every(key => {
                     const filterValue = selectedFilters[key];
-                    const wineValue = wine[key] ? wine[key].toLowerCase().trim() : '';
-                    if (filterValue) {
-                        matchesFilters = matchesFilters && (wineValue === filterValue);
-                    }
+                    const wineValue = wine[key] ? wine[key].toLowerCase() : '';
+                    return wineValue === filterValue;
                 });
 
                 return matchesSearch && matchesFilters;
@@ -567,6 +558,11 @@
                 resultsContainer.appendChild(div);
             });
             currentResults += resultsPerPage;
+
+            // Show message if no results are found
+            if (nextResults.length === 0 && currentResults === 0) {
+                resultsContainer.innerHTML = '<p>No wines match your search criteria.</p>';
+            }
         }
 
         // Show the wine details in the popup
@@ -593,11 +589,6 @@
             });
 
             document.getElementById('popup').style.display = 'block';
-        }
-
-        // Helper function to capitalize the first letter
-        function capitalize(str) {
-            return str.charAt(0).toUpperCase() + str.slice(1);
         }
 
         // Close the popup window
