@@ -610,26 +610,56 @@
         // Load wine data when the page loads
         window.onload = loadWineData;
     </script>
-    <script>
+<script>
+    let wineToSearch = null; // Variable to hold wine type from the URL
+
     // Function to get the 'wine' parameter from the URL
     function getQueryParam(param) {
         const urlParams = new URLSearchParams(window.location.search);
         return urlParams.get(param);
     }
 
-    // Set the wine type into the search input field and trigger search once the page is loaded
-    document.addEventListener('DOMContentLoaded', () => {
-        const wine = getQueryParam('wine'); // Get the 'wine' parameter from the URL
-        if (wine) {
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.value = wine;  // Populate the search input with the wine type
-                searchWines(); // Trigger the search directly after populating the input
+    // Modify loadWineData to include the search functionality after loading data
+    async function loadWineData() {
+        try {
+            const response = await fetch(dataUrl);
+            if (!response.ok) {
+                console.error("Network response was not ok: ", response.statusText);
+                return;
             }
+            const data = await response.text();
+            const parsedData = Papa.parse(data, { header: true }).data;
+            wines = parsedData.map(wine => {
+                const cleanedWine = {};
+                for (let key in wine) {
+                    if (wine.hasOwnProperty(key)) {
+                        cleanedWine[key.trim().toLowerCase()] = wine[key] ? wine[key].trim() : '';
+                    }
+                }
+                return cleanedWine;
+            }).filter(wine => wine['wine'] && wine['wine'] !== '');
+            originalWines = [...wines];
+            loadMoreResults();
+
+            // If wineToSearch is set (from the URL), populate the search bar and trigger search
+            if (wineToSearch) {
+                const searchInput = document.getElementById('search-input');
+                if (searchInput) {
+                    searchInput.value = wineToSearch; // Populate the search input with the wine type
+                    searchWines(); // Trigger search after data is loaded
+                }
+            }
+        } catch (error) {
+            console.error("Error loading data: ", error);
         }
+    }
+
+    // Set wineToSearch variable from the URL after the page is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        wineToSearch = getQueryParam('wine'); // Get the 'wine' parameter from the URL
+        loadWineData(); // Load data only after setting the wineToSearch variable
     });
 </script>
-
 
 </body>
 </html>
