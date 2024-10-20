@@ -1,5 +1,38 @@
-# 🥭 MangoWarz    🎮 [Play Now!](https://obsidianmango.github.io/ObsidianMango/mangowarz.html) 
+# 🎉 Welcome to A.S.S. land 🎉
 
+** A.S.S.** stands for:
+
+- **A**pplications of
+- **S**pecialized
+- **S**election
+ 
+---
+
+🍷 [WEIN](https://obsidianmango.github.io/ObsidianMango/wine.html)
+
+🥖 [BROT](https://obsidianmango.github.io/ObsidianMango/food.html)
+
+---
+
+🃏 [COMEDY](https://obsidianmango.github.io/ObsidianMango/comedy.html)
+
+---
+
+### 🥭 MangoWarz 
+
+🎮 [Play Now!](https://obsidianmango.github.io/ObsidianMango/mangowarz.html) 
+
+---
+
+### 🦖 Fun Fact:
+
+Did you know mangoes have been cultivated for over 4,000 years?
+
+
+<!---
+ObsidianMango/ObsidianMango is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+You can click the Preview link to take a look at your changes.
+ old stuff 
 Welcome to **MangoWars**! This project is a **dynamic web-based game** where players can engage in goods trading around the world as well as buy exciting  assets that can be sold for a chance of loss or profit. 🌴🐉
 
 
@@ -19,22 +52,4 @@ Welcome to **MangoWars**! This project is a **dynamic web-based game** where pla
 
 
 ---
-
-### 🦖 Fun Fact:
-
-Did you know mangoes have been cultivated for over 4,000 years?
-
----
-
-
-
-🍷 [WEIN](https://obsidianmango.github.io/ObsidianMango/wine.html)
-
-🥖 [BROT](https://obsidianmango.github.io/ObsidianMango/food.html)
-
-🃏 [COMEDY](https://obsidianmango.github.io/ObsidianMango/comedy.html)
-
-<!---
-ObsidianMango/ObsidianMango is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
-You can click the Preview link to take a look at your changes.
 --->
