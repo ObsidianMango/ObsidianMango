@@ -32,6 +32,7 @@ Did you know mangoes have been cultivated for over 4,000 years?
 
 🥖 [BROT](https://obsidianmango.github.io/ObsidianMango/food.html)
 
+🃏 [COMEDY](https://obsidianmango.github.io/ObsidianMango/comedy.html)
 
 <!---
 ObsidianMango/ObsidianMango is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
