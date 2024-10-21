@@ -1,26 +1,17 @@
-# 🎉 Welcome to A.S.S. land 🎉
-
-** A.S.S.** stands for:
-
-- **A**pplications of
-- **S**pecialized
-- **S**election
- 
+## ObsidianMango App Repo 
 ---
+Current Projects
 
-🍷 [WEIN](https://obsidianmango.github.io/ObsidianMango/wine.html)
+| Apps      | Link |
+| ------------ | ------ |
+| WineDB |🍷    [WEIN](https://obsidianmango.github.io/ObsidianMango/wine.html)    |
+| Food Match       |🥖     [BROT](https://obsidianmango.github.io/ObsidianMango/food.html)    |
+| Know Yo Joke |🃏     [knoyojo](https://obsidianmango.github.io/ObsidianMango/comedy.html)    |
+| Excuse Generator |😲     [exGen](https://obsidianmango.github.io/ObsidianMango/wine.html)    |
+| D20 Roller |🎲    [Roll It](https://obsidianmango.github.io/ObsidianMango/wine.html) |
+| DWar Knockoff       |🥭      [Mango Warz](https://obsidianmango.github.io/ObsidianMango/mangowarz.html)     |
 
-🥖 [BROT](https://obsidianmango.github.io/ObsidianMango/food.html)
 
----
-
-🃏 [COMEDY](https://obsidianmango.github.io/ObsidianMango/comedy.html)
-
----
-
-### 🥭 MangoWarz 
-
-🎮 [Play Now!](https://obsidianmango.github.io/ObsidianMango/mangowarz.html) 
 
 ---
 
@@ -29,7 +20,29 @@
 Did you know mangoes have been cultivated for over 4,000 years?
 
 
+
+
+
+
+
+
+
+
 <!---
+
+
+
+
+## Roadmap
+
+- [x] Initial release
+- [ ] Add new feature X
+- [ ] Improve performance
+
+
+
+
+
 ObsidianMango/ObsidianMango is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 You can click the Preview link to take a look at your changes.
  old stuff 
