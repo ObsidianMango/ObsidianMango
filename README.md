@@ -1,4 +1,23 @@
-<link rel="stylesheet" href="mdcustom.css">
+<style>
+  body {
+      background-color: #121212;
+      color: #e0e0e0;
+  }
+
+  a {
+      color: #bb86fc;
+  }
+
+  table {
+      background-color: #1e1e1e;
+      border: 1px solid #303030;
+  }
+
+  table th, table td {
+      border: 1px solid #303030;
+      padding: 10px;
+  }
+</style>
 
 # 🍇 Application Repository
 
@@ -11,7 +30,7 @@
 | **Know Yo Joke**     | 🃏 [knoyojo - Master Comedy](https://obsidianmango.github.io/ObsidianMango/comedy.html)   |
 | **Excuse Generator** | 😲 [exGen - Generate Excuses](https://obsidianmango.github.io/ObsidianMango/xcuse.html)   |
 | **D20 Roller**       | 🎲 [Roll It - Dice Roller](https://obsidianmango.github.io/ObsidianMango/d20.html)        |
-| **DWars Knockoff**   | 🥭 [Mango Warz - DW Knockoff](https://obsidianmango.github.io/ObsidianMango/mangowarz.html)|
+| **DWars Knockoff**   | 🥭 [Mango Warz - RTS Knockoff](https://obsidianmango.github.io/ObsidianMango/mangowarz.html)|
 
 ---
 
