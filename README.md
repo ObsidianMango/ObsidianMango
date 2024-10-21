@@ -7,7 +7,7 @@ Current Projects
 | WineDB           | 🍷 [WEIN](https://obsidianmango.github.io/ObsidianMango/wine.html)                               |
 | Food Match       | 🥖 [BROT](https://obsidianmango.github.io/ObsidianMango/food.html)                               |
 | Know Yo Joke     | 🃏 [knoyojo](https://obsidianmango.github.io/ObsidianMango/comedy.html)                          |
-| Excuse Generator | 😲 [exGen](https://obsidianmango.github.io/ObsidianMango/excuse.html)                            |
+| Excuse Generator | 😲 [exGen](https://obsidianmango.github.io/ObsidianMango/xcuse.html)                            |
 | D20 Roller       | 🎲 [Roll It](https://obsidianmango.github.io/ObsidianMango/d20.html)                             |
 | DWars Knockoff   | 🥭 [Mango Warz](https://obsidianmango.github.io/ObsidianMango/mangowarz.html)                    |
 
