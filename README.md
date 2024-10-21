@@ -36,7 +36,7 @@
 
 ## Current Projects
 
-| **App Name**         | **Description & Links**                                                                 |  **Version**  |
+| **App Name**         | **Links**                                                                 |  **Version**  |
 | -------------------- | --------------------------------------------------------------------------------------- |---------------|
 | **WineDB**           | 🍷 [WEIN](https://obsidianmango.github.io/ObsidianMango/wine.html)|  0.8_8165a8f  |
 | **Food Match**       | 🥖 [BROT](https://obsidianmango.github.io/ObsidianMango/food.html)    |  0.7_1a6edff  |
