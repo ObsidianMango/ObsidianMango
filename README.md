@@ -1,4 +1,4 @@
-## ObsidianMango App Repo 
+## Application Repository
 ---
 Current Projects
 
