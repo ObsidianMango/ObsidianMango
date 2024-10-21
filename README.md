@@ -10,12 +10,25 @@
 
   table {
       background-color: #1e1e1e;
-      border: 1px solid #303030;
+      border-collapse: collapse;
+      width: 100%;
+      margin: 20px 0;
   }
 
-  table th, table td {
+  th, td {
       border: 1px solid #303030;
-      padding: 10px;
+      padding: 12px;
+      text-align: left;
+  }
+
+  th {
+      background-color: #333333;
+      color: #ffffff;
+  }
+
+  td {
+      background-color: #1e1e1e;
+      color: #e0e0e0;
   }
 </style>
 
