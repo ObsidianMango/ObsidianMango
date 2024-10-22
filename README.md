@@ -43,7 +43,9 @@
 | **Know Yo Joke**     | 🃏 [knoyojo](https://obsidianmango.github.io/ObsidianMango/comedy.html)   |  0.9_e94785e  |
 | **Excuse Generator** | 😲 [exGen](https://obsidianmango.github.io/ObsidianMango/xcuse.html)   |  1.0_20a6129  |
 | **D20 Roller**       | 🎲 [Roll It](https://obsidianmango.github.io/ObsidianMango/d20.html)        |  1.0_e7f6c54  |
-| **DWars Knockoff**   | 🥭 [Mango Warz](https://obsidianmango.github.io/ObsidianMango/mangowarz.html)|  1.1_7fbddd0  |
+| **DWars Knockoff**   | 🥭 [MangoWarz](https://obsidianmango.github.io/ObsidianMango/mangowarz.html)|  1.1_7fbddd0  |
+| **Clicking Game**   | 🖱 [Carptunnel](https://obsidianmango.github.io/ObsidianMango/clickgame.html)|  1.1_7fbddd0  |
+
 
 ---
 
