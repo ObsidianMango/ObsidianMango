@@ -46,6 +46,7 @@
 | **DWars Knockoff**   | 🥭 [MangoWarz](https://obsidianmango.github.io/ObsidianMango/mangowarz.html)|  1.1_7fbddd0  |
 | **Clicking Game**   | 🖱 [Carptunnel](https://obsidianmango.github.io/ObsidianMango/clickgame.html)|  1.0_1cc7c8f  |
 | **Crappy Windows Demo**   | 🖥 [Win95pu](https://obsidianmango.github.io/ObsidianMango/windex.html)|  0.6_0832cc9  |
+| **Orderer**   | 📋 [JobDoer](https://obsidianmango.github.io/ObsidianMango/orderer.html)|  1.0_55fds9g  |
 
 
 
