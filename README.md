@@ -38,7 +38,7 @@
 
 | **App Name**         | **Links**                                                                 |  **Version**  |
 | -------------------- | --------------------------------------------------------------------------------------- |---------------|
-| **Bibliomance**       | 📖 [Biblomancy](https://obsidianmango.github.io/ObsidianMango/biblioma.html)    |  1,0_e587fk2  |
+| **Bibliomance**       | 📖 [Biblomancy](https://obsidianmango.github.io/ObsidianMango/biblioma.html)    |  1.1_e587fk2  |
 | **WineDB**           | 🍷 [WEIN](https://obsidianmango.github.io/ObsidianMango/wine.html)|  0.8_8165a8f  |
 | **Food Match**       | 🥖 [BROT](https://obsidianmango.github.io/ObsidianMango/food.html)    |  0.7_1a6edff  |
 | **Know Yo Joke**     | 🃏 [knoyojo](https://obsidianmango.github.io/ObsidianMango/comedy.html)   |  0.9_e94785e  |
