@@ -36,7 +36,6 @@
             width: 120px;
             height: auto;
             margin-bottom: 20px;
-            margin-top: 20px;
         }
 
         .source-select {
@@ -78,12 +77,50 @@
             opacity: 0;
             transition: opacity 1.5s ease-in-out;
             color: #444;
+            cursor: pointer;
         }
 
         .loading-message {
             font-size: 16px;
             color: #888;
             margin-top: 10px;
+        }
+
+        /* Full text scrollable window */
+        .scroll-window {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .scroll-content {
+            background: #fff;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80%;
+            overflow-y: auto;
+            padding: 20px;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #f00;
+            color: #fff;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 5px;
         }
 
         @media (max-width: 768px) {
@@ -148,7 +185,18 @@
         <div id="loadingMessage" class="loading-message" style="display: none;">Loading verse...</div>
     </div>
 
+    <div id="scrollWindow" class="scroll-window">
+        <div class="scroll-content">
+            <button class="close-btn" onclick="closeScroll()">X</button>
+            <div id="fullTextContent"></div>
+        </div>
+    </div>
+
     <script>
+        let clickCount = 0;
+        let verseContent = '';
+        let fullText = '';
+
         async function fetchVerse() {
             const sourceSelect = document.getElementById('sourceSelect').value;
             const verseDisplay = document.getElementById('verseDisplay');
@@ -157,16 +205,20 @@
             // Fade out the current verse first, display loading message
             verseDisplay.style.opacity = 0;
             loadingMessage.style.display = 'block';
+            clickCount = 0; // Reset click count
 
             setTimeout(async () => {
                 try {
                     // Fetch the selected text file
-                    const verse = await fetchTextFromFile(`https://obsidianmango.github.io/ObsidianMango/bilbiomancy/${sourceSelect}`);
+                    verseContent = await fetchTextFromFile(`https://obsidianmango.github.io/ObsidianMango/bilbiomancy/${sourceSelect}`);
                     
                     // Hide loading message and fade in the new verse
                     loadingMessage.style.display = 'none';
-                    verseDisplay.innerHTML = verse;
+                    verseDisplay.innerHTML = verseContent;
                     verseDisplay.style.opacity = 1;
+
+                    // Fetch the full text for scrollable view
+                    fullText = await fetchFullText(`https://obsidianmango.github.io/ObsidianMango/bilbiomancy/${sourceSelect}`);
                 } catch (error) {
                     console.error('Error fetching verse:', error);
                     loadingMessage.style.display = 'none';
@@ -176,61 +228,37 @@
             }, 1500);  // Delay for the fade-out transition
         }
 
-        async function fetchTextFromFile(fileUrl) {
+        async function fetchFullText(fileUrl) {
             const response = await fetch(fileUrl);
             if (!response.ok) {
-                throw new Error('Failed to fetch file');
+                throw new Error('Failed to fetch full text');
             }
+            return await response.text();
+        }
 
-            const text = await response.text();
-            const lines = text.split('\n').filter(line => line.trim().length > 0);
-
-            let randomIndex = Math.floor(Math.random() * lines.length);
-
-            // For Aeneid and Agamemnon, ensure at least two lines are picked
-            if (fileUrl.includes("Aeneid-Virgil.txt") || fileUrl.includes("Quran-Clear.txt") || fileUrl.includes("The-Republic-Plato.txt") || fileUrl.includes("Agamemnon-of-Aeschylus.txt") || fileUrl.includes("Enuma-Elish.txt") || fileUrl.includes("The-divine-comedy-Dante.txt")) {
-                let verse = lines[randomIndex];
-                let lineCount = 1;
-
-                for (let i = randomIndex + 1; i < lines.length && lineCount < 3; i++) {
-                    verse += ' ' + lines[i];
-                    lineCount++;
-                }
-                return verse;
+        document.getElementById('verseDisplay').addEventListener('click', function () {
+            clickCount++;
+            if (clickCount === 5) {
+                openScrollWindow();
             }
+        });
 
-            // For Bhagavad Gita, handle multi-line verses
-            if (fileUrl.includes("The-Bhagavad-Gita.txt")) {
-                let verse = lines[randomIndex];
-                let lineCount = 1;
+        function openScrollWindow() {
+            const scrollWindow = document.getElementById('scrollWindow');
+            const fullTextContent = document.getElementById('fullTextContent');
 
-                for (let i = randomIndex + 1; i < lines.length && lineCount < 3; i++) {
-                    if (/^\(\d+\.\d+\)/.test(lines[i])) {
-                        break;
-                    }
-                    verse += ' ' + lines[i]; 
-                    lineCount++;
-                }
-                return verse;
+            // Insert full text and scroll to the specific verse
+            fullTextContent.innerHTML = `<pre>${fullText}</pre>`;
+            scrollWindow.style.display = 'flex';
+            const versePosition = fullText.indexOf(verseContent);
+            if (versePosition > -1) {
+                fullTextContent.scrollTop = fullTextContent.offsetTop + versePosition;
             }
+        }
 
-            // Default behavior: pick one or more lines until it reaches a stop marker
-            while (!/^\d/.test(lines[randomIndex]) && !/[.;]$/.test(lines[randomIndex])) {
-                randomIndex = Math.floor(Math.random() * lines.length);
-            }
-
-            let verse = lines[randomIndex];
-            let lineCount = 1;
-
-            for (let i = randomIndex + 1; i < lines.length && lineCount < 3; i++) {
-                if (/^\d/.test(lines[i]) || /[.;]$/.test(lines[i])) {
-                    break;
-                }
-                verse += ' ' + lines[i];
-                lineCount++;
-            }
-
-            return verse;
+        function closeScroll() {
+            const scrollWindow = document.getElementById('scrollWindow');
+            scrollWindow.style.display = 'none';
         }
     </script>
 
