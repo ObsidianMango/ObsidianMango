@@ -1,3 +1,37 @@
+<style>
+  body {
+      background-color: #121212;
+      color: #e0e0e0;
+  }
+
+  a {
+      color: #bb86fc;
+  }
+
+  table {
+      background-color: #1e1e1e;
+      border-collapse: collapse;
+      width: 100%;
+      margin: 20px 0;
+  }
+
+  th, td {
+      border: 1px solid #303030;
+      padding: 12px;
+      text-align: left;
+  }
+
+  th {
+      background-color: #333333;
+      color: #ffffff;
+  }
+
+  td {
+      background-color: #1e1e1e;
+      color: #e0e0e0;
+  }
+</style>
+
 # 🍇 Application Repository   
 
 ## Current Projects
