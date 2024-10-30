@@ -1,37 +1,3 @@
-<style>
-  body {
-      background-color: #121212;
-      color: #e0e0e0;
-  }
-
-  a {
-      color: #bb86fc;
-  }
-
-  table {
-      background-color: #1e1e1e;
-      border-collapse: collapse;
-      width: 100%;
-      margin: 20px 0;
-  }
-
-  th, td {
-      border: 1px solid #303030;
-      padding: 12px;
-      text-align: left;
-  }
-
-  th {
-      background-color: #333333;
-      color: #ffffff;
-  }
-
-  td {
-      background-color: #1e1e1e;
-      color: #e0e0e0;
-  }
-</style>
-
 # 🍇 Application Repository
 
 ## Current Projects
@@ -49,7 +15,7 @@
 | **Crappy Windows Demo**   |      🖥 [Win95pu](https://obsidianmango.github.io/ObsidianMango/windex.html)|  0.6_0832cc9  |
 | **Orderer**   | 📋     [JobDoer](https://obsidianmango.github.io/ObsidianMango/orderer.html)|  1.0_55fds9g  |
 | **Cube2Uncubed**   | 📋     [Cube2](https://obsidianmango.github.io/ObsidianMango/cube2uncubed.html)|  1.0_hj83f87  |
-| **Orderer**   | 📋     [JobDoer](https://obsidianmango.github.io/ObsidianMango/orderer.html)|  1.0_55fds9g  |
+| **Arcane Whisper**   | 🔥     [ArcWhisp](https://obsidianmango.github.io/ObsidianMango/arcanewhisper.html)|  1.0_55fds9g  |
 ---
 
 ### 🦖 Fun Fact:
