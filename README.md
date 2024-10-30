@@ -48,9 +48,8 @@
 | **Clicking Game**   | 🖱     [Carptunnel](https://obsidianmango.github.io/ObsidianMango/clickgame.html)|  1.0_1cc7c8f  |
 | **Crappy Windows Demo**   |      🖥 [Win95pu](https://obsidianmango.github.io/ObsidianMango/windex.html)|  0.6_0832cc9  |
 | **Orderer**   | 📋     [JobDoer](https://obsidianmango.github.io/ObsidianMango/orderer.html)|  1.0_55fds9g  |
-| **Cube2Uncubed**   | 🔹     [Cube2](https://obsidianmango.github.io/ObsidianMango/cube2uncubed.html)|  1.0_hj83f87  |
-| **ArcaneWhisper**   |  🔥    [ArcWhisp](https://obsidianmango.github.io/ObsidianMango/arcanewhisper.html)|  1.0_ks76d5f  |
-
+| **Cube2Uncubed**   | 📋     [Cube2](https://obsidianmango.github.io/ObsidianMango/cube2uncubed.html)|  1.0_hj83f87  |
+| **Orderer**   | 📋     [JobDoer](https://obsidianmango.github.io/ObsidianMango/orderer.html)|  1.0_55fds9g  |
 ---
 
 ### 🦖 Fun Fact:
