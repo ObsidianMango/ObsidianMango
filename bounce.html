@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>• BounCeBall</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0d0d0d, #1a1a1a);
+            font-family: "Courier New", Courier, monospace;
+            color: #ecf0f1;
+        }
+        #titleScreen, #gameScreen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        #titleScreen {
+            display: flex;
+        }
+        #gameTitle {
+            font-size: 3rem;
+            color: #f39c12;
+            animation: titleAnimation 1.5s infinite alternate;
+        }
+        @keyframes titleAnimation {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+        #menu {
+            margin-top: 20px;
+        }
+        .menuOption {
+            font-size: 1.5rem;
+            color: #ecf0f1;
+            cursor: pointer;
+        }
+        .menuOption.selected {
+            color: #f1c40f;
+        }
+        #arrow {
+            color: #f1c40f;
+            padding-right: 5px;
+        }
+        #ball {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ff4d4d, #d00000);
+            box-shadow: 0px 8px 20px rgba(0, 0, 0, 0.5);
+            position: absolute;
+            top: 50%;
+            transition: background-color 0.1s ease;
+        }
+        #counter {
+            font-size: 2.5rem;
+            margin-top: 20px;
+            color: #f1c40f;
+        }
+        #finalTime {
+            display: none;
+            font-size: 2rem;
+            margin-top: 20px;
+            text-align: center;
+            color: #9b59b6;
+        }
+        #playAgain {
+            display: none;
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1rem;
+            background-color: #34495e;
+            color: #ecf0f1;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        /* Prevent zoom on double-tap */
+        html, body {
+            touch-action: manipulation;
+        }
+    </style>
+</head>
+<body>
+    <!-- Title Screen with Animated Title and Menu Options -->
+    <div id="titleScreen">
+        <div id="gameTitle">Bounce Ball</div>
+        <div id="menu">
+            <div class="menuOption selected" data-goal="32" id="quick"><span id="arrow">> </span>Quick - Goal: 32</div>
+            <div class="menuOption" data-goal="64" id="normal">Normal - Goal: 64</div>
+            <div class="menuOption" data-goal="1024" id="long">Long - Goal: 1024</div>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen">
+        <div id="ball"></div>
+        <div id="counter">0</div>
+        <div id="finalTime"></div>
+        <button id="playAgain">Play Again</button>
+    </div>
+
+    <script>
+        let selectedOption = 0;
+        let bounceCount = 0;
+        let goal = 32;
+        let gameStarted = false;
+        let gameEnded = false;
+        let startTime = null;
+        let velocity = -10; // Initial upward velocity
+        const gravity = 0.6; // Gravity strength
+        const bounceFactor = -0.7; // Bounce damping
+        let isBouncing = false;
+        const menuOptions = document.querySelectorAll(".menuOption");
+        const titleScreen = document.getElementById("titleScreen");
+        const gameScreen = document.getElementById("gameScreen");
+        const counter = document.getElementById("counter");
+        const ball = document.getElementById("ball");
+        const playAgainButton = document.getElementById("playAgain");
+
+        // Initialize Menu
+        function updateMenu() {
+            menuOptions.forEach((option, index) => {
+                option.classList.remove("selected");
+                if (index === selectedOption) {
+                    option.classList.add("selected");
+                    option.innerHTML = `<span id="arrow">> </span>${option.textContent.split("> ").pop()}`;
+                    goal = parseInt(option.getAttribute("data-goal"));
+                } else {
+                    option.innerHTML = option.textContent.split("> ").pop();
+                }
+            });
+        }
+        updateMenu();
+
+        // Handle Menu Clicks
+        menuOptions.forEach((option, index) => {
+            option.addEventListener("click", () => {
+                selectedOption = index;
+                updateMenu();
+                startGame();
+            });
+        });
+
+        // Handle Keyboard Navigation and Mouse Clicks for Menu and Game
+        document.addEventListener("keydown", (e) => {
+            if (!gameStarted) {
+                if (e.key === "ArrowDown") {
+                    selectedOption = (selectedOption + 1) % menuOptions.length;
+                    updateMenu();
+                } else if (e.key === "ArrowUp") {
+                    selectedOption = (selectedOption - 1 + menuOptions.length) % menuOptions.length;
+                    updateMenu();
+                } else if (e.key === "Enter" || e.key === " ") {
+                    startGame();
+                }
+            } else if (!gameEnded) {
+                bounceBall();
+            }
+        });
+
+        document.body.addEventListener("click", () => {
+            if (gameStarted && !gameEnded) {
+                bounceBall();
+            }
+        });
+
+        // Device Motion Detection for Shaking
+        window.addEventListener("devicemotion", (event) => {
+            const acceleration = event.acceleration;
+            if (acceleration.x > 15 || acceleration.y > 15 || acceleration.z > 15) {
+                bounceBall();
+            }
+        });
+
+        function startGame() {
+            titleScreen.style.display = "none";
+            gameScreen.style.display = "flex";
+            gameStarted = true;
+            gameEnded = false;
+            bounceCount = 0;
+            counter.textContent = bounceCount;
+            startTime = Date.now(); // Start the timer
+        }
+
+        function bounceBall() {
+            if (gameEnded) return;
+
+            bounceCount++;
+            counter.textContent = bounceCount;
+            changeBallColor();
+            vibrate();
+
+            // Restart bounce physics from the current position
+            velocity = -15; // set bounce velocity each hit
+            if (!isBouncing) {
+                isBouncing = true;
+                startBouncePhysics();
+            }
+
+            if (bounceCount >= goal) {
+                endGame();
+            }
+        }
+
+        function changeBallColor() {
+            const colors = ['#FF5733', '#33FF57', '#3357FF', '#FF33A5'];
+            ball.style.background = `radial-gradient(circle at 30% 30%, ${colors[Math.floor(Math.random() * colors.length)]}, #d00000)`;
+        }
+
+        function vibrate() {
+            if (navigator.vibrate) {
+                navigator.vibrate(100); // Vibrate for 100 milliseconds
+            }
+        }
+
+        function startBouncePhysics() {
+            function bounceLoop() {
+                if (!gameEnded) {
+                    velocity += gravity;
+                    let position = parseInt(ball.style.top || window.innerHeight / 2);
+
+                    // Update position based on velocity
+                    position += velocity;
+
+                    // Check for bottom boundary
+                    if (position >= window.innerHeight - 80) {
+                        position = window.innerHeight - 80;
+                        velocity *= bounceFactor;
+                        vibrate(); // Vibrate on hitting the bottom edge
+                    }
+                    // Check for top boundary
+                    if (position <= 0) {
+                        position = 0;
+                        velocity *= bounceFactor;
+                        vibrate(); // Vibrate on hitting the top edge
+                    }
+
+                    ball.style.top = `${position}px`;
+
+                    if (Math.abs(velocity) < 1 && position >= window.innerHeight - 80) {
+                        isBouncing = false;
+                    } else {
+                        requestAnimationFrame(bounceLoop);
+                    }
+                }
+            }
+            bounceLoop();
+        }
+
+        function endGame() {
+            gameEnded = true;
+            const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+            document.getElementById("finalTime").textContent = `Goal Reached! Final Time: ${elapsedTime} seconds`;
+            document.getElementById("finalTime").style.display = "block";
+            document.getElementById("playAgain").style.display = "block";
+        }
+
+        function resetGame() {
+            gameScreen.style.display = "none";
+            titleScreen.style.display = "flex";
+            gameStarted = false;
+            gameEnded = false;
+            bounceCount = 0;
+            isBouncing = false;
+            document.getElementById("playAgain").style.display = "none";
+            document.getElementById("finalTime").style.display = "none";
+            document.getElementById("finalTime").textContent = "";
+            ball.style.top = "50%";
+            updateMenu();
+        }
+
+        // Play Again Button
+        playAgainButton.addEventListener("click", resetGame);
+    </script>
+</body>
+</html>
