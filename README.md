@@ -43,7 +43,7 @@
 | **ChoozyBoozy**           | 🥃 [Boozy](https://obsidianmango.github.io/ObsidianMango/boozy.html) | 
 | **WineDB**           | 🍷 [WEIN](https://obsidianmango.github.io/ObsidianMango/wine.html) | 
 | **Food Match**       | 🥖 [BROT](https://obsidianmango.github.io/ObsidianMango/food.html)    | 
-| **Know Yo Joke**     | 🃏 [knoyojo](https://obsidianmango.github.io/ObsidianMango/comedy.html)   | 
+| **TASKMEISTER5000**     | ☑️ [TM5K](https://obsidianmango.github.io/ObsidianMango/tm5k.html)   | 
 | **Excuse Generator** | 😲 [exGen](https://obsidianmango.github.io/ObsidianMango/xcuse.html)   | 
 | **D20 Roller**       | 🎲 [Roll It](https://obsidianmango.github.io/ObsidianMango/d20.html)        | 
 | **DWars Knockoff**   | 🥭 [MangoWarz](https://obsidianmango.github.io/ObsidianMango/mangowarz.html) | 
@@ -51,7 +51,7 @@
 | **Crappy Windows Demo** | 🖥 [Win95pu](https://obsidianmango.github.io/ObsidianMango/windex.html) | 
 | **Orderer**   | 📋 [JobDoer](https://obsidianmango.github.io/ObsidianMango/orderer.html) |  
 | **Cube2Uncubed**   | 📋 [Cube2](https://obsidianmango.github.io/ObsidianMango/cube2uncubed.html) | 
-| **ArcaneWhisper**   | 🔥 [ArcaneWhisper](https://obsidianmango.github.io/ObsidianMango/arcanewhisper.html) |  
+| **ArcaneWhisper**   | 🔥 [ArcaneWhisper](https://obsidianmango.github.io/ObsidianMango/arcanewhisper.html) | 
 | **Magick8ball**   | 🎱 [Magick8](https://obsidianmango.github.io/ObsidianMango/magick8.html) |  
 | **Madlib**   | 🙊 [Madlib](https://obsidianmango.github.io/ObsidianMango/madlib.html) |  
 | **BounceBall**   | 🔴 [Bounce](https://obsidianmango.github.io/ObsidianMango/bounce.html) | 
