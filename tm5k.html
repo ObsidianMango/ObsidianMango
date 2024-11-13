@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✔︎ TASKMEISTER5000</title>
+    <style>
+        /* Basic styling */
+        body {
+            font-family: Arial, sans-serif;
+            background: #1d1f21;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            margin: 10px;
+            font-size: 2rem;
+        }
+        #dailyPoints {
+            font-family: "Courier New", Courier, monospace;
+            color: #aaaaaa;
+            margin-top: -5px;
+            font-size: 1.1rem;
+            cursor: pointer;
+        }
+	 #addTaskSection {
+
+         background: #1d1f21;
+
+ 
+
+        }
+
+        /* Task list and log section styling */
+        #taskList, #log {
+            width: 100%;
+            max-width: 500px;
+            margin-top: 20px;
+            padding: 10px;
+        }
+
+        /* Single-line task styling */
+        .task, .completed {
+            background-color: #333;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: opacity 2s ease-in-out;
+        }
+
+        .completed { 
+            opacity: 0;
+        }
+
+        /* Task name with aligned buttons */
+        .task-name {
+            font-weight: bold;
+            flex-grow: 1;
+            padding-right: 5px;
+            cursor: pointer;
+        }
+
+        /* Button styling */
+        .task-buttons button {
+            cursor: pointer;
+            background: #d4d0c8;
+            border: 1px solid #888;
+            color: #000000;
+            padding: 5px 8px;
+            border-radius: 3px;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.8rem;
+            margin-left: 3px; /* Reduced spacing between buttons */
+        }
+
+        /* Celebration effect */
+        .celebration {
+            position: fixed;
+            width: 100vw;
+            height: 100vh;
+            top: 0;
+            left: 0;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            color: #ff9900;
+            animation: popFade 2s ease-out forwards;
+            z-index: 99;
+        }
+
+        @keyframes popFade {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+            100% { opacity: 0; transform: scale(1.4); }
+        }
+
+        /* Log overlay styling */
+        #logOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        /* Log content styling */
+        #logOverlayContent {
+            background: #222;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            color: #ffffff;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        #pointLog {
+            list-style-type: none;
+            padding: 0;
+            margin: 10px 0 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+        }
+
+        #pointLog li {
+            background: #333;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+
+        #clearMemoryButton {
+            background-color: #ff5555;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>TASKMEISTER5000</h1>
+    <div id="dailyPoints" onclick="toggleLog()">Score: <span id="score">0</span></div>
+
+    <div id="addTaskSection" style="display: flex; gap: 5px; margin-top: 10px;">
+        <input type="text" id="taskInput" placeholder="Enter task" style="padding: 8px; font-size: 1rem; flex: 1;"/>
+        <button onclick="addTask()">Add Task</button>
+    </div>
+
+    <div id="taskList">
+        <!-- Task items will appear here -->
+    </div>
+
+    <!-- Log overlay -->
+    <div id="logOverlay" onclick="closeLog(event)">
+        <div id="logOverlayContent" onclick="event.stopPropagation()">
+            <h2>Task & Point Log</h2>
+            <ul id="pointLog"></ul>
+            <button id="clearMemoryButton" onclick="clearMemory(event)">Clear Memory</button>
+        </div>
+    </div>
+
+    <script>
+        let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+        let points = parseInt(localStorage.getItem('points')) || 0;
+        let pointLog = JSON.parse(localStorage.getItem('pointLog')) || [];
+        document.getElementById("score").textContent = points;
+
+        function addTask() {
+            const taskInput = document.getElementById("taskInput");
+            const taskText = taskInput.value.trim();
+            if (taskText) {
+                const newTask = { text: taskText, completed: false };
+                tasks.push(newTask);
+                saveTasks();
+                renderTasks();
+                taskInput.value = "";
+            }
+        }
+
+        function completeTask(index) {
+            const task = tasks[index];
+            const pointIncrease = 100;
+            tasks[index].completed = true;
+            points += pointIncrease;
+            document.getElementById("score").textContent = points;
+
+            pointLog.push({ task: task.text, points: pointIncrease, date: new Date().toLocaleString() });
+            localStorage.setItem('pointLog', JSON.stringify(pointLog));
+
+            renderCelebration("+100 Points!");
+            saveTasks();
+            renderTasks();
+            renderPointLog();
+        }
+
+        function editTask(index) {
+            const newText = prompt("Edit task:", tasks[index].text);
+            if (newText) {
+                tasks[index].text = newText.trim();
+                saveTasks();
+                renderTasks();
+            }
+        }
+
+        function deleteTask(index) {
+            tasks.splice(index, 1);
+            saveTasks();
+            renderTasks();
+        }
+
+        function renderCelebration(message) {
+            const celebration = document.createElement("div");
+            celebration.className = "celebration";
+            celebration.textContent = message;
+            document.body.appendChild(celebration);
+            setTimeout(() => celebration.remove(), 2000);
+        }
+
+        function toggleLog() {
+            const logOverlay = document.getElementById("logOverlay");
+            logOverlay.style.display = logOverlay.style.display === "none" ? "flex" : "none";
+            renderPointLog();
+        }
+
+        function closeLog(event) {
+            const logOverlay = document.getElementById("logOverlay");
+            if (event.target === logOverlay) {
+                logOverlay.style.display = "none";
+            }
+        }
+
+        function saveTasks() {
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+            localStorage.setItem('points', points);
+        }
+
+        function renderTasks() {
+            const taskList = document.getElementById("taskList");
+            taskList.innerHTML = "";
+            tasks.forEach((task, index) => {
+                const taskElement = document.createElement("div");
+                taskElement.className = task.completed ? "completed" : "task";
+
+                taskElement.innerHTML = `
+                    <span class="task-name">${task.text}</span>
+                    <div class="task-buttons">
+                        <button onclick="editTask(${index})">Edit</button>
+                        <button onclick="deleteTask(${index})">X</button>
+                        <button onclick="completeTask(${index})">Complete</button>
+                    </div>
+                `;
+
+                taskList.appendChild(taskElement);
+
+                if (task.completed) {
+                    setTimeout(() => taskElement.remove(), 2000);
+                }
+            });
+        }
+
+        function renderPointLog() {
+            const pointLogList = document.getElementById("pointLog");
+            pointLogList.innerHTML = "";
+            pointLog.forEach(log => {
+                const logItem = document.createElement("li");
+                logItem.textContent = `${log.date}: ${log.task} (+${log.points} points)`;
+                pointLogList.appendChild(logItem);
+            });
+        }
+
+        function clearMemory(event) {
+            event.stopPropagation();
+            if (confirm("Are you sure you want to clear all data?")) {
+                tasks = [];
+                points = 0;
+                pointLog = [];
+                localStorage.clear();
+                renderTasks();
+                renderPointLog();
+                document.getElementById("score").textContent = points;
+            }
+        }
+
+        renderTasks();
+        renderPointLog();
+    </script>
+</body>
+</html>
