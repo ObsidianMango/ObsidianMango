@@ -542,55 +542,44 @@
         }
 
         async function loadWineData() {
-            try {
-                const response = await fetch(dataUrl);
-                if (!response.ok) {
-                    console.error("Network response was not ok: ", response.statusText);
-                    return;
-                }
-                const data = await response.text();
-                const parsedData = Papa.parse(data, { header: true }).data;
-                wines = parsedData.map(wine => {
-                    const cleanedWine = {};
-                    for (let key in wine) {
-                        if (wine.hasOwnProperty(key)) {
-                            let cleanedKey = key.trim().toLowerCase().replace(/\//g, '-');
-                            cleanedWine[cleanedKey] = wine[key] ? wine[key].trim() : '';
-                        }
-                    }
-                    // Log the "Price Rating" before parsing
-                    const priceRating = cleanedWine['price rating'] || '';
-                    console.log(`Wine: ${cleanedWine['wine']}, Price Rating: "${priceRating}"`); // Log price rating
+    try {
+        const response = await fetch(dataUrl);
+        if (!response.ok) {
+            console.error("Network response was not ok: ", response.statusText);
+            return;
+        }
+        const data = await response.text();
+        const parsedData = Papa.parse(data, { header: true }).data;
 
-                    // Removed the price field parsing
-                    // const priceMatch = priceRating.match(/(\d+(\.\d+)?)/);
-                    // cleanedWine['price'] = priceMatch ? parseFloat(priceMatch[1]) : 0;
-                    // console.log(`Parsed Wine: ${cleanedWine['wine']}, Price: ${cleanedWine['price']}`); // Removed debugging line
-
-                    return cleanedWine;
-                }).filter(wine => wine['wine'] && wine['wine'] !== '');
-                originalWines = [...wines];
-                
-                console.log(`Total Wines Loaded: ${wines.length}`); // Debugging line
-                
-                if (wines.length > 0) {
-                    console.log("Parsed Wine Data Keys:", Object.keys(wines[0])); // Debugging line
-                    console.log("Sample Wines:", wines.slice(0, 5)); // Debugging line
+        wines = parsedData.map(wine => {
+            const cleanedWine = {};
+            for (let key in wine) {
+                if (wine.hasOwnProperty(key)) {
+                    let cleanedKey = key.trim().toLowerCase().replace(/\//g, '-');
+                    cleanedWine[cleanedKey] = wine[key] ? wine[key].trim() : '';
                 }
-                displayAllResults();
+            }
+            return cleanedWine;
+        })
+        // Filter out items with Total Unit of 0
+        .filter(wine => wine['wine'] && wine['wine'] !== '' && parseInt(wine['total unit']) > 0);
 
-                if (wineToSearch) {
-                    const searchInput = document.getElementById('search-input');
-                    if (searchInput) {
-                        searchInput.value = wineToSearch;
-                        debouncedSearch();
-                        document.getElementById('clear-button').style.display = 'inline';
-                    }
-                }
-            } catch (error) {
-                console.error("Error loading data: ", error);
+        originalWines = [...wines];
+
+        displayAllResults();
+
+        if (wineToSearch) {
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.value = wineToSearch;
+                debouncedSearch();
+                document.getElementById('clear-button').style.display = 'inline';
             }
         }
+    } catch (error) {
+        console.error("Error loading data: ", error);
+    }
+}
 
         function capitalize(str) {
             return str.charAt(0).toUpperCase() + str.slice(1);
@@ -723,44 +712,43 @@
         }
 
         // Function to handle search input
-        function searchWines() {
-            const input = document.getElementById('search-input').value.toLowerCase().trim();
-            const searchTerms = input.split(' ').map(term => countryAliases[term] || term).filter(term => term);
-            const resultsContainer = document.getElementById('results');
+       function searchWines() {
+                const input = document.getElementById('search-input').value.toLowerCase().trim();
+                 const searchTerms = input.split(' ').map(term => countryAliases[term] || term).filter(term => term);
+                 const resultsContainer = document.getElementById('results');
 
-            const selectedFilters = {};
-            const filterGroups = ['color', 'type', 'country', 'dry-sweet', 'body', 'acidity'];
-            filterGroups.forEach(group => {
-                const selectedOption = document.querySelector(`input[name="${group}"]:checked`);
-                if (selectedOption) {
-                    selectedFilters[group] = selectedOption.value.toLowerCase();
-                }
-            });
+                 const selectedFilters = {};
+                 const filterGroups = ['color', 'type', 'country', 'dry-sweet', 'body', 'acidity'];
+                 filterGroups.forEach(group => {
+                     const selectedOption = document.querySelector(`input[name="${group}"]:checked`);
+                     if (selectedOption) {
+                         selectedFilters[group] = selectedOption.value.toLowerCase();
+                     }
+                 });
 
-            wines = originalWines.filter(wine => {
-                const matchesSearch = searchTerms.every(term => {
-                    return Object.values(wine).some(value => 
-                        value && value.toLowerCase().includes(term)
-                    );
-                });
+                 // Filter out items with Total Unit of 0
+                 wines = originalWines.filter(wine => {
+             const matchesSearch = searchTerms.every(term => {
+            return Object.values(wine).some(value => 
+                             value && value.toLowerCase().includes(term)
+                         );
+                     });
 
-                const matchesFilters = Object.keys(selectedFilters).every(key => {
-                    const filterValue = selectedFilters[key];
-                    const wineValue = wine[key] ? wine[key].toLowerCase() : '';
-                    return wineValue === filterValue;
-                });
+        const matchesFilters = Object.keys(selectedFilters).every(key => {
+            const filterValue = selectedFilters[key];
+            const wineValue = wine[key] ? wine[key].toLowerCase() : '';
+            return wineValue === filterValue;
+        });
 
-                return matchesSearch && matchesFilters;
-            });
+        return matchesSearch && matchesFilters && parseInt(wine['total unit']) > 0;
+    });
 
-            console.log("Filtered Wines:", wines.map(wine => ({ wine: wine.wine, priceRating: wine['price rating'] }))); // Debugging line
+    displayAllResults();
 
-            displayAllResults();
-
-            if (wines.length === 0) {
-                resultsContainer.innerHTML = '<p>No wines match your search criteria.</p>';
-            }
-        }
+    if (wines.length === 0) {
+        resultsContainer.innerHTML = '<p>No wines match your search criteria.</p>';
+    }
+}
 
         // Event Listeners
         document.addEventListener('DOMContentLoaded', () => {
