@@ -50,18 +50,21 @@ function clearScreen() {
   ctx.fillRect(0, canvas.height - counterHeight, canvas.width, counterHeight);
 }
 
-function drawText(text, x, y, size, color = "white") {
+function drawText(text, x, y, size, color = "white", align = "center") {
   ctx.font = `${size}px 'Press Start 2P', cursive`;
   ctx.fillStyle = color;
-  ctx.textAlign = "right";
+  ctx.textAlign = align;
   ctx.fillText(text, x, y);
 }
 
 function drawStars() {
   const starSize = 30;
-  const starY = 20;
+  const totalWidth = stars * (starSize + 10) - 10; // Total width of stars
+  const startX = (canvas.width - totalWidth) / 2; // Centered starting x position
+  const starY = canvas.height - 30;
+
   for (let i = 0; i < stars; i++) {
-    drawEmoji("⭐", 30 + i * (starSize + 10), starY, starSize);
+    drawEmoji("⭐", startX + i * (starSize + 10), starY, starSize);
   }
 }
 
@@ -90,7 +93,7 @@ function startScreen() {
 
   const padding = 10;
 
-  drawText("BURGER BOOM", canvas.width / 2, canvas.height / 3, titleFontSize, "cyan");
+  drawText("CHEF INVADERS", canvas.width / 2, canvas.height / 3, titleFontSize, "cyan");
   drawText("Tap or Press Any Key", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
   drawText("to Start", canvas.width / 2, canvas.height / 2 + instructionFontSize + padding, instructionFontSize, "white");
 
@@ -181,8 +184,8 @@ function update() {
   clearScreen();
   drawStars();
   
-  // Ensure the score is fully visible and aligned to the right
-  drawText(`Score: ${score}`, canvas.width - 10, 40, 20, "white");
+  // Centered score at the top
+  drawText(`Score: ${score}`, canvas.width / 2, 40, 20, "white");
 
   if (keys["ArrowLeft"]) chef.dx = -chef.speed;
   if (keys["ArrowRight"]) chef.dx = chef.speed;
@@ -236,9 +239,8 @@ canvas.addEventListener("touchstart", (e) => {
   e.preventDefault();
   isTouching = true;
   touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
 
-  // Shoot if touch is quick tap
+  // Shoot if quick tap
   if (projectiles.length < 5) {
     projectiles.push({ x: chef.x + chef.width / 2 - 10, y: chef.y, size: 20 });
   }
