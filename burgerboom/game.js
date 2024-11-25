@@ -1,11 +1,16 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// Adjust canvas size with a max width of 600px
-canvas.width = Math.min(600, window.innerWidth);
-canvas.height = canvas.width * (4 / 3);
-canvas.style.position = "absolute";
-canvas.style.left = `${(window.innerWidth - canvas.width) / 2}px`;
+// Adjust canvas size dynamically
+function resizeCanvas() {
+  canvas.width = Math.min(600, window.innerWidth); // Max width 600px
+  canvas.height = canvas.width * (4 / 3); // Maintain 4:3 aspect ratio
+  canvas.style.position = "absolute";
+  canvas.style.left = `${(window.innerWidth - canvas.width) / 2}px`;
+  canvas.style.top = `${(window.innerHeight - canvas.height) / 2}px`;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
 
 // Game states
 let state = "start"; // Possible states: "start", "playing", "gameOver"
@@ -124,13 +129,19 @@ function createCustomer() {
     emoji: size === 100 ? "👩‍⚖️" : "👨‍🍳",
     leaving: false,
     exploding: false,
-    timer: 0, // Timer for disappointed customers
+    timer: 0,
   });
 }
 
 // Handle Customer Explosion and Leaving
 function handleCustomerLeaveOrExplode(customer) {
   if (customer.exploding) {
+    // Add score based on customer type
+    if (customer.size === 100) {
+      score += 20; // Add 20 points for larger customers
+    } else {
+      score += 5; // Add 5 points for regular customers
+    }
     drawEmoji("💥", customer.x, customer.y, customer.size + 20);
     customers.splice(customers.indexOf(customer), 1);
   } else if (customer.leaving) {
@@ -138,7 +149,9 @@ function handleCustomerLeaveOrExplode(customer) {
     if (customer.emoji !== "😢") {
       customer.emoji = "😢"; // Turn customer into a sad face
     }
-    if (customer.y < 0) customers.splice(customers.indexOf(customer), 1);
+    if (customer.y < 0) {
+      customers.splice(customers.indexOf(customer), 1); // Remove customer when off-screen
+    }
   }
 }
 
@@ -156,7 +169,6 @@ function handleCollisions() {
         projectiles.splice(pi, 1);
         if (c.health <= 0) {
           c.exploding = true;
-          score += c.size === 100 ? 3 : 1;
         }
       }
     });
@@ -167,7 +179,7 @@ function handleCollisions() {
 function update() {
   clearScreen();
   drawStars();
-  drawText(`Score: ${score}`, canvas.width - 30, 50, 20, "white");
+  drawText(`Score: ${score}`, canvas.width - 70, 50, 20, "white"); // Adjusted position
 
   if (keys["ArrowLeft"]) chef.dx = -chef.speed;
   if (keys["ArrowRight"]) chef.dx = chef.speed;
@@ -224,9 +236,6 @@ canvas.addEventListener("touchstart", (e) => {
     update();
   } else if (state === "playing") {
     touchStartX = e.touches[0].clientX;
-    if (projectiles.length < 5) {
-      projectiles.push({ x: chef.x + chef.width / 2 - 10, y: chef.y, size: 20 });
-    }
   }
 });
 
@@ -234,7 +243,7 @@ canvas.addEventListener("touchmove", (e) => {
   e.preventDefault();
   if (state === "playing") {
     const touchX = e.touches[0].clientX;
-    chef.dx = touchX > touchStartX ? chef.speed : -chef.speed;
+    chef.x += touchX - touchStartX; // Move chef based on finger slide
     touchStartX = touchX;
   }
 });
