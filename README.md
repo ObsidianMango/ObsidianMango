@@ -40,6 +40,7 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
+| **Burger Boom**           | 🍔 [BurgBoom](https://obsidianmango.github.io/ObsidianMango/burgerboom/game.html) |
 | **Bibliomance**       | 📖 [Biblomancy](https://obsidianmango.github.io/ObsidianMango/biblioma.html)    | 
 | **ChoozyBoozy**           | 🥃 [Boozy](https://obsidianmango.github.io/ObsidianMango/boozy.html) | 
 | **WineDB**           | 🍷 [WEIN](https://obsidianmango.github.io/ObsidianMango/wine.html) | 
