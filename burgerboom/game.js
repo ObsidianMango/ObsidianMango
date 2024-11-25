@@ -1,10 +1,10 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// Adjust canvas size dynamically
+// Adjust canvas size dynamically for iPhone screen ratio (9:16)
 function resizeCanvas() {
-  canvas.width = Math.min(600, window.innerWidth); // Max width 600px
-  canvas.height = canvas.width * (4 / 3); // Maintain 4:3 aspect ratio
+  canvas.width = Math.min(375, window.innerWidth); // iPhone screen width (max 375px)
+  canvas.height = canvas.width * (16 / 9); // Maintain 9:16 aspect ratio
   canvas.style.position = "absolute";
   canvas.style.left = `${(window.innerWidth - canvas.width) / 2}px`;
   canvas.style.top = `${(window.innerHeight - canvas.height) / 2}px`;
@@ -20,6 +20,8 @@ const chef = { x: canvas.width / 2, y: canvas.height - 100, width: 50, height: 5
 
 // Touch controls
 let touchStartX = null;
+let touchStartY = null;
+let isTouching = false;
 
 // Keyboard controls
 const keys = {};
@@ -51,7 +53,7 @@ function clearScreen() {
 function drawText(text, x, y, size, color = "white") {
   ctx.font = `${size}px 'Press Start 2P', cursive`;
   ctx.fillStyle = color;
-  ctx.textAlign = "center";
+  ctx.textAlign = "right";
   ctx.fillText(text, x, y);
 }
 
@@ -88,7 +90,7 @@ function startScreen() {
 
   const padding = 10;
 
-  drawText("CHEF INVADERS", canvas.width / 2, canvas.height / 3, titleFontSize, "cyan");
+  drawText("BURGER BOOM", canvas.width / 2, canvas.height / 3, titleFontSize, "cyan");
   drawText("Tap or Press Any Key", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
   drawText("to Start", canvas.width / 2, canvas.height / 2 + instructionFontSize + padding, instructionFontSize, "white");
 
@@ -174,13 +176,13 @@ function handleCollisions() {
   });
 }
 
+// Game Update Logic
 function update() {
   clearScreen();
   drawStars();
-
+  
   // Ensure the score is fully visible and aligned to the right
-  ctx.textAlign = "right";
-  drawText(`Score: ${score}`, canvas.width - 100, 50, 20, "white"); // Align to right and leave 10px padding
+  drawText(`Score: ${score}`, canvas.width - 10, 40, 20, "white");
 
   if (keys["ArrowLeft"]) chef.dx = -chef.speed;
   if (keys["ArrowRight"]) chef.dx = chef.speed;
@@ -232,17 +234,19 @@ function update() {
 // Touch Events
 canvas.addEventListener("touchstart", (e) => {
   e.preventDefault();
-  if (state === "start") {
-    state = "playing";
-    update();
-  } else if (state === "playing") {
-    touchStartX = e.touches[0].clientX;
+  isTouching = true;
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+
+  // Shoot if touch is quick tap
+  if (projectiles.length < 5) {
+    projectiles.push({ x: chef.x + chef.width / 2 - 10, y: chef.y, size: 20 });
   }
 });
 
 canvas.addEventListener("touchmove", (e) => {
   e.preventDefault();
-  if (state === "playing") {
+  if (isTouching) {
     const touchX = e.touches[0].clientX;
     chef.x += touchX - touchStartX; // Move chef based on finger slide
     touchStartX = touchX;
@@ -250,6 +254,7 @@ canvas.addEventListener("touchmove", (e) => {
 });
 
 canvas.addEventListener("touchend", () => {
+  isTouching = false;
   chef.dx = 0;
 });
 
