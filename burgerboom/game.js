@@ -1,9 +1,9 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
-canvas.height = window.innerHeight;
-canvas.width = canvas.height * (4 / 3);
 
-// Center the canvas
+// Adjust canvas size with a max width of 600px
+canvas.width = Math.min(600, window.innerWidth);
+canvas.height = canvas.width * (4 / 3);
 canvas.style.position = "absolute";
 canvas.style.left = `${(window.innerWidth - canvas.width) / 2}px`;
 
@@ -13,27 +13,34 @@ let state = "start"; // Possible states: "start", "playing", "gameOver"
 // Player setup
 const chef = { x: canvas.width / 2, y: canvas.height - 100, width: 50, height: 50, speed: 7, dx: 0 };
 
+// Touch controls
+let touchStartX = null;
+
+// Keyboard controls
+const keys = {};
+
 // Game variables
 let customers = [];
 let projectiles = [];
 let score = 0;
 let disappointedCount = 0;
-const maxDisappointed = 25;
+let stars = 5; // Start with 5 stars
+const maxDisappointedBeforeStarLoss = 5;
 
-// Blinking Start Text
-let blinkVisible = true;
-let blinkTimer = 0;
-
-// Customer and Projectile Configuration
-const randomEmojis = ["👩‍🍳", "👨‍🎤", "👨‍🌾", "👩‍🔬"];
-const largeEmoji = "👩‍⚖️";
-const explosionEmoji = "💥";
-const sadEmoji = "😢";
-const counterY = canvas.height - 150;
+// Counter height
+const counterHeight = 150;
 
 // Utility Functions
-function randomX() {
-  return Math.random() * (canvas.width - 50);
+function clearScreen() {
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, "#222"); // Dark gray
+  gradient.addColorStop(1, "#000"); // Black
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw counter area
+  ctx.fillStyle = "#444"; // Darker gray for the counter
+  ctx.fillRect(0, canvas.height - counterHeight, canvas.width, counterHeight);
 }
 
 function drawText(text, x, y, size, color = "white") {
@@ -43,130 +50,102 @@ function drawText(text, x, y, size, color = "white") {
   ctx.fillText(text, x, y);
 }
 
-function drawFrame() {
-  ctx.strokeStyle = "gold";
-  ctx.lineWidth = 15;
-  ctx.strokeRect(0, 0, canvas.width, canvas.height);
+function drawStars() {
+  const starSize = 30;
+  const starY = 20;
+  for (let i = 0; i < stars; i++) {
+    drawEmoji("⭐", 30 + i * (starSize + 10), starY, starSize);
+  }
 }
 
-function clearScreen() {
-  ctx.fillStyle = "black";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-}
-
-// Draw Emoji
 function drawEmoji(emoji, x, y, size) {
   ctx.font = `${size}px Arial`;
   ctx.fillText(emoji, x, y + size);
 }
 
-// Move the Chef
-function moveChef() {
-  chef.x += chef.dx; // Update chef's position based on direction
-  if (chef.x < 0) chef.x = 0; // Prevent moving off the left edge
-  if (chef.x + chef.width > canvas.width) chef.x = canvas.width - chef.width; // Prevent moving off the right edge
+// Reset Game Logic
+function resetGame() {
+  customers = [];
+  projectiles = [];
+  score = 0;
+  disappointedCount = 0;
+  stars = 5; // Reset stars
+  state = "playing";
+  update();
 }
 
-// Create Customers
-function createCustomer() {
-  const size = Math.random() > 0.8 ? 100 : 50; // Large customer 20% of the time
-  customers.push({
-    x: randomX(), // Random X position
-    y: -size, // Start above the screen
-    size: size, // Customer size
-    health: size === 100 ? 5 : 1, // Large customers take 5 hits
-    emoji: size === 100 ? largeEmoji : randomEmojis[Math.floor(Math.random() * randomEmojis.length)], // Random emoji
-    timer: 0, // Timer for how long the customer waits at the counter
-    served: false, // Whether the customer has been served
-    leaving: false, // Whether the customer is leaving
-    exploding: false, // Whether the customer is exploding
-    explosionTimer: 0, // Timer for explosion animation
-    explosionSize: size, // Initial explosion size
-  });
-}
-
-// **Start Screen Logic**
+// Start Screen
 function startScreen() {
   clearScreen();
-  drawText("CHEF INVADERS", canvas.width / 2, canvas.height / 3, 30, "cyan");
 
-  if (blinkVisible) {
-    drawText("[ Press Any Key to Begin ]", canvas.width / 2, canvas.height / 2, 20, "white");
-  }
-  drawFrame();
+  const titleFontSize = Math.min(30, canvas.width / 15);
+  const instructionFontSize = Math.min(20, canvas.width / 25);
 
-  // Blinking effect
-  blinkTimer++;
-  if (blinkTimer % 30 === 0) blinkVisible = !blinkVisible;
+  const padding = 10;
+
+  drawText("CHEF INVADERS", canvas.width / 2, canvas.height / 3, titleFontSize, "cyan");
+  drawText("Tap or Press Any Key", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
+  drawText("to Start", canvas.width / 2, canvas.height / 2 + instructionFontSize + padding, instructionFontSize, "white");
 
   if (state === "start") {
     requestAnimationFrame(startScreen);
   }
 }
 
-// **Gameplay Logic**
-function update() {
+function gameOverScreen() {
   clearScreen();
-  drawText(`Score: ${score}`, canvas.width / 3, 50, 20, "white");
-  drawText(`Disappointed: ${disappointedCount}`, (2 * canvas.width) / 3, 50, 20, "white");
 
-  // Draw Chef
-  moveChef();
-  drawEmoji("🍳", chef.x, chef.y, chef.width);
+  const titleFontSize = Math.min(30, canvas.width / 15);
+  const instructionFontSize = Math.min(20, canvas.width / 25);
 
-  // Move and draw projectiles
-  projectiles = projectiles.filter((p) => p.y > 0); // Remove off-screen projectiles
-  projectiles.forEach((p) => {
-    p.y -= 10; // Move up
-    drawEmoji("🍔", p.x, p.y, p.size);
+  const padding = 10;
+
+  drawText("GAME OVER", canvas.width / 2, canvas.height / 3, titleFontSize, "red");
+  drawText("Tap or Press Any Key", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
+  drawText("to Restart", canvas.width / 2, canvas.height / 2 + instructionFontSize + padding, instructionFontSize, "white");
+
+  document.addEventListener("keydown", handleRestart, { once: true });
+  canvas.addEventListener("click", handleRestart, { once: true });
+}
+
+function handleRestart() {
+  state = "start"; // Reset state
+  resetGame();
+}
+
+// Spawn Customer
+function createCustomer() {
+  const size = Math.random() > 0.8 ? 100 : 50;
+  customers.push({
+    x: Math.random() * (canvas.width - size),
+    y: -size,
+    size,
+    health: size === 100 ? 5 : 1,
+    emoji: size === 100 ? "👩‍⚖️" : "👨‍🍳",
+    leaving: false,
+    exploding: false,
+    timer: 0, // Timer for disappointed customers
   });
+}
 
-  // Spawn and move customers
-  if (Math.random() < 0.02) createCustomer();
-  customers.forEach((customer) => {
-    if (customer.exploding) {
-      // Handle explosions
-      customer.explosionSize += 5; // Explosion grows
-      customer.explosionTimer++;
-      drawEmoji(explosionEmoji, customer.x, customer.y, customer.explosionSize);
-
-      if (customer.explosionTimer > 20) {
-        customers = customers.filter((c) => c !== customer); // Remove after explosion
-      }
-      return;
+// Handle Customer Explosion and Leaving
+function handleCustomerLeaveOrExplode(customer) {
+  if (customer.exploding) {
+    drawEmoji("💥", customer.x, customer.y, customer.size + 20);
+    customers.splice(customers.indexOf(customer), 1);
+  } else if (customer.leaving) {
+    customer.y -= 2;
+    if (customer.emoji !== "😢") {
+      customer.emoji = "😢"; // Turn customer into a sad face
     }
+    if (customer.y < 0) customers.splice(customers.indexOf(customer), 1);
+  }
+}
 
-    if (customer.leaving) {
-      // Handle leaving customers
-      customer.y -= 2;
-      drawEmoji(customer.emoji, customer.x, customer.y, customer.size);
-      if (customer.y < 0) {
-        customers = customers.filter((c) => c !== customer); // Remove off-screen
-      }
-      return;
-    }
-
-    if (!customer.served && customer.y + customer.size >= counterY) {
-      // Customer reaches the counter
-      customer.y = counterY; // Lock to counter
-      customer.timer++;
-
-      if (customer.timer > 200) {
-        customer.emoji = sadEmoji; // Turn sad
-        customer.leaving = true; // Start leaving
-        disappointedCount++; // Increment disappointed count
-      }
-    } else {
-      // Move customer
-      customer.y += 2;
-    }
-
-    drawEmoji(customer.emoji, customer.x, customer.y, customer.size);
-  });
-
-  // Handle collisions (projectiles vs customers)
-  projectiles.forEach((p, i) => {
-    customers.forEach((c, j) => {
+// Handle Collisions
+function handleCollisions() {
+  projectiles.forEach((p, pi) => {
+    customers.forEach((c, ci) => {
       if (
         !c.leaving &&
         p.y < c.y + c.size &&
@@ -174,49 +153,109 @@ function update() {
         p.x < c.x + c.size
       ) {
         c.health--;
-        projectiles.splice(i, 1); // Remove projectile
+        projectiles.splice(pi, 1);
         if (c.health <= 0) {
           c.exploding = true;
-          score += c.size === 100 ? 3 : 1; // Add points (3 for large, 1 for small)
+          score += c.size === 100 ? 3 : 1;
         }
       }
     });
   });
+}
 
-  // End game if too many disappointed customers
-  if (disappointedCount >= maxDisappointed) {
+// Game Update Logic
+function update() {
+  clearScreen();
+  drawStars();
+  drawText(`Score: ${score}`, canvas.width - 30, 50, 20, "white");
+
+  if (keys["ArrowLeft"]) chef.dx = -chef.speed;
+  if (keys["ArrowRight"]) chef.dx = chef.speed;
+  if (!keys["ArrowLeft"] && !keys["ArrowRight"]) chef.dx = 0;
+
+  chef.x += chef.dx;
+  if (chef.x < 0) chef.x = 0;
+  if (chef.x + chef.width > canvas.width) chef.x = canvas.width - chef.width;
+  drawEmoji("🍳", chef.x, chef.y, chef.width);
+
+  projectiles = projectiles.filter((p) => p.y > 0);
+  projectiles.forEach((p) => {
+    p.y -= 10;
+    drawEmoji("🍔", p.x, p.y, p.size);
+  });
+
+  if (Math.random() < 0.02) createCustomer();
+  customers.forEach((customer) => {
+    if (customer.exploding || customer.leaving) {
+      handleCustomerLeaveOrExplode(customer);
+    } else if (!customer.served && customer.y + customer.size >= canvas.height - counterHeight) {
+      customer.y = canvas.height - counterHeight - customer.size;
+      customer.timer++;
+
+      if (customer.timer > 200) {
+        customer.leaving = true;
+        disappointedCount++;
+        if (disappointedCount % maxDisappointedBeforeStarLoss === 0) {
+          stars--;
+        }
+      }
+    } else {
+      customer.y += 2;
+    }
+    drawEmoji(customer.emoji, customer.x, customer.y, customer.size);
+  });
+
+  handleCollisions();
+
+  if (stars <= 0) {
     state = "gameOver";
+    gameOverScreen();
     return;
   }
 
-  drawFrame();
   if (state === "playing") requestAnimationFrame(update);
 }
 
-// **Game Over Screen**
-function gameOverScreen() {
-  clearScreen();
-  drawText("GAME OVER", canvas.width / 2, canvas.height / 2, 30, "red");
-  drawText("Too many disappointed customers!", canvas.width / 2, canvas.height / 2 + 50, 20, "white");
-  drawFrame();
-}
-
-// **State Transition Logic**
-window.addEventListener("keydown", (e) => {
+// Touch Events
+canvas.addEventListener("touchstart", (e) => {
+  e.preventDefault();
   if (state === "start") {
     state = "playing";
-    update(); // Start gameplay
+    update();
   } else if (state === "playing") {
-    if (e.key === "ArrowLeft") chef.dx = -chef.speed;
-    if (e.key === "ArrowRight") chef.dx = chef.speed;
-    if (e.key === " " && projectiles.length < 5) {
+    touchStartX = e.touches[0].clientX;
+    if (projectiles.length < 5) {
       projectiles.push({ x: chef.x + chef.width / 2 - 10, y: chef.y, size: 20 });
     }
   }
 });
 
-window.addEventListener("keyup", (e) => {
-  if (e.key === "ArrowLeft" || e.key === "ArrowRight") chef.dx = 0;
+canvas.addEventListener("touchmove", (e) => {
+  e.preventDefault();
+  if (state === "playing") {
+    const touchX = e.touches[0].clientX;
+    chef.dx = touchX > touchStartX ? chef.speed : -chef.speed;
+    touchStartX = touchX;
+  }
+});
+
+canvas.addEventListener("touchend", () => {
+  chef.dx = 0;
+});
+
+// Keyboard Events
+document.addEventListener("keydown", (e) => {
+  keys[e.key] = true;
+  if (state === "start") {
+    state = "playing";
+    update();
+  } else if (state === "playing" && e.key === " " && projectiles.length < 5) {
+    projectiles.push({ x: chef.x + chef.width / 2 - 10, y: chef.y, size: 20 });
+  }
+});
+
+document.addEventListener("keyup", (e) => {
+  keys[e.key] = false;
 });
 
 // Start the game
