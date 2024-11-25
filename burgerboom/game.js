@@ -46,7 +46,7 @@ let lastTimestamp = 0; // Tracks the last frame's timestamp
 function clearScreen() {
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
   gradient.addColorStop(0, "#222"); // Dark gray
-  gradient.addColorStop(1, "#000"); // Black
+  gradient.addColorStop(1, "#7c7c7c"); // Black
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -65,7 +65,7 @@ function drawText(text, x, y, size, color = "white", align = "center") {
 function drawStars() {
   const starSize = 30;
   const totalWidth = stars * (starSize + 10) - 10; // Total width of stars
-  const startX = (canvas.width - totalWidth) / 2; // Centered starting x position
+  const startX = (canvas.width - totalWidth) / 2 + 15; // Centered starting x position, shifted right by 10 pixels
   const starY = canvas.height - 20; // Adjust to fit at the bottom
 
   for (let i = 0; i < stars; i++) {
@@ -99,8 +99,8 @@ function startScreen() {
 
   const padding = 10;
 
-  drawText("CHEF INVADERS", canvas.width / 2, canvas.height / 3, titleFontSize, "cyan");
-  drawText("Tap or Press Any Key", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
+  drawText("BURGER BOOM", canvas.width / 2, canvas.height / 3, titleFontSize, "cyan");
+  drawText("Press Anything", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
   drawText("to Start", canvas.width / 2, canvas.height / 2 + instructionFontSize + padding, instructionFontSize, "white");
 
   // Add event listeners for starting the game
@@ -112,8 +112,7 @@ function startScreen() {
     requestAnimationFrame(startScreen);
   }
 }
-
-// Game Over Screen
+//gameover screen
 function gameOverScreen() {
   clearScreen();
 
@@ -123,7 +122,8 @@ function gameOverScreen() {
   const padding = 10;
 
   drawText("GAME OVER", canvas.width / 2, canvas.height / 3, titleFontSize, "red");
-  drawText("Tap or Press Any Key", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
+  drawText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 3 + titleFontSize + 10, instructionFontSize, "white");
+  drawText("Press Anything", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
   drawText("to Restart", canvas.width / 2, canvas.height / 2 + instructionFontSize + padding, instructionFontSize, "white");
 
   // Add event listeners for restarting the game
@@ -131,6 +131,7 @@ function gameOverScreen() {
   canvas.addEventListener("click", handleGameRestart, { once: true });
   canvas.addEventListener("touchstart", handleGameRestart, { once: true });
 }
+
 
 function handleGameStart() {
   state = "playing"; // Set state to playing
@@ -144,13 +145,15 @@ function handleGameRestart() {
 
 // Spawn Customer
 function createCustomer() {
-  const size = Math.random() > 0.8 ? 80 : 50; // Adjust size for better visibility
+  const size = Math.random() > 0.9 ? 80 : 50; // Adjust size for better visibility
   customers.push({
     x: Math.random() * (canvas.width - size),
     y: -size, // Start above the screen
     size,
     health: size === 80 ? 5 : 1,
-    emoji: size === 80 ? "👩‍⚖️" : "👨‍🍳",
+   emoji: size === 80 
+    ? ["🧔‍♂️", "🐄"][Math.floor(Math.random() * 2)]
+    : ["👮‍♂️", "👷‍♀️", "👨", "👩", "👷‍♂️"][Math.floor(Math.random() * 5)],
     timer: 0, // Timer for how long they've been at the counter
     leaving: false,
     exploding: false,
@@ -205,7 +208,10 @@ function update(timestamp) {
 
   clearScreen();
   drawStars();
-  drawText(`Score: ${score}`, canvas.width / 2, 40, 20, "white");
+
+  // Draw the score just above the stars
+  const scoreYPosition = canvas.height - counterHeight + 110; // Adjust position to fit above the stars
+  drawText(`Score: ${score}`, canvas.width / 2, scoreYPosition, 20, "white");
 
   // Handle keyboard movement
   chef.dx = 0;
@@ -220,7 +226,7 @@ function update(timestamp) {
   // Move projectiles
   projectiles.forEach((p) => (p.y -= PROJECTILE_SPEED * deltaTime));
   projectiles = projectiles.filter((p) => p.y > 0);
-  projectiles.forEach((p) => drawEmoji("🍔", p.x, p.y, 30)); // Adjust projectile size
+  projectiles.forEach((p) => drawEmoji("🍔", p.x, p.y, 40)); // Adjust projectile size
 
   // Move customers
   customers.forEach((c) => {
