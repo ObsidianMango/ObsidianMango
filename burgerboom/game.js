@@ -20,7 +20,6 @@ const chef = { x: canvas.width / 2, y: canvas.height - 100, width: 50, height: 5
 
 // Touch controls
 let touchStartX = null;
-let touchStartY = null;
 let isTouching = false;
 
 // Keyboard controls
@@ -93,15 +92,21 @@ function startScreen() {
 
   const padding = 10;
 
-  drawText("CHEF INVADERS", canvas.width / 2, canvas.height / 3, titleFontSize, "cyan");
-  drawText("Tap or Press Any Key", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
+  drawText("BURGERBOOM", canvas.width / 2, canvas.height / 3, titleFontSize, "cyan");
+  drawText("Press Anything", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
   drawText("to Start", canvas.width / 2, canvas.height / 2 + instructionFontSize + padding, instructionFontSize, "white");
+
+  // Add event listeners for starting the game
+  document.addEventListener("keydown", handleGameStart, { once: true });
+  canvas.addEventListener("click", handleGameStart, { once: true });
+  canvas.addEventListener("touchstart", handleGameStart, { once: true });
 
   if (state === "start") {
     requestAnimationFrame(startScreen);
   }
 }
 
+// Game Over Screen
 function gameOverScreen() {
   clearScreen();
 
@@ -111,16 +116,23 @@ function gameOverScreen() {
   const padding = 10;
 
   drawText("GAME OVER", canvas.width / 2, canvas.height / 3, titleFontSize, "red");
-  drawText("Tap or Press Any Key", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
+  drawText("Press Anything", canvas.width / 2, canvas.height / 2 - instructionFontSize, instructionFontSize, "white");
   drawText("to Restart", canvas.width / 2, canvas.height / 2 + instructionFontSize + padding, instructionFontSize, "white");
 
-  document.addEventListener("keydown", handleRestart, { once: true });
-  canvas.addEventListener("click", handleRestart, { once: true });
+  // Add event listeners for restarting the game
+  document.addEventListener("keydown", handleGameRestart, { once: true });
+  canvas.addEventListener("click", handleGameRestart, { once: true });
+  canvas.addEventListener("touchstart", handleGameRestart, { once: true });
 }
 
-function handleRestart() {
-  state = "start"; // Reset state
-  resetGame();
+function handleGameStart() {
+  state = "playing"; // Set state to playing
+  update(); // Start the game loop
+}
+
+function handleGameRestart() {
+  state = "start"; // Set state to start
+  resetGame(); // Restart the game
 }
 
 // Spawn Customer
