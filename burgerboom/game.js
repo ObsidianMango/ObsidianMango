@@ -136,7 +136,6 @@ function createCustomer() {
 // Handle Customer Explosion and Leaving
 function handleCustomerLeaveOrExplode(customer) {
   if (customer.exploding) {
-    // Add score based on customer type
     if (customer.size === 100) {
       score += 20; // Add 20 points for larger customers
     } else {
@@ -175,11 +174,13 @@ function handleCollisions() {
   });
 }
 
-// Game Update Logic
 function update() {
   clearScreen();
   drawStars();
-  drawText(`Score: ${score}`, canvas.width - 70, 50, 20, "white"); // Adjusted position
+
+  // Ensure the score is fully visible and aligned to the right
+  ctx.textAlign = "right";
+  drawText(`Score: ${score}`, canvas.width - 100, 50, 20, "white"); // Align to right and leave 10px padding
 
   if (keys["ArrowLeft"]) chef.dx = -chef.speed;
   if (keys["ArrowRight"]) chef.dx = chef.speed;
