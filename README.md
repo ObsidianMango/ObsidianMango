@@ -40,6 +40,7 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
+| **Slots**           | 🎰 [LSLOTS](https://obsidianmango.github.io/ObsidianMango/slot.html) | 
 | **TodayHistory**       | 🌎 [TodayHistory](https://obsidianmango.github.io/ObsidianMango/es.html)    |
 | **TodayMovie**       | 🎥 [MoviesPremiere](https://obsidianmango.github.io/ObsidianMango/mov.html)    |
 | **Burger Boom**           | 🍔 [BurgBoom](https://obsidianmango.github.io/ObsidianMango/burgerboom/game.html) |
