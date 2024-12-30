@@ -40,6 +40,7 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
+| **StoryPromptGen**           | 🍷 [Story](https://obsidianmango.github.io/ObsidianMango/storyprompt.html) |
 | **EmojiBattleArena**           | ⚔️ [EBArena](https://obsidianmango.github.io/ObsidianMango/eba.html) | 
 | **Slots**           | 🎰 [SLOTS](https://obsidianmango.github.io/ObsidianMango/slot.html) | 
 | **TodayHistory**       | 🌎 [TodayHistory](https://obsidianmango.github.io/ObsidianMango/es.html)    |
