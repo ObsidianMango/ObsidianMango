@@ -9,18 +9,9 @@
       overflow: hidden;
       background-color: #000000;
     }
-    #info {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      font-family: Arial, sans-serif;
-      color: #ffffff;
-      z-index: 999;
-    }
   </style>
 </head>
 <body>
-  <div id="info">Click or tap a sphere, 6-slice!</div>
   <script src="https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.min.js"></script>
   <script>
     // Basic scene setup
@@ -55,7 +46,7 @@
     for (let i = 0; i < 12; i++) {
       const material = new THREE.MeshPhongMaterial({
         color: Math.random() * 0xffffff,
-        shininess: 100
+        shininess: 100,
       });
       const sphere = new THREE.Mesh(geometry, material);
 
@@ -76,7 +67,7 @@
       scene.add(sphere);
     }
 
-    // Raycaster for detecting clicks/taps
+    // Raycaster for detecting taps
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -85,32 +76,61 @@
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
-    window.addEventListener('resize', onWindowResize, false);
+    window.addEventListener("resize", onWindowResize, false);
 
-    function onClick(event) {
+    function onTap(event) {
       event.preventDefault();
-      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX || event.touches[0].clientX) - rect.left) / rect.width * 2 - 1;
+      mouse.y = -((event.clientY || event.touches[0].clientY) - rect.top) / rect.height * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(spheres);
 
       if (intersects.length > 0) {
         const clickedSphere = intersects[0].object;
-        // Give it a quick color change
         clickedSphere.material.color.set(Math.random() * 0xffffff);
 
-        // Increase velocity on click
+        // Increase velocity on tap
         const index = spheres.indexOf(clickedSphere);
         velocities[index].x += (Math.random() - 0.5) * 0.3;
         velocities[index].y += (Math.random() - 0.5) * 0.3;
         velocities[index].z += (Math.random() - 0.5) * 0.3;
       }
     }
-    window.addEventListener('click', onClick, false);
+    window.addEventListener("pointerdown", onTap, false);
+
+    // Check for collisions between spheres
+    function checkCollisions() {
+      for (let i = 0; i < spheres.length; i++) {
+        for (let j = i + 1; j < spheres.length; j++) {
+          const sphereA = spheres[i];
+          const sphereB = spheres[j];
+          const distance = sphereA.position.distanceTo(sphereB.position);
+          const radiusSum = 4; // 2 + 2 (radius of each sphere)
+
+          if (distance < radiusSum) {
+            // Simple elastic collision
+            const velA = velocities[i];
+            const velB = velocities[j];
+            const collisionNormal = sphereA.position.clone().sub(sphereB.position).normalize();
+
+            // Reflect velocities
+            velA.sub(
+              collisionNormal.clone().multiplyScalar(2 * velA.dot(collisionNormal))
+            );
+            velB.sub(
+              collisionNormal.clone().multiplyScalar(2 * velB.dot(collisionNormal))
+            );
+          }
+        }
+      }
+    }
 
     // Animate
     function animate() {
       requestAnimationFrame(animate);
+
+      checkCollisions();
 
       spheres.forEach((sphere, index) => {
         const vel = velocities[index];
@@ -119,15 +139,9 @@
         sphere.position.add(vel);
 
         // Bounce off boundaries (x: ±25, y: ±15, z: ±15)
-        if (sphere.position.x < -25 || sphere.position.x > 25) {
-          vel.x = -vel.x;
-        }
-        if (sphere.position.y < -15 || sphere.position.y > 15) {
-          vel.y = -vel.y;
-        }
-        if (sphere.position.z < -15 || sphere.position.z > 15) {
-          vel.z = -vel.z;
-        }
+        if (sphere.position.x < -25 || sphere.position.x > 25) vel.x = -vel.x;
+        if (sphere.position.y < -15 || sphere.position.y > 15) vel.y = -vel.y;
+        if (sphere.position.z < -15 || sphere.position.z > 15) vel.z = -vel.z;
 
         // Slight rotation for a cool spin effect
         sphere.rotation.x += 0.01;
