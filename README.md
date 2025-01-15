@@ -40,8 +40,8 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
-| **MCQ**           |  [MCQ](https://obsidianmango.github.io/ObsidianMango/MCQ.html) | 
-| **UntitledSteveStory**     | 🤖 [USS](https://obsidianmango.github.io/ObsidianMango/sstory.html)   | 
+| **G64Cheats**           | 👁️ [G64cu](https://obsidianmango.github.io/ObsidianMango/g64cu/watch.html) | 
+| **MCQ**           | 🪤 [MCQ](https://obsidianmango.github.io/ObsidianMango/MCQ.html) |  
 | **TASKMEISTER8000**     | ☑️ [TM8K](https://obsidianmango.github.io/ObsidianMango/tm5k.html)   | 
 | **StoryPromptGen**           | 🎭 [Story](https://obsidianmango.github.io/ObsidianMango/storyprompt.html) |
 | **EmojiBattleArena**           | ⚔️ [EBArena](https://obsidianmango.github.io/ObsidianMango/eba.html) | 
