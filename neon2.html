@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cosmic Bounce</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #000000;
+    }
+  </style>
+</head>
+<body>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.141.0/build/three.min.js"></script>
+  <script>
+    // Constants
+    const gatherSpeed = 0.1; // Speed of gathering to center
+    const confettiCount = 100; // Number of confetti particles per cat
+    const confettiFadeTime = 2000; // Time in ms for confetti to fade out
+    const MAX_SPEED = 0.25; // Maximum velocity magnitude for objects
+
+    let boundaries = { x: 25, y: 15, z: 15 }; // Initial boundaries
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+    camera.position.z = 40;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Update boundaries dynamically based on screen size
+    function updateBoundaries() {
+      boundaries.x = window.innerWidth / 50;
+      boundaries.y = window.innerHeight / 50;
+      boundaries.z = Math.min(boundaries.x, boundaries.y);
+    }
+    window.addEventListener("resize", () => {
+      updateBoundaries();
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    updateBoundaries();
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.PointLight(0xffcc00, 1.5, 200);
+    scene.add(sunLight);
+
+    // Sun setup
+    const sunGeometry = new THREE.SphereGeometry(5, 32, 32);
+    const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+    const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+    scene.add(sun);
+
+    const sunOrbitRadius = 60;
+
+    // Starfield background
+    const starGeometry = new THREE.BufferGeometry();
+    const starCount = 1000;
+    const starPositions = [];
+    for (let i = 0; i < starCount; i++) {
+      starPositions.push(
+        (Math.random() - 0.5) * 500,
+        (Math.random() - 0.5) * 500,
+        (Math.random() - 0.5) * 500
+      );
+    }
+
+    starGeometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(starPositions, 3)
+    );
+
+    const starMaterial = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 1,
+      sizeAttenuation: true,
+    });
+
+    const stars = new THREE.Points(starGeometry, starMaterial);
+    scene.add(stars);
+
+    // Global variables
+    let objects = [];
+    let velocities = [];
+    let explosionInProgress = false;
+
+    // Function to create a cat model
+    function createCatModel() {
+      const cat = new THREE.Group();
+
+      const catColors = [0x000000, 0xffffff, 0xd2b48c, 0xffc107, 0x808080]; // Realistic cat colors
+      const bodyColor = catColors[Math.floor(Math.random() * catColors.length)];
+      const accentColor = catColors[Math.floor(Math.random() * catColors.length)];
+
+      // Body
+      const bodyGeometry = new THREE.SphereGeometry(2, 16, 16);
+      const bodyMaterial = new THREE.MeshPhongMaterial({ color: bodyColor });
+      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      cat.add(body);
+
+      // Head
+      const headGeometry = new THREE.SphereGeometry(1.5, 16, 16);
+      const headMaterial = new THREE.MeshPhongMaterial({ color: accentColor });
+      const head = new THREE.Mesh(headGeometry, headMaterial);
+      head.position.set(0, 2.5, 0);
+      cat.add(head);
+
+      // Ears
+      const earGeometry = new THREE.ConeGeometry(0.5, 1.5, 8);
+      const earMaterial = new THREE.MeshPhongMaterial({ color: accentColor });
+      const leftEar = new THREE.Mesh(earGeometry, earMaterial);
+      const rightEar = new THREE.Mesh(earGeometry, earMaterial);
+
+      leftEar.position.set(-0.8, 4, 0);
+      leftEar.rotation.z = Math.PI / 6;
+
+      rightEar.position.set(0.8, 4, 0);
+      rightEar.rotation.z = -Math.PI / 6;
+
+      cat.add(leftEar, rightEar);
+
+      return cat;
+    }
+
+    // Function to create a sphere
+    function createSphere() {
+      const geometry = new THREE.SphereGeometry(2, 32, 32);
+      const material = new THREE.MeshPhongMaterial({
+        color: Math.random() * 0xffffff,
+        shininess: 100,
+      });
+      return new THREE.Mesh(geometry, material);
+    }
+
+    // Function to respawn balls
+    function respawnBalls() {
+      objects.forEach((obj) => scene.remove(obj));
+      objects = [];
+      velocities = [];
+
+      for (let i = 0; i < 12; i++) {
+        const sphere = createSphere();
+
+        sphere.position.set(
+          (Math.random() - 0.5) * boundaries.x,
+          (Math.random() - 0.5) * boundaries.y,
+          (Math.random() - 0.5) * boundaries.z
+        );
+
+        const vx = (Math.random() - 0.5) * 0.2;
+        const vy = (Math.random() - 0.5) * 0.2;
+        const vz = (Math.random() - 0.5) * 0.2;
+
+        objects.push(sphere);
+        velocities.push(new THREE.Vector3(vx, vy, vz));
+        scene.add(sphere);
+      }
+    }
+
+    // Function to clamp velocities to a maximum speed
+    function clampVelocity(velocity) {
+      if (velocity.length() > MAX_SPEED) {
+        velocity.setLength(MAX_SPEED);
+      }
+    }
+
+    // Function to handle collisions
+    function handleCollisions() {
+      for (let i = 0; i < objects.length; i++) {
+        for (let j = i + 1; j < objects.length; j++) {
+          const objA = objects[i];
+          const objB = objects[j];
+          const distance = objA.position.distanceTo(objB.position);
+          const combinedRadius = 4; // Radius of sphere or cat (2 each)
+
+          if (distance < combinedRadius) {
+            const collisionNormal = objA.position
+              .clone()
+              .sub(objB.position)
+              .normalize();
+
+            const relativeVelocity = velocities[i]
+              .clone()
+              .sub(velocities[j]);
+
+            const separatingVelocity = relativeVelocity.dot(collisionNormal);
+
+            if (separatingVelocity < 0) {
+              const impulse = collisionNormal.multiplyScalar(-2 * separatingVelocity);
+              velocities[i].add(impulse);
+              velocities[j].sub(impulse);
+
+              // Clamp velocities to prevent excessive speed
+              clampVelocity(velocities[i]);
+              clampVelocity(velocities[j]);
+            }
+          }
+        }
+      }
+    }
+
+    // Function to trigger the final explosion
+    function triggerExplosion() {
+      explosionInProgress = true;
+      const explosionDuration = 3000; // Time for everything to be sucked into the sun
+      const explosionParticles = [];
+
+      // Create explosion particles
+      const particleGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+      const particleMaterial = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+      for (let i = 0; i < 500; i++) {
+        const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+        particle.position.copy(sun.position);
+        scene.add(particle);
+        explosionParticles.push({
+          mesh: particle,
+          velocity: new THREE.Vector3(
+            (Math.random() - 0.5) * 2,
+            (Math.random() - 0.5) * 2,
+            (Math.random() - 0.5) * 2
+          ),
+        });
+      }
+
+      // Animate objects being sucked into the sun
+      const startTime = Date.now();
+      function animateExplosion() {
+        const elapsed = Date.now() - startTime;
+        const t = elapsed / explosionDuration;
+
+        // Move objects toward the sun
+        objects.forEach((object, index) => {
+          object.position.lerp(sun.position, gatherSpeed * t);
+        });
+
+        // Animate explosion particles
+        explosionParticles.forEach((particle) => {
+          particle.mesh.position.add(particle.velocity);
+          particle.mesh.material.opacity -= 0.01; // Gradually fade out
+        });
+
+        renderer.render(scene, camera);
+
+        if (elapsed < explosionDuration) {
+          requestAnimationFrame(animateExplosion);
+        } else {
+          // End explosion and reload the page
+          explosionParticles.forEach((particle) => scene.remove(particle.mesh));
+          setTimeout(() => {
+            location.reload();
+          }, 1000); // Reload after a brief delay
+        }
+      }
+
+      animateExplosion();
+    }
+
+    // Raycaster for interactions
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    function onTap(event) {
+      if (explosionInProgress) return;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX || event.touches[0].clientX) - rect.left) / rect.width * 2 - 1;
+      mouse.y = -((event.clientY || event.touches[0].clientY) - rect.top) / rect.height * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersects = raycaster.intersectObjects(objects);
+
+      if (intersects.length > 0) {
+        const clickedObject = intersects[0].object;
+        const index = objects.indexOf(clickedObject);
+
+        if (clickedObject.geometry?.type === "SphereGeometry") {
+          const cat = createCatModel();
+          cat.position.copy(clickedObject.position);
+
+          objects[index] = cat;
+          velocities[index] = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.5,
+            (Math.random() - 0.5) * 0.5,
+            (Math.random() - 0.5) * 0.5
+          );
+
+          scene.remove(clickedObject);
+          scene.add(cat);
+        }
+
+        if (objects.every((obj) => obj.isGroup)) {
+          triggerExplosion();
+        }
+      }
+    }
+
+    window.addEventListener("pointerdown", onTap);
+
+    // Initialize and animate
+    respawnBalls();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Rotate the sun
+      const sunAngle = Date.now() * 0.0001;
+      sun.position.set(
+        Math.cos(sunAngle) * sunOrbitRadius,
+        Math.sin(sunAngle) * sunOrbitRadius,
+        0
+      );
+      sunLight.position.copy(sun.position);
+
+      // Rotate stars
+      stars.rotation.y += 0.0005;
+
+      // Handle collisions
+      handleCollisions();
+
+      // Update objects
+      objects.forEach((object, index) => {
+        if (!explosionInProgress) {
+          object.position.add(velocities[index]);
+
+          // Bounce off boundaries
+          if (object.position.x < -boundaries.x || object.position.x > boundaries.x) {
+            velocities[index].x *= -1;
+          }
+          if (object.position.y < -boundaries.y || object.position.y > boundaries.y) {
+            velocities[index].y *= -1;
+          }
+          if (object.position.z < -boundaries.z || object.position.z > boundaries.z) {
+            velocities[index].z *= -1;
+          }
+
+          // Clamp velocity after boundary collisions
+          clampVelocity(velocities[index]);
+
+          // Random rotation
+          object.rotation.x += Math.random() * 0.05;
+          object.rotation.y += Math.random() * 0.05;
+        }
+      });
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
