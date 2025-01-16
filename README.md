@@ -40,6 +40,8 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
+| **Balls**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/neon1.html) | 
+| **Balls2:Catballs**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/neon2.html) | 
 | **G64Cheats**           | 👁️ [G64cu](https://obsidianmango.github.io/ObsidianMango/g64cu/goldeneye_cheats.html) | 
 | **MCQ**           | 🪤 [MCQ](https://obsidianmango.github.io/ObsidianMango/MCQ.html) |  
 | **TASKMEISTER8000**     | ☑️ [TM8K](https://obsidianmango.github.io/ObsidianMango/tm5k.html)   | 
