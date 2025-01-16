@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Dark Themed Conspiracy Word Search</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  body {
+    background: #111;
+    color: #0ff;
+    font-family: "Press Start 2P", monospace;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+  }
+ h1 {
+    
+    font-family: "Press Start 2P", monospace;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+  }
+
+  #word-search-container {
+    display: inline-block;
+    margin-top: 1rem;
+    border: 4px solid #0ff;
+    padding: 1rem;
+  }
+
+  .row {
+    display: flex;
+  }
+
+  .cell {
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid #0ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    font-size: 1rem;
+    position: relative;
+  }
+
+  .cell.selected {
+    background-color: #f0f;
+    color: #000;
+  }
+
+  .cell.found {
+    background-color: #0f0;
+    color: #000;
+  }
+
+  #word-list {
+    margin: 1rem auto;
+    max-width: 80%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+    word-wrap: break-word;
+  }
+
+  .word-item {
+    padding: 0.2rem 0.5rem;
+    border: 2px solid #0ff;
+  }
+
+  .word-item.found {
+    color: #0f0;
+    border-color: #0f0;
+  }
+</style>
+</head>
+<body>
+
+<h1 style="margin-top:1rem; margin-bottom:5;">CONSPIRACY WORD SEARCH</h1>
+
+<div id="word-search-container"></div>
+<div id="word-list"></div>
+
+<!-- Confetti Library -->
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.3.2/dist/confetti.browser.min.js"></script>
+
+<script>
+/* ================================
+   POOL OF CONSPIRACY WORDS
+================================== */
+const allWords = [
+  "ILLUMINATI", "CHEMTRAILS", "AREA51", "HAARP", "MKULTRA", "BILDERBERG", 
+  "REPTILIANS", "MOONLANDING", "JFK", "MANDALAEFFECT", "DENVERAIRPORT", 
+  "CLINTONS", "DULLES", "SECRETSOCIETIES", "ANTARCTICA", "TIMETRAVEL", 
+  "SKINWALKER", "BERMUDATRIANGLE", "LOCHNESS", "TR3B", 
+  "SHADOWGOV", "SATANISM", "GHOSTS", "ROSWELL", 
+  "MENINBLACK", "BIGFOOT", "CRYPTOZOOLOGY", "HAUNTINGS", "UFOLOGY", "MINDCONTROL",
+  "NEWWORLDORDER", "FAKEMOON", "DEEPSTATE", "PSYCHICWARS", "SKYNET", 
+  "DISCLOSURE", "ABDUCTION", "VATICANSECRETS", "ATLANTIS", 
+  "MARSBASE", "PAPERCLIP", "ZEROGRAVITY", "WEATHERMOD", "BLACKOPS",
+  "CROPCIRCLES", "SHAPESHIFTERS", "ZERODAY", "PLANDEMIC"
+];
+
+// Pick random subset for puzzle
+const puzzleWordsCount = 10;
+let puzzleWords = [];
+while (puzzleWords.length < puzzleWordsCount) {
+  const candidate = allWords[Math.floor(Math.random() * allWords.length)];
+  if (!puzzleWords.includes(candidate)) {
+    puzzleWords.push(candidate);
+  }
+}
+
+/* ================================
+   GRID SETTINGS
+================================== */
+const gridSize = 15;
+let grid = [];
+for (let r = 0; r < gridSize; r++) {
+  grid[r] = [];
+  for (let c = 0; c < gridSize; c++) {
+    grid[r][c] = "";
+  }
+}
+
+/* ================================
+   PLACE WORDS
+================================== */
+function placeWordInGrid(word) {
+  const directions = [
+    { dr: 0, dc: 1 },   // right
+    { dr: 0, dc: -1 },  // left
+    { dr: 1, dc: 0 },   // down
+    { dr: -1, dc: 0 },  // up
+    { dr: 1, dc: 1 },   // down-right
+    { dr: 1, dc: -1 },  // down-left
+    { dr: -1, dc: 1 },  // up-right
+    { dr: -1, dc: -1 }  // up-left
+  ];
+  const shuffledDirections = directions.sort(() => Math.random() - 0.5);
+
+  for (let d = 0; d < shuffledDirections.length; d++) {
+    const { dr, dc } = shuffledDirections[d];
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const startRow = Math.floor(Math.random() * gridSize);
+      const startCol = Math.floor(Math.random() * gridSize);
+      let canPlace = true;
+      let rr = startRow, cc = startCol;
+
+      for (let i = 0; i < word.length; i++) {
+        if (
+          rr < 0 || rr >= gridSize ||
+          cc < 0 || cc >= gridSize ||
+          (grid[rr][cc] !== "" && grid[rr][cc] !== word[i])
+        ) {
+          canPlace = false;
+          break;
+        }
+        rr += dr;
+        cc += dc;
+      }
+
+      if (canPlace) {
+        rr = startRow; cc = startCol;
+        for (let i = 0; i < word.length; i++) {
+          grid[rr][cc] = word[i];
+          rr += dr;
+          cc += dc;
+        }
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+puzzleWords.forEach(word => {
+  placeWordInGrid(word);
+});
+
+// Fill remaining cells with random letters
+const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+for (let r = 0; r < gridSize; r++) {
+  for (let c = 0; c < gridSize; c++) {
+    if (grid[r][c] === "") {
+      grid[r][c] = letters[Math.floor(Math.random() * letters.length)];
+    }
+  }
+}
+
+/* ================================
+   BUILD THE PUZZLE
+================================== */
+const container = document.getElementById("word-search-container");
+const wordList = document.getElementById("word-list");
+let isSelecting = false;
+let startCell = null;
+let selectedCells = [];
+let foundCount = 0;
+
+// Render the grid
+for (let r = 0; r < gridSize; r++) {
+  const rowDiv = document.createElement("div");
+  rowDiv.classList.add("row");
+  for (let c = 0; c < gridSize; c++) {
+    const cellDiv = document.createElement("div");
+    cellDiv.classList.add("cell");
+    cellDiv.textContent = grid[r][c];
+    cellDiv.dataset.row = r;
+    cellDiv.dataset.col = c;
+    cellDiv.addEventListener("click", () => handleCellClick(cellDiv));
+    rowDiv.appendChild(cellDiv);
+  }
+  container.appendChild(rowDiv);
+}
+
+// Render the word list
+puzzleWords.forEach(w => {
+  const item = document.createElement("div");
+  item.classList.add("word-item");
+  item.textContent = w;
+  item.dataset.word = w;
+  wordList.appendChild(item);
+});
+
+// Handle cell clicks
+function handleCellClick(cell) {
+  if (!isSelecting) {
+    isSelecting = true;
+    startCell = cell;
+    cell.classList.add("selected");
+    selectedCells = [cell];
+  } else {
+    isSelecting = false;
+    const endCell = cell;
+    const pathCells = getLineCells(startCell, endCell);
+    pathCells.forEach(c => c.classList.add("selected"));
+
+    const formedString = pathCells.map(c => c.textContent).join("");
+    const formedStringReversed = pathCells.map(c => c.textContent).reverse().join("");
+
+    let foundWord = puzzleWords.find(
+      w => w === formedString || w === formedStringReversed
+    );
+
+    if (foundWord) {
+      // Mark as found
+      pathCells.forEach(c => {
+        c.classList.remove("selected");
+        c.classList.add("found");
+      });
+      // Update word list
+      const item = [...document.querySelectorAll(".word-item")].find(
+        i => i.dataset.word === foundWord
+      );
+      if (!item.classList.contains("found")) {
+        item.classList.add("found");
+        foundCount++;
+        checkIfAllWordsFound();
+      }
+    } else {
+      // Not valid, reset
+      pathCells.forEach(c => c.classList.remove("selected"));
+    }
+
+    startCell = null;
+    selectedCells = [];
+  }
+}
+
+// Return array of cells in straight/diagonal line
+function getLineCells(start, end) {
+  const startRow = parseInt(start.dataset.row, 10);
+  const startCol = parseInt(start.dataset.col, 10);
+  const endRow = parseInt(end.dataset.row, 10);
+  const endCol = parseInt(end.dataset.col, 10);
+
+  const dRow = Math.sign(endRow - startRow);
+  const dCol = Math.sign(endCol - startCol);
+
+  let length = 0;
+  if (dRow === 0) {
+    length = Math.abs(endCol - startCol) + 1; // horizontal
+  } else if (dCol === 0) {
+    length = Math.abs(endRow - startRow) + 1; // vertical
+  } else if (Math.abs(endRow - startRow) === Math.abs(endCol - startCol)) {
+    length = Math.abs(endRow - startRow) + 1; // diagonal
+  } else {
+    return [start];
+  }
+
+  const cells = [];
+  let r = startRow, c = startCol;
+  for (let i = 0; i < length; i++) {
+    cells.push(document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`));
+    r += dRow;
+    c += dCol;
+  }
+  return cells;
+}
+
+// Check if puzzle is completed
+function checkIfAllWordsFound() {
+  if (foundCount === puzzleWordsCount) {
+    launchConfetti();
+    setTimeout(() => {
+      if (confirm("You found all the words! Play again?")) {
+        location.reload();
+      }
+    }, 5500);
+  }
+}
+
+// Confetti effect
+function launchConfetti() {
+  const duration = 5000;
+  const end = Date.now() + duration;
+  (function frame() {
+    confetti({
+      particleCount: 7,
+      angle: 60,
+      spread: 55,
+      origin: { x: 0 }
+    });
+    confetti({
+      particleCount: 7,
+      angle: 120,
+      spread: 55,
+      origin: { x: 1 }
+    });
+    if (Date.now() < end) {
+      requestAnimationFrame(frame);
+    }
+  })();
+}
+</script>
+
+</body>
+</html>
