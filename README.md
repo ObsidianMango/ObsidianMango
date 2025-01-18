@@ -40,7 +40,7 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
-| **Sick?**           | 🦠 [Sick?](https://obsidianmango.github.io/ObsidianMango/sick.html) | 
+| **Sick?**           | 🦠 [PhlegmAnalysis](https://obsidianmango.github.io/ObsidianMango/sick.html) | 
 | **WordSearch**           | 🔍 [WSearch](https://obsidianmango.github.io/ObsidianMango/word.html) | 
 | **Balls**           | 🟠 [Balls](https://obsidianmango.github.io/ObsidianMango/neon1.html) | 
 | **Balls2:Catballs**           | 🐱 [Balls2](https://obsidianmango.github.io/ObsidianMango/neon2.html) | 
