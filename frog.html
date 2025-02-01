@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Froggy Nom Nom</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: skyblue;
+      touch-action: manipulation;
+      position: relative;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    #score {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      color: white;
+      text-shadow: 2px 2px 4px black;
+      font-family: 'Press Start 2P', sans-serif;
+      z-index: 2;
+    }
+    #titleScreen {
+      position: absolute;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: yellow;
+      font-size: 48px;
+      text-align: center;
+      flex-direction: column;
+      text-shadow: 3px 3px 6px black;
+      font-family: 'Press Start 2P', sans-serif;
+      z-index: 3;
+    }
+    #titleScreen small {
+      font-size: 24px;
+      margin-top: 20px;
+      font-family: 'Press Start 2P', sans-serif;
+    }
+
+    #levelComplete {
+      pointer-events: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.4);
+      font-family: 'Press Start 2P', sans-serif;
+      font-size: 40px;
+      text-align: center;
+      color: #fff;
+      z-index: 4;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    #flowerButton {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background-color: pink;
+      font-family: 'Press Start 2P', sans-serif;
+      font-size: 12px;
+      color: #000;
+      border: 2px solid #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      z-index: 5;
+    }
+
+    #bombButton {
+      position: absolute;
+      bottom: 20px;
+      right: 120px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background-color: #ccc;
+      font-family: 'Press Start 2P', sans-serif;
+      font-size: 30px;
+      color: #000;
+      border: 2px solid #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      cursor: pointer;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <div id="titleScreen">FROGGY NOM NOM<br><small>Tap to Start</small></div>
+  <div id="score">Score: 0</div>
+  <div id="levelComplete">LEVEL COMPLETE!</div>
+  <div id="flowerButton">Flower<br><span id="flowerAmmoSpan">0</span></div>
+  <div id="bombButton">💣</div>
+
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreDisplay = document.getElementById('score');
+    const titleScreen = document.getElementById('titleScreen');
+    const levelCompleteDiv = document.getElementById('levelComplete');
+    const flowerButton = document.getElementById('flowerButton');
+    const flowerAmmoSpan = document.getElementById('flowerAmmoSpan');
+    const bombButton = document.getElementById('bombButton');
+
+    let score = 0;
+    let totalFliesEaten = 0;
+    let gameStarted = false;
+    let level = 1;
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const frog = {
+      x: canvas.width / 2,
+      y: canvas.height - 100,
+      tongueOut: false,
+      emoji: '🐸'
+    };
+
+    const flies = [];
+    const bees = [];
+    const flowers = [];
+
+    const tongue = {
+      x: frog.x,
+      y: frog.y,
+      targetX: frog.x,
+      targetY: frog.y,
+      active: false
+    };
+
+    // confetti array for level complete
+    let confettiParticles = [];
+    let showLevelComplete = false;
+    let flowerAmmo = 0;
+    let nextFlowerSide = 'left'; // alternate side for flower spawn
+
+    // Explosions array for bombs
+    let explosions = [];
+
+    // Helper: keep random positions mostly in upper portion
+    function randomPos() {
+      return {
+        x: Math.random() * canvas.width,
+        y: Math.random() * (canvas.height * 0.5)
+      };
+    }
+
+    // random color for confetti
+    function randomColor() {
+      const r = Math.floor(Math.random() * 256);
+      const g = Math.floor(Math.random() * 256);
+      const b = Math.floor(Math.random() * 256);
+      return `rgb(${r},${g},${b})`;
+    }
+
+    // create confetti
+    function createConfetti() {
+      confettiParticles = [];
+      for (let i = 0; i < 100; i++) {
+        confettiParticles.push({
+          x: canvas.width / 2,
+          y: canvas.height / 2,
+          vx: (Math.random() - 0.5) * 8,
+          vy: (Math.random() - 0.5) * 8,
+          color: randomColor(),
+          life: 60 + Math.random() * 60
+        });
+      }
+    }
+
+    // spawn a mosquito
+    function spawnFly() {
+      flies.push({
+        ...randomPos(),
+        speed: Math.random() * 2 + 1,
+        emoji: '🦟',
+        directionX: (Math.random() * 2 - 1) * 0.5,
+        directionY: (Math.random() * 2 - 1) * 0.5
+      });
+    }
+
+    // spawn a bee
+    function spawnBee() {
+      bees.push({
+        ...randomPos(),
+        speed: Math.random() * 2 + 2,
+        emoji: '🐝',
+        directionX: (Math.random() * 2 - 1) * 0.5,
+        directionY: (Math.random() * 2 - 1) * 0.5,
+        attracted: null // track if bee is attracted to a flower
+      });
+    }
+
+    // spawn flower on either left or right
+    function spawnFlower() {
+      const sideX = (nextFlowerSide === 'left') ? 50 : (canvas.width - 50);
+      nextFlowerSide = (nextFlowerSide === 'left') ? 'right' : 'left';
+
+      flowers.push({
+        x: sideX,
+        y: canvas.height * 0.5,
+        radius: 30,
+        lifetime: 300, // frames it stays
+      });
+    }
+
+    // check levels
+    function checkLevelUp() {
+      // each 50 totalFliesEaten => next level
+      if (totalFliesEaten >= level * 50) {
+        level++;
+        doLevelComplete();
+      }
+    }
+
+    function doLevelComplete() {
+      showLevelComplete = true;
+      levelCompleteDiv.style.opacity = 1;
+      createConfetti();
+
+      // hide the overlay after a bit
+      setTimeout(() => {
+        showLevelComplete = false;
+        levelCompleteDiv.style.opacity = 0;
+      }, 3000);
+    }
+
+    function update() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // handle confetti
+      if (showLevelComplete) {
+        confettiParticles.forEach((p) => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.2; // gravity
+          p.life -= 1;
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x, p.y, 5, 5);
+        });
+        // remove dead confetti
+        confettiParticles = confettiParticles.filter((p) => p.life > 0);
+      }
+
+      // handle explosions
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        let e = explosions[i];
+        // grow explosion
+        e.radius += e.growth;
+        e.alpha = 1 - (e.radius / e.maxRadius);
+        if (e.alpha < 0) e.alpha = 0;
+
+        // draw explosion emoji
+        ctx.save();
+        ctx.globalAlpha = e.alpha;
+        ctx.font = `${e.radius}px 'Press Start 2P'`;
+        ctx.fillText(e.emoji, e.x - e.radius*0.5, e.y + e.radius*0.5);
+        ctx.restore();
+
+        // kill bees in radius
+        for (let b = bees.length - 1; b >= 0; b--) {
+          const bee = bees[b];
+          const dist = Math.hypot(bee.x - e.x, bee.y - e.y);
+          if (dist < e.radius * 0.5) {
+            // kill bee
+            bees.splice(b, 1);
+          }
+        }
+
+        // if explosion done
+        if (e.radius >= e.maxRadius) {
+          explosions.splice(i, 1);
+        }
+      }
+
+      // draw the frog
+      ctx.font = "50px 'Press Start 2P'";
+      ctx.fillText(frog.emoji, frog.x - 25, frog.y + 15);
+
+      // update & draw tongue
+      if (tongue.active) {
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(frog.x, frog.y);
+        ctx.lineTo(tongue.x, tongue.y);
+        ctx.stroke();
+
+        // move tongue toward target
+        tongue.x += (tongue.targetX - tongue.x) * 0.2;
+        tongue.y += (tongue.targetY - tongue.y) * 0.2;
+
+        // check if close enough to retract
+        if (
+          Math.abs(tongue.x - tongue.targetX) < 10 &&
+          Math.abs(tongue.y - tongue.targetY) < 10
+        ) {
+          tongue.active = false;
+          tongue.x = frog.x;
+          tongue.y = frog.y;
+        }
+      }
+
+      // update flowers
+      for (let i = flowers.length - 1; i >= 0; i--) {
+        const flower = flowers[i];
+        // draw flower
+        ctx.save();
+        ctx.fillStyle = 'pink';
+        ctx.beginPath();
+        ctx.arc(flower.x, flower.y, flower.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        flower.lifetime -= 1;
+        if (flower.lifetime <= 0) {
+          flowers.splice(i, 1);
+        }
+      }
+
+      // update flies
+      for (let i = flies.length - 1; i >= 0; i--) {
+        const fly = flies[i];
+        // move the fly
+        fly.x += fly.directionX * fly.speed;
+        fly.y += fly.directionY * fly.speed;
+
+        // bounce off edges
+        if (fly.x < 0) {
+          fly.x = 0;
+          fly.directionX *= -1;
+        } else if (fly.x > canvas.width) {
+          fly.x = canvas.width;
+          fly.directionX *= -1;
+        }
+        if (fly.y < 0) {
+          fly.y = 0;
+          fly.directionY *= -1;
+        } else if (fly.y > canvas.height) {
+          fly.y = canvas.height;
+          fly.directionY *= -1;
+        }
+
+        // draw fly
+        ctx.fillText(fly.emoji, fly.x - 10, fly.y + 10);
+
+        // check collision with tongue
+        if (
+          tongue.active &&
+          Math.hypot(tongue.x - fly.x, tongue.y - fly.y) < 40
+        ) {
+          flies.splice(i, 1);
+          score++;
+          totalFliesEaten++;
+          scoreDisplay.textContent = `Score: ${score}`;
+          spawnFly();
+          // check if we get new flower ammo every 10 mosquitos
+          if (totalFliesEaten % 10 === 0) {
+            flowerAmmo++;
+            flowerAmmoSpan.textContent = flowerAmmo;
+          }
+          checkLevelUp();
+        }
+      }
+
+      // update bees
+      for (let i = bees.length - 1; i >= 0; i--) {
+        const bee = bees[i];
+        // if there's a flower, check attraction
+        let closestFlower = null;
+        let minDist = Infinity;
+        for (let f = 0; f < flowers.length; f++) {
+          const fl = flowers[f];
+          const dist = Math.hypot(bee.x - fl.x, bee.y - fl.y);
+          if (dist < minDist) {
+            minDist = dist;
+            closestFlower = fl;
+          }
+        }
+
+        // if a flower is around, direct bee towards it
+        if (closestFlower) {
+          const angle = Math.atan2(
+            closestFlower.y - bee.y,
+            closestFlower.x - bee.x
+          );
+          bee.directionX = Math.cos(angle);
+          bee.directionY = Math.sin(angle);
+        }
+
+        // move the bee
+        bee.x += bee.directionX * bee.speed;
+        bee.y += bee.directionY * bee.speed;
+
+        // bounce off edges
+        if (bee.x < 0) {
+          bee.x = 0;
+          bee.directionX *= -1;
+        } else if (bee.x > canvas.width) {
+          bee.x = canvas.width;
+          bee.directionX *= -1;
+        }
+        if (bee.y < 0) {
+          bee.y = 0;
+          bee.directionY *= -1;
+        } else if (bee.y > canvas.height) {
+          bee.y = canvas.height;
+          bee.directionY *= -1;
+        }
+
+        // draw bee
+        ctx.fillText(bee.emoji, bee.x - 10, bee.y + 10);
+
+        // check collision with tongue
+        if (
+          tongue.active &&
+          Math.hypot(tongue.x - bee.x, tongue.y - bee.y) < 40
+        ) {
+          bees.splice(i, 1);
+          score--;
+          scoreDisplay.textContent = `Score: ${score}`;
+        }
+      }
+
+      requestAnimationFrame(update);
+    }
+
+    // shoot the tongue on click/touch
+    function shootTongue(event) {
+      tongue.targetX = event.clientX;
+      tongue.targetY = event.clientY;
+      tongue.active = true;
+    }
+
+    // start game
+    function startGame() {
+      if (!gameStarted) {
+        gameStarted = true;
+        titleScreen.style.opacity = 0;
+        setTimeout(() => (titleScreen.style.display = 'none'), 500);
+
+        // spawn initial flies
+        for (let i = 0; i < 5; i++) {
+          spawnFly();
+        }
+
+        // periodically spawn bees
+        setInterval(spawnBee, 5000);
+
+        // begin the loop
+        update();
+      }
+    }
+
+    // handle flower button click
+    flowerButton.addEventListener('click', () => {
+      // if we have ammo
+      if (flowerAmmo > 0) {
+        flowerAmmo--;
+        flowerAmmoSpan.textContent = flowerAmmo;
+        spawnFlower();
+      }
+    });
+
+    // handle bomb button
+    bombButton.addEventListener('click', () => {
+      // for each flower, create an explosion
+      if (flowers.length > 0) {
+        flowers.forEach(flower => {
+          explosions.push({
+            x: flower.x,
+            y: flower.y,
+            emoji: '💥',
+            radius: 0,
+            maxRadius: 150,
+            growth: 20,
+            alpha: 1.0
+          });
+        });
+      }
+    });
+
+    // event listeners
+    titleScreen.addEventListener('click', startGame);
+    titleScreen.addEventListener('touchstart', startGame);
+    canvas.addEventListener('click', shootTongue);
+    canvas.addEventListener('touchstart', (event) => {
+      shootTongue(event.touches[0]);
+    });
+  </script>
+</body>
+</html>
