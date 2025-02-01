@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>🐸 Froggy Nom Nom</title>
+  <title>Froggy Nom Nom</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <style>
     body {
@@ -18,6 +18,7 @@
       width: 100vw;
       height: 100vh;
     }
+    /* Score now shows level as well; also clickable for cheats */
     #score {
       position: absolute;
       top: 10px;
@@ -28,6 +29,7 @@
       text-shadow: 2px 2px 4px black;
       font-family: 'Press Start 2P', sans-serif;
       z-index: 2;
+      cursor: pointer;
     }
     #titleScreen {
       position: absolute;
@@ -50,7 +52,6 @@
       margin-top: 20px;
       font-family: 'Press Start 2P', sans-serif;
     }
-
     #levelComplete {
       pointer-events: none;
       position: absolute;
@@ -70,10 +71,10 @@
       opacity: 0;
       transition: opacity 0.5s ease;
     }
-
+    /* Adjusted for mobile */
     #flowerButton {
       position: absolute;
-      bottom: 20px;
+      bottom: 50px;
       right: 20px;
       width: 80px;
       height: 80px;
@@ -84,16 +85,16 @@
       color: #000;
       border: 2px solid #fff;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       text-align: center;
       cursor: pointer;
       z-index: 5;
     }
-
     #bombButton {
       position: absolute;
-      bottom: 20px;
+      bottom: 50px;
       right: 120px;
       width: 80px;
       height: 80px;
@@ -110,14 +111,48 @@
       cursor: pointer;
       z-index: 5;
     }
+    /* Cheat Menu styling */
+    #cheatMenu {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.9);
+      border: 3px solid limegreen;
+      padding: 20px;
+      font-family: 'Press Start 2P', sans-serif;
+      color: limegreen;
+      text-align: center;
+      z-index: 10;
+      display: none;
+    }
+    #cheatMenu button {
+      margin: 10px;
+      padding: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      border: 2px solid limegreen;
+      background: black;
+      color: limegreen;
+    }
   </style>
 </head>
 <body>
   <div id="titleScreen">FROGGY NOM NOM<br><small>Tap to Start</small></div>
-  <div id="score">Score: 0</div>
+  <div id="score">Score: 0&nbsp;&nbsp;Level: 1</div>
   <div id="levelComplete">LEVEL COMPLETE!</div>
-  <div id="flowerButton">Flower<br><span id="flowerAmmoSpan">0</span></div>
+  <div id="flowerButton">
+    Flower
+    <br>
+    <span id="flowerAmmoSpan">0</span>
+  </div>
   <div id="bombButton">💣</div>
+  <div id="cheatMenu">
+    <div><strong>Cheat Menu</strong></div>
+    <button id="boostScore">Boost Score +47</button>
+    <button id="toggleFlowers">Infinite Flowers: OFF</button>
+    <button id="toggleLaser">Frog Laser Mode: OFF</button>
+  </div>
 
   <canvas id="gameCanvas"></canvas>
   <script>
@@ -129,11 +164,16 @@
     const flowerButton = document.getElementById('flowerButton');
     const flowerAmmoSpan = document.getElementById('flowerAmmoSpan');
     const bombButton = document.getElementById('bombButton');
+    const cheatMenu = document.getElementById('cheatMenu');
+    const boostScoreBtn = document.getElementById('boostScore');
+    const toggleFlowersBtn = document.getElementById('toggleFlowers');
+    const toggleLaserBtn = document.getElementById('toggleLaser');
 
     let score = 0;
     let totalFliesEaten = 0;
     let gameStarted = false;
     let level = 1;
+    let nextLevelScore = 50; // first "level complete" at 50, then every additional 100
 
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -141,7 +181,6 @@
     const frog = {
       x: canvas.width / 2,
       y: canvas.height - 100,
-      tongueOut: false,
       emoji: '🐸'
     };
 
@@ -149,6 +188,7 @@
     const bees = [];
     const flowers = [];
 
+    // Regular mode uses the tongue.
     const tongue = {
       x: frog.x,
       y: frog.y,
@@ -157,16 +197,23 @@
       active: false
     };
 
-    // confetti array for level complete
+    // Laser mode projectiles.
+    let laserProjectiles = [];
+
+    // Cheat flags.
+    let infiniteFlowersCheat = false;
+    let laserModeCheat = false;
+
+    // Confetti for level complete.
     let confettiParticles = [];
     let showLevelComplete = false;
     let flowerAmmo = 0;
-    let nextFlowerSide = 'left'; // alternate side for flower spawn
+    let nextFlowerSide = 'left';
 
-    // Explosions array for bombs
+    // Explosions from bomb button.
     let explosions = [];
 
-    // Helper: keep random positions mostly in upper portion
+    // Helper: random position in upper half.
     function randomPos() {
       return {
         x: Math.random() * canvas.width,
@@ -174,7 +221,7 @@
       };
     }
 
-    // random color for confetti
+    // Random color for confetti.
     function randomColor() {
       const r = Math.floor(Math.random() * 256);
       const g = Math.floor(Math.random() * 256);
@@ -182,7 +229,7 @@
       return `rgb(${r},${g},${b})`;
     }
 
-    // create confetti
+    // Create confetti particles.
     function createConfetti() {
       confettiParticles = [];
       for (let i = 0; i < 100; i++) {
@@ -197,18 +244,21 @@
       }
     }
 
-    // spawn a mosquito
+    // --- spawnFly with sinusoidal movement ---
     function spawnFly() {
       flies.push({
         ...randomPos(),
         speed: Math.random() * 2 + 1,
         emoji: '🦟',
         directionX: (Math.random() * 2 - 1) * 0.5,
-        directionY: (Math.random() * 2 - 1) * 0.5
+        directionY: (Math.random() * 2 - 1) * 0.5,
+        angle: Math.random() * Math.PI * 2,
+        amplitude: Math.random() * 2 + 1,
+        angularSpeed: Math.random() * 0.1 + 0.05
       });
     }
 
-    // spawn a bee
+    // --- spawnBee with wobble effect ---
     function spawnBee() {
       bees.push({
         ...randomPos(),
@@ -216,29 +266,31 @@
         emoji: '🐝',
         directionX: (Math.random() * 2 - 1) * 0.5,
         directionY: (Math.random() * 2 - 1) * 0.5,
-        attracted: null // track if bee is attracted to a flower
+        attracted: null,
+        wobbleAngle: Math.random() * Math.PI * 2,
+        wobbleAmplitude: Math.random() * 1.5 + 0.5,
+        wobbleAngularSpeed: Math.random() * 0.1 + 0.05
       });
     }
 
-    // spawn flower on either left or right
+    // Spawn a flower.
     function spawnFlower() {
       const sideX = (nextFlowerSide === 'left') ? 50 : (canvas.width - 50);
       nextFlowerSide = (nextFlowerSide === 'left') ? 'right' : 'left';
-
       flowers.push({
         x: sideX,
         y: canvas.height * 0.5,
-        radius: 30,
-        lifetime: 300, // frames it stays
+        lifetime: 300
       });
     }
 
-    // check levels
-    function checkLevelUp() {
-      // each 50 totalFliesEaten => next level
-      if (totalFliesEaten >= level * 50) {
+    // Check score for level completion.
+    function checkScoreLevel() {
+      if (score >= nextLevelScore) {
         level++;
         doLevelComplete();
+        nextLevelScore += 100;
+        updateScoreDisplay();
       }
     }
 
@@ -246,115 +298,128 @@
       showLevelComplete = true;
       levelCompleteDiv.style.opacity = 1;
       createConfetti();
-
-      // hide the overlay after a bit
       setTimeout(() => {
         showLevelComplete = false;
         levelCompleteDiv.style.opacity = 0;
       }, 3000);
     }
 
+    // Update score and level display.
+    function updateScoreDisplay() {
+      scoreDisplay.textContent = `Score: ${score}  Level: ${level}`;
+    }
+
+    // Update background color based on current level.
+    function updateBackground() {
+      const mod = ((level - 1) % 4) + 1;
+      let bgColor;
+      if (mod === 1) bgColor = "skyblue";
+      else if (mod === 2) bgColor = "orange";
+      else if (mod === 3) bgColor = "darkblue";
+      else if (mod === 4) bgColor = "lightpink";
+      document.body.style.backgroundColor = bgColor;
+    }
+
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      updateBackground();
 
-      // handle confetti
-      if (showLevelComplete) {
-        confettiParticles.forEach((p) => {
-          p.x += p.vx;
-          p.y += p.vy;
-          p.vy += 0.2; // gravity
-          p.life -= 1;
-          ctx.fillStyle = p.color;
-          ctx.fillRect(p.x, p.y, 5, 5);
-        });
-        // remove dead confetti
-        confettiParticles = confettiParticles.filter((p) => p.life > 0);
-      }
-
-      // handle explosions
-      for (let i = explosions.length - 1; i >= 0; i--) {
-        let e = explosions[i];
-        // grow explosion
-        e.radius += e.growth;
-        e.alpha = 1 - (e.radius / e.maxRadius);
-        if (e.alpha < 0) e.alpha = 0;
-
-        // draw explosion emoji
-        ctx.save();
-        ctx.globalAlpha = e.alpha;
-        ctx.font = `${e.radius}px 'Press Start 2P'`;
-        ctx.fillText(e.emoji, e.x - e.radius*0.5, e.y + e.radius*0.5);
-        ctx.restore();
-
-        // kill bees in radius
-        for (let b = bees.length - 1; b >= 0; b--) {
-          const bee = bees[b];
-          const dist = Math.hypot(bee.x - e.x, bee.y - e.y);
-          if (dist < e.radius * 0.5) {
-            // kill bee
-            bees.splice(b, 1);
-          }
-        }
-
-        // if explosion done
-        if (e.radius >= e.maxRadius) {
-          explosions.splice(i, 1);
+      // Update laser projectiles.
+      for (let i = laserProjectiles.length - 1; i >= 0; i--) {
+        const proj = laserProjectiles[i];
+        proj.x += proj.vx;
+        proj.y += proj.vy;
+        ctx.fillStyle = 'limegreen';
+        ctx.beginPath();
+        ctx.arc(proj.x, proj.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        if (proj.x < 0 || proj.x > canvas.width || proj.y < 0 || proj.y > canvas.height) {
+          laserProjectiles.splice(i, 1);
         }
       }
 
-      // draw the frog
-      ctx.font = "50px 'Press Start 2P'";
-      ctx.fillText(frog.emoji, frog.x - 25, frog.y + 15);
-
-      // update & draw tongue
-      if (tongue.active) {
-        ctx.strokeStyle = 'red';
+      // Draw regular tongue.
+      if (!laserModeCheat && tongue.active) {
         ctx.lineWidth = 5;
+        ctx.strokeStyle = 'red';
         ctx.beginPath();
         ctx.moveTo(frog.x, frog.y);
         ctx.lineTo(tongue.x, tongue.y);
         ctx.stroke();
-
-        // move tongue toward target
         tongue.x += (tongue.targetX - tongue.x) * 0.2;
         tongue.y += (tongue.targetY - tongue.y) * 0.2;
-
-        // check if close enough to retract
-        if (
-          Math.abs(tongue.x - tongue.targetX) < 10 &&
-          Math.abs(tongue.y - tongue.targetY) < 10
-        ) {
+        if (Math.abs(tongue.x - tongue.targetX) < 10 &&
+            Math.abs(tongue.y - tongue.targetY) < 10) {
           tongue.active = false;
           tongue.x = frog.x;
           tongue.y = frog.y;
         }
       }
 
-      // update flowers
+      // Update confetti.
+      if (showLevelComplete) {
+        confettiParticles.forEach((p) => {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.2;
+          p.life -= 1;
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x, p.y, 5, 5);
+        });
+        confettiParticles = confettiParticles.filter((p) => p.life > 0);
+      }
+
+      // Handle explosions.
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        let e = explosions[i];
+        e.radius += e.growth;
+        e.alpha = 1 - (e.radius / e.maxRadius);
+        if (e.alpha < 0) e.alpha = 0;
+        ctx.save();
+        ctx.globalAlpha = e.alpha;
+        ctx.font = `${e.radius}px 'Press Start 2P'`;
+        ctx.fillText(e.emoji, e.x - e.radius * 0.5, e.y + e.radius * 0.5);
+        ctx.restore();
+        for (let b = bees.length - 1; b >= 0; b--) {
+          const bee = bees[b];
+          const dist = Math.hypot(bee.x - e.x, bee.y - e.y);
+          if (dist < e.radius * 0.5) {
+            bees.splice(b, 1);
+          }
+        }
+        if (e.radius >= e.maxRadius) {
+          explosions.splice(i, 1);
+        }
+      }
+
+      // Draw the frog at original size.
+      ctx.font = "50px 'Press Start 2P'";
+      ctx.fillText(frog.emoji, frog.x - 25, frog.y + 15);
+
+      // Update and draw flowers.
       for (let i = flowers.length - 1; i >= 0; i--) {
         const flower = flowers[i];
-        // draw flower
         ctx.save();
-        ctx.fillStyle = 'pink';
-        ctx.beginPath();
-        ctx.arc(flower.x, flower.y, flower.radius, 0, Math.PI * 2);
-        ctx.fill();
+        let blinkAlpha = 1;
+        if (flower.lifetime < 100) {
+          blinkAlpha = Math.abs(Math.sin((100 - flower.lifetime) * Math.PI / 10));
+        }
+        ctx.globalAlpha = blinkAlpha;
+        ctx.font = "60px 'Press Start 2P'";
+        ctx.fillText('🌸', flower.x - 30, flower.y + 30);
         ctx.restore();
-
         flower.lifetime -= 1;
         if (flower.lifetime <= 0) {
           flowers.splice(i, 1);
         }
       }
 
-      // update flies
+      // Update flies.
       for (let i = flies.length - 1; i >= 0; i--) {
         const fly = flies[i];
-        // move the fly
-        fly.x += fly.directionX * fly.speed;
-        fly.y += fly.directionY * fly.speed;
-
-        // bounce off edges
+        fly.x += fly.directionX * fly.speed + Math.sin(fly.angle) * fly.amplitude;
+        fly.y += fly.directionY * fly.speed + Math.cos(fly.angle) * fly.amplitude;
+        fly.angle += fly.angularSpeed;
         if (fly.x < 0) {
           fly.x = 0;
           fly.directionX *= -1;
@@ -369,33 +434,28 @@
           fly.y = canvas.height;
           fly.directionY *= -1;
         }
-
-        // draw fly
         ctx.fillText(fly.emoji, fly.x - 10, fly.y + 10);
-
-        // check collision with tongue
-        if (
-          tongue.active &&
-          Math.hypot(tongue.x - fly.x, tongue.y - fly.y) < 40
-        ) {
+        if (!laserModeCheat && tongue.active && Math.hypot(tongue.x - fly.x, tongue.y - fly.y) < 40) {
           flies.splice(i, 1);
           score++;
           totalFliesEaten++;
-          scoreDisplay.textContent = `Score: ${score}`;
+          updateScoreDisplay();
           spawnFly();
-          // check if we get new flower ammo every 10 mosquitos
           if (totalFliesEaten % 10 === 0) {
-            flowerAmmo++;
-            flowerAmmoSpan.textContent = flowerAmmo;
+            if (!infiniteFlowersCheat) {
+              flowerAmmo++;
+              flowerAmmoSpan.textContent = flowerAmmo;
+            } else {
+              flowerAmmoSpan.textContent = "∞";
+            }
           }
-          checkLevelUp();
+          checkScoreLevel();
         }
       }
 
-      // update bees
+      // Update bees.
       for (let i = bees.length - 1; i >= 0; i--) {
         const bee = bees[i];
-        // if there's a flower, check attraction
         let closestFlower = null;
         let minDist = Infinity;
         for (let f = 0; f < flowers.length; f++) {
@@ -406,22 +466,14 @@
             closestFlower = fl;
           }
         }
-
-        // if a flower is around, direct bee towards it
         if (closestFlower) {
-          const angle = Math.atan2(
-            closestFlower.y - bee.y,
-            closestFlower.x - bee.x
-          );
+          const angle = Math.atan2(closestFlower.y - bee.y, closestFlower.x - bee.x);
           bee.directionX = Math.cos(angle);
           bee.directionY = Math.sin(angle);
         }
-
-        // move the bee
-        bee.x += bee.directionX * bee.speed;
-        bee.y += bee.directionY * bee.speed;
-
-        // bounce off edges
+        bee.x += bee.directionX * bee.speed + Math.sin(bee.wobbleAngle) * bee.wobbleAmplitude;
+        bee.y += bee.directionY * bee.speed + Math.cos(bee.wobbleAngle) * bee.wobbleAmplitude;
+        bee.wobbleAngle += bee.wobbleAngularSpeed;
         if (bee.x < 0) {
           bee.x = 0;
           bee.directionX *= -1;
@@ -436,64 +488,110 @@
           bee.y = canvas.height;
           bee.directionY *= -1;
         }
-
-        // draw bee
         ctx.fillText(bee.emoji, bee.x - 10, bee.y + 10);
-
-        // check collision with tongue
-        if (
-          tongue.active &&
-          Math.hypot(tongue.x - bee.x, tongue.y - bee.y) < 40
-        ) {
+        if (!laserModeCheat && tongue.active && Math.hypot(tongue.x - bee.x, tongue.y - bee.y) < 40) {
           bees.splice(i, 1);
           score--;
-          scoreDisplay.textContent = `Score: ${score}`;
+          updateScoreDisplay();
         }
       }
 
+      // Laser mode collisions.
+      if (laserModeCheat) {
+        for (let i = flies.length - 1; i >= 0; i--) {
+          const fly = flies[i];
+          for (let j = laserProjectiles.length - 1; j >= 0; j--) {
+            const proj = laserProjectiles[j];
+            const d = Math.hypot(fly.x - proj.x, fly.y - proj.y);
+            if (d < 20) {
+              flies.splice(i, 1);
+              score++;
+              totalFliesEaten++;
+              updateScoreDisplay();
+              spawnFly();
+              if (totalFliesEaten % 10 === 0) {
+                if (!infiniteFlowersCheat) {
+                  flowerAmmo++;
+                  flowerAmmoSpan.textContent = flowerAmmo;
+                } else {
+                  flowerAmmoSpan.textContent = "∞";
+                }
+              }
+              checkScoreLevel();
+              break;
+            }
+          }
+        }
+        for (let i = bees.length - 1; i >= 0; i--) {
+          const bee = bees[i];
+          for (let j = laserProjectiles.length - 1; j >= 0; j--) {
+            const proj = laserProjectiles[j];
+            const d = Math.hypot(bee.x - proj.x, bee.y - proj.y);
+            if (d < 20) {
+              bees.splice(i, 1);
+              score--;
+              updateScoreDisplay();
+              break;
+            }
+          }
+        }
+      }
       requestAnimationFrame(update);
     }
 
-    // shoot the tongue on click/touch
+    // Fire tongue or laser.
     function shootTongue(event) {
-      tongue.targetX = event.clientX;
-      tongue.targetY = event.clientY;
-      tongue.active = true;
+      if (laserModeCheat) {
+        const targetX = event.clientX;
+        const targetY = event.clientY;
+        const dx = targetX - frog.x;
+        const dy = targetY - frog.y;
+        const dist = Math.hypot(dx, dy);
+        const speed = 12;
+        const vx = (dx / dist) * speed;
+        const vy = (dy / dist) * speed;
+        laserProjectiles.push({
+          x: frog.x,
+          y: frog.y,
+          vx,
+          vy
+        });
+      } else {
+        tongue.targetX = event.clientX;
+        tongue.targetY = event.clientY;
+        tongue.active = true;
+      }
     }
 
-    // start game
+    // Start game.
     function startGame() {
       if (!gameStarted) {
         gameStarted = true;
         titleScreen.style.opacity = 0;
         setTimeout(() => (titleScreen.style.display = 'none'), 500);
-
-        // spawn initial flies
         for (let i = 0; i < 5; i++) {
           spawnFly();
         }
-
-        // periodically spawn bees
         setInterval(spawnBee, 5000);
-
-        // begin the loop
         update();
       }
     }
 
-    // handle flower button click
+    // Flower button.
     flowerButton.addEventListener('click', () => {
-      // if we have ammo
-      if (flowerAmmo > 0) {
-        flowerAmmo--;
-        flowerAmmoSpan.textContent = flowerAmmo;
+      if (flowerAmmo > 0 || infiniteFlowersCheat) {
+        if (!infiniteFlowersCheat) {
+          flowerAmmo--;
+          flowerAmmoSpan.textContent = flowerAmmo;
+        } else {
+          flowerAmmoSpan.textContent = "∞";
+        }
         spawnFlower();
       }
     });
 
-    // handle bomb button
+    // Bomb button.
     bombButton.addEventListener('click', () => {
-      // for each flower, create an explosion
       if (flowers.length > 0) {
         flowers.forEach(flower => {
           explosions.push({
@@ -501,15 +599,65 @@
             y: flower.y,
             emoji: '💥',
             radius: 0,
-            maxRadius: 150,
-            growth: 20,
+            maxRadius: 250,
+            growth: 30,
             alpha: 1.0
           });
         });
       }
     });
 
-    // event listeners
+    // Cheat menu activation: tap the score text three times.
+    let scoreClickCount = 0;
+    scoreDisplay.addEventListener('click', () => {
+      scoreClickCount++;
+      if(scoreClickCount >= 3) {
+        cheatMenu.style.display = 'block';
+        scoreClickCount = 0;
+      }
+    });
+
+    // Konami code (retained if needed).
+    const konamiCode = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "a", "b"];
+    let konamiIndex = 0;
+    document.addEventListener('keydown', (e) => {
+      if (e.key === konamiCode[konamiIndex]) {
+        konamiIndex++;
+        if (konamiIndex === konamiCode.length) {
+          cheatMenu.style.display = 'block';
+          konamiIndex = 0;
+        }
+      } else {
+        konamiIndex = 0;
+      }
+    });
+
+    // Hide cheat menu if clicking outside.
+    document.addEventListener('click', (e) => {
+      if (cheatMenu.style.display === 'block' && !cheatMenu.contains(e.target)) {
+        cheatMenu.style.display = 'none';
+      }
+    });
+    cheatMenu.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    // Cheat menu buttons.
+    boostScoreBtn.addEventListener('click', () => {
+      score += 47;
+      updateScoreDisplay();
+      checkScoreLevel();
+    });
+    toggleFlowersBtn.addEventListener('click', () => {
+      infiniteFlowersCheat = !infiniteFlowersCheat;
+      toggleFlowersBtn.textContent = `Infinite Flowers: ${infiniteFlowersCheat ? 'ON' : 'OFF'}`;
+      flowerAmmoSpan.textContent = infiniteFlowersCheat ? "∞" : flowerAmmo;
+    });
+    toggleLaserBtn.addEventListener('click', () => {
+      laserModeCheat = !laserModeCheat;
+      toggleLaserBtn.textContent = `Frog Laser Mode: ${laserModeCheat ? 'ON' : 'OFF'}`;
+    });
+
     titleScreen.addEventListener('click', startGame);
     titleScreen.addEventListener('touchstart', startGame);
     canvas.addEventListener('click', shootTongue);
