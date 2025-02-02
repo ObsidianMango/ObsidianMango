@@ -123,7 +123,6 @@
         <button class="dice-count-btn" data-count="1">1</button>
         <button class="dice-count-btn" data-count="2">2</button>
         <button class="dice-count-btn" data-count="3">3</button>
-      
       </div>
     </div>
 
@@ -323,16 +322,35 @@
       /**********************
        * ROLL ANIMATION & MULTIPLE DICE LOGIC
        **********************/
+      // Updated startRoll function for responsive dice positioning/scaling.
       function startRoll() {
         // Remove any previous dice.
         diceArray.forEach(d => scene.remove(d.mesh));
         diceArray = [];
-        // Calculate horizontal spacing based on diceCount.
-        const spacing = 2; // adjust as needed
-        const startX = -((diceCount - 1) / 2) * spacing;
+
+        // Calculate available horizontal view width at the dice landing plane.
+        const d = camera.position.distanceTo(baseLandPos);
+        const fovInRadians = camera.fov * (Math.PI / 180);
+        const viewHeight = 2 * d * Math.tan(fovInRadians / 2);
+        const viewWidth = viewHeight * camera.aspect;
+
+        // Compute dice size from geometry.
+        const tempGeometry = getDiceGeometry(currentDiceType);
+        tempGeometry.computeBoundingSphere();
+        const diceRadius = tempGeometry.boundingSphere.radius;
+
+        const defaultSpacing = 2; // default spacing between dice centers
+        const totalDesiredWidth = (diceCount - 1) * defaultSpacing + 2 * diceRadius;
+        const scaleFactor =
+          diceCount > 1 ? Math.min(1, viewWidth / totalDesiredWidth) : 1;
+        const spacing = defaultSpacing * scaleFactor;
+        const startX = diceCount > 1 ? -((diceCount - 1) / 2) * spacing : 0;
+
         for (let i = 0; i < diceCount; i++) {
           const offset = new THREE.Vector3(startX + i * spacing, 0, 0);
           const mesh = createDiceMesh();
+          // Apply scale factor so dice resize on smaller screens.
+          mesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
           // Set each dice's spawn and land positions using the offset.
           const spawnPos = baseSpawnPos.clone().add(offset);
           const landPos = baseLandPos.clone().add(offset);
@@ -351,7 +369,13 @@
             initialRotation.z + (Math.random() * 4 + 4) * Math.PI
           );
           // Push the dice object into the array.
-          diceArray.push({ mesh, spawnPos, landPos, initialRotation, targetRotation });
+          diceArray.push({
+            mesh,
+            spawnPos,
+            landPos,
+            initialRotation,
+            targetRotation
+          });
         }
         rollStartTime = performance.now();
         isRolling = true;
@@ -367,14 +391,39 @@
           const ease = easeOutCubic(t);
           diceArray.forEach(diceObj => {
             // Lerp position for this dice.
-            diceObj.mesh.position.lerpVectors(diceObj.spawnPos, diceObj.landPos, ease);
-            const baseX = THREE.MathUtils.lerp(diceObj.initialRotation.x, diceObj.targetRotation.x, ease);
-            const baseY = THREE.MathUtils.lerp(diceObj.initialRotation.y, diceObj.targetRotation.y, ease);
-            const baseZ = THREE.MathUtils.lerp(diceObj.initialRotation.z, diceObj.targetRotation.z, ease);
+            diceObj.mesh.position.lerpVectors(
+              diceObj.spawnPos,
+              diceObj.landPos,
+              ease
+            );
+            const baseX = THREE.MathUtils.lerp(
+              diceObj.initialRotation.x,
+              diceObj.targetRotation.x,
+              ease
+            );
+            const baseY = THREE.MathUtils.lerp(
+              diceObj.initialRotation.y,
+              diceObj.targetRotation.y,
+              ease
+            );
+            const baseZ = THREE.MathUtils.lerp(
+              diceObj.initialRotation.z,
+              diceObj.targetRotation.z,
+              ease
+            );
             const shakeDecay = 1 - ease;
-            const shakeX = shakeDecay * shakeAmplitude * Math.sin(shakeFrequency * ((now - rollStartTime) / 1000));
-            const shakeY = shakeDecay * shakeAmplitude * Math.sin(shakeFrequency * ((now - rollStartTime) / 1000) + 1);
-            const shakeZ = shakeDecay * shakeAmplitude * Math.sin(shakeFrequency * ((now - rollStartTime) / 1000) + 2);
+            const shakeX =
+              shakeDecay *
+              shakeAmplitude *
+              Math.sin(shakeFrequency * ((now - rollStartTime) / 1000));
+            const shakeY =
+              shakeDecay *
+              shakeAmplitude *
+              Math.sin(shakeFrequency * ((now - rollStartTime) / 1000) + 1);
+            const shakeZ =
+              shakeDecay *
+              shakeAmplitude *
+              Math.sin(shakeFrequency * ((now - rollStartTime) / 1000) + 2);
             diceObj.mesh.rotation.set(baseX + shakeX, baseY + shakeY, baseZ + shakeZ);
           });
           if (t >= 1) {
@@ -383,16 +432,25 @@
             const results = [];
             diceArray.forEach(diceObj => {
               diceObj.mesh.position.copy(diceObj.landPos);
-              diceObj.mesh.rotation.set(diceObj.targetRotation.x, diceObj.targetRotation.y, diceObj.targetRotation.z);
+              diceObj.mesh.rotation.set(
+                diceObj.targetRotation.x,
+                diceObj.targetRotation.y,
+                diceObj.targetRotation.z
+              );
               diceObj.mesh.updateMatrixWorld(true);
-              const desiredNormal = camera.position.clone().sub(diceObj.mesh.position).normalize();
+              const desiredNormal = camera.position
+                .clone()
+                .sub(diceObj.mesh.position)
+                .normalize();
               const result = computeDiceResult(diceObj.mesh, desiredNormal);
               results.push(result);
               highlightWinningFace(diceObj.mesh, result - 1);
-              // Critical alerts for d20 (only for single dice in original, but here applied per dice)
+              // Critical alerts for d20 (applied per dice)
               if (currentDiceType === "d20") {
-                if (result === 1) flashScreen("CRITICAL FAILURE", "#ff0000", "#ffffff");
-                if (result === 20) flashScreen("CRITICAL SUCCESS", "#00ff00", "#000000");
+                if (result === 1)
+                  flashScreen("CRITICAL FAILURE", "#ff0000", "#ffffff");
+                if (result === 20)
+                  flashScreen("CRITICAL SUCCESS", "#00ff00", "#000000");
               }
             });
             resultDisplay.innerText = "Results: " + results.join(", ");
@@ -401,7 +459,9 @@
         renderer.render(scene, camera);
       }
 
-      function easeOutCubic(t) { return (--t) * t * t + 1; }
+      function easeOutCubic(t) {
+        return --t * t * t + 1;
+      }
 
       function getTrianglesPerFace(diceType) {
         switch (diceType) {
@@ -425,14 +485,16 @@
         let bestTriangleIndex = -1;
         for (let i = 0; i < indices.length; i += 3) {
           const a = indices[i],
-                b = indices[i + 1],
-                c = indices[i + 2];
+            b = indices[i + 1],
+            c = indices[i + 2];
           const vA = new THREE.Vector3().fromBufferAttribute(posAttr, a);
           const vB = new THREE.Vector3().fromBufferAttribute(posAttr, b);
           const vC = new THREE.Vector3().fromBufferAttribute(posAttr, c);
           const edge1 = new THREE.Vector3().subVectors(vB, vA);
           const edge2 = new THREE.Vector3().subVectors(vC, vA);
-          const localNormal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+          const localNormal = new THREE.Vector3()
+            .crossVectors(edge1, edge2)
+            .normalize();
           const worldNormal = localNormal.clone().applyMatrix3(normalMatrix).normalize();
           const dot = worldNormal.dot(desiredNormal);
           if (dot > bestDot) {
