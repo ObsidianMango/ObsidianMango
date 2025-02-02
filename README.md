@@ -96,12 +96,11 @@
 </div>
 
 ## Current Projects
-
 ### 🍷 Food & Beverage
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
-| **Wine Match**       | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) |  
 | **Food Match**       | 🥖 [BROT](https://obsidianmango.github.io/ObsidianMango/food.html)    | 
+| **Wine Match**       | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) |  
 | **ChoozyBoozy**           | 🥃 [Boozy](https://obsidianmango.github.io/ObsidianMango/boozy.html) | 
 | **WineDB**           | 🍷 [WEIN](https://obsidianmango.github.io/ObsidianMango/wine.html) |  
 
@@ -111,6 +110,7 @@
 | **Burger Boom**           | 🍔 [BurgBoom](https://obsidianmango.github.io/ObsidianMango/burgerboom/game.html) |
 | **BounceBall**   | 🔴 [Bounce](https://obsidianmango.github.io/ObsidianMango/bounce.html) | 
 | **Clicking Game**   | 🖱 [Carptunnel](https://obsidianmango.github.io/ObsidianMango/clickgame.html) | 
+| **D20v2**       | 🎲 [d20v2](https://obsidianmango.github.io/ObsidianMango/d20v2.html)        | 
 | **DWars Knockoff**   | 🥭 [MangoWarz](https://obsidianmango.github.io/ObsidianMango/mangowarz.html) | 
 | **EmojiBattleArena**           | ⚔️ [EBArena](https://obsidianmango.github.io/ObsidianMango/eba.html) | 
 | **Frog**           | 🐸 [FroggyNomNom](https://obsidianmango.github.io/ObsidianMango/frog.html) |  
@@ -131,7 +131,6 @@
 ### 🧠 Tools & Utilities
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
-| **D20v2**       | 🎲 [d20v2](https://obsidianmango.github.io/ObsidianMango/d20v2.html)        | 
 | **D20 Roller**       | 🎲 [Roll It](https://obsidianmango.github.io/ObsidianMango/d20.html)        | 
 | **Motivemate**   | 🏁 [Motivemate](https://obsidianmango.github.io/ObsidianMango/mm.html) | 
 | **Orderer**   | 📋 [JobDoer](https://obsidianmango.github.io/ObsidianMango/orderer.html) |  
@@ -156,8 +155,6 @@
 | **Madlib**   | 🙊 [Madlib](https://obsidianmango.github.io/ObsidianMango/madlib.html) |  
 | **Magick8ball**   | 🎱 [Magick8](https://obsidianmango.github.io/ObsidianMango/magick8.html) |  
 | **StoryPromptGen**           | 🎭 [Story](https://obsidianmango.github.io/ObsidianMango/storyprompt.html) |
-
-
 
 
 ---
