@@ -15,72 +15,116 @@
         width: 100vw;
         height: 100vh;
       }
-      /* Roll button centered at the bottom */
-      #roll-button {
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 10px 20px;
-        background: #000;
-        color: #0f0;
-        border: 2px solid #0f0;
-        font-size: 40px;
-        cursor: pointer;
-        z-index: 20;
-      }
-      /* Settings button positioned next to the roll button */
+      /* Settings button in the top right corner */
       #settings-button {
         position: fixed;
-        bottom: 20px;
-        left: calc(50% + 150px);
-        padding: 10px 20px;
-        background: #000;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(45deg, #222, #000);
         color: #0f0;
         border: 2px solid #0f0;
-        font-size: 40px;
+        border-radius: 8px;
+        padding: 12px 24px;
+        font-size: 32px;
         cursor: pointer;
         z-index: 20;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
       }
-      /* Settings panel (hidden by default) */
-      #settings-panel {
-        position: fixed;
-        bottom: 70px;
-        left: calc(50% + 150px);
-        background: rgba(0, 0, 0, 0.8);
-        color: #0f0;
-        padding: 10px;
-        font-size: 40px;
-        border: 1px solid #0f0;
-        z-index: 20;
-        display: none;
+      #settings-button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 8px rgba(0, 255, 0, 0.5);
       }
-      /* Result display above roll button */
+      /* Result display styling */
       #result-display {
         position: fixed;
         bottom: 90px;
         left: 50%;
         transform: translateX(-50%);
         color: #0f0;
-        font-size: 40px;
+        font-size: 32px;
         z-index: 20;
+      }
+      /* Modal (pop‑up) styling */
+      .settings-panel {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 30;
+        align-items: center;
+        justify-content: center;
+      }
+      .settings-content {
+        background: #111;
+        padding: 20px;
+        border: 2px solid #0f0;
+        border-radius: 8px;
+        font-size: 32px;
+        color: #0f0;
+        text-align: center;
+      }
+      .settings-content h2 {
+        margin-top: 0;
+      }
+      .settings-content button {
+        background: none;
+        border: 2px solid #0f0;
+        color: #0f0;
+        border-radius: 4px;
+        padding: 8px 16px;
+        font-size: 28px;
+        margin: 5px;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.2s;
+      }
+      .settings-content button:hover {
+        background: #222;
+        transform: scale(1.05);
+      }
+      /* Mobile responsive adjustments */
+      @media (max-width: 600px) {
+        #settings-button,
+        .settings-content,
+        #result-display {
+          font-size: 20px;
+          padding: 8px 16px;
+        }
+        #settings-button {
+          top: 10px;
+          right: 10px;
+        }
       }
     </style>
   </head>
   <body>
     <div id="container"></div>
     <div id="result-display"></div>
-    <button id="roll-button">Roll Dice</button>
     <button id="settings-button">⚙️</button>
-    <div id="settings-panel">
-      <label for="dice-type-select">Dice Type:</label>
-      <select id="dice-type-select">
-        <option value="d4">d4</option>
-        <option value="d6">d6</option>
-        <option value="d8">d8</option>
-        <option value="d12">d12</option>
-        <option value="d20" selected>d20</option>
-      </select>
+
+    <!-- Dice Type Modal -->
+    <div id="dice-type-panel" class="settings-panel">
+      <div class="settings-content">
+        <h2>Select Dice Type:</h2>
+        <button class="dice-type-btn" data-type="d4">d4</button>
+        <button class="dice-type-btn" data-type="d6">d6</button>
+        <button class="dice-type-btn" data-type="d8">d8</button>
+        <button class="dice-type-btn" data-type="d12">d12</button>
+        <button class="dice-type-btn" data-type="d20">d20</button>
+      </div>
+    </div>
+
+    <!-- Dice Count Modal -->
+    <div id="dice-count-panel" class="settings-panel">
+      <div class="settings-content">
+        <h2>Select Dice Count:</h2>
+        <button class="dice-count-btn" data-count="1">1</button>
+        <button class="dice-count-btn" data-count="2">2</button>
+        <button class="dice-count-btn" data-count="3">3</button>
+      
+      </div>
     </div>
 
     <!-- Import Three.js -->
@@ -91,27 +135,26 @@
        * GLOBAL VARIABLES
        **********************/
       let scene, camera, renderer;
-      let dice = null; // our single dice object
+      let diceArray = []; // holds all dice objects
       let isRolling = false;
       const rollDuration = 2000; // in ms
-      const spawnPos = new THREE.Vector3(0, 5, 0);
-      const landPos = new THREE.Vector3(0, 0, 0);
+      const baseSpawnPos = new THREE.Vector3(0, 5, 0);
+      const baseLandPos = new THREE.Vector3(0, 0, 0);
       const shakeAmplitude = 0.3;
       const shakeFrequency = 30;
       let rollStartTime = 0;
-      let initialRotation, targetRotation;
-      let resultFaceIndex = -1;
-      let currentDiceType = "d20"; // default
+      // current settings:
+      let currentDiceType = "d20";
+      let diceCount = 1;
 
       const container = document.getElementById("container");
-      const rollButton = document.getElementById("roll-button");
-      const settingsButton = document.getElementById("settings-button");
-      const settingsPanel = document.getElementById("settings-panel");
-      const diceTypeSelect = document.getElementById("dice-type-select");
       const resultDisplay = document.getElementById("result-display");
+      const settingsButton = document.getElementById("settings-button");
+      const diceTypePanel = document.getElementById("dice-type-panel");
+      const diceCountPanel = document.getElementById("dice-count-panel");
 
       /**********************
-       * INITIALIZE SCENE
+       * INITIALIZE SCENE & SETTINGS
        **********************/
       function init() {
         scene = new THREE.Scene();
@@ -123,17 +166,31 @@
         );
         camera.position.set(0, 3, 6);
         camera.lookAt(0, 0, 0);
-        camera.up.set(0, 1, 0);
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         container.appendChild(renderer.domElement);
         window.addEventListener("resize", onWindowResize);
-        rollButton.addEventListener("click", startRoll);
-        settingsButton.addEventListener("click", toggleSettingsPanel);
-        diceTypeSelect.addEventListener("change", () => {
-          currentDiceType = diceTypeSelect.value;
-          // Optionally, update the dice immediately if one exists.
-          // For a fresh roll, we recreate the dice.
+        // Roll dice when clicking on the canvas.
+        container.addEventListener("click", () => {
+          if (!isRolling) startRoll();
+        });
+        settingsButton.addEventListener("click", () => {
+          diceTypePanel.style.display = "flex";
+        });
+        // Set up dice type button event listeners.
+        document.querySelectorAll(".dice-type-btn").forEach(btn => {
+          btn.addEventListener("click", () => {
+            currentDiceType = btn.getAttribute("data-type");
+            diceTypePanel.style.display = "none";
+            diceCountPanel.style.display = "flex";
+          });
+        });
+        // Set up dice count button event listeners.
+        document.querySelectorAll(".dice-count-btn").forEach(btn => {
+          btn.addEventListener("click", () => {
+            diceCount = parseInt(btn.getAttribute("data-count"));
+            diceCountPanel.style.display = "none";
+          });
         });
         animate();
       }
@@ -144,18 +201,9 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       }
 
-      function toggleSettingsPanel() {
-        if (settingsPanel.style.display === "none" || settingsPanel.style.display === "") {
-          settingsPanel.style.display = "block";
-        } else {
-          settingsPanel.style.display = "none";
-        }
-      }
-
       /**********************
        * DICE CREATION & LABELING
        **********************/
-      // Get geometry based on dice type.
       function getDiceGeometry(type) {
         switch (type) {
           case "d4":
@@ -172,95 +220,76 @@
         }
       }
 
-      function createDice() {
-        // Always create a new dice (so that highlighted labels are reset).
-        if (dice) {
-          scene.remove(dice.mesh);
-          dice = null;
-        }
+      function createDiceMesh() {
         const geometry = getDiceGeometry(currentDiceType);
         const material = new THREE.MeshBasicMaterial({ color: 0x000000 });
         const mesh = new THREE.Mesh(geometry, material);
-        // Add glowing green edges.
+        // Add glowing edges.
         const edges = new THREE.EdgesGeometry(geometry);
         const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
         const edgeLines = new THREE.LineSegments(edges, lineMaterial);
         mesh.add(edgeLines);
-        // Add face labels.
         addFaceLabels(mesh);
         scene.add(mesh);
-        dice = { mesh: mesh };
+        return mesh;
       }
 
       function addFaceLabels(mesh) {
-  const geometry = mesh.geometry;
-  if (!geometry.index) {
-    geometry.setIndex(
-      Array.from({ length: geometry.attributes.position.count }, (_, i) => i)
-    );
-  }
-  const posAttr = geometry.attributes.position;
-  const indices = geometry.index.array;
-  const faceCount = indices.length / 3;
-  const offset = 0.02;
-
-  // Determine how many triangles form one face based on dice type
-  let trianglesPerFace;
-  switch (currentDiceType) {
-    case "d6":
-      trianglesPerFace = 2; // 6 faces, each made of 2 triangles
-      break;
-    case "d12":
-      trianglesPerFace = 3; // 12 faces, each made of 3 triangles
-      break;
-    default:
-      trianglesPerFace = 1; // d4, d8, d20 use 1 triangle per face
-      break;
-  }
-
-  let faceLabelIndex = 0;
-  for (let i = 0; i < faceCount; i += trianglesPerFace) {
-    let centroid = new THREE.Vector3();
-    let accumulatedNormal = new THREE.Vector3();
-
-    // Sum the positions and normals for each actual face
-    for (let t = 0; t < trianglesPerFace; t++) {
-      const triIndex = i + t;
-      if (triIndex >= faceCount) break;
-
-      const a = indices[triIndex * 3];
-      const b = indices[triIndex * 3 + 1];
-      const c = indices[triIndex * 3 + 2];
-
-      const vA = new THREE.Vector3().fromBufferAttribute(posAttr, a);
-      const vB = new THREE.Vector3().fromBufferAttribute(posAttr, b);
-      const vC = new THREE.Vector3().fromBufferAttribute(posAttr, c);
-
-      centroid.add(vA).add(vB).add(vC);
-
-      const edge1 = new THREE.Vector3().subVectors(vB, vA);
-      const edge2 = new THREE.Vector3().subVectors(vC, vA);
-      const faceNormal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
-      accumulatedNormal.add(faceNormal);
-    }
-
-    centroid.divideScalar(trianglesPerFace * 3);
-    const normal = accumulatedNormal.normalize();
-    const labelPos = centroid.clone().add(normal.clone().multiplyScalar(offset));
-
-    const faceNumber = faceLabelIndex + 1;
-    const labelMesh = makeTextPlane(faceNumber.toString(), "#0f0");
-    labelMesh.position.copy(labelPos);
-    labelMesh.quaternion.copy(
-      new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal)
-    );
-    labelMesh.userData.faceIndex = faceLabelIndex;
-    mesh.add(labelMesh);
-
-    faceLabelIndex++;
-  }
-}
-
+        const geometry = mesh.geometry;
+        if (!geometry.index) {
+          geometry.setIndex(
+            Array.from({ length: geometry.attributes.position.count }, (_, i) => i)
+          );
+        }
+        const posAttr = geometry.attributes.position;
+        const indices = geometry.index.array;
+        const faceCount = indices.length / 3;
+        const offset = 0.02;
+        let trianglesPerFace;
+        switch (currentDiceType) {
+          case "d6":
+            trianglesPerFace = 2;
+            break;
+          case "d12":
+            trianglesPerFace = 3;
+            break;
+          default:
+            trianglesPerFace = 1;
+            break;
+        }
+        let faceLabelIndex = 0;
+        for (let i = 0; i < faceCount; i += trianglesPerFace) {
+          let centroid = new THREE.Vector3();
+          let accumulatedNormal = new THREE.Vector3();
+          for (let t = 0; t < trianglesPerFace; t++) {
+            const triIndex = i + t;
+            if (triIndex >= faceCount) break;
+            const a = indices[triIndex * 3];
+            const b = indices[triIndex * 3 + 1];
+            const c = indices[triIndex * 3 + 2];
+            const vA = new THREE.Vector3().fromBufferAttribute(posAttr, a);
+            const vB = new THREE.Vector3().fromBufferAttribute(posAttr, b);
+            const vC = new THREE.Vector3().fromBufferAttribute(posAttr, c);
+            centroid.add(vA).add(vB).add(vC);
+            const edge1 = new THREE.Vector3().subVectors(vB, vA);
+            const edge2 = new THREE.Vector3().subVectors(vC, vA);
+            const faceNormal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+            accumulatedNormal.add(faceNormal);
+          }
+          centroid.divideScalar(trianglesPerFace * 3);
+          const normal = accumulatedNormal.normalize();
+          const labelPos = centroid.clone().add(normal.clone().multiplyScalar(offset));
+          const faceNumber = faceLabelIndex + 1;
+          const labelMesh = makeTextPlane(faceNumber.toString(), "#0f0");
+          labelMesh.position.copy(labelPos);
+          labelMesh.quaternion.copy(
+            new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal)
+          );
+          labelMesh.userData.faceIndex = faceLabelIndex;
+          mesh.add(labelMesh);
+          faceLabelIndex++;
+        }
+      }
 
       function makeTextPlane(message, textColor) {
         const canvas = document.createElement("canvas");
@@ -285,38 +314,45 @@
         return new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), material);
       }
 
-      // Create a highlighted label (red text and scaled up for a bulge).
       function createHighlightedLabel(message) {
-        const label = makeTextPlane(message, "#ff0000"); // red text
+        const label = makeTextPlane(message, "#ff0000");
         label.scale.set(1.3, 1.3, 1.3);
         return label;
       }
 
       /**********************
-       * ROLL ANIMATION & RESULT COMPUTATION
+       * ROLL ANIMATION & MULTIPLE DICE LOGIC
        **********************/
       function startRoll() {
-        // Remove any existing dice so that labels reset.
-        if (dice) {
-          scene.remove(dice.mesh);
-          dice = null;
+        // Remove any previous dice.
+        diceArray.forEach(d => scene.remove(d.mesh));
+        diceArray = [];
+        // Calculate horizontal spacing based on diceCount.
+        const spacing = 2; // adjust as needed
+        const startX = -((diceCount - 1) / 2) * spacing;
+        for (let i = 0; i < diceCount; i++) {
+          const offset = new THREE.Vector3(startX + i * spacing, 0, 0);
+          const mesh = createDiceMesh();
+          // Set each dice's spawn and land positions using the offset.
+          const spawnPos = baseSpawnPos.clone().add(offset);
+          const landPos = baseLandPos.clone().add(offset);
+          mesh.position.copy(spawnPos);
+          // Assign random initial rotation.
+          mesh.rotation.set(
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2
+          );
+          const initialRotation = mesh.rotation.clone();
+          // Compute target rotation with extra spins.
+          const targetRotation = new THREE.Euler(
+            initialRotation.x + (Math.random() * 4 + 4) * Math.PI,
+            initialRotation.y + (Math.random() * 4 + 4) * Math.PI,
+            initialRotation.z + (Math.random() * 4 + 4) * Math.PI
+          );
+          // Push the dice object into the array.
+          diceArray.push({ mesh, spawnPos, landPos, initialRotation, targetRotation });
         }
-        createDice();
-        // Reset position to spawn.
-        dice.mesh.position.copy(spawnPos);
-        // Set a random initial rotation.
-        dice.mesh.rotation.set(
-          Math.random() * Math.PI * 2,
-          Math.random() * Math.PI * 2,
-          Math.random() * Math.PI * 2
-        );
-        initialRotation = dice.mesh.rotation.clone();
-        // Compute a target rotation (adding extra spins).
-        targetRotation = new THREE.Euler(
-          initialRotation.x + (Math.random() * 4 + 4) * Math.PI,
-          initialRotation.y + (Math.random() * 4 + 4) * Math.PI,
-          initialRotation.z + (Math.random() * 4 + 4) * Math.PI
-        );
         rollStartTime = performance.now();
         isRolling = true;
         resultDisplay.innerText = "";
@@ -325,37 +361,41 @@
       function animate() {
         requestAnimationFrame(animate);
         const now = performance.now();
-        if (isRolling && dice) {
+        if (isRolling) {
           let t = (now - rollStartTime) / rollDuration;
           if (t > 1) t = 1;
           const ease = easeOutCubic(t);
-          // Interpolate position from spawnPos to landPos.
-          dice.mesh.position.lerpVectors(spawnPos, landPos, ease);
-          // Interpolate rotation.
-          const baseX = THREE.MathUtils.lerp(initialRotation.x, targetRotation.x, ease);
-          const baseY = THREE.MathUtils.lerp(initialRotation.y, targetRotation.y, ease);
-          const baseZ = THREE.MathUtils.lerp(initialRotation.z, targetRotation.z, ease);
-          const shakeDecay = 1 - ease;
-          const shakeX = shakeDecay * shakeAmplitude * Math.sin(shakeFrequency * ((now - rollStartTime) / 1000));
-          const shakeY = shakeDecay * shakeAmplitude * Math.sin(shakeFrequency * ((now - rollStartTime) / 1000) + 1);
-          const shakeZ = shakeDecay * shakeAmplitude * Math.sin(shakeFrequency * ((now - rollStartTime) / 1000) + 2);
-          dice.mesh.rotation.set(baseX + shakeX, baseY + shakeY, baseZ + shakeZ);
+          diceArray.forEach(diceObj => {
+            // Lerp position for this dice.
+            diceObj.mesh.position.lerpVectors(diceObj.spawnPos, diceObj.landPos, ease);
+            const baseX = THREE.MathUtils.lerp(diceObj.initialRotation.x, diceObj.targetRotation.x, ease);
+            const baseY = THREE.MathUtils.lerp(diceObj.initialRotation.y, diceObj.targetRotation.y, ease);
+            const baseZ = THREE.MathUtils.lerp(diceObj.initialRotation.z, diceObj.targetRotation.z, ease);
+            const shakeDecay = 1 - ease;
+            const shakeX = shakeDecay * shakeAmplitude * Math.sin(shakeFrequency * ((now - rollStartTime) / 1000));
+            const shakeY = shakeDecay * shakeAmplitude * Math.sin(shakeFrequency * ((now - rollStartTime) / 1000) + 1);
+            const shakeZ = shakeDecay * shakeAmplitude * Math.sin(shakeFrequency * ((now - rollStartTime) / 1000) + 2);
+            diceObj.mesh.rotation.set(baseX + shakeX, baseY + shakeY, baseZ + shakeZ);
+          });
           if (t >= 1) {
             isRolling = false;
-            dice.mesh.position.copy(landPos);
-            dice.mesh.rotation.set(targetRotation.x, targetRotation.y, targetRotation.z);
-            dice.mesh.updateMatrixWorld(true);
-            // Compute the winning face.
-            const desiredNormal = camera.position.clone().sub(dice.mesh.position).normalize();
-            const result = computeDiceResult(dice.mesh, desiredNormal);
-            resultDisplay.innerText = "Result: " + result;
-            // Highlight the winning face.
-            highlightWinningFace(result - 1);
-            // Critical alerts for d20 only.
-            if (currentDiceType === "d20") {
-              if (result === 1) flashScreen("CRITICAL FAILURE", "#ff0000", "#ffffff");
-              if (result === 20) flashScreen("CRITICAL SUCCESS", "#00ff00", "#000000");
-            }
+            // Finalize positions and compute results.
+            const results = [];
+            diceArray.forEach(diceObj => {
+              diceObj.mesh.position.copy(diceObj.landPos);
+              diceObj.mesh.rotation.set(diceObj.targetRotation.x, diceObj.targetRotation.y, diceObj.targetRotation.z);
+              diceObj.mesh.updateMatrixWorld(true);
+              const desiredNormal = camera.position.clone().sub(diceObj.mesh.position).normalize();
+              const result = computeDiceResult(diceObj.mesh, desiredNormal);
+              results.push(result);
+              highlightWinningFace(diceObj.mesh, result - 1);
+              // Critical alerts for d20 (only for single dice in original, but here applied per dice)
+              if (currentDiceType === "d20") {
+                if (result === 1) flashScreen("CRITICAL FAILURE", "#ff0000", "#ffffff");
+                if (result === 20) flashScreen("CRITICAL SUCCESS", "#00ff00", "#000000");
+              }
+            });
+            resultDisplay.innerText = "Results: " + results.join(", ");
           }
         }
         renderer.render(scene, camera);
@@ -363,78 +403,60 @@
 
       function easeOutCubic(t) { return (--t) * t * t + 1; }
 
-     // First, define a helper to get how many triangles form one face for each dice type:
-function getTrianglesPerFace(diceType) {
-  switch (diceType) {
-    case "d6":
-      return 2;  // each of the 6 faces is split into 2 triangles => total 12
-    case "d12":
-      return 3;  // each of the 12 faces is split into 3 triangles => total 36
-    // d4, d8, d20 use 1 triangle per face in their basic geometries
-    default:
-      return 1;
-  }
-}
+      function getTrianglesPerFace(diceType) {
+        switch (diceType) {
+          case "d6":
+            return 2;
+          case "d12":
+            return 3;
+          default:
+            return 1;
+        }
+      }
 
-// Then modify computeDiceResult to convert from triangle index to face index correctly:
-function computeDiceResult(mesh, desiredNormal) {
-  mesh.updateMatrixWorld(true);
-  const geometry = mesh.geometry;
-  const posAttr = geometry.attributes.position;
-  const indices = geometry.index.array;
-  const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+      function computeDiceResult(mesh, desiredNormal) {
+        mesh.updateMatrixWorld(true);
+        const geometry = mesh.geometry;
+        const posAttr = geometry.attributes.position;
+        const indices = geometry.index.array;
+        const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+        const trianglesPerFace = getTrianglesPerFace(currentDiceType);
+        let bestDot = -Infinity;
+        let bestTriangleIndex = -1;
+        for (let i = 0; i < indices.length; i += 3) {
+          const a = indices[i],
+                b = indices[i + 1],
+                c = indices[i + 2];
+          const vA = new THREE.Vector3().fromBufferAttribute(posAttr, a);
+          const vB = new THREE.Vector3().fromBufferAttribute(posAttr, b);
+          const vC = new THREE.Vector3().fromBufferAttribute(posAttr, c);
+          const edge1 = new THREE.Vector3().subVectors(vB, vA);
+          const edge2 = new THREE.Vector3().subVectors(vC, vA);
+          const localNormal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+          const worldNormal = localNormal.clone().applyMatrix3(normalMatrix).normalize();
+          const dot = worldNormal.dot(desiredNormal);
+          if (dot > bestDot) {
+            bestDot = dot;
+            bestTriangleIndex = i / 3;
+          }
+        }
+        const bestFaceIndex = Math.floor(bestTriangleIndex / trianglesPerFace);
+        return bestFaceIndex + 1;
+      }
 
-  // Determine the correct triangle grouping for the current dice
-  const trianglesPerFace = getTrianglesPerFace(currentDiceType);
-
-  let bestDot = -Infinity;
-  let bestTriangleIndex = -1;
-
-  // Loop over every triangle in the geometry
-  for (let i = 0; i < indices.length; i += 3) {
-    const a = indices[i],
-          b = indices[i + 1],
-          c = indices[i + 2];
-
-    const vA = new THREE.Vector3().fromBufferAttribute(posAttr, a);
-    const vB = new THREE.Vector3().fromBufferAttribute(posAttr, b);
-    const vC = new THREE.Vector3().fromBufferAttribute(posAttr, c);
-
-    const edge1 = new THREE.Vector3().subVectors(vB, vA);
-    const edge2 = new THREE.Vector3().subVectors(vC, vA);
-    const localNormal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
-
-    // Convert local normal to world space and compare to desiredNormal
-    const worldNormal = localNormal.clone().applyMatrix3(normalMatrix).normalize();
-    const dot = worldNormal.dot(desiredNormal);
-
-    if (dot > bestDot) {
-      bestDot = dot;
-      // Store the index of this particular triangle (i / 3)
-      bestTriangleIndex = i / 3;
-    }
-  }
-
-  // Convert triangle index to face index (accounting for the triangles per face)
-  const bestFaceIndex = Math.floor(bestTriangleIndex / trianglesPerFace);
-  resultFaceIndex = bestFaceIndex;
-  return bestFaceIndex + 1;
-}
-      // Replace the label on the winning face with a highlighted version.
-      function highlightWinningFace(faceIndex) {
-        dice.mesh.children.forEach(child => {
+      function highlightWinningFace(mesh, faceIndex) {
+        mesh.children.forEach(child => {
           if (child.userData && child.userData.faceIndex === faceIndex) {
             const newLabel = createHighlightedLabel((faceIndex + 1).toString());
             newLabel.position.copy(child.position);
             newLabel.quaternion.copy(child.quaternion);
             newLabel.userData.faceIndex = faceIndex;
-            dice.mesh.remove(child);
-            dice.mesh.add(newLabel);
+            mesh.remove(child);
+            mesh.add(newLabel);
           }
         });
       }
 
-      // Flash a full‑screen overlay with a message.
       function flashScreen(message, bgColor, textColor) {
         const flashDiv = document.createElement("div");
         flashDiv.style.position = "fixed";
