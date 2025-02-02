@@ -41,6 +41,7 @@
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
 | **Frog**           | 🐸 [FroggyNomNom](https://obsidianmango.github.io/ObsidianMango/frog.html) | 
+| **D20 v2**       | 🎲 [d20v2](https://obsidianmango.github.io/ObsidianMango/d20v2.html)        | 
 | **Sick?**           | 🦠 [PhlegmAnalysis](https://obsidianmango.github.io/ObsidianMango/sick.html) | 
 | **WordSearch**           | 🔍 [WSearch](https://obsidianmango.github.io/ObsidianMango/word.html) | 
 | **Balls**           | 🟠 [Balls](https://obsidianmango.github.io/ObsidianMango/neon1.html) | 
