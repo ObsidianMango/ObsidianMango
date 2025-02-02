@@ -35,7 +35,8 @@
 
 # 🍇 Application Repository   
 
-🚀 Quick Launch # [🎲](https://obsidianmango.github.io/ObsidianMango/d20v2.html)  [🐸](https://obsidianmango.github.io/ObsidianMango/frog.html)  [⬡](https://obsidianmango.github.io/ObsidianMango/demu2.html)  [🏁](https://obsidianmango.github.io/ObsidianMango/mm.html)  [🎱](https://obsidianmango.github.io/ObsidianMango/magick8.html)  [🔥](https://obsidianmango.github.io/ObsidianMango/arcanewhisper.html)  [🌎](https://obsidianmango.github.io/ObsidianMango/es.html)  [🐱](https://obsidianmango.github.io/ObsidianMango/neon2.html)
+🚀 Quick Launch 
+# [🎲](https://obsidianmango.github.io/ObsidianMango/d20v2.html)  [🐸](https://obsidianmango.github.io/ObsidianMango/frog.html)  [⬡](https://obsidianmango.github.io/ObsidianMango/demu2.html)  [🏁](https://obsidianmango.github.io/ObsidianMango/mm.html)  [🎱](https://obsidianmango.github.io/ObsidianMango/magick8.html)  [🔥](https://obsidianmango.github.io/ObsidianMango/arcanewhisper.html)  [🌎](https://obsidianmango.github.io/ObsidianMango/es.html)  [🐱](https://obsidianmango.github.io/ObsidianMango/neon2.html)
 
 ## Current Projects
 
