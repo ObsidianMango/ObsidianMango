@@ -2,6 +2,7 @@
   body {
       background-color: #121212;
       color: #e0e0e0;
+      font-family: Arial, sans-serif;
   }
 
   a {
@@ -14,6 +15,7 @@
       border-collapse: collapse;
       width: 100%;
       margin: 20px 0;
+      overflow-x: auto; /* Allows horizontal scrolling on small screens */
   }
 
   th, td {
@@ -31,12 +33,67 @@
       background-color: #1e1e1e;
       color: #e0e0e0;
   }
+
+  /* Responsive Design */
+  @media screen and (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    table {
+        margin: 10px 0;
+        font-size: 14px;
+    }
+
+    th, td {
+        padding: 8px;
+    }
+
+    h1, h2 {
+        font-size: 20px;
+    }
+
+    /* Stacking the app links vertically on smaller screens */
+    .quick-launch-links {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .quick-launch-links a {
+        font-size: 20px;
+    }
+  }
+
+  @media screen and (max-width: 480px) {
+    table {
+        font-size: 12px;
+    }
+
+    h1, h2 {
+        font-size: 18px;
+    }
+
+    .quick-launch-links a {
+        font-size: 18px;
+    }
+  }
 </style>
 
 # 🍇 Application Repository   
 
 🚀 Quick Launch 
-# [🎲](https://obsidianmango.github.io/ObsidianMango/d20v2.html)  [🐸](https://obsidianmango.github.io/ObsidianMango/frog.html)  [⬡](https://obsidianmango.github.io/ObsidianMango/demu2.html)  [🏁](https://obsidianmango.github.io/ObsidianMango/mm.html)  [🎱](https://obsidianmango.github.io/ObsidianMango/magick8.html)  [🔥](https://obsidianmango.github.io/ObsidianMango/arcanewhisper.html)  [🌎](https://obsidianmango.github.io/ObsidianMango/es.html)  [🐱](https://obsidianmango.github.io/ObsidianMango/neon2.html)
+<div class="quick-launch-links">
+  <a href="https://obsidianmango.github.io/ObsidianMango/d20v2.html">🎲</a>
+  <a href="https://obsidianmango.github.io/ObsidianMango/frog.html">🐸</a>
+  <a href="https://obsidianmango.github.io/ObsidianMango/demu2.html">⬡</a>
+  <a href="https://obsidianmango.github.io/ObsidianMango/mm.html">🏁</a>
+  <a href="https://obsidianmango.github.io/ObsidianMango/magick8.html">🎱</a>
+  <a href="https://obsidianmango.github.io/ObsidianMango/arcanewhisper.html">🔥</a>
+  <a href="https://obsidianmango.github.io/ObsidianMango/es.html">🌎</a>
+  <a href="https://obsidianmango.github.io/ObsidianMango/neon2.html">🐱</a>
+</div>
 
 ## Current Projects
 
