@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Explosive Orbit – Interactive Particle System</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script>
+    (function() {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      let w = canvas.width = window.innerWidth;
+      let h = canvas.height = window.innerHeight;
+      const defaultCenter = { x: w / 2, y: h / 2 };
+
+      window.addEventListener('resize', () => {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+        defaultCenter.x = w / 2;
+        defaultCenter.y = h / 2;
+      });
+
+      let rotationAngle = 0;
+
+      class Particle {
+        constructor() {
+          this.init();
+        }
+        init() {
+          const angle = Math.random() * Math.PI * 2;
+          const radius = Math.random() * (Math.min(w, h) / 2 * 0.8);
+          this.orbitRadius = radius;
+          this.angle = angle;
+          this.angularSpeed = 0.001 + Math.random() * 0.002;
+          this.center = { x: defaultCenter.x, y: defaultCenter.y };
+          this.size = 1.5 + Math.random() * 2;
+          this.hue = Math.random() * 360;
+          this.offsetX = 0;
+          this.offsetY = 0;
+        }
+        explode(explosionCenter) {
+          let currentX = this.center.x + this.orbitRadius * Math.cos(this.angle) + this.offsetX;
+          let currentY = this.center.y + this.orbitRadius * Math.sin(this.angle) + this.offsetY;
+          let dx = currentX - explosionCenter.x;
+          let dy = currentY - explosionCenter.y;
+          let distance = Math.sqrt(dx * dx + dy * dy) || 1;
+          let magnitude = Math.random() * 80 + 20;
+          this.offsetX = (dx / distance) * magnitude;
+          this.offsetY = (dy / distance) * magnitude;
+        }
+        update() {
+          this.angle += this.angularSpeed;
+          this.center.x += (defaultCenter.x - this.center.x) * 0.05;
+          this.center.y += (defaultCenter.y - this.center.y) * 0.05;
+          this.offsetX *= 0.95;
+          this.offsetY *= 0.95;
+          this.x = this.center.x + this.orbitRadius * Math.cos(this.angle) + this.offsetX;
+          this.y = this.center.y + this.orbitRadius * Math.sin(this.angle) + this.offsetY;
+        }
+        draw() {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+          ctx.fillStyle = `hsl(${this.hue}, 80%, 60%)`;
+          ctx.shadowColor = `hsl(${this.hue}, 80%, 60%)`;
+          ctx.shadowBlur = 10;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      const particles = [];
+      const particleCount = 300;
+      for (let i = 0; i < particleCount; i++) {
+        particles.push(new Particle());
+      }
+
+      function connectParticles() {
+        for (let i = 0; i < particleCount; i++) {
+          for (let j = i + 1; j < particleCount; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 80) {
+              ctx.strokeStyle = 'rgba(255, 255, 255, ' + (1 - dist / 80) + ')';
+              ctx.lineWidth = 0.5;
+              ctx.beginPath();
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+
+      canvas.addEventListener('click', function(e) {
+        let explosionCenter = { x: e.clientX, y: e.clientY };
+        particles.forEach(p => p.explode(explosionCenter));
+      });
+      canvas.addEventListener('touchstart', function(e) {
+        let touch = e.touches[0];
+        let explosionCenter = { x: touch.clientX, y: touch.clientY };
+        particles.forEach(p => p.explode(explosionCenter));
+      });
+
+      function animate() {
+        requestAnimationFrame(animate);
+        rotationAngle += 0.001;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.save();
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(rotationAngle);
+        ctx.translate(-w / 2, -h / 2);
+
+        particles.forEach(p => {
+          p.update();
+          p.draw();
+        });
+        connectParticles();
+        ctx.restore();
+      }
+
+      animate();
+    })();
+  </script>
+</body>
+</html>
