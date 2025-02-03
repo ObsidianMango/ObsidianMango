@@ -41,6 +41,7 @@
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
 | **Motivemate**   | 🏁 [Motivemate](https://obsidianmango.github.io/ObsidianMango/mm.html) | 
+| **VisualDemos**   | 👑 [DEEmu](https://obsidianmango.github.io/ObsidianMango/deemu/deemu.html) |
 | **Frog**           | 🐸 [FroggyNomNom](https://obsidianmango.github.io/ObsidianMango/frog.html) | 
 | **D20 v2**       | 🎲 [d20v2](https://obsidianmango.github.io/ObsidianMango/d20v2.html)        | 
 | **Demu2**   | ⬡ [Demu2](https://obsidianmango.github.io/ObsidianMango/demu2.html) | 
