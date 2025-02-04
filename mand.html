@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Expanded Fractal Explorer</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      color: #333;
+      background: black;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+    #controls {
+      margin-top: 10px;
+      background: #fafafa;
+      padding: 10px 15px;
+      border-radius: 6px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 15px;
+    }
+    button {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s ease-in-out;
+    }
+    button:hover {
+      background: #eee;
+    }
+    #info {
+      margin: 0;
+      font-weight: bold;
+      line-height: 1.5;
+    }
+    /* Keep the internal resolution at 400x300, but scale for responsiveness */
+    #fractalCanvas {
+      margin: 10px 0;
+      background: #000;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: 90vw;
+      max-width: 600px;
+      height: auto;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <button id="btnFractal">Change Fractal</button>
+    <button id="btnDirection">Change Zoom Direction</button>
+    <button id="btnReset">Reset View</button>
+
+  </div>
+
+
+  <!-- Keep the canvas's "internal" resolution at 400×300 for performance -->
+  <canvas id="fractalCanvas" width="400" height="300"></canvas>
+  <div id="controls">
+   
+    <p id="info">
+      Fractal: <span id="fractalType">Mandelbrot</span>
+      &nbsp;|&nbsp; Zoom: <span id="zoomDir">IN</span>
+    </p>
+  </div>
+  <script>
+    const canvas = document.getElementById('fractalCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const fractalLabel = document.getElementById('fractalType');
+    const zoomLabel = document.getElementById('zoomDir');
+
+    // A variety of fractals to explore:
+    const fractals = [
+      "Mandelbrot",
+      "Julia",
+      "BurningShip",
+      "Tricorn",
+      "Newton"
+    ];
+
+    let fractalIndex = 0;
+    let fractalType = fractals[fractalIndex];
+
+    // Adjust iteration count for performance vs. detail
+    let maxIter = 100;
+
+    // Julia constants (can experiment with these!)
+    let cRe = -0.7;
+    let cIm = 0.27015;
+
+    // Viewport boundaries
+    let xmin, xmax, ymin, ymax;
+
+    // Zoom direction: "in" or "out"
+    let zoomDirection = "in";
+
+    resetView();
+    drawFractal();
+
+    // --- Functions ---
+
+    // Reset the view range based on the chosen fractal
+    function resetView() {
+      switch (fractalType) {
+        case "Mandelbrot":
+          xmin = -2.5; xmax = 1.2;
+          ymin = -1.2; ymax = 1.2;
+          break;
+        case "Julia":
+          xmin = -1.5; xmax = 1.5;
+          ymin = -1.5; ymax = 1.5;
+          break;
+        case "BurningShip":
+          xmin = -2.0; xmax = 1.2;
+          ymin = -2.5; ymax = 0.5;
+          break;
+        case "Tricorn":
+          // Similar range to Mandelbrot, but can be tweaked
+          xmin = -2.5; xmax = 1.2;
+          ymin = -1.5; ymax = 1.5;
+          break;
+        case "Newton":
+          // Center near roots of z^3 - 1
+          xmin = -2; xmax = 2;
+          ymin = -1.5; ymax = 1.5;
+          break;
+      }
+    }
+
+    // Draw the current fractal
+    function drawFractal() {
+      const w = canvas.width;
+      const h = canvas.height;
+      const imgData = ctx.createImageData(w, h);
+      const data = imgData.data;
+
+      for (let py = 0; py < h; py++) {
+        for (let px = 0; px < w; px++) {
+          const x0 = xmin + (xmax - xmin) * px / w;
+          const y0 = ymin + (ymax - ymin) * py / h;
+          const iter = fractalIteration(x0, y0, fractalType, maxIter);
+
+          // Each pixel is 4 bytes: RGBA
+          const idx = (py * w + px) * 4;
+          if (iter[0] >= maxIter) {
+            // "In the set" or "converged" in Newton's case
+            data[idx] = 0;
+            data[idx+1] = 0;
+            data[idx+2] = 0;
+            data[idx+3] = 255;
+          } else {
+            // Outside or partially convergent
+            // For Newton's fractal, iter can return [iteration, rootIndex]
+            // For the others, rootIndex is unused (-1)
+            const iterationCount = iter[0];
+            const rootIndex = iter[1]; 
+            const hue = (iterationCount / maxIter) * 360;
+
+            // If Newton fractal found a specific root, we can color by root index
+            // to create multi-root coloring. Let's do a simple approach:
+            let sat = 1, light = 0.5;
+            if (rootIndex >= 0) {
+              // We have up to 3 possible roots for z^3 - 1 = 0
+              // We'll offset the hue slightly for each root
+              const rootHueOffsets = [0, 120, 240];
+              const rootOffset = rootHueOffsets[rootIndex % rootHueOffsets.length];
+              const modHue = (hue + rootOffset) % 360;
+              const [r, g, b] = hslToRgb(modHue / 360, sat, light);
+              data[idx]   = r;
+              data[idx+1] = g;
+              data[idx+2] = b;
+              data[idx+3] = 255;
+            } else {
+              // Regular fractals: color by iteration
+              const [r, g, b] = hslToRgb(hue / 360, sat, light);
+              data[idx]   = r;
+              data[idx+1] = g;
+              data[idx+2] = b;
+              data[idx+3] = 255;
+            }
+          }
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    // This function computes the iteration count for each fractal
+    // Return format: [iterationCount, rootIndex]
+    //   - For fractals that don't have multiple roots, return [finalIter, -1].
+    //   - For Newton fractal, if converged to a root, return [iter, rootIndex].
+    function fractalIteration(x, y, type, maxIters) {
+      let zx, zy;
+      switch (type) {
+        case "Mandelbrot":
+          zx = x; zy = y;
+          for (let i = 0; i < maxIters; i++) {
+            const xx = zx * zx - zy * zy + x;
+            const yy = 2 * zx * zy + y;
+            zx = xx; 
+            zy = yy;
+            if (zx * zx + zy * zy > 4) return [i, -1];
+          }
+          return [maxIters, -1];
+          
+        case "Julia":
+          zx = x; zy = y;
+          for (let i = 0; i < maxIters; i++) {
+            const xx = zx * zx - zy * zy + cRe;
+            const yy = 2 * zx * zy + cIm;
+            zx = xx; 
+            zy = yy;
+            if (zx * zx + zy * zy > 4) return [i, -1];
+          }
+          return [maxIters, -1];
+
+        case "BurningShip":
+          zx = x; zy = y;
+          for (let i = 0; i < maxIters; i++) {
+            const xx = (Math.abs(zx) * Math.abs(zx)) - (Math.abs(zy) * Math.abs(zy)) + x;
+            const yy = 2 * Math.abs(zx) * Math.abs(zy) + y;
+            zx = xx; 
+            zy = yy;
+            if (zx * zx + zy * zy > 4) return [i, -1];
+          }
+          return [maxIters, -1];
+
+        case "Tricorn":
+          // The Tricorn is sometimes defined as z -> conjugate(z)^2 + c
+          // We'll do: z_{n+1} = (conjugate of z_n)^2 + c
+          // So each iteration: conj(zx + i zy) = zx - i zy
+          // then square that
+          for (let i = 0, rx = x, ry = y; i < maxIters; i++) {
+            // conj(rx + i ry) -> rx - i ry
+            // (rx - i ry)^2 = rx^2 - 2i rx ry + (i^2)(ry^2) = rx^2 - ry^2 - 2i rx ry
+            const conjRx = rx, conjRy = -ry;
+            const xx = conjRx * conjRx - conjRy * conjRy + x;
+            const yy = 2 * conjRx * conjRy + y;
+            rx = xx; 
+            ry = yy;
+            if (rx * rx + ry * ry > 4) return [i, -1];
+          }
+          return [maxIters, -1];
+
+        case "Newton":
+          // Newton fractal for f(z) = z^3 - 1
+          // z_{n+1} = z_n - f(z_n) / f'(z_n), f'(z) = 3z^2
+          // We'll consider up to 3 possible roots: 1, -1/2 ± sqrt(3)/2 i
+          // We'll do iteration up to maxIters or until close to any root
+          const tolerance = 1e-6;
+          zx = x; zy = y;
+          let i = 0;
+          for (; i < maxIters; i++) {
+            // f(z) = (zx + i zy)^3 - 1
+            // We'll do polynomial expansion or direct approach
+            // (zx + i zy)^3 = (zx^3 - 3zx zy^2) + i(3zx^2 zy - zy^3)
+            const zx2 = zx * zx, zy2 = zy * zy;
+            const zx3 = zx2 * zx, zy3 = zy2 * zy;
+            const reF = zx3 - 3 * zx * zy2 - 1; 
+            const imF = 3 * zx2 * zy - zy3;
+            // f'(z) = 3z^2 => 3(zx + i zy)^2
+            // z^2 = (zx^2 - zy^2) + i(2 zx zy)
+            const reZ2 = zx2 - zy2;
+            const imZ2 = 2 * zx * zy;
+            // reF' = 3(reZ2), imF' = 3(imZ2)
+            const reFprime = 3 * reZ2;
+            const imFprime = 3 * imZ2;
+            // Next z = z - f(z)/f'(z)
+            // f(z)/f'(z) => multiply numerator & denominator by conjugate of denominator
+            const denom = reFprime * reFprime + imFprime * imFprime;
+            if (Math.abs(denom) < 1e-14) {
+              break; // avoid dividing by zero
+            }
+            const newRe = (reF * reFprime + imF * imFprime) / denom;
+            const newIm = (imF * reFprime - reF * imFprime) / denom;
+            zx -= newRe;
+            zy -= newIm;
+
+            // Check if close to a known root of z^3 - 1 = 0
+            // The roots are:
+            //   1           (index 0)
+            //   -1/2 + i(√3/2)  (index 1)
+            //   -1/2 - i(√3/2)  (index 2)
+            // We'll see if (zx, zy) is near any of these.
+            const roots = [
+              [1, 0],
+              [-0.5,  Math.sqrt(3)/2],
+              [-0.5, -Math.sqrt(3)/2]
+            ];
+            for (let r = 0; r < roots.length; r++) {
+              const dx = zx - roots[r][0];
+              const dy = zy - roots[r][1];
+              if (dx*dx + dy*dy < tolerance) {
+                return [i, r]; // iteration + which root
+              }
+            }
+          }
+          return [maxIters, -1];
+      }
+    }
+
+    // Convert HSL to RGB
+    function hslToRgb(h, s, l) {
+      if (s === 0) {
+        const val = Math.round(l * 255);
+        return [val, val, val];
+      }
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      const r = hue2rgb(p, q, h + 1/3);
+      const g = hue2rgb(p, q, h);
+      const b = hue2rgb(p, q, h - 1/3);
+      return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+    }
+
+    // Smooth zoom animation for a “very smooth” effect → increase steps
+    function smoothZoomTo(cx, cy, factor, steps = 30) {
+      const xMinStart = xmin, xMaxStart = xmax;
+      const yMinStart = ymin, yMaxStart = ymax;
+      const xRange = (xmax - xmin) * factor;
+      const yRange = (ymax - ymin) * factor;
+
+      const xMinEnd = cx - xRange / 2;
+      const xMaxEnd = cx + xRange / 2;
+      const yMinEnd = cy - yRange / 2;
+      const yMaxEnd = cy + yRange / 2;
+
+      let currentStep = 0;
+      function animate() {
+        currentStep++;
+        const t = currentStep / steps;
+        xmin = xMinStart + (xMinEnd - xMinStart) * t;
+        xmax = xMaxStart + (xMaxEnd - xMaxStart) * t;
+        ymin = yMinStart + (yMinEnd - yMinStart) * t;
+        ymax = yMaxStart + (yMaxEnd - yMaxStart) * t;
+
+        drawFractal();
+        if (currentStep < steps) requestAnimationFrame(animate);
+      }
+      requestAnimationFrame(animate);
+    }
+
+    // Canvas click/touch => Zoom in or out
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const xClick = e.clientX - rect.left;
+      const yClick = e.clientY - rect.top;
+      const real = xmin + (xmax - xmin) * xClick / canvas.width;
+      const imag = ymin + (ymax - ymin) * yClick / canvas.height;
+
+      // Decide factor based on zoom direction
+      const factor = (zoomDirection === "in") ? 0.5 : 2.0;
+      smoothZoomTo(real, imag, factor, 30);
+    });
+
+    canvas.addEventListener("touchend", (e) => {
+      if (e.changedTouches.length === 1) {
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.changedTouches[0];
+        const xTouch = touch.clientX - rect.left;
+        const yTouch = touch.clientY - rect.top;
+        const real = xmin + (xmax - xmin) * xTouch / canvas.width;
+        const imag = ymin + (ymax - ymin) * yTouch / canvas.height;
+
+        const factor = (zoomDirection === "in") ? 0.5 : 2.0;
+        smoothZoomTo(real, imag, factor, 30);
+      }
+    });
+
+    // --- Button Listeners ---
+    // 1. Cycle through fractals
+    document.getElementById("btnFractal").addEventListener("click", () => {
+      fractalIndex = (fractalIndex + 1) % fractals.length;
+      fractalType = fractals[fractalIndex];
+      fractalLabel.textContent = fractalType;
+      resetView();
+      drawFractal();
+    });
+
+    // 2. Change zoom direction
+    document.getElementById("btnDirection").addEventListener("click", () => {
+      zoomDirection = (zoomDirection === "in") ? "out" : "in";
+      zoomLabel.textContent = zoomDirection.toUpperCase();
+    });
+
+    // 3. Reset view
+    document.getElementById("btnReset").addEventListener("click", () => {
+      resetView();
+      drawFractal();
+    });
+  </script>
+</body>
+</html>
