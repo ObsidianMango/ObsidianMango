@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Liquor Cabinet App - Pagination & Simplified Types</title>
+  <style>
+    /* Global Styles */
+    html, body {
+      height: 100%;
+      margin: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f2f2f2;
+      color: #000;
+      transition: background 0.3s, color 0.3s;
+    }
+    /* Dark mode */
+    html.dark-mode, body.dark-mode {
+      background: #222;
+      color: #ddd;
+    }
+    /* Header / Menu */
+    #header {
+      background: #fff;
+      padding: 15px;
+      border-bottom: 1px solid #ccc;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    html.dark-mode #header, body.dark-mode #header {
+      background: #333;
+      border-color: #555;
+    }
+    #header form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+    }
+    #header label {
+      font-size: 14px;
+    }
+    #header input, #header select, #header button {
+      flex: 1 1 100px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    /* Default color input: dark gray with label */
+    #bottleColor {
+      background: #555555;
+    }
+    #header button {
+      background: #007aff;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+    #header button:hover { background: #005bb5; }
+    /* Additional Settings button */
+    #settingsBtn {
+      background: #007aff;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      align-self: center;
+      margin-top: 5px;
+    }
+    /* Viewer Area */
+    #viewer {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    #threeCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    /* List View with Pagination */
+    #listView {
+      display: none;
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      background: #f9f9f9;
+      padding: 10px;
+    }
+    html.dark-mode #listView {
+      background: #333;
+    }
+    #listView .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+    }
+    #listView .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+      padding: 15px;
+      text-align: center;
+      transition: background 0.3s;
+    }
+    html.dark-mode #listView .card {
+      background: #444;
+    }
+    #listView .card button {
+      margin: 5px;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #listView .card .editBtn { background: #007aff; color: #fff; }
+    #listView .card .drinkBtn { background: #34c759; color: #fff; }
+    #listView .progress {
+      background: #e0e0e0;
+      border-radius: 4px;
+      height: 10px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    #listView .progress-bar {
+      height: 100%;
+      background: #007aff;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    /* Pagination Controls */
+    #pagination {
+      margin-top: 10px;
+      text-align: center;
+    }
+    #pagination button {
+      margin: 0 5px;
+      padding: 5px 10px;
+      border: none;
+      border-radius: 4px;
+      background: #007aff;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    /* Stats */
+    #stats { text-align: center; font-size: 14px; }
+    /* Modal for 3D Info */
+    #bottleModal, #editModal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    /* Modal for 3D Info: mini canvas on top, info panel below, and a close button */
+    #bottleModal .modal-content {
+      background: #fff;
+      padding: 20px 30px;
+      border-radius: 10px;
+      text-align: center;
+      max-width: 90%;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      transition: background 0.3s;
+    }
+    html.dark-mode #bottleModal .modal-content {
+      background: #444;
+    }
+    /* Reduced bottle container height */
+    #modalBottleContainer {
+      width: 300px;
+      height: 250px;
+      margin: 0 auto;
+    }
+    #modalInfo {
+      background: #ffffff;
+      padding: 10px;
+      border-radius: 6px;
+      margin-top: 5px;
+      font-size: 15px;
+    }
+    html.dark-mode #modalInfo {
+      background: #555;
+      color: #eee;
+    }
+    #modalCloseBtn {
+      margin-top: 10px;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      background: #007aff;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    /* Edit Modal Styles */
+    #editModal .modal-content {
+      background: #fff;
+      padding: 20px 30px;
+      border-radius: 10px;
+      text-align: center;
+      max-width: 90%;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    html.dark-mode #editModal .modal-content {
+      background: #444;
+      color: #eee;
+    }
+    #editModal label {
+      display: block;
+      margin: 10px 0 5px;
+      font-size: 14px;
+      text-align: left;
+    }
+    #editModal input, #editModal textarea {
+      width: 100%;
+      padding: 6px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    #editModal textarea { resize: vertical; }
+    #editModal button {
+      margin-top: 10px;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #editModal .saveBtn { background: #007aff; color: #fff; }
+    #editModal .cancelBtn { background: #aaa; color: #fff; margin-left: 10px; }
+    #editModal .removeBtn { background: #ff3b30; color: #fff; margin-top: 10px; }
+  </style>
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Tween.js UMD version -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+  <header id="header">
+    <form id="addBottleForm">
+      <input type="text" id="bottleName" placeholder="Bottle Name" required />
+      <label for="bottleColor">Color</label>
+      <input type="color" id="bottleColor" value="#555555" />
+      <select id="bottleSize" required>
+        <option value="1750">1.75L</option>
+        <option value="1000">1L</option>
+        <option value="750">750ml</option>
+        <option value="375">375ml</option>
+        <option value="200">200ml</option>
+        <option value="50">50ml</option>
+      </select>
+      <select id="bottleShape" required>
+        <!-- Simplified, descriptive shape names -->
+        <option value="Flask">Flask Bottles</option>
+        <option value="DemiJohn">Demi‑John Bottles</option>
+        <option value="Gin">Gin Bottles</option>
+        <option value="Bitters">Bitters Bottles</option>
+        <option value="Cylinder">Cylinder Bottles</option>
+        <option value="Squat">Squat Bottles</option>
+        <option value="Pontiled">Pontiled Bottles</option>
+        <option value="BlobTop">Blob Top Bottles</option>
+        <option value="Square">Square Bottles</option>
+        <option value="Cobalt">Cobalt Bottles</option>
+        <option value="AmberWhiskey">Amber Whiskey Bottles</option>
+        <option value="Figural">Figural Bottles</option>
+        <option value="Rum">Rum Bottles</option>
+        <option value="Picnic">Picnic Flasks</option>
+        <option value="Embossed">Embossed Bottles</option>
+        <option value="Wine">Wine Bottles</option>
+      </select>
+      <button type="submit">Add Bottle</button>
+    </form>
+    <div class="controls" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
+      <select id="sortCriteria">
+        <option value="sizeAsc">Size Ascending</option>
+        <option value="sizeDesc">Size Descending</option>
+        <option value="nameAsc">Name A–Z</option>
+        <option value="nameDesc">Name Z–A</option>
+      </select>
+      <button id="sortBtn">Sort Bottles</button>
+      <button id="toggleViewBtn">Switch to List View</button>
+      <button id="toggleFullScreenBtn">Full Screen</button>
+      <button id="settingsBtn">Settings</button>
+    </div>
+    <div id="stats"></div>
+  </header>
+  <main id="viewer">
+    <canvas id="threeCanvas"></canvas>
+    <div id="listView"></div>
+  </main>
+
+  <!-- Pagination Controls (shown only in List View) -->
+  <div id="pagination" style="display:none; text-align:center; margin:10px;"></div>
+
+  <!-- Modal for 3D Info -->
+  <div id="bottleModal">
+    <div class="modal-content">
+      <div id="modalBottleContainer"></div>
+      <div id="modalInfo"></div>
+      <button id="modalCloseBtn">Close</button>
+    </div>
+  </div>
+
+  <!-- Modal for Editing Bottle Details -->
+  <div id="editModal">
+    <div class="modal-content">
+      <h3>Edit Bottle Details</h3>
+      <form id="editForm">
+        <label>Proof: <input type="text" id="editProof"></label>
+        <label>Alcohol %: <input type="text" id="editAlc"></label>
+        <label>Notes: <textarea id="editNotes"></textarea></label>
+        <label>Flavors: <input type="text" id="editFlavors"></label>
+        <div style="margin-top:10px;">
+          <button type="submit" class="saveBtn">Save</button>
+          <button type="button" id="cancelEdit" class="cancelBtn">Cancel</button>
+        </div>
+        <button type="button" id="removeBottle" class="removeBtn">Remove Bottle</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let bottleIdCounter = 0;
+    const bottles = [];
+    let shelfMeshes = [];
+    let selectedBottle = null;
+    // Pagination variables
+    let currentPage = 1;
+    const itemsPerPage = 6;
+
+    // Global grid constants for cabinet-like layout
+    const maxColumns = 6;
+    const spacingX = 2;
+    const marginY = 1; // extra vertical margin
+
+    // Main Three.js Setup
+    const viewer = document.getElementById('viewer');
+    const canvas = document.getElementById('threeCanvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setSize(viewer.clientWidth, viewer.clientHeight);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    const camera = new THREE.PerspectiveCamera(75, viewer.clientWidth / viewer.clientHeight, 0.1, 1000);
+    camera.position.z = 10;
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    dirLight.position.set(5, 10, 7.5);
+    scene.add(dirLight);
+
+    // Create dynamic label texture and set renderOrder for labels
+    function createLabelTexture(text, width, height) {
+      const labelCanvas = document.createElement('canvas');
+      labelCanvas.width = width;
+      labelCanvas.height = height;
+      const ctx = labelCanvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      let fontSize = Math.floor(height * 0.5);
+      ctx.font = `Bold ${fontSize}px Arial`;
+      let metrics = ctx.measureText(text);
+      while (metrics.width > width - 10 && fontSize > 10) {
+        fontSize -= 2;
+        ctx.font = `Bold ${fontSize}px Arial`;
+        metrics = ctx.measureText(text);
+      }
+      ctx.fillStyle = '#000';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, width / 2, height / 2);
+      return new THREE.CanvasTexture(labelCanvas);
+    }
+
+    // Update grid layout: compute maximum bottle height to determine vertical spacing
+    function updateGridLayout() {
+      shelfMeshes.forEach(shelf => scene.remove(shelf));
+      shelfMeshes = [];
+      let maxHeight = 0;
+      for (const bottle of bottles) {
+        if (bottle.userData.height > maxHeight) { maxHeight = bottle.userData.height; }
+      }
+      const effectiveSpacingY = maxHeight + marginY;
+      const numRows = Math.ceil(bottles.length / maxColumns);
+      const bottomY = -((numRows - 1) * effectiveSpacingY) / 2;
+      bottles.forEach((bottle, index) => {
+        const col = index % maxColumns;
+        const row = Math.floor(index / maxColumns);
+        const targetX = -((maxColumns - 1) * spacingX) / 2 + col * spacingX;
+        const targetY = bottomY + row * effectiveSpacingY + 0.5;
+        const targetZ = 0;
+        if (!bottle.userData.selected) {
+          new TWEEN.Tween(bottle.position)
+            .to({ x: targetX, y: targetY, z: targetZ }, 500)
+            .start();
+        }
+        bottle.userData.gridPosition = { x: targetX, y: targetY, z: targetZ };
+      });
+      for (let row = 0; row < numRows; row++) {
+        const shelfWidth = (maxColumns - 1) * spacingX + 2;
+        const shelfThickness = 0.3;
+        const shelfDepth = 1;
+        const shelfGeometry = new THREE.BoxGeometry(shelfWidth, shelfThickness, shelfDepth);
+        const shelfMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+        const shelfMesh = new THREE.Mesh(shelfGeometry, shelfMaterial);
+        const shelfYPos = bottomY + row * effectiveSpacingY;
+        shelfMesh.position.set(0, shelfYPos, -0.1);
+        scene.add(shelfMesh);
+        shelfMeshes.push(shelfMesh);
+      }
+    }
+
+    // Create bottle – sizes are used to compute a scale factor.
+    function createBottle(name, bottleColor, size, shape) {
+      const scale = parseFloat(size) / 1000;
+      let bottleGroup = new THREE.Group();
+      let bodyHeight, neckHeight, totalHeight;
+      // Use simplified, descriptive shape names and adjust proportions accordingly.
+      if (shape === 'Flask') {
+        // Flask Bottles – Oval/rectangular with flat body
+        let bodyHeightFactor = 1.0;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyWidth = scale * 1.2;
+        let bodyDepth = scale * 0.4;
+        let bodyGeo = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.3;
+        let neckGeo = new THREE.BoxGeometry(bodyWidth * 0.6, neckHeight, bodyDepth);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyWidth, bodyHeight * 0.3);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({ 
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight / 2, bodyDepth / 2 + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'DemiJohn') {
+        // Demi‑John Bottles – large, round bottles with narrow necks
+        let bodyHeightFactor = 2.0;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = scale * 0.6;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.4;
+        let neckRadius = bodyRadius * 0.5;
+        let neckGeo = new THREE.CylinderGeometry(neckRadius, neckRadius, neckHeight, 32);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.3);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({ 
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Gin') {
+        // Gin Bottles – Square-shaped
+        let bodyHeightFactor = 1.4;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyWidth = scale * 0.8;
+        let bodyDepth = bodyWidth;
+        let bodyGeo = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.2;
+        let neckGeo = new THREE.BoxGeometry(bodyWidth * 0.6, neckHeight, bodyDepth * 0.6);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyWidth, bodyHeight * 0.3);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({ 
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight / 2, bodyDepth/2 + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Bitters') {
+        // Bitters Bottles – decorative, often embossed
+        let bodyHeightFactor = 1.6;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = scale * 0.5;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        // Simulate embossing by a slight vertical scale adjustment
+        bodyMesh.scale.y = 0.98;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.25;
+        let neckRadius = bodyRadius * 0.6;
+        let neckGeo = new THREE.CylinderGeometry(neckRadius, neckRadius, neckHeight, 32);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.35);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({ 
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Cylinder') {
+        // Cylinder Bottles – common long-necked bottles
+        let bodyHeightFactor = 1.5;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = bodyHeight / 4;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.2;
+        let neckRadius = bodyRadius * 0.6;
+        let neckGeo = new THREE.CylinderGeometry(neckRadius, neckRadius, neckHeight, 32);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.4);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({ 
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Squat') {
+        // Squat Bottles – short, globular
+        let bodyHeightFactor = 1.0;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = scale * 0.7;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.15;
+        let neckRadius = bodyRadius * 0.6;
+        let neckGeo = new THREE.CylinderGeometry(neckRadius, neckRadius, neckHeight, 32);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.4);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({ 
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Pontiled') {
+        // Pontiled Bottles – hand-blown with rough marks
+        let bodyHeightFactor = 1.5;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = bodyHeight / 4;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bodyMesh.scale.y = 0.98; // simulate rough pontil mark
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.2;
+        let neckRadius = bodyRadius * 0.6;
+        let neckGeo = new THREE.CylinderGeometry(neckRadius, neckRadius, neckHeight, 32);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.4);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'BlobTop') {
+        // Blob Top Bottles – thick glass with a rounded lip
+        let bodyHeightFactor = 1.5;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = bodyHeight / 4;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        let sphereGeo = new THREE.SphereGeometry(bodyRadius, 16, 16, 0, Math.PI);
+        let sphereMesh = new THREE.Mesh(sphereGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        sphereMesh.position.y = bodyHeight;
+        bottleGroup.add(sphereMesh);
+        neckHeight = scale * 0.15;
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.4);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Square') {
+        // Square Bottles – used for patent medicine
+        let side = scale * 0.8;
+        let bodyGeo = new THREE.BoxGeometry(side, side, side);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = side / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.2;
+        let neckGeo = new THREE.BoxGeometry(side * 0.6, neckHeight, side * 0.6);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = side + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(side, side * 0.3);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, side / 2, side/2 + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = side + neckHeight;
+      } else if (shape === 'Cobalt') {
+        // Cobalt Bottles – distinctive blue glass look; use cylinder style
+        let bodyHeightFactor = 1.6;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = bodyHeight / 4;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.2;
+        let neckRadius = bodyRadius * 0.6;
+        let neckGeo = new THREE.CylinderGeometry(neckRadius, neckRadius, neckHeight, 32);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.4);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'AmberWhiskey') {
+        // Amber Whiskey Bottles – tall, cylindrical
+        let bodyHeightFactor = 2.0;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = bodyHeight / 5;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.25;
+        let neckRadius = bodyRadius * 0.6;
+        let neckGeo = new THREE.CylinderGeometry(neckRadius, neckRadius, neckHeight, 32);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.35);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Figural') {
+        // Figural Bottles – decorative shapes
+        let bodyHeightFactor = 1.7;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = bodyHeight / 4;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.2;
+        // Add a decorative cap (small sphere)
+        let capGeo = new THREE.SphereGeometry(bodyRadius * 0.4, 16, 16);
+        let capMesh = new THREE.Mesh(capGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        capMesh.position.y = bodyHeight + neckHeight;
+        bottleGroup.add(capMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.35);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Rum') {
+        // Rum Bottles – thick, dark glass
+        let bodyHeightFactor = 1.6;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = bodyHeight / 4.2;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.2;
+        let neckRadius = bodyRadius * 0.65;
+        let neckGeo = new THREE.CylinderGeometry(neckRadius, neckRadius, neckHeight, 32);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.4);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Picnic') {
+        // Picnic Flasks – small, portable
+        let bodyHeightFactor = 0.8;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyWidth = scale * 1.0;
+        let bodyDepth = scale * 0.35;
+        let bodyGeo = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.2;
+        let neckGeo = new THREE.BoxGeometry(bodyWidth * 0.6, neckHeight, bodyDepth);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyWidth, bodyHeight * 0.3);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight / 2, bodyDepth/2 + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Embossed') {
+        // Embossed Bottles – raised label effect
+        let bodyHeightFactor = 1.0;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyWidth = scale * 1.2;
+        let bodyDepth = scale * 0.4;
+        let bodyGeo = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.3;
+        let neckGeo = new THREE.BoxGeometry(bodyWidth * 0.6, neckHeight, bodyDepth);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyWidth, bodyHeight * 0.3);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        // Offset label slightly forward to simulate embossing
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight / 2, bodyDepth/2 + 0.05);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      } else if (shape === 'Wine') {
+        // Wine Bottles – wider base, longer neck
+        let bodyHeightFactor = 1.8;
+        bodyHeight = scale * bodyHeightFactor;
+        let bodyRadius = scale * 0.5;
+        let bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+        let bodyMesh = new THREE.Mesh(bodyGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        bodyMesh.position.y = bodyHeight / 2;
+        bottleGroup.add(bodyMesh);
+        neckHeight = scale * 0.4;
+        let neckRadius = bodyRadius * 0.6;
+        let neckGeo = new THREE.CylinderGeometry(neckRadius, neckRadius, neckHeight, 32);
+        let neckMesh = new THREE.Mesh(neckGeo, new THREE.MeshLambertMaterial({ color: bottleColor }));
+        neckMesh.position.y = bodyHeight + neckHeight / 2;
+        bottleGroup.add(neckMesh);
+        let labelGeo = new THREE.PlaneGeometry(bodyRadius * 2, bodyHeight * 0.35);
+        let labelMesh = new THREE.Mesh(labelGeo, new THREE.MeshBasicMaterial({
+          map: createLabelTexture(name, 128, 64),
+          side: THREE.DoubleSide,
+          transparent: true
+        }));
+        labelMesh.renderOrder = 1;
+        labelMesh.position.set(0, bodyHeight * 0.5, bodyRadius + 0.01);
+        bottleGroup.add(labelMesh);
+        totalHeight = bodyHeight + neckHeight;
+      }
+      // Store total bottle height for layout calculations
+      bottleGroup.userData.height = totalHeight;
+      bottleGroup.userData = Object.assign(bottleGroup.userData, {
+        name: name,
+        size: parseFloat(size),
+        bottleColor: bottleColor,
+        shape: shape,
+        proof: "",
+        alc: "",
+        notes: "",
+        flavors: "",
+        volumeLeft: parseFloat(size),
+        selected: false,
+        id: bottleIdCounter++
+      });
+      scene.add(bottleGroup);
+      bottles.push(bottleGroup);
+      updateGridLayout();
+      updateListView();
+      return bottleGroup;
+    }
+
+    // Main animation loop for main scene
+    function animate(time) {
+      requestAnimationFrame(animate);
+      TWEEN.update(time);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Resize handling for main scene and 3D view on switch
+    function resize3DView() {
+      const width = viewer.clientWidth;
+      const height = viewer.clientHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    }
+    window.addEventListener('resize', resize3DView);
+
+    // Handle adding bottles
+    document.getElementById('addBottleForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const name = document.getElementById('bottleName').value;
+      const bottleColor = document.getElementById('bottleColor').value;
+      const size = document.getElementById('bottleSize').value;
+      const shape = document.getElementById('bottleShape').value;
+      createBottle(name, bottleColor, size, shape);
+      this.reset();
+    });
+
+    // Sort bottles
+    document.getElementById('sortBtn').addEventListener('click', function() {
+      const criteria = document.getElementById('sortCriteria').value;
+      bottles.sort((a, b) => {
+        if (criteria === 'sizeAsc') return a.userData.size - b.userData.size;
+        if (criteria === 'sizeDesc') return b.userData.size - a.userData.size;
+        if (criteria === 'nameAsc') return a.userData.name.localeCompare(b.userData.name);
+        if (criteria === 'nameDesc') return b.userData.name.localeCompare(a.userData.name);
+      });
+      updateGridLayout();
+      updateListView();
+    });
+
+    // Toggle between 3D and list views. Resize 3D view on switch.
+    let is3DView = true;
+    const toggleViewBtn = document.getElementById('toggleViewBtn');
+    const listView = document.getElementById('listView');
+    const paginationDiv = document.getElementById('pagination');
+    toggleViewBtn.addEventListener('click', function() {
+      is3DView = !is3DView;
+      if (is3DView) {
+        canvas.style.display = 'block';
+        listView.style.display = 'none';
+        paginationDiv.style.display = 'none';
+        toggleViewBtn.textContent = 'Switch to List View';
+        resize3DView();
+      } else {
+        canvas.style.display = 'none';
+        listView.style.display = 'block';
+        toggleViewBtn.textContent = 'Switch to 3D View';
+        updateListView();
+      }
+    });
+
+    // Full screen toggle with automatic button text update
+    const fsBtn = document.getElementById('toggleFullScreenBtn');
+    fsBtn.addEventListener('click', function() {
+      if (!document.fullscreenElement) {
+        viewer.requestFullscreen().catch(err => { alert(`Error: ${err.message}`); });
+      } else {
+        document.exitFullscreen();
+      }
+    });
+    document.addEventListener("fullscreenchange", function() {
+      if(document.fullscreenElement) {
+        fsBtn.textContent = 'Exit Full Screen';
+      } else {
+        fsBtn.textContent = 'Full Screen';
+      }
+    });
+
+    // Settings button toggles dark mode
+    const settingsBtn = document.getElementById('settingsBtn');
+    settingsBtn.addEventListener('click', function() {
+      document.body.classList.toggle('dark-mode');
+      document.documentElement.classList.toggle('dark-mode');
+    });
+
+    // ----- Modal for 3D Info (Reparent Actual Bottle) -----
+    let modalRenderer, modalScene, modalCamera, modalAnimationId;
+    const bottleModal = document.getElementById('bottleModal');
+    const modalBottleContainer = document.getElementById('modalBottleContainer');
+    const modalInfo = document.getElementById('modalInfo');
+    const modalCloseBtn = document.getElementById('modalCloseBtn');
+
+    function showBottleModal(bottle) {
+      selectedBottle = bottle;
+      bottle.userData.originalGridPosition = Object.assign({}, bottle.userData.gridPosition);
+      scene.remove(bottle);
+
+      const modalCanvas = document.createElement('canvas');
+      modalCanvas.width = 300;
+      modalCanvas.height = 300;
+      modalBottleContainer.innerHTML = "";
+      modalBottleContainer.appendChild(modalCanvas);
+
+      modalRenderer = new THREE.WebGLRenderer({ canvas: modalCanvas, antialias: true, alpha: true });
+      modalRenderer.setSize(300, 300);
+      modalScene = new THREE.Scene();
+      modalScene.background = new THREE.Color(0xffffff);
+      modalCamera = new THREE.PerspectiveCamera(75, 300/300, 0.1, 1000);
+      modalCamera.position.set(0, 0, 10);
+      modalCamera.lookAt(new THREE.Vector3(0, 0, 0));
+
+      modalScene.add(new THREE.AmbientLight(0xffffff, 0.8));
+      const modalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+      modalLight.position.set(5, 10, 7.5);
+      modalScene.add(modalLight);
+
+      // Reparent the actual bottle into the modal scene and center it
+      modalScene.add(bottle);
+      bottle.position.set(0, 0, 0);
+      bottle.userData.selected = true;
+
+      modalInfo.innerHTML = `<strong>${bottle.userData.name}</strong><br>
+                             Size: ${bottle.userData.size} ml<br>
+                             Shape: ${bottle.userData.shape}<br>
+                             Proof: ${bottle.userData.proof || 'N/A'}<br>
+                             Alcohol %: ${bottle.userData.alc || 'N/A'}<br>
+                             Notes: ${bottle.userData.notes || 'None'}<br>
+                             Flavors: ${bottle.userData.flavors || 'None'}<br>
+                             Volume Left: ${bottle.userData.volumeLeft} ml`;
+
+      function modalAnimate() {
+        modalAnimationId = requestAnimationFrame(modalAnimate);
+        bottle.rotation.y += 0.01;
+        modalRenderer.render(modalScene, modalCamera);
+      }
+      modalAnimate();
+
+      bottleModal.style.display = 'flex';
+    }
+
+    function hideBottleModal() {
+      cancelAnimationFrame(modalAnimationId);
+      modalBottleContainer.innerHTML = "";
+      if (modalRenderer) { modalRenderer.dispose(); modalRenderer = null; }
+      modalScene = null;
+      modalCamera = null;
+      bottleModal.style.display = 'none';
+      if (selectedBottle) {
+        selectedBottle.userData.selected = false;
+        selectedBottle.position.set(
+          selectedBottle.userData.originalGridPosition.x,
+          selectedBottle.userData.originalGridPosition.y,
+          selectedBottle.userData.originalGridPosition.z
+        );
+        scene.add(selectedBottle);
+        selectedBottle = null;
+      }
+    }
+
+    modalCloseBtn.addEventListener('click', hideBottleModal);
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    viewer.addEventListener('mousedown', function(event) {
+      if (!is3DView) return;
+      const rect = viewer.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(bottles, true);
+      if (intersects.length > 0) {
+        const bottle = intersects[0].object.parent;
+        if (!bottle.userData.selected) { showBottleModal(bottle); }
+      }
+    }, false);
+    // ----- End Modal Section -----
+
+    // Update list view with pagination
+    function updateListView() {
+      // Pagination: slice the bottles array for the current page
+      const start = (currentPage - 1) * itemsPerPage;
+      const end = currentPage * itemsPerPage;
+      const pageItems = bottles.slice(start, end);
+      
+      let html = '<div class="grid">';
+      pageItems.forEach(bottle => {
+        const progress = Math.round((bottle.userData.volumeLeft / bottle.userData.size) * 100);
+        html += `<div class="card">
+                   <strong>${bottle.userData.name}</strong><br>
+                   Size: ${bottle.userData.size} ml<br>
+                   Shape: ${bottle.userData.shape}<br>
+                   Volume Left: ${bottle.userData.volumeLeft} ml
+                   <div class="progress">
+                     <div class="progress-bar" style="width: ${progress}%"></div>
+                   </div>
+                   <button class="editBtn" onclick="editBottle(${bottle.userData.id})">Edit</button>
+                   <button class="drinkBtn" onclick="drinkBottle(${bottle.userData.id})">Drink</button>
+                 </div>`;
+      });
+      html += '</div>';
+      // Add pagination controls if necessary
+      const totalPages = Math.ceil(bottles.length / itemsPerPage);
+      if (totalPages > 1) {
+        html += `<div id="pagination">
+                   <button onclick="prevPage()" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>
+                   Page ${currentPage} of ${totalPages}
+                   <button onclick="nextPage()" ${currentPage === totalPages ? 'disabled' : ''}>Next</button>
+                 </div>`;
+      }
+      listView.innerHTML = html;
+    }
+
+    function nextPage() {
+      const totalPages = Math.ceil(bottles.length / itemsPerPage);
+      if (currentPage < totalPages) {
+        currentPage++;
+        updateListView();
+      }
+    }
+    function prevPage() {
+      if (currentPage > 1) {
+        currentPage--;
+        updateListView();
+      }
+    }
+
+    // Open edit modal for a bottle
+    function editBottle(id) {
+      const bottle = bottles.find(b => b.userData.id === id);
+      if (!bottle) return;
+      document.getElementById('editProof').value = bottle.userData.proof;
+      document.getElementById('editAlc').value = bottle.userData.alc;
+      document.getElementById('editNotes').value = bottle.userData.notes;
+      document.getElementById('editFlavors').value = bottle.userData.flavors;
+      document.getElementById('editForm').setAttribute('data-id', id);
+      document.getElementById('editModal').style.display = 'flex';
+    }
+
+    // Save edits from edit modal
+    document.getElementById('editForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const id = parseInt(this.getAttribute('data-id'));
+      const bottle = bottles.find(b => b.userData.id === id);
+      if (bottle) {
+        bottle.userData.proof = document.getElementById('editProof').value;
+        bottle.userData.alc = document.getElementById('editAlc').value;
+        bottle.userData.notes = document.getElementById('editNotes').value;
+        bottle.userData.flavors = document.getElementById('editFlavors').value;
+        updateListView();
+      }
+      document.getElementById('editModal').style.display = 'none';
+    });
+    document.getElementById('cancelEdit').addEventListener('click', function() {
+      document.getElementById('editModal').style.display = 'none';
+    });
+
+    // Remove bottle via edit modal
+    document.getElementById('removeBottle').addEventListener('click', function() {
+      const id = parseInt(document.getElementById('editForm').getAttribute('data-id'));
+      const index = bottles.findIndex(b => b.userData.id === id);
+      if (index !== -1) {
+        scene.remove(bottles[index]);
+        bottles.splice(index, 1);
+        updateGridLayout();
+        updateListView();
+      }
+      document.getElementById('editModal').style.display = 'none';
+    });
+
+    // Drink: subtract 50 ml per tap; if volume reaches 0, remove the bottle automatically
+    function drinkBottle(id) {
+      const bottle = bottles.find(b => b.userData.id === id);
+      if (bottle) {
+        const drinkAmount = 50;
+        bottle.userData.volumeLeft = Math.max(0, bottle.userData.volumeLeft - drinkAmount);
+        if (bottle.userData.volumeLeft === 0) {
+          scene.remove(bottle);
+          const index = bottles.findIndex(b => b.userData.id === id);
+          if (index !== -1) { bottles.splice(index, 1); }
+          updateGridLayout();
+          // Adjust pagination if necessary
+          const totalPages = Math.ceil(bottles.length / itemsPerPage);
+          if (currentPage > totalPages) { currentPage = totalPages; }
+        }
+        updateListView();
+      }
+    }
+    // For very large collections, consider further optimizations.
+  </script>
+</body>
+</html>
