@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Floppy Simulation - Enhanced Auto-Reerection & Sack Clipping</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      color: #ccc;
+      font-family: sans-serif;
+    }
+    /* "Activate" button centered at bottom */
+    #newOneBtn, #settingsBtn {
+      position: fixed;
+      bottom: 20px;
+      padding: 10px 20px;
+      font-size: 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background: #444;
+      color: #ccc;
+    }
+    #newOneBtn {
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    /* Settings button with gear emoji */
+    #settingsBtn {
+      right: 20px;
+    }
+    /* Settings panel (hidden by default) */
+    #settingsPanel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #333;
+      padding: 15px;
+      border-radius: 5px;
+      display: none;
+      z-index: 10;
+    }
+    #settingsPanel label {
+      display: block;
+      margin: 5px 0;
+    }
+    #settingsPanel input[type="range"] {
+      width: 200px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Activate button -->
+  <button id="newOneBtn">Activate</button>
+  <!-- Settings button -->
+  <button id="settingsBtn">⚙️</button>
+  <!-- Settings panel -->
+  <div id="settingsPanel">
+    <label>
+      Shaft Final Length:
+      <input id="shaftLengthInput" type="range" min="100" max="400" value="200">
+    </label>
+    <label>
+      Confetti Volume:
+      <input id="confettiVolumeInput" type="range" min="50" max="300" value="100">
+    </label>
+    <label>
+      Sack Girth:
+      <input id="sackGirthInput" type="range" min="0.5" max="2" step="0.1" value="1">
+    </label>
+    <label>
+      Shaft Girth:
+      <input id="shaftGirthInput" type="range" min="20" max="60" value="30">
+    </label>
+  </div>
+
+  <!-- Matter.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+  <script>
+    /* 
+      This simulation combines a filled nut sack (drawn as a convex hull with its top 10px clipped)
+      and a shaft that erects (from 7 o’clock to 11 o’clock) then retracts to a flaccid state.
+      Once flaccid, the shaft remains for 20 seconds before re-erecting automatically.
+      Separate sliders adjust Sack Girth, Shaft Girth, Shaft Final Length, and Confetti Volume.
+    */
+    
+    const Engine    = Matter.Engine,
+          Render    = Matter.Render,
+          Runner    = Matter.Runner,
+          World     = Matter.World,
+          Bodies    = Matter.Bodies,
+          Body      = Matter.Body,
+          Constraint = Matter.Constraint,
+          Composite = Matter.Composite,
+          Common    = Matter.Common,
+          Events    = Matter.Events;
+    
+    let engine = Engine.create();
+    let world  = engine.world;
+    let render = Render.create({
+      element: document.body,
+      engine: engine,
+      options: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        background: '#111',
+        wireframes: false
+      }
+    });
+    Render.run(render);
+    let runner = Runner.create();
+    Runner.run(runner, engine);
+    
+    // Global adjustable settings.
+    let globalShaftLength = 200;   // Final shaft length (via settings)
+    let globalTankVolume  = 100;   // Confetti volume (via settings)
+    let globalSackGirth   = 1;     // Sack girth multiplier
+    let globalShaftGirth  = 30;    // Shaft final width
+    
+    // Our combined model is model 2.
+    let currentModel = 2;
+    let combinedBase = null;       // Base of the shaft & sack attachment (remains constant)
+    // combinedShaftAnim holds erection and retraction parameters.
+    let combinedShaftAnim = null;
+    // nutSack holds the soft-body sack data.
+    let nutSack = null;
+    // Constraint that attaches the top of the sack to combinedBase.
+    let nutSackConstraint = null;
+    // Timer for triggering retraction and for auto-erection.
+    let retractionTimer = null;
+    let reerectionTimer = null;
+    
+    // Global skin color (all parts share the same).
+    let globalSkinColorCombined = null;
+    
+    // Constant offset to draw the shaft 20 pixels lower than combinedBase.
+    const shaftDrawOffset = 20;
+    // Constant: hide top 10 pixels of sack.
+    const sackHideOffset = 10;
+    
+    // Array of realistic skin tones.
+    const skinTones = ["#f1c27d", "#e0ac69", "#c68642", "#8d5524", "#fcd5b5", "#f0c987", "#d9a57a", "#8e5a2b"];
+    function getRandomSkinTone() {
+      return skinTones[Math.floor(Math.random() * skinTones.length)];
+    }
+    
+    // Convex hull computation (Andrew's Monotone Chain)
+    function cross(o, a, b) {
+      return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    }
+    function computeConvexHull(points) {
+      if (points.length <= 1) return points.slice();
+      let sorted = points.slice().sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x);
+      let lower = [];
+      for (let p of sorted) {
+        while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) {
+          lower.pop();
+        }
+        lower.push(p);
+      }
+      let upper = [];
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        let p = sorted[i];
+        while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) {
+          upper.pop();
+        }
+        upper.push(p);
+      }
+      lower.pop();
+      upper.pop();
+      return lower.concat(upper);
+    }
+    
+    // Create boundaries (left/right walls only).
+    function createBoundaries() {
+      const w = window.innerWidth, h = window.innerHeight;
+      let bodies = [];
+      const leftWall  = Bodies.rectangle(-25, h/2, 50, h, { isStatic: true });
+      const rightWall = Bodies.rectangle(w+25, h/2, 50, h, { isStatic: true });
+      bodies.push(leftWall, rightWall);
+      World.add(world, bodies);
+    }
+    
+    function resetWorld() {
+      World.clear(world, false);
+      Engine.clear(engine);
+      createBoundaries();
+    }
+    
+    // Utility: Create a soft-body blob.
+    function createSoftBody(x, y, blobRadius, particleCount, particleRadius, stiffness, color) {
+      const group = Body.nextGroup(true);
+      const particles = [];
+      const constraints = [];
+      const center = Bodies.circle(x, y, particleRadius, { 
+        restitution: 0.6,
+        collisionFilter: { group: group },
+        render: { fillStyle: color }
+      });
+      particles.push(center);
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (2 * Math.PI / particleCount) * i;
+        const px = x + blobRadius * Math.cos(angle);
+        const py = y + blobRadius * Math.sin(angle);
+        const particle = Bodies.circle(px, py, particleRadius, {
+          restitution: 0.6,
+          collisionFilter: { group: group },
+          render: { fillStyle: color }
+        });
+        particles.push(particle);
+        constraints.push(Constraint.create({
+          bodyA: center,
+          bodyB: particle,
+          stiffness: stiffness,
+          render: { visible: false }
+        }));
+      }
+      for (let i = 1; i <= particleCount; i++) {
+        const nextIndex = (i % particleCount) + 1;
+        constraints.push(Constraint.create({
+          bodyA: particles[i],
+          bodyB: particles[nextIndex],
+          stiffness: stiffness,
+          render: { visible: false }
+        }));
+      }
+      Composite.add(world, particles);
+      Composite.add(world, constraints);
+      return { particles, constraints, center };
+    }
+    
+    // Function to (re)start the shaft erection cycle while leaving the sack intact.
+    function startShaftErection() {
+      combinedShaftAnim = {
+        animating: true,
+        retracting: false,
+        startTime: Date.now(),
+        duration: 2000, // 2 sec erection
+        confettiSpawned: false,
+        startAngle: 225 * Math.PI / 180,
+        endAngle: 135 * Math.PI / 180,
+        startLength: 50,
+        endLength: globalShaftLength,
+        startWidth: globalShaftGirth / 3,
+        endWidth: globalShaftGirth,
+        shaftColor: globalSkinColorCombined,
+        tip: null,
+        retractionStartTime: null,
+        retractionDuration: 2000 // 2 sec retraction
+      };
+    }
+    
+    // Setup the combined model.
+    function setupCombinedModel() {
+      resetWorld();
+      // Clear any pending timers.
+      if (retractionTimer) { clearTimeout(retractionTimer); retractionTimer = null; }
+      if (reerectionTimer) { clearTimeout(reerectionTimer); reerectionTimer = null; }
+      
+      const w = window.innerWidth, h = window.innerHeight;
+      // Position the base so everything is centered.
+      combinedBase = { x: w/2, y: h/2 - 50 };
+      globalSkinColorCombined = getRandomSkinTone();
+      
+      // Initialize the shaft erection.
+      startShaftErection();
+      
+      // Create the nut sack.
+      nutSack = createSoftBody(
+        combinedBase.x, 
+        combinedBase.y + 40, 
+        45 * globalSackGirth, 
+        32, 
+        6 * globalSackGirth, 
+        0.05, 
+        globalSkinColorCombined
+      );
+      // Hide individual sack particle renderings.
+      nutSack.particles.forEach(p => p.render.visible = false);
+      
+      // Attach the top of the sack to combinedBase.
+      let topParticleSack = nutSack.particles.reduce((top, p) => (p.position.y < top.position.y ? p : top), nutSack.particles[0]);
+      nutSackConstraint = Constraint.create({
+        pointA: combinedBase,
+        bodyB: topParticleSack,
+        length: 0,
+        stiffness: 0.9,
+        damping: 0.2,
+        render: { visible: true }
+      });
+      World.add(world, nutSackConstraint);
+      
+      // Create two testicles inside the sack.
+      const testicleOffsetX = 30;
+      const testicleOffsetY = 20;
+      const testicleRadius = 20;
+      const testicle1 = Bodies.circle(combinedBase.x - testicleOffsetX, combinedBase.y + 60, testicleRadius, {
+        restitution: 0.8,
+        render: { fillStyle: globalSkinColorCombined }
+      });
+      const testicle2 = Bodies.circle(combinedBase.x + testicleOffsetX, combinedBase.y + 60, testicleRadius, {
+        restitution: 0.8,
+        render: { fillStyle: globalSkinColorCombined }
+      });
+      World.add(world, [testicle1, testicle2]);
+    }
+    
+    // Erection and retraction animation update.
+    Events.on(engine, 'beforeUpdate', function() {
+      if (currentModel === 2 && combinedShaftAnim) {
+        if (!combinedShaftAnim.retracting) {
+          // Erection phase.
+          const elapsed = Date.now() - combinedShaftAnim.startTime;
+          const t = Math.min(elapsed / combinedShaftAnim.duration, 1);
+          const angle = combinedShaftAnim.startAngle + (combinedShaftAnim.endAngle - combinedShaftAnim.startAngle) * t;
+          const length = combinedShaftAnim.startLength + (combinedShaftAnim.endLength - combinedShaftAnim.startLength) * t;
+          combinedShaftAnim.tip = {
+            x: combinedBase.x + length * Math.cos(angle),
+            y: combinedBase.y - length * Math.sin(angle)
+          };
+          if (elapsed >= combinedShaftAnim.duration && !combinedShaftAnim.confettiSpawned) {
+            combinedShaftAnim.confettiSpawned = true;
+            spawnConfetti(combinedShaftAnim.tip.x, combinedShaftAnim.tip.y, globalTankVolume);
+            // After 4 seconds, start retraction.
+            retractionTimer = setTimeout(function() {
+              if (combinedShaftAnim && !combinedShaftAnim.retracting) {
+                combinedShaftAnim.retracting = true;
+                combinedShaftAnim.retractionStartTime = Date.now();
+              }
+            }, 4000);
+          }
+        } else {
+          // Retraction phase.
+          const rElapsed = Date.now() - combinedShaftAnim.retractionStartTime;
+          const tRet = Math.min(rElapsed / combinedShaftAnim.retractionDuration, 1);
+          const newLength = combinedShaftAnim.endLength + (combinedShaftAnim.startLength - combinedShaftAnim.endLength) * tRet;
+          const newAngle  = combinedShaftAnim.endAngle + (combinedShaftAnim.startAngle - combinedShaftAnim.endAngle) * tRet;
+          combinedShaftAnim.tip = {
+            x: combinedBase.x + newLength * Math.cos(newAngle),
+            y: combinedBase.y - newLength * Math.sin(newAngle)
+          };
+          if (tRet >= 1) {
+            // Shaft is now fully flaccid.
+            combinedShaftAnim.tip = {
+              x: combinedBase.x + combinedShaftAnim.startLength * Math.cos(combinedShaftAnim.startAngle),
+              y: combinedBase.y - combinedShaftAnim.startLength * Math.sin(combinedShaftAnim.startAngle)
+            };
+            combinedShaftAnim.animating = false;
+            combinedShaftAnim.retracting = false;
+            // Now remain flaccid for 20 seconds then re-erect.
+            reerectionTimer = setTimeout(function() {
+              startShaftErection();
+            }, 20000);
+          }
+        }
+      }
+    });
+    
+    // Draw the shaft and the filled sack.
+    Events.on(render, 'afterRender', function() {
+      const ctx = render.context;
+      if (currentModel === 2 && combinedShaftAnim && combinedShaftAnim.tip) {
+        let t;
+        if (!combinedShaftAnim.retracting) {
+          t = Math.min((Date.now() - combinedShaftAnim.startTime) / combinedShaftAnim.duration, 1);
+        } else {
+          t = Math.min((Date.now() - combinedShaftAnim.retractionStartTime) / combinedShaftAnim.retractionDuration, 1);
+        }
+        const width = combinedShaftAnim.retracting 
+                      ? combinedShaftAnim.endWidth + (combinedShaftAnim.startWidth - combinedShaftAnim.endWidth) * t 
+                      : combinedShaftAnim.startWidth + (combinedShaftAnim.endWidth - combinedShaftAnim.startWidth) * t;
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = combinedShaftAnim.shaftColor;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        // Draw the shaft starting from combinedBase shifted down by shaftDrawOffset.
+        ctx.moveTo(combinedBase.x, combinedBase.y + shaftDrawOffset);
+        ctx.lineTo(combinedShaftAnim.tip.x, combinedShaftAnim.tip.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+      // Draw the filled nut sack as a convex hull of its particles.
+      if (nutSack) {
+        let points = nutSack.particles.map(p => ({x: p.position.x, y: p.position.y}));
+        let hull = computeConvexHull(points);
+        if (hull.length > 0) {
+          // Hide the top 10 pixels: force any point above combinedBase.y + sackHideOffset down.
+          for (let p of hull) {
+            if (p.y < combinedBase.y + sackHideOffset) {
+              p.y = combinedBase.y + sackHideOffset;
+            }
+          }
+          ctx.save();
+          ctx.fillStyle = globalSkinColorCombined;
+          ctx.beginPath();
+          ctx.moveTo(hull[0].x, hull[0].y);
+          for (let i = 1; i < hull.length; i++) {
+            ctx.lineTo(hull[i].x, hull[i].y);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    });
+    
+    // Spawn confetti at (x, y) with given count.
+    function spawnConfetti(x, y, count) {
+      for (let i = 0; i < count; i++) {
+        const confetti = Bodies.circle(x, y, 3, { 
+          restitution: 0.5,
+          friction: 0.1,
+          render: { fillStyle: Common.choose(['#ff0000','#00ff00','#0000ff','#ffff00','#ff00ff','#00ffff']) }
+        });
+        const forceMagnitude = 0.02 * confetti.mass;
+        Body.applyForce(confetti, confetti.position, {
+          x: (Common.random() - 0.5) * forceMagnitude,
+          y: -forceMagnitude * Common.random() * 5
+        });
+        World.add(world, confetti);
+      }
+    }
+    
+    // Settings panel functionality.
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const shaftLengthInput = document.getElementById('shaftLengthInput');
+    const confettiVolumeInput = document.getElementById('confettiVolumeInput');
+    const sackGirthInput = document.getElementById('sackGirthInput');
+    const shaftGirthInput = document.getElementById('shaftGirthInput');
+    
+    settingsBtn.addEventListener('click', function(e) {
+      settingsPanel.style.display = settingsPanel.style.display === 'block' ? 'none' : 'block';
+    });
+    
+    shaftLengthInput.addEventListener('input', function() {
+      globalShaftLength = parseInt(this.value);
+      if (combinedShaftAnim) {
+        combinedShaftAnim.endLength = globalShaftLength;
+      }
+    });
+    
+    confettiVolumeInput.addEventListener('input', function() {
+      globalTankVolume = parseInt(this.value);
+    });
+    
+    sackGirthInput.addEventListener('input', function() {
+      globalSackGirth = parseFloat(this.value);
+      // New sack girth takes effect on next activation.
+    });
+    
+    shaftGirthInput.addEventListener('input', function() {
+      globalShaftGirth = parseInt(this.value);
+      if (combinedShaftAnim) {
+        combinedShaftAnim.endWidth = globalShaftGirth;
+        combinedShaftAnim.startWidth = globalShaftGirth / 3;
+      }
+    });
+    
+    // "Activate" button resets the simulation.
+    document.getElementById('newOneBtn').addEventListener('click', function(e) {
+      setupCombinedModel();
+    });
+    
+    window.addEventListener('resize', function() {
+      render.canvas.width = window.innerWidth;
+      render.canvas.height = window.innerHeight;
+      resetWorld();
+      setupCombinedModel();
+    });
+    
+    window.addEventListener('click', function(e) {
+      if (e.target === document.body) {
+        setupCombinedModel();
+      }
+    });
+    
+    createBoundaries();
+    setupCombinedModel();
+  </script>
+</body>
+</html>
