@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Ensure proper scaling on mobile devices -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Bagging Game</title>
+  <!-- Retro pixel font -->
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    /* Basic reset and responsive styling */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Press Start 2P', cursive;
+      background: linear-gradient(135deg, #222, #000);
+      color: #fff;
+      padding: 5px;
+      text-align: center;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: background-color 0.3s ease;
+    }
+    /* Flash effect for overload */
+    .flash { background-color: red !important; }
+    
+    /* Header styles */
+    header { margin-bottom: 5px; }
+    h1 { font-size: 14px; margin-bottom: 3px; text-shadow: 1px 1px 2px #000; }
+    #scoreDisplay { font-size: 12px; margin-bottom: 3px; text-shadow: 1px 1px 2px #000; }
+    
+    /* Container selection buttons */
+    #containerSelection {
+      margin: 3px auto;
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    #containerSelection button {
+      font-size: 10px;
+      padding: 4px 6px;
+      margin: 3px;
+      cursor: pointer;
+      background: linear-gradient(45deg, #333, #555);
+      border: 2px solid #fff;
+      color: #fff;
+      flex: 1 1 22%;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    #containerSelection button:hover {
+      transform: scale(1.05);
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.7);
+    }
+    
+    /* Active container area – drop zone is fixed for all containers */
+    #activeContainer {
+      border: 3px solid #ddd;
+      background: linear-gradient(135deg, #333, #222);
+      margin: 3px auto;
+      padding: 3px;
+      position: relative;
+      width: 300px;
+      height: 150px;
+    }
+    /* Unified drop zone – fixed dimensions with auto overflow */
+    #activeContainerDropZone {
+      border: 2px dashed #999;
+      background: #111;
+      margin: 0 auto;
+      padding: 3px;
+      width: 300px;
+      height: 150px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: flex-start;
+      overflow: auto;
+      transition: background 0.5s ease;
+    }
+    /* We'll add a glitter effect on success */
+    .pop-success {
+      animation: popSuccess 0.4s ease;
+    }
+    @keyframes popSuccess {
+      0%   { background: #111; transform: scale(1); }
+      50%  { background: radial-gradient(circle, #fff, #aaa); transform: scale(1.1); }
+      100% { background: #111; transform: scale(1); }
+    }
+    
+    /* (Optional) Capacity display */
+    #capacityDisplay { font-size: 10px; margin-top: 3px; }
+    
+    /* Order counter */
+    #counterContainer {
+      border: 2px dashed #666;
+      padding: 3px;
+      margin: 3px auto;
+      width: 300px;
+      height: 100px;
+      overflow: auto;
+      background: linear-gradient(135deg, #222, #111);
+    }
+    #counterContainer h2 { font-size: 10px; margin-bottom: 3px; }
+    #counter {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 3px;
+      padding: 3px;
+      background: #222;
+      min-height: 30px;
+    }
+    
+    /* Order info and message */
+    #orderInfo, #message {
+      font-size: 10px;
+      margin: 3px auto;
+      width: 300px;
+      text-shadow: 1px 1px 2px #000;
+    }
+    
+    /* Clickable items */
+    .item {
+      cursor: pointer;
+      user-select: none;
+      margin: 3px;
+      padding: 2px;
+      border: 2px solid #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 30px;
+      min-height: 30px;
+      transition: all 0.3s ease;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+    }
+    .item:hover {
+      transform: scale(1.05);
+    }
+    .item:active {
+      transform: scale(0.95);
+    }
+    
+    /* Bottle style for single bottles (vertical text) */
+    .bottle {
+      position: relative;
+      width: 30px;
+      height: 70px;
+      border-radius: 10px;
+      font-size: 8px;
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #8B0000, #AA1111);
+    }
+    .bottle::before {
+      content: "";
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 10px;
+      height: 6px;
+      border: 2px solid #fff;
+      border-bottom: none;
+      border-radius: 50% 50% 0 0;
+    }
+    
+    /* Pack style for multi‑unit packs */
+    .pack {
+      font-size: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #FFD700, #FFC107);
+    }
+    
+    /* Responsive tweaks for very small screens */
+    @media (max-width: 320px) {
+      h1 { font-size: 12px; }
+      #scoreDisplay, #orderInfo, #message { font-size: 9px; }
+      #containerSelection button { font-size: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <h1>🛍️ Bagging Game 🍾</h1>
+    <div id="scoreDisplay">Score: 0</div>
+  </header>
+
+  <!-- Container Selection -->
+  <div id="containerSelection">
+    <button onclick="setActiveContainer('bag')">Bag</button>
+    <button onclick="setActiveContainer('six')">6‑Pack Box</button>
+    <button onclick="setActiveContainer('wine')">Wine Box</button>
+    <button onclick="setActiveContainer('beer')">Beer Box</button>
+  </div>
+
+  <!-- Active Container Display -->
+  <div id="activeContainer">
+    <div id="activeContainerDropZone"></div>
+    <div id="capacityDisplay"></div>
+  </div>
+
+  <!-- Order Info -->
+  <div id="orderInfo"></div>
+
+  <!-- Order Counter -->
+  <div id="counterContainer">
+    <h2>Order Items</h2>
+    <div id="counter"></div>
+  </div>
+
+  <!-- Message -->
+  <div id="message"></div>
+
+  <script>
+    // Global variables
+    let score = 0;
+    let currentOrderTotal = 0;
+    let requiredContainer = ""; // "bag", "six", "wine", or "beer"
+    let activeContainer = null;  // the container object selected by the player
+    let itemIdCounter = 0;
+
+    // Base drop zone dimensions for a 24‑unit container (Beer Box)
+    const baseWidth = 300;
+    const baseHeight = 150;
+
+    /* Container definitions.
+       All containers share the same fixed drop zone size (300px x 150px).
+       The container capacity is used to compute the unit width:
+         unitWidth = 300 / (container capacity)
+    */
+    const containers = {
+      bag:  { type: "bag",  name: "Bag",         capacity: 4 },
+      six:  { type: "six",  name: "6‑Pack Box",  capacity: 6 },
+      wine: { type: "wine", name: "Wine Box",    capacity: 12 },
+      beer: { type: "beer", name: "Beer Box",    capacity: 24 }
+    };
+
+    /* Product types.
+       - Wine and Booze: always single bottles (size = 1).
+       - Beer, THC, and Seltzer: can be single bottles or packs.
+    */
+    const productTypes = [
+      { name: "Wine",    packSizes: [1],         color: "#8B0000", textColor: "#fff" },
+      { name: "Booze",   packSizes: [1],         color: "#800080", textColor: "#fff" },
+      { name: "Beer",    packSizes: [1, 4, 6, 12], color: "#FFD700", textColor: "#000" },
+      { name: "THC",     packSizes: [1, 4, 6, 12], color: "#228B22", textColor: "#fff" },
+      { name: "Seltzer", packSizes: [1, 4, 6, 12], color: "#1E90FF", textColor: "#fff" }
+    ];
+
+    // Set the active container; the drop zone always remains 300px x 150px.
+    // Items are scaled using: unitWidth = 300 / (container capacity)
+    function setActiveContainer(containerType) {
+      activeContainer = containers[containerType];
+      activeContainer.zoneWidth = baseWidth;
+      activeContainer.zoneHeight = baseHeight;
+      const dropZone = document.getElementById("activeContainerDropZone");
+      dropZone.style.width = activeContainer.zoneWidth + "px";
+      dropZone.style.height = activeContainer.zoneHeight + "px";
+      updateDropZoneLayout();
+      updateUsedCapacityDisplay();
+    }
+
+    // Clear the drop zone.
+    function updateDropZoneLayout() {
+      document.getElementById("activeContainerDropZone").innerHTML = "";
+    }
+
+    // Generate a new order with a mixture of items.
+    function generateOrder() {
+      document.getElementById("counter").innerHTML = "";
+      if (activeContainer) updateDropZoneLayout();
+      document.getElementById("message").textContent = "";
+
+      let itemsArray = [];
+      let total = 0;
+      // Generate between 1 and 6 order items.
+      const count = Math.floor(Math.random() * 6) + 1;
+      for (let i = 0; i < count; i++) {
+        const prod = productTypes[Math.floor(Math.random() * productTypes.length)];
+        let size;
+        if (prod.name === "Wine" || prod.name === "Booze") {
+          size = 1;
+        } else {
+          const sizes = prod.packSizes;
+          size = sizes[Math.floor(Math.random() * sizes.length)];
+        }
+        itemsArray.push({ size: size, label: prod.name, color: prod.color, textColor: prod.textColor });
+        total += size;
+      }
+      if (total > 24) { generateOrder(); return; }
+      currentOrderTotal = total;
+
+      // Determine required container.
+      if (total <= 4) requiredContainer = "bag";
+      else if (total <= 6) requiredContainer = "six";
+      else if (total <= 12) requiredContainer = "wine";
+      else requiredContainer = "beer";
+
+      document.getElementById("orderInfo").textContent =
+        "Order: " + itemsArray.map(item => item.size + " " + item.label).join(", ") +
+        " | Total: " + currentOrderTotal +
+        " | Use: " + containers[requiredContainer].name;
+
+      // Create order items in the counter.
+      itemsArray.forEach(item => {
+        const itemDiv = document.createElement("div");
+        itemDiv.classList.add("item");
+        if (item.size === 1) {
+          itemDiv.classList.add("bottle");
+          itemDiv.textContent = item.label;
+          itemDiv.style.width = "30px";
+          itemDiv.style.height = "70px";
+          itemDiv.dataset.originalWidth = 30;
+          itemDiv.dataset.originalHeight = 70;
+        } else {
+          itemDiv.classList.add("pack");
+          itemDiv.textContent = item.size + " Pack " + item.label;
+          if (item.size === 4) {
+            itemDiv.style.width = "40px";
+            itemDiv.style.height = "40px";
+            itemDiv.dataset.originalWidth = 40;
+            itemDiv.dataset.originalHeight = 40;
+          } else if (item.size === 6) {
+            itemDiv.style.width = "60px";
+            itemDiv.style.height = "40px";
+            itemDiv.dataset.originalWidth = 60;
+            itemDiv.dataset.originalHeight = 40;
+          } else if (item.size === 12) {
+            itemDiv.style.width = "80px";
+            itemDiv.style.height = "40px";
+            itemDiv.dataset.originalWidth = 80;
+            itemDiv.dataset.originalHeight = 40;
+          }
+        }
+        itemDiv.style.backgroundColor = item.color;
+        itemDiv.style.color = item.textColor;
+        itemDiv.dataset.size = item.size;
+        itemDiv.id = "item" + (itemIdCounter++);
+        itemDiv.onclick = () => moveToContainer(itemDiv);
+        document.getElementById("counter").appendChild(itemDiv);
+      });
+      updateUsedCapacityDisplay();
+    }
+
+    // Move an item into the active container.
+    function moveToContainer(item) {
+      if (!activeContainer) { alert("Please select a container first!"); return; }
+      document.getElementById("activeContainerDropZone").appendChild(item);
+      updateDroppedItemSize(item);
+      item.onclick = () => moveToCounter(item);
+      updateUsedCapacityDisplay();
+    }
+
+    // Move an item back to the counter.
+    function moveToCounter(item) {
+      document.getElementById("counter").appendChild(item);
+      updateCounterItemSize(item);
+      item.onclick = () => moveToContainer(item);
+      updateUsedCapacityDisplay();
+    }
+
+    // Scale an item proportionally based on unit width.
+    function updateDroppedItemSize(item) {
+      if (!activeContainer) return;
+      const unitWidth = baseWidth / activeContainer.capacity; // 300 / capacity
+      const itemSize = parseInt(item.dataset.size);
+      const newWidth = unitWidth * itemSize;
+      const origWidth = parseInt(item.dataset.originalWidth);
+      const origHeight = parseInt(item.dataset.originalHeight);
+      const scale = newWidth / origWidth;
+      item.style.width = newWidth + "px";
+      item.style.height = (origHeight * scale) + "px";
+    }
+
+    // Restore original size when item is in counter.
+    function updateCounterItemSize(item) {
+      item.style.width = item.dataset.originalWidth + "px";
+      item.style.height = item.dataset.originalHeight + "px";
+    }
+
+    // Update used capacity and check for overload/completion.
+    function updateUsedCapacityDisplay() {
+      let used = 0;
+      const dropZone = document.getElementById("activeContainerDropZone");
+      const items = dropZone.getElementsByClassName("item");
+      for (let i = 0; i < items.length; i++) {
+        used += parseInt(items[i].dataset.size);
+      }
+      document.getElementById("capacityDisplay").textContent =
+        "Used: " + used + " / Capacity: " + activeContainer.capacity;
+      if (activeContainer && used > activeContainer.capacity) {
+        flashScreen();
+        showError("Ah man it ripped, man do you look stupid.");
+        setTimeout(resetOrder, 1500);
+      }
+      if (activeContainer && used === currentOrderTotal) {
+        document.getElementById("activeContainerDropZone").classList.add("pop-success");
+        setTimeout(() => {
+          document.getElementById("activeContainerDropZone").classList.remove("pop-success");
+        }, 400);
+        setTimeout(finishOrder, 500);
+      }
+    }
+
+    // Complete the order if capacity exactly matches.
+    function finishOrder() {
+      let used = 0;
+      const dropZone = document.getElementById("activeContainerDropZone");
+      const items = dropZone.getElementsByClassName("item");
+      for (let i = 0; i < items.length; i++) {
+        used += parseInt(items[i].dataset.size);
+      }
+      if (used !== currentOrderTotal) return;
+      if (!activeContainer) { showError("No container selected!"); return; }
+      if (activeContainer.type !== requiredContainer) {
+        showError("Wrong container! Use: " + containers[requiredContainer].name);
+        setTimeout(resetOrder, 1500);
+        return;
+      }
+      let waste = activeContainer.capacity - currentOrderTotal;
+      let points = Math.max(100 - (waste * 10), 10);
+      score += points;
+      document.getElementById("scoreDisplay").textContent = "Score: " + score;
+      showMessage("Order completed! +" + points + " points");
+      setTimeout(resetOrder, 2000);
+    }
+
+    // Reset the order and generate a new one.
+    function resetOrder() {
+      document.getElementById("activeContainerDropZone").innerHTML = "";
+      document.getElementById("counter").innerHTML = "";
+      document.getElementById("message").textContent = "";
+      generateOrder();
+    }
+
+    function showMessage(msg) {
+      const messageDiv = document.getElementById("message");
+      messageDiv.textContent = msg;
+      messageDiv.style.color = "lime";
+    }
+
+    function showError(msg) {
+      const messageDiv = document.getElementById("message");
+      messageDiv.textContent = msg;
+      messageDiv.style.color = "red";
+    }
+
+    // Flash the screen red briefly.
+    function flashScreen() {
+      document.body.classList.add("flash");
+      setTimeout(() => { document.body.classList.remove("flash"); }, 300);
+    }
+
+    // Start the game.
+    window.onload = function() {
+      generateOrder();
+    };
+  </script>
+</body>
+</html>
