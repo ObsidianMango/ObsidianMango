@@ -40,8 +40,6 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 
- CPI Currency Converter
-
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
 | **CCCalc**   | 💵 [ CPI Currency Converter](https://obsidianmango.github.io/ObsidianMango/ccc.html) | 
 | **Motivemate**   | 🏁 [Motivemate](https://obsidianmango.github.io/ObsidianMango/mm.html) | 
