@@ -39,9 +39,8 @@
 
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
-
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
-| **CCCalc**   | 💵 [ CPI Currency Converter](https://obsidianmango.github.io/ObsidianMango/ccc.html) | 
+| **CCalc**   | 💵 [CPI Calc](https://obsidianmango.github.io/ObsidianMango/ccc.html) | 
 | **Motivemate**   | 🏁 [Motivemate](https://obsidianmango.github.io/ObsidianMango/mm.html) | 
 | **VisualDemos**   | 👑 [DEEmu](https://obsidianmango.github.io/ObsidianMango/deemu/deemu.html) |
 | **Frog**           | 🐸 [FroggyNomNom](https://obsidianmango.github.io/ObsidianMango/frog.html) | 
@@ -59,7 +58,7 @@
 | **StoryPromptGen**           | 🎭 [Story](https://obsidianmango.github.io/ObsidianMango/storyprompt.html) |
 | **EmojiBattleArena**           | ⚔️ [EBArena](https://obsidianmango.github.io/ObsidianMango/eba.html) | 
 | **Slots**           | 🎰 [SLOTS](https://obsidianmango.github.io/ObsidianMango/slot.html) | 
-| **TodayHistory**       | 🌎 [TodayHistory](https://obsidianmango.github.io/ObsidianMango/es.html)    |
+| **TodayHistory**       | 📅 [TodayHistory](https://obsidianmango.github.io/ObsidianMango/es.html)    |
 | **TodayMovie**       | 🎥 [MoviesPremiere](https://obsidianmango.github.io/ObsidianMango/mov.html)    |
 | **Burger Boom**           | 🍔 [BurgBoom](https://obsidianmango.github.io/ObsidianMango/burgerboom/game.html) |
 | **Bibliomance**       | 📖 [Biblomancy](https://obsidianmango.github.io/ObsidianMango/biblioma.html)    | 
