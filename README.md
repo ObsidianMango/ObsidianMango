@@ -39,8 +39,11 @@
 
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
+
+ CPI Currency Converter
+
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
-| **Baggy**   | 🛍 [Baggy](https://obsidianmango.github.io/ObsidianMango/bagg.html) | 
+| **CCCalc**   | 💵 [ CPI Currency Converter](https://obsidianmango.github.io/ObsidianMango/ccc.html) | 
 | **Motivemate**   | 🏁 [Motivemate](https://obsidianmango.github.io/ObsidianMango/mm.html) | 
 | **VisualDemos**   | 👑 [DEEmu](https://obsidianmango.github.io/ObsidianMango/deemu/deemu.html) |
 | **Frog**           | 🐸 [FroggyNomNom](https://obsidianmango.github.io/ObsidianMango/frog.html) | 
