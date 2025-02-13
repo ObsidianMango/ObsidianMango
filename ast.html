@@ -15,6 +15,19 @@
     canvas {
       display: block;
     }
+    /* CSS animation for letters */
+    .letter-animation {
+      display: inline-block;
+      opacity: 0;
+      transform: scale(0.8);
+      animation: popIn 0.8s forwards;
+    }
+    @keyframes popIn {
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
     /* Splash screen styling */
     #splash {
       position: fixed;
@@ -73,7 +86,7 @@
     #message {
       margin-top: 10px;
       font-size: 18px;
-      opacity: 1;
+      /* No fade-out; remains until next press */
     }
   </style>
   <script type="importmap">
@@ -97,7 +110,7 @@
   <!-- UI Panel -->
   <div id="ui-panel">
     <button id="simulate">Simulate Odds</button>
-    <button id="forceImpact">☄️</button>
+    <button id="forceImpact" style="display:none;">☄️</button>
     <div id="message"></div>
   </div>
   
@@ -109,28 +122,20 @@
     let currentMarker = null;
     let splashSkipped = false;
     
-    // Helper: animate text one word at a time into an element.
-    // This function creates spans for each word so the layout is pre-set.
-    function animateText(element, text, wordDelay = 400, callback) {
+    // Helper: animate text (each letter pops in) without layout shifts.
+    function animateTextLetters(element, text, callback) {
       element.innerHTML = "";
-      const words = text.split(" ");
-      words.forEach((word) => {
+      // Pre-create spans for each character (including spaces).
+      for (let char of text) {
         const span = document.createElement("span");
-        span.textContent = word + " ";
-        span.style.opacity = "0";
-        span.style.transition = "opacity 0.5s ease-in-out";
+        span.textContent = char;
+        span.className = "letter-animation";
         element.appendChild(span);
-      });
-      
-      const spans = element.querySelectorAll("span");
-      spans.forEach((span, index) => {
-        setTimeout(() => {
-          span.style.opacity = "1";
-        }, index * wordDelay);
-      });
-      
+      }
+      // All letters animate simultaneously via CSS.
       if (callback) {
-        setTimeout(callback, spans.length * wordDelay);
+        // Allow animation to finish (e.g., 800ms) before calling callback.
+        setTimeout(callback, 800);
       }
     }
     
@@ -138,14 +143,13 @@
     const splashText1 = "In the Year 2032 an asteroid approximately 150 to 300 ft has a 1 in 43 chance of hitting earth.";
     const splashText2 = "The following is a simulation to experience a galactic ballpark calculation of the odds as well as an impact site.";
     
-    // Start splash animation: animate first paragraph, then second, then wait before fade-out.
+    // Start splash animation: first paragraph, then second, then wait before fade-out.
     function startSplashAnimation() {
       const para1 = document.getElementById('splash-paragraph1');
       const para2 = document.getElementById('splash-paragraph2');
       
-      animateText(para1, splashText1, 400, () => {
-        animateText(para2, splashText2, 400, () => {
-          // After finishing, wait 3 seconds before fading out.
+      animateTextLetters(para1, splashText1, () => {
+        animateTextLetters(para2, splashText2, () => {
           setTimeout(() => {
             if (!splashSkipped) {
               hideSplash();
@@ -171,22 +175,14 @@
       hideSplash();
     });
     
-    // Status message animation (for UI panel).
+    // showMessage: Displays the result alert with alert emojis and letter animation.
+    // The message stays until the next simulation button press.
     function showMessage(text) {
       const messageElem = document.getElementById('message');
       messageElem.innerHTML = "";
-      animateText(messageElem, text, 400);
-      // Fade out after the message has been fully displayed + extra delay.
-      const totalDelay = text.split(" ").length * 400 + 3000;
-      setTimeout(() => {
-        messageElem.style.transition = 'opacity 2s ease-out';
-        messageElem.style.opacity = '0';
-        setTimeout(() => {
-          messageElem.textContent = "";
-          messageElem.style.opacity = '1';
-          messageElem.style.transition = '';
-        }, 2000);
-      }, totalDelay);
+      // Wrap the message with alert emojis.
+      const alertText = "🚨 " + text + " 🚨";
+      animateTextLetters(messageElem, alertText);
     }
     
     // Scene, Camera, Renderer.
@@ -218,12 +214,10 @@
     
     // Create an impact marker (red circle) and attach it to the globe.
     function createMarker(hitPoint) {
-      // Clear any previous marker.
       if (currentMarker) {
         globe.remove(currentMarker);
         currentMarker = null;
       }
-      
       const circleGeometry = new THREE.CircleGeometry(0.2, 32);
       const circleMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
       const marker = new THREE.Mesh(circleGeometry, circleMaterial);
@@ -232,13 +226,15 @@
       marker.lookAt(hitPoint.clone().multiplyScalar(2));
       marker.userData.pulsePhase = 0;
       globe.add(marker);
-      
       currentMarker = marker;
     }
     
     // Simulate Asteroid Impact Function.
     function simulateImpact(forced = false) {
-      // Clear previous impact site (if any).
+      // Clear previous result message.
+      document.getElementById('message').innerHTML = "";
+      
+      // Clear previous impact marker.
       if (currentMarker) {
         globe.remove(currentMarker);
         currentMarker = null;
@@ -265,8 +261,8 @@
       const lonIndex = Math.floor(Math.random() * segments);
       
       // Convert segment indices to spherical coordinates.
-      const theta = (latIndex + 0.5) * (Math.PI / segments);      // polar angle.
-      const phi = (lonIndex + 0.5) * ((2 * Math.PI) / segments);    // azimuth angle.
+      const theta = (latIndex + 0.5) * (Math.PI / segments);
+      const phi = (lonIndex + 0.5) * ((2 * Math.PI) / segments);
       const r = 2; // globe radius.
       
       const hitX = r * Math.sin(theta) * Math.cos(phi);
