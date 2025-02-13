@@ -149,48 +149,48 @@
     let currentMarker = null;
     let splashSkipped = false;
     
-    // Optimized animateText function with "1 in 43" highlight support.
+    // Updated animateText function that preallocates space for each word.
     function animateText(element, text, wordDelay = 400, callback) {
       element.innerHTML = "";
-      const words = text.split(" ");
-      let i = 0;
-      function nextWord() {
-        if (i >= words.length) {
-          if (callback) callback();
-          return;
-        }
-        // Check if next three words form "1 in 43" (ignoring punctuation)
+      let tokens = [];
+      let words = text.split(" ");
+      for (let i = 0; i < words.length; i++) {
         if (
           i <= words.length - 3 &&
           words[i].replace(/[^0-9a-zA-Z]/g, '') === "1" &&
           words[i+1].replace(/[^0-9a-zA-Z]/g, '') === "in" &&
           words[i+2].replace(/[^0-9a-zA-Z]/g, '') === "43"
         ) {
-          const span = document.createElement("span");
-          span.innerHTML = words[i] + " " + words[i+1] + " " + words[i+2] + " ";
-          span.classList.add("highlight");
-          span.style.opacity = "0";
-          span.style.transition = "opacity 0.5s ease-in-out";
-          element.appendChild(span);
-          setTimeout(() => {
-            span.style.opacity = "1";
-            i += 3;
-            setTimeout(nextWord, wordDelay);
-          }, wordDelay);
+          tokens.push({ text: words[i] + " " + words[i+1] + " " + words[i+2] + " ", highlight: true });
+          i += 2;
         } else {
-          const span = document.createElement("span");
-          span.textContent = words[i] + " ";
-          span.style.opacity = "0";
-          span.style.transition = "opacity 0.5s ease-in-out";
-          element.appendChild(span);
-          setTimeout(() => {
-            span.style.opacity = "1";
-            i++;
-            setTimeout(nextWord, wordDelay);
-          }, wordDelay);
+          tokens.push({ text: words[i] + " ", highlight: false });
         }
       }
-      nextWord();
+      let spans = tokens.map(token => {
+        let span = document.createElement("span");
+        span.textContent = token.text;
+        if (token.highlight) {
+          span.classList.add("highlight");
+        }
+        span.style.opacity = "0";
+        span.style.transition = "opacity 0.5s ease-in-out";
+        // Use inline-block to reserve space for each word
+        span.style.display = "inline-block";
+        element.appendChild(span);
+        return span;
+      });
+      let index = 0;
+      function fadeNext() {
+        if (index >= spans.length) {
+          if (callback) callback();
+          return;
+        }
+        spans[index].style.opacity = "1";
+        index++;
+        setTimeout(fadeNext, wordDelay);
+      }
+      fadeNext();
     }
     
     // Splash text content
