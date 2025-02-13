@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rotating Earth - mango</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #overlayButton {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 1;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <button id="overlayButton">Spin the Earth!</button>
+  <script type="module">
+    // Import Three.js and OrbitControls using absolute URLs.
+    import * as THREE from 'https://unpkg.com/three@0.152.2/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.152.2/examples/jsm/controls/OrbitControls.js';
+
+    // Scene, Camera, Renderer Setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // OrbitControls for camera interaction
+    const controls = new OrbitControls(camera, renderer.domElement);
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 3, 5);
+    scene.add(directionalLight);
+
+    // Create the Earth sphere using a high-segment geometry for realism.
+    const earthRadius = 5;
+    const earthGeometry = new THREE.SphereGeometry(earthRadius, 64, 64);
+    const earthTexture = new THREE.TextureLoader().load('https://threejsfundamentals.org/threejs/resources/images/earth.jpg');
+    const earthMaterial = new THREE.MeshPhongMaterial({ map: earthTexture });
+    const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+    scene.add(earth);
+
+    // Set initial camera position.
+    camera.position.set(0, 0, 15);
+    controls.update();
+
+    let isSpinning = true;
+    let highlightMesh = null;
+
+    // Create a patch (BufferGeometry) covering a segment defined by lat/lon boundaries.
+    function createSegmentPatch(latMin, latMax, lonMin, lonMax, segments = 20) {
+      const vertices = [];
+      const indices = [];
+      
+      // Generate vertices for a grid on the patch.
+      for (let i = 0; i <= segments; i++) {
+        const lat = THREE.MathUtils.lerp(latMin, latMax, i / segments);
+        for (let j = 0; j <= segments; j++) {
+          const lon = THREE.MathUtils.lerp(lonMin, lonMax, j / segments);
+          const phi = THREE.MathUtils.degToRad(90 - lat); // polar angle
+          const theta = THREE.MathUtils.degToRad(lon + 180); // azimuthal angle
+          const x = earthRadius * Math.sin(phi) * Math.cos(theta);
+          const y = earthRadius * Math.cos(phi);
+          const z = earthRadius * Math.sin(phi) * Math.sin(theta);
+          vertices.push(x, y, z);
+        }
+      }
+      
+      // Create indices for two triangles per grid cell.
+      for (let i = 0; i < segments; i++) {
+        for (let j = 0; j < segments; j++) {
+          const a = i * (segments + 1) + j;
+          const b = a + 1;
+          const c = a + (segments + 1);
+          const d = c + 1;
+          indices.push(a, b, d);
+          indices.push(a, d, c);
+        }
+      }
+      
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+    
+    // Define 8 lat segments and 8 lon segments (64 total)
+    const latStep = 180 / 8;
+    const lonStep = 360 / 8;
+    const segmentsArray = [];
+    for (let i = 0; i < 8; i++) {
+      const latMin = -90 + i * latStep;
+      const latMax = latMin + latStep;
+      for (let j = 0; j < 8; j++) {
+        const lonMin = -180 + j * lonStep;
+        const lonMax = lonMin + lonStep;
+        segmentsArray.push({ latMin, latMax, lonMin, lonMax });
+      }
+    }
+    
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      if (isSpinning) {
+        earth.rotation.y += 0.002;
+      }
+      renderer.render(scene, camera);
+    }
+    animate();
+    
+    // Button event: on click, simulate 1 in 43 chance.
+    function tryHighlightSegment() {
+      const chance = Math.floor(Math.random() * 43) + 1;
+      if (chance === 1) {
+        const seg = segmentsArray[Math.floor(Math.random() * segmentsArray.length)];
+        const patchGeom = createSegmentPatch(seg.latMin, seg.latMax, seg.lonMin, seg.lonMax);
+        const patchMaterial = new THREE.MeshBasicMaterial({
+          color: 0xff0000,
+          transparent: true,
+          opacity: 0.6,
+          side: THREE.DoubleSide
+        });
+        highlightMesh = new THREE.Mesh(patchGeom, patchMaterial);
+        highlightMesh.scale.set(1.01, 1.01, 1.01);
+        earth.add(highlightMesh);
+        isSpinning = false;
+        
+        const centerLat = (seg.latMin + seg.latMax) / 2;
+        const centerLon = (seg.lonMin + seg.lonMax) / 2;
+        const phi = THREE.MathUtils.degToRad(90 - centerLat);
+        const theta = THREE.MathUtils.degToRad(centerLon + 180);
+        const x = earthRadius * Math.sin(phi) * Math.cos(theta);
+        const y = earthRadius * Math.cos(phi);
+        const z = earthRadius * Math.sin(phi) * Math.sin(theta);
+        const target = new THREE.Vector3(x, y, z);
+        
+        const startPos = camera.position.clone();
+        const endPos = target.clone().multiplyScalar(2.5);
+        const duration = 1500;
+        const startTime = performance.now();
+        
+        function zoomAnimation(time) {
+          const elapsed = time - startTime;
+          const t = Math.min(elapsed / duration, 1);
+          camera.position.lerpVectors(startPos, endPos, t);
+          controls.target.lerp(target, t);
+          controls.update();
+          if (t < 1) requestAnimationFrame(zoomAnimation);
+        }
+        requestAnimationFrame(zoomAnimation);
+      } else {
+        alert("No hit this time, mango!");
+      }
+    }
+    document.getElementById("overlayButton").addEventListener("click", tryHighlightSegment);
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
