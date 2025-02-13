@@ -1,160 +1,109 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>3D Game Level</title>
+  <title>BabylonJS 3D Level</title>
   <style>
-    body { margin: 0; overflow: hidden; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    canvas { width: 100%; height: 100%; touch-action: none; }
   </style>
+  <!-- BabylonJS core and loaders -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 </head>
 <body>
-  <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.153.0/build/three.module.js';
-    import { MTLLoader } from 'https://unpkg.com/three@0.153.0/examples/jsm/loaders/MTLLoader.js';
-    import { OBJLoader } from 'https://unpkg.com/three@0.153.0/examples/jsm/loaders/OBJLoader.js';
+  <canvas id="renderCanvas"></canvas>
+  <script>
+    // Get the canvas element and create the BabylonJS engine
+    const canvas = document.getElementById("renderCanvas");
+    const engine = new BABYLON.Engine(canvas, true);
 
-    let scene, camera, renderer;
-    let character;
-    let clock = new THREE.Clock();
-    let mixer; // For animations if available
+    // Create the scene
+    const scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color3(0.8, 0.8, 0.8);
 
-    // Movement flags
-    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    // Add a hemispheric light
+    const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+    light.intensity = 0.8;
 
-    init();
-    animate();
+    // Create a FollowCamera for third-person view
+    const followCamera = new BABYLON.FollowCamera("FollowCam", new BABYLON.Vector3(0, 5, -10), scene);
+    followCamera.radius = 10; // Distance from target
+    followCamera.heightOffset = 5;
+    followCamera.rotationOffset = 180;
+    followCamera.cameraAcceleration = 0.05;
+    followCamera.maxCameraSpeed = 20;
+    scene.activeCamera = followCamera;
+    followCamera.attachControl(canvas, true);
 
-    function init() {
-      // Create scene
-      scene = new THREE.Scene();
+    // Global variables for our character and movement
+    let character = null;
+    const moveSpeed = 0.1;
+    const inputMap = {};
 
-      // Set up camera
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.set(0, 5, 10);
+    // Register keyboard events using ActionManager
+    scene.actionManager = new BABYLON.ActionManager(scene);
+    scene.actionManager.registerAction(
+      new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyDownTrigger, evt => {
+        inputMap[evt.sourceEvent.key] = true;
+      })
+    );
+    scene.actionManager.registerAction(
+      new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyUpTrigger, evt => {
+        inputMap[evt.sourceEvent.key] = false;
+      })
+    );
 
-      // Set up renderer
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
+    // Load the house model (OBJ with accompanying MTL if available)
+    BABYLON.SceneLoader.ImportMesh("", "3d files/house/", "house.obj", scene, meshes => {
+      // House model loaded; adjust positioning if necessary
+    });
 
-      // Add lights
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-      scene.add(ambientLight);
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(10, 20, 10);
-      scene.add(directionalLight);
+    // Load the character model
+    BABYLON.SceneLoader.ImportMesh("", "3d files/link (Goron)/", "Goron Link.obj", scene, meshes => {
+      // Assume the first mesh is the character root
+      character = meshes[0];
+      character.position = new BABYLON.Vector3(0, 0, 0);
+      // Lock the follow camera onto the character
+      followCamera.lockedTarget = character;
+    });
 
-      // Load House Model
-      const houseMtlLoader = new MTLLoader();
-      houseMtlLoader.setPath('3d files/house/');
-      houseMtlLoader.load('house.mtl', (materials) => {
-        materials.preload();
-        const houseObjLoader = new OBJLoader();
-        houseObjLoader.setMaterials(materials);
-        houseObjLoader.setPath('3d files/house/');
-        houseObjLoader.load('house.obj', (object) => {
-          scene.add(object);
-        });
-      });
-
-      // Load Character Model
-      const charMtlLoader = new MTLLoader();
-      charMtlLoader.setPath('3d files/link (Goron)/');
-      charMtlLoader.load('Goron Link.mtl', (materials) => {
-        materials.preload();
-        const charObjLoader = new OBJLoader();
-        charObjLoader.setMaterials(materials);
-        charObjLoader.setPath('3d files/link (Goron)/');
-        charObjLoader.load('Goron Link.obj', (object) => {
-          character = object;
-          character.position.set(0, 0, 0);
-          scene.add(character);
-        });
-      });
-
-      // Keyboard event listeners
-      document.addEventListener('keydown', onKeyDown, false);
-      document.addEventListener('keyup', onKeyUp, false);
-      window.addEventListener('resize', onWindowResize, false);
-    }
-
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    function onKeyDown(event) {
-      switch (event.code) {
-        case 'KeyW':
-        case 'ArrowUp':
-          moveForward = true;
-          break;
-        case 'KeyS':
-        case 'ArrowDown':
-          moveBackward = true;
-          break;
-        case 'KeyA':
-        case 'ArrowLeft':
-          moveLeft = true;
-          break;
-        case 'KeyD':
-        case 'ArrowRight':
-          moveRight = true;
-          break;
-      }
-    }
-
-    function onKeyUp(event) {
-      switch (event.code) {
-        case 'KeyW':
-        case 'ArrowUp':
-          moveForward = false;
-          break;
-        case 'KeyS':
-        case 'ArrowDown':
-          moveBackward = false;
-          break;
-        case 'KeyA':
-        case 'ArrowLeft':
-          moveLeft = false;
-          break;
-        case 'KeyD':
-        case 'ArrowRight':
-          moveRight = false;
-          break;
-      }
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      const delta = clock.getDelta();
-
+    // Update movement before each render
+    scene.onBeforeRenderObservable.add(() => {
       if (character) {
-        const moveSpeed = 5;
-        let direction = new THREE.Vector3();
-
-        if (moveForward) direction.z -= 1;
-        if (moveBackward) direction.z += 1;
-        if (moveLeft) direction.x -= 1;
-        if (moveRight) direction.x += 1;
-
+        let direction = new BABYLON.Vector3(0, 0, 0);
+        // Using WASD or arrow keys
+        if (inputMap["w"] || inputMap["W"] || inputMap["ArrowUp"]) {
+          direction.z += 1;
+        }
+        if (inputMap["s"] || inputMap["S"] || inputMap["ArrowDown"]) {
+          direction.z -= 1;
+        }
+        if (inputMap["a"] || inputMap["A"] || inputMap["ArrowLeft"]) {
+          direction.x -= 1;
+        }
+        if (inputMap["d"] || inputMap["D"] || inputMap["ArrowRight"]) {
+          direction.x += 1;
+        }
         if (direction.length() > 0) {
           direction.normalize();
-          character.position.add(direction.multiplyScalar(moveSpeed * delta));
+          // Move the character. Use moveWithCollisions if you have collision settings enabled.
+          character.moveWithCollisions(direction.scale(moveSpeed));
+          // Rotate to face the direction of movement
           character.rotation.y = Math.atan2(direction.x, direction.z);
         }
-
-        if (mixer) mixer.update(delta);
-
-        // Update camera to follow the character
-        const cameraOffset = new THREE.Vector3(0, 5, 10);
-        camera.position.copy(character.position).add(cameraOffset);
-        camera.lookAt(character.position);
       }
+    });
 
-      renderer.render(scene, camera);
-    }
+    // Render loop
+    engine.runRenderLoop(() => {
+      scene.render();
+    });
+
+    // Resize the engine on window resize
+    window.addEventListener("resize", () => {
+      engine.resize();
+    });
   </script>
 </body>
 </html>
