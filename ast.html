@@ -39,7 +39,7 @@
       font-size: 24px;
       line-height: 1.5;
     }
-    /* UI Panel styling: placed at the top center */
+    /* UI Panel styling */
     #ui-panel {
       position: absolute;
       top: 20px;
@@ -47,34 +47,47 @@
       transform: translateX(-50%);
       z-index: 10;
       background: rgba(0, 0, 0, 0.6);
-      padding: 10px 20px;
+      padding: 20px 30px;
       border-radius: 8px;
       text-align: center;
       display: none;
+      min-width: 320px;
     }
-    #ui-panel button {
+    /* Container for buttons to ensure they stay on one line */
+    #buttons-container {
+      display: flex;
+      gap: 10px;
+      flex-wrap: nowrap;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    #buttons-container button {
       padding: 8px 16px;
       font-size: 16px;
-      margin: 0 5px;
       cursor: pointer;
       border: none;
       border-radius: 4px;
       background: #28a745;
       color: #fff;
-      display: inline-block;
     }
-    #ui-panel button:hover {
+    #buttons-container button:hover {
       background: #218838;
     }
-    #ui-panel #forceImpact {
+    /* Force Impact button */
+    #forceImpact {
       background: #dc3545;
       padding: 8px;
       width: 40px;
     }
+    /* Result text styling */
     #message {
-      margin-top: 10px;
       font-size: 18px;
       opacity: 1;
+    }
+    /* Highlight style for "1 in 43" */
+    .highlight {
+      color: #ff0;
+      font-weight: bold;
     }
     /* Mobile styles */
     @media (max-width: 600px) {
@@ -84,13 +97,13 @@
       }
       #ui-panel {
         padding: 20px 30px;
+        min-width: 300px;
       }
-      #ui-panel button {
+      #buttons-container button {
         padding: 12px 24px;
         font-size: 20px;
-        margin: 5px;
       }
-      #ui-panel #forceImpact {
+      #forceImpact {
         padding: 12px;
         width: 50px;
       }
@@ -119,8 +132,10 @@
   
   <!-- UI Panel -->
   <div id="ui-panel">
-    <button id="simulate">Simulate Odds</button>
-    <button id="forceImpact">☄️</button>
+    <div id="buttons-container">
+      <button id="simulate">Simulate Odds</button>
+      <button id="forceImpact">☄️</button>
+    </div>
     <div id="message"></div>
   </div>
   
@@ -132,28 +147,48 @@
     let currentMarker = null;
     let splashSkipped = false;
     
-    // Helper: animate text one word at a time into an element.
+    // Optimized animateText function with "1 in 43" highlight support.
     function animateText(element, text, wordDelay = 400, callback) {
       element.innerHTML = "";
       const words = text.split(" ");
-      words.forEach((word) => {
-        const span = document.createElement("span");
-        span.textContent = word + " ";
-        span.style.opacity = "0";
-        span.style.transition = "opacity 0.5s ease-in-out";
-        element.appendChild(span);
-      });
-      
-      const spans = element.querySelectorAll("span");
-      spans.forEach((span, index) => {
-        setTimeout(() => {
-          span.style.opacity = "1";
-        }, index * wordDelay);
-      });
-      
-      if (callback) {
-        setTimeout(callback, spans.length * wordDelay);
+      let i = 0;
+      function nextWord() {
+        if (i >= words.length) {
+          if (callback) callback();
+          return;
+        }
+        // Check if next three words form "1 in 43" (ignoring punctuation)
+        if (
+          i <= words.length - 3 &&
+          words[i].replace(/[^0-9a-zA-Z]/g, '') === "1" &&
+          words[i+1].replace(/[^0-9a-zA-Z]/g, '') === "in" &&
+          words[i+2].replace(/[^0-9a-zA-Z]/g, '') === "43"
+        ) {
+          const span = document.createElement("span");
+          span.innerHTML = words[i] + " " + words[i+1] + " " + words[i+2] + " ";
+          span.classList.add("highlight");
+          span.style.opacity = "0";
+          span.style.transition = "opacity 0.5s ease-in-out";
+          element.appendChild(span);
+          setTimeout(() => {
+            span.style.opacity = "1";
+            i += 3;
+            setTimeout(nextWord, wordDelay);
+          }, wordDelay);
+        } else {
+          const span = document.createElement("span");
+          span.textContent = words[i] + " ";
+          span.style.opacity = "0";
+          span.style.transition = "opacity 0.5s ease-in-out";
+          element.appendChild(span);
+          setTimeout(() => {
+            span.style.opacity = "1";
+            i++;
+            setTimeout(nextWord, wordDelay);
+          }, wordDelay);
+        }
       }
+      nextWord();
     }
     
     // Splash text content
@@ -164,7 +199,6 @@
     function startSplashAnimation() {
       const para1 = document.getElementById('splash-paragraph1');
       const para2 = document.getElementById('splash-paragraph2');
-      
       animateText(para1, splashText1, 400, () => {
         animateText(para2, splashText2, 400, () => {
           setTimeout(() => {
@@ -182,7 +216,7 @@
       splash.style.opacity = '0';
       setTimeout(() => {
         splash.style.display = 'none';
-        document.getElementById('ui-panel').style.display = 'block';
+        document.getElementById('ui-panel').style.display = 'flex';
       }, 2000);
     }
     
@@ -192,21 +226,12 @@
       hideSplash();
     });
     
-    // Status message animation.
+    // Updated showMessage: clear previous text for a fresh result (no fade-out).
     function showMessage(text) {
       const messageElem = document.getElementById('message');
       messageElem.innerHTML = "";
+      messageElem.style.opacity = "1";
       animateText(messageElem, text, 400);
-      const totalDelay = text.split(" ").length * 400 + 3000;
-      setTimeout(() => {
-        messageElem.style.transition = 'opacity 2s ease-out';
-        messageElem.style.opacity = '0';
-        setTimeout(() => {
-          messageElem.textContent = "";
-          messageElem.style.opacity = '1';
-          messageElem.style.transition = '';
-        }, 2000);
-      }, totalDelay);
     }
     
     // Scene, Camera, Renderer.
@@ -242,7 +267,6 @@
         globe.remove(currentMarker);
         currentMarker = null;
       }
-      
       const circleGeometry = new THREE.CircleGeometry(0.2, 32);
       const circleMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
       const marker = new THREE.Mesh(circleGeometry, circleMaterial);
@@ -250,7 +274,6 @@
       marker.lookAt(hitPoint.clone().multiplyScalar(2));
       marker.userData.pulsePhase = 0;
       globe.add(marker);
-      
       currentMarker = marker;
     }
     
@@ -274,7 +297,7 @@
       
       impactTries = 0;
       document.getElementById('forceImpact').style.display = 'none';
-      showMessage("Asteroid impact detected!", 8000);
+      showMessage("Asteroid impact detected!");
       
       const segments = 8;
       const latIndex = Math.floor(Math.random() * segments);
