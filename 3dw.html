@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>3D Game Level</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.153.0/build/three.module.js';
+    import { MTLLoader } from 'https://unpkg.com/three@0.153.0/examples/jsm/loaders/MTLLoader.js';
+    import { OBJLoader } from 'https://unpkg.com/three@0.153.0/examples/jsm/loaders/OBJLoader.js';
+
+    let scene, camera, renderer;
+    let character;
+    let clock = new THREE.Clock();
+    let mixer; // For animations if available
+
+    // Movement flags
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+
+    init();
+    animate();
+
+    function init() {
+      // Create scene
+      scene = new THREE.Scene();
+
+      // Set up camera
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 5, 10);
+
+      // Set up renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // Add lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(10, 20, 10);
+      scene.add(directionalLight);
+
+      // Load House Model
+      const houseMtlLoader = new MTLLoader();
+      houseMtlLoader.setPath('3d files/house/');
+      houseMtlLoader.load('house.mtl', materials => {
+        materials.preload();
+        const houseObjLoader = new OBJLoader();
+        houseObjLoader.setMaterials(materials);
+        houseObjLoader.setPath('3d files/house/');
+        houseObjLoader.load('house.obj', object => {
+          scene.add(object);
+        });
+      });
+
+      // Load Character Model
+      const charMtlLoader = new MTLLoader();
+      charMtlLoader.setPath('3d files/link (Goron)/');
+      charMtlLoader.load('Goron Link.mtl', materials => {
+        materials.preload();
+        const charObjLoader = new OBJLoader();
+        charObjLoader.setMaterials(materials);
+        charObjLoader.setPath('3d files/link (Goron)/');
+        charObjLoader.load('Goron Link.obj', object => {
+          character = object;
+          character.position.set(0, 0, 0);
+          scene.add(character);
+
+          // If you have animation clips available, set up the mixer here:
+          // mixer = new THREE.AnimationMixer(character);
+          // mixer.clipAction( idleClip ).play();
+        });
+      });
+
+      // Keyboard event listeners
+      document.addEventListener('keydown', onKeyDown, false);
+      document.addEventListener('keyup', onKeyUp, false);
+      window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function onKeyDown(event) {
+      switch (event.code) {
+        case 'KeyW':
+        case 'ArrowUp':
+          moveForward = true;
+          break;
+        case 'KeyS':
+        case 'ArrowDown':
+          moveBackward = true;
+          break;
+        case 'KeyA':
+        case 'ArrowLeft':
+          moveLeft = true;
+          break;
+        case 'KeyD':
+        case 'ArrowRight':
+          moveRight = true;
+          break;
+      }
+    }
+
+    function onKeyUp(event) {
+      switch (event.code) {
+        case 'KeyW':
+        case 'ArrowUp':
+          moveForward = false;
+          break;
+        case 'KeyS':
+        case 'ArrowDown':
+          moveBackward = false;
+          break;
+        case 'KeyA':
+        case 'ArrowLeft':
+          moveLeft = false;
+          break;
+        case 'KeyD':
+        case 'ArrowRight':
+          moveRight = false;
+          break;
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+
+      if (character) {
+        const moveSpeed = 5;
+        let direction = new THREE.Vector3();
+
+        if (moveForward) direction.z -= 1;
+        if (moveBackward) direction.z += 1;
+        if (moveLeft) direction.x -= 1;
+        if (moveRight) direction.x += 1;
+
+        if (direction.length() > 0) {
+          direction.normalize();
+          // Update character position
+          character.position.add(direction.multiplyScalar(moveSpeed * delta));
+          // Rotate character to face movement direction
+          character.rotation.y = Math.atan2(direction.x, direction.z);
+
+          // If using animations, switch to walking clip here:
+          // mixer.clipAction(walkClip).play();
+        } else {
+          // Switch to idle animation if using animations:
+          // mixer.clipAction(idleClip).play();
+        }
+
+        if (mixer) mixer.update(delta);
+
+        // Update camera to follow the character
+        const cameraOffset = new THREE.Vector3(0, 5, 10);
+        camera.position.copy(character.position).add(cameraOffset);
+        camera.lookAt(character.position);
+      }
+
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+</html>
