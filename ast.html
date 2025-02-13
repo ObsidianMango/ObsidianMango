@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <title>Asteroid Impact Simulation</title>
   <style>
-    /* Global styling */
+    /* Global styling with Impact font */
     body {
       margin: 0;
       overflow: hidden;
-      font-family: Arial, sans-serif;
+      font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
       background: #111;
       color: #eee;
     }
@@ -35,7 +35,7 @@
     #splash-text {
       max-width: 600px;
       padding: 20px;
-      font-size: 20px;
+      font-size: 24px;
       line-height: 1.5;
     }
     /* UI Panel styling: placed at the top center */
@@ -67,7 +67,7 @@
     }
     #ui-panel #forceImpact {
       background: #dc3545;
-      padding: 8px; /* smaller button with just emoji */
+      padding: 8px;
       width: 40px;
     }
     #message {
@@ -110,21 +110,28 @@
     let splashSkipped = false;
     
     // Helper: animate text one word at a time into an element.
-    // wordDelay: delay between words in ms.
-    function animateText(element, text, wordDelay = 300, callback) {
-      element.textContent = "";
+    // This function creates spans for each word so the layout is pre-set.
+    function animateText(element, text, wordDelay = 400, callback) {
+      element.innerHTML = "";
       const words = text.split(" ");
-      let i = 0;
-      function nextWord() {
-        if (i < words.length) {
-          element.textContent += (i === 0 ? "" : " ") + words[i];
-          i++;
-          setTimeout(nextWord, wordDelay);
-        } else if (callback) {
-          callback();
-        }
+      words.forEach((word) => {
+        const span = document.createElement("span");
+        span.textContent = word + " ";
+        span.style.opacity = "0";
+        span.style.transition = "opacity 0.5s ease-in-out";
+        element.appendChild(span);
+      });
+      
+      const spans = element.querySelectorAll("span");
+      spans.forEach((span, index) => {
+        setTimeout(() => {
+          span.style.opacity = "1";
+        }, index * wordDelay);
+      });
+      
+      if (callback) {
+        setTimeout(callback, spans.length * wordDelay);
       }
-      nextWord();
     }
     
     // Splash text content
@@ -136,8 +143,8 @@
       const para1 = document.getElementById('splash-paragraph1');
       const para2 = document.getElementById('splash-paragraph2');
       
-      animateText(para1, splashText1, 300, () => {
-        animateText(para2, splashText2, 300, () => {
+      animateText(para1, splashText1, 400, () => {
+        animateText(para2, splashText2, 400, () => {
           // After finishing, wait 3 seconds before fading out.
           setTimeout(() => {
             if (!splashSkipped) {
@@ -167,10 +174,10 @@
     // Status message animation (for UI panel).
     function showMessage(text) {
       const messageElem = document.getElementById('message');
-      messageElem.style.opacity = '1';
-      animateText(messageElem, text, 300);
+      messageElem.innerHTML = "";
+      animateText(messageElem, text, 400);
       // Fade out after the message has been fully displayed + extra delay.
-      const totalDelay = text.split(" ").length * 300 + 3000;
+      const totalDelay = text.split(" ").length * 400 + 3000;
       setTimeout(() => {
         messageElem.style.transition = 'opacity 2s ease-out';
         messageElem.style.opacity = '0';
@@ -211,8 +218,10 @@
     
     // Create an impact marker (red circle) and attach it to the globe.
     function createMarker(hitPoint) {
+      // Clear any previous marker.
       if (currentMarker) {
         globe.remove(currentMarker);
+        currentMarker = null;
       }
       
       const circleGeometry = new THREE.CircleGeometry(0.2, 32);
@@ -229,6 +238,12 @@
     
     // Simulate Asteroid Impact Function.
     function simulateImpact(forced = false) {
+      // Clear previous impact site (if any).
+      if (currentMarker) {
+        globe.remove(currentMarker);
+        currentMarker = null;
+      }
+      
       if (!forced) {
         if (Math.random() >= 1/43) {
           impactTries++;
