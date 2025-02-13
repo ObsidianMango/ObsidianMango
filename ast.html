@@ -4,31 +4,69 @@
   <meta charset="UTF-8">
   <title>Spinning Globe with Asteroid Simulation</title>
   <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
-    #simulate {
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #eee;
+    }
+    canvas {
+      display: block;
+    }
+    #ui-panel {
       position: absolute;
       top: 20px;
       left: 20px;
-      z-index: 1;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.6);
       padding: 10px 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+    button {
+      padding: 8px 16px;
+      font-size: 14px;
+      margin-right: 10px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background: #28a745;
+      color: #fff;
+    }
+    button:hover {
+      background: #218838;
+    }
+    #forceImpact {
+      display: none;
+      background: #dc3545;
+    }
+    #message {
+      margin-top: 10px;
       font-size: 16px;
     }
   </style>
   <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
-      "three/examples/jsm/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+        "three/examples/jsm/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+      }
     }
-  }
   </script>
 </head>
 <body>
-  <button id="simulate">Simulate Asteroid Impact</button>
+  <div id="ui-panel">
+    <button id="simulate">Simulate Asteroid Impact</button>
+    <button id="forceImpact">☄️ Force Impact</button>
+    <div id="message"></div>
+  </div>
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+    
+    let impactTries = 0;
+    let currentMarker = null;
     
     // Scene, Camera, Renderer
     const scene = new THREE.Scene();
@@ -47,7 +85,7 @@
     const textureLoader = new THREE.TextureLoader();
     const earthTexture = textureLoader.load('land_ocean_ice_2048.jpeg');
     
-    // Globe Geometry: radius 2, 64 segments for width and height (for smooth texturing)
+    // Globe Geometry: radius 2, 64 segments for smooth texturing
     const sphereGeometry = new THREE.SphereGeometry(2, 64, 64);
     const sphereMaterial = new THREE.MeshStandardMaterial({ map: earthTexture });
     const globe = new THREE.Mesh(sphereGeometry, sphereMaterial);
@@ -57,52 +95,69 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     
-    // Simulate Asteroid Impact Function
-    function simulateImpact() {
-      // 1 in 43 chance
-      if (Math.random() < 1/43) {
-        console.log("Asteroid impact detected!");
-        // Divide Earth into 64 equal segments (8 lat x 8 lon)
-        const segments = 8;
-        const latIndex = Math.floor(Math.random() * segments);
-        const lonIndex = Math.floor(Math.random() * segments);
-        const theta = (latIndex + 0.5) * (Math.PI / segments);      // polar angle [0, PI]
-        const phi = (lonIndex + 0.5) * ((2 * Math.PI) / segments);    // azimuth angle [0, 2PI]
-        const r = 2; // globe radius
-        
-        const hitX = r * Math.sin(theta) * Math.cos(phi);
-        const hitY = r * Math.cos(theta);
-        const hitZ = r * Math.sin(theta) * Math.sin(phi);
-        const hitPoint = new THREE.Vector3(hitX, hitY, hitZ);
-        
-        // Create a red circle marker at the hit point
-        const circleGeometry = new THREE.CircleGeometry(0.2, 32);
-        const circleMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
-        const marker = new THREE.Mesh(circleGeometry, circleMaterial);
-        marker.position.copy(hitPoint);
-        // Orient the marker so it lies tangent to the sphere surface
-        marker.lookAt(hitPoint.clone().multiplyScalar(2));
-        scene.add(marker);
-        
-        // Animate the marker (pulsate)
-        let scaleDirection = 1;
-        function animateMarker() {
-          marker.scale.x += scaleDirection * 0.005;
-          marker.scale.y += scaleDirection * 0.005;
-          if (marker.scale.x > 1.5 || marker.scale.x < 1) {
-            scaleDirection *= -1;
-          }
-          requestAnimationFrame(animateMarker);
-        }
-        animateMarker();
-        
-        console.log("Asteroid hit at segment (lat index, lon index):", latIndex, lonIndex);
-      } else {
-        console.log("No asteroid hit.");
+    // Function to create a marker on the globe at the hit point
+    function createMarker(hitPoint) {
+      // Remove existing marker if any
+      if (currentMarker) {
+        globe.remove(currentMarker);
       }
+      
+      const circleGeometry = new THREE.CircleGeometry(0.2, 32);
+      const circleMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide });
+      const marker = new THREE.Mesh(circleGeometry, circleMaterial);
+      marker.position.copy(hitPoint);
+      // Orient the marker so it lies tangent to the sphere surface
+      marker.lookAt(hitPoint.clone().multiplyScalar(2));
+      // Store pulse phase for animation
+      marker.userData.pulsePhase = 0;
+      // Attach marker to globe so it rotates with it
+      globe.add(marker);
+      
+      currentMarker = marker;
     }
     
-    document.getElementById('simulate').addEventListener('click', simulateImpact);
+    // Simulate Asteroid Impact Function
+    function simulateImpact(forced = false) {
+      // If not forced, check random chance (1 in 43)
+      if (!forced) {
+        if (Math.random() >= 1/43) {
+          impactTries++;
+          document.getElementById('message').textContent = "Earth is sparred... for now.";
+          if (impactTries >= 5) {
+            document.getElementById('forceImpact').style.display = 'inline-block';
+          }
+          return;
+        }
+      }
+      
+      // Reset tries and hide force-impact button on a hit
+      impactTries = 0;
+      document.getElementById('forceImpact').style.display = 'none';
+      document.getElementById('message').textContent = "Asteroid impact detected!";
+      
+      // Divide Earth into 64 equal segments (8 lat x 8 lon)
+      const segments = 8;
+      const latIndex = Math.floor(Math.random() * segments);
+      const lonIndex = Math.floor(Math.random() * segments);
+      
+      // Convert segment indices to spherical coordinates (theta, phi)
+      const theta = (latIndex + 0.5) * (Math.PI / segments);      // polar angle [0, PI]
+      const phi = (lonIndex + 0.5) * ((2 * Math.PI) / segments);    // azimuth angle [0, 2PI]
+      const r = 2; // globe radius
+      
+      // Compute hit point on the sphere's surface
+      const hitX = r * Math.sin(theta) * Math.cos(phi);
+      const hitY = r * Math.cos(theta);
+      const hitZ = r * Math.sin(theta) * Math.sin(phi);
+      const hitPoint = new THREE.Vector3(hitX, hitY, hitZ);
+      
+      createMarker(hitPoint);
+      
+      console.log("Asteroid hit at segment (lat, lon):", latIndex, lonIndex);
+    }
+    
+    document.getElementById('simulate').addEventListener('click', () => simulateImpact());
+    document.getElementById('forceImpact').addEventListener('click', () => simulateImpact(true));
     
     // Responsive resizing
     window.addEventListener('resize', () => {
@@ -111,11 +166,19 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
     
-    // Animation Loop: Globe rotation
+    // Animation Loop
     function animate() {
       requestAnimationFrame(animate);
       globe.rotation.y += 0.002;
       controls.update();
+      
+      // Animate marker pulsation if it exists
+      if (currentMarker) {
+        currentMarker.userData.pulsePhase += 0.05;
+        const scale = 1 + 0.3 * Math.sin(currentMarker.userData.pulsePhase);
+        currentMarker.scale.set(scale, scale, scale);
+      }
+      
       renderer.render(scene, camera);
     }
     
