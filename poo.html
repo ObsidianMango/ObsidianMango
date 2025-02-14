@@ -115,6 +115,46 @@
       z-index: 5;
       text-shadow: 1px 1px 2px #000;
     }
+    /* Splash and Game Over Overlays */
+    #splashScreen,
+    #gameOverScreen {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 20;
+      text-align: center;
+      padding: 20px;
+    }
+    #splashScreen h1,
+    #gameOverScreen h1 {
+      font-size: 36px;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px #000;
+    }
+    #splashScreen p,
+    #gameOverScreen p {
+      font-size: 16px;
+      margin-bottom: 30px;
+      text-shadow: 1px 1px 2px #000;
+    }
+    #splashScreen button,
+    #gameOverScreen button {
+      font-size: 18px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #ff416c, #ff4b2b);
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
   </style>
 </head>
 <body>
@@ -130,10 +170,24 @@
     </div>
     <button id="poopButton">POOP</button>
     <div id="toilet">🚽</div>
+    
+    <!-- Splash Screen Overlay -->
+    <div id="splashScreen">
+      <h1>Poop Drop</h1>
+      <p>The game to play while you drop poop</p>
+      <button id="startButton">Start Game</button>
+    </div>
+    
+    <!-- Game Over Overlay -->
+    <div id="gameOverScreen" style="display: none;">
+      <h1>Game Over</h1>
+      <p>Wow, you stink!</p>
+      <button id="playAgainButton">Play Again</button>
+    </div>
   </div>
 
   <script>
-    // ----- Game Constants & Variables -----
+    // ----- Game Variables & Constants -----
     let gameWidth = document.getElementById('gameContainer').clientWidth;
     let gameHeight = document.getElementById('gameContainer').clientHeight;
     const maxPooMeter = 8;  // 8 units = full
@@ -143,18 +197,12 @@
     let misses = 0;
     let consecutiveHits = 0;
     let pooMeter = 0; // current meter (0 to 8)
-    let gameRunning = true;
+    let gameRunning = false;
     const poopSpeed = 300; // pixels per second
 
     let fallingPoops = [];
     let lastFrame = performance.now();
-
-    // Update game dimensions on resize
-    const gameContainer = document.getElementById('gameContainer');
-    window.addEventListener('resize', function() {
-      gameWidth = gameContainer.clientWidth;
-      gameHeight = gameContainer.clientHeight;
-    });
+    let timerInterval = null;
 
     // Food types with varying fill values
     const foods = [
@@ -172,6 +220,7 @@
     ];
 
     // ----- DOM Elements -----
+    const gameContainer = document.getElementById('gameContainer');
     const foodContainer = document.getElementById('foodContainer');
     const pooMeterFill = document.getElementById('pooMeterFill');
     const scoreDisplay = document.getElementById('score');
@@ -179,21 +228,28 @@
     const missesDisplay = document.getElementById('misses');
     const poopButton = document.getElementById('poopButton');
     const toilet = document.getElementById('toilet');
+    const splashScreen = document.getElementById('splashScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const startButton = document.getElementById('startButton');
+    const playAgainButton = document.getElementById('playAgainButton');
+
+    // Update game dimensions on resize
+    window.addEventListener('resize', function() {
+      gameWidth = gameContainer.clientWidth;
+      gameHeight = gameContainer.clientHeight;
+    });
 
     // ----- Utility Functions -----
     function updatePooMeterDisplay() {
       let percentage = (pooMeter / maxPooMeter) * 100;
       pooMeterFill.style.width = percentage + '%';
     }
-
     function updateScoreDisplay() {
       scoreDisplay.innerText = 'Score: ' + score;
     }
-
     function updateTimerDisplay() {
       timerDisplay.innerText = 'Time: ' + timer;
     }
-
     function updateMissesDisplay() {
       missesDisplay.innerText = 'Misses: ' + misses;
     }
@@ -212,20 +268,20 @@
       foodElem.style.top = y + 'px';
 
       foodElem.addEventListener('click', function () {
-        // Increase poo meter (cap at maxPooMeter)
         let fillValue = parseInt(this.getAttribute('data-value'));
         pooMeter = Math.min(maxPooMeter, pooMeter + fillValue);
         updatePooMeterDisplay();
-        // Remove food and respawn after delay
         this.remove();
         setTimeout(() => { spawnFood(foodObj); }, 3000);
       });
 
       foodContainer.appendChild(foodElem);
     }
-
-    // Spawn all food emojis initially
-    foods.forEach(food => spawnFood(food));
+    // Initialize food emojis
+    function initFood() {
+      foodContainer.innerHTML = '';
+      foods.forEach(food => spawnFood(food));
+    }
 
     // ----- POOP Button Handling -----
     poopButton.addEventListener('click', function () {
@@ -233,11 +289,9 @@
       if (pooMeter >= poopCost) {
         pooMeter -= poopCost;
         updatePooMeterDisplay();
-        // Create falling poop emoji
         const poopElem = document.createElement('div');
         poopElem.classList.add('poop');
         poopElem.innerText = '💩';
-        // Starting position: center horizontally, just below the meter
         const startX = gameWidth / 2 - 15;
         const startY = 170;
         poopElem.style.left = startX + 'px';
@@ -249,11 +303,9 @@
 
     // ----- Toilet Movement -----
     function updateToiletPosition(time) {
-      // Oscillate horizontally using a sine wave.
-      // Assume toilet width ~80px (double-sized emoji)
       const amplitude = (gameWidth - 80) / 2;
       const centerX = gameWidth / 2;
-      const period = 5000; // full cycle in ms
+      const period = 5000;
       const x = centerX + amplitude * Math.sin((2 * Math.PI / period) * time) - 40;
       toilet.style.left = x + 'px';
     }
@@ -264,22 +316,17 @@
       const dt = (time - lastFrame) / 1000;
       lastFrame = time;
       
-      // Update falling poops
       for (let i = fallingPoops.length - 1; i >= 0; i--) {
         const poop = fallingPoops[i];
         poop.y += poopSpeed * dt;
         poop.element.style.top = poop.y + 'px';
-        // When poop nears the bottom of the game container
         if (poop.y > gameHeight - 120) {
           const poopRect = poop.element.getBoundingClientRect();
           const poopCenterX = poopRect.left + poopRect.width / 2;
           const toiletRect = toilet.getBoundingClientRect();
-          // Check if poop lands within toilet's horizontal bounds
           if (poopCenterX >= toiletRect.left && poopCenterX <= toiletRect.right) {
-            // Successful hit!
             score += 10;
             consecutiveHits++;
-            // Award bonus time for consecutive hits (2nd hit onward)
             if (consecutiveHits > 1) {
               const bonus = 5 * (consecutiveHits - 1);
               timer += bonus;
@@ -287,7 +334,6 @@
             updateScoreDisplay();
             updateTimerDisplay();
           } else {
-            // Missed! Reset streak.
             misses++;
             consecutiveHits = 0;
             updateMissesDisplay();
@@ -296,10 +342,8 @@
           fallingPoops.splice(i, 1);
         }
       }
-      // Update toilet position
       updateToiletPosition(time);
       
-      // Check for game over conditions
       if (timer <= 0 || misses >= 50) {
         gameOver();
         return;
@@ -308,24 +352,48 @@
     }
 
     // ----- Timer Countdown -----
-    const timerInterval = setInterval(() => {
-      if (!gameRunning) return;
-      timer--;
-      updateTimerDisplay();
-      if (timer <= 0) gameOver();
-    }, 1000);
+    function startTimer() {
+      timerInterval = setInterval(() => {
+        if (!gameRunning) return;
+        timer--;
+        updateTimerDisplay();
+        if (timer <= 0) gameOver();
+      }, 1000);
+    }
 
     // ----- Game Over -----
     function gameOver() {
       gameRunning = false;
       clearInterval(timerInterval);
-      alert("wow you stink");
-      // Optionally, you can reload the page to restart:
-      // location.reload();
+      gameOverScreen.style.display = 'flex';
     }
 
-    // Start the game loop
-    requestAnimationFrame(gameLoop);
+    // ----- Start / Reset Game -----
+    function startGame() {
+      // Reset Variables
+      score = 0;
+      timer = 330;
+      misses = 0;
+      consecutiveHits = 0;
+      pooMeter = 0;
+      fallingPoops.forEach(poop => poop.element.remove());
+      fallingPoops = [];
+      updateScoreDisplay();
+      updateTimerDisplay();
+      updateMissesDisplay();
+      updatePooMeterDisplay();
+      initFood();
+      splashScreen.style.display = 'none';
+      gameOverScreen.style.display = 'none';
+      gameRunning = true;
+      lastFrame = performance.now();
+      startTimer();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ----- Button Event Listeners -----
+    startButton.addEventListener('click', startGame);
+    playAgainButton.addEventListener('click', startGame);
   </script>
 </body>
 </html>
