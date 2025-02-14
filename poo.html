@@ -2,28 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Poop Drop Game</title>
   <!-- Retro pixel font from Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: #222;
+      background: linear-gradient(135deg, #ff7e5f, #feb47b);
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      min-height: 100vh;
       font-family: 'Press Start 2P', cursive;
       color: #fff;
     }
     #gameContainer {
       position: relative;
-      width: 600px;
-      height: 800px;
-      background: #eee;
+      width: 90vw;
+      height: 90vh;
+      max-width: 600px;
+      max-height: 800px;
+      background: linear-gradient(145deg, #ffe259, #ffa751);
       border: 4px solid #000;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+      border-radius: 12px;
       overflow: hidden;
-      background: #ccc;
     }
     /* Header for Score, Timer, and Misses */
     #header {
@@ -31,13 +35,14 @@
       top: 0;
       width: 100%;
       height: 40px;
-      background: #000;
-      color: #0f0;
+      background: linear-gradient(90deg, #00c6ff, #0072ff);
+      color: #fff;
       display: flex;
       justify-content: space-around;
       align-items: center;
       font-size: 14px;
       z-index: 10;
+      text-shadow: 1px 1px 2px #000;
     }
     /* Food emojis container (top area) */
     #foodContainer {
@@ -54,6 +59,7 @@
       cursor: pointer;
       user-select: none;
       transition: transform 0.1s;
+      text-shadow: 1px 1px 2px #000;
     }
     .food:active {
       transform: scale(1.2);
@@ -68,11 +74,13 @@
       height: 20px;
       border: 2px solid #000;
       background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
       z-index: 10;
     }
     #pooMeterFill {
       height: 100%;
-      background: #0a0;
+      background: linear-gradient(90deg, #76b852, #8DC26F);
       width: 0%;
     }
     /* POOP button */
@@ -85,12 +93,17 @@
       padding: 10px 20px;
       z-index: 10;
       cursor: pointer;
+      background: linear-gradient(90deg, #ff416c, #ff4b2b);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    /* Toilet (double-sized emoji) */
+    /* Toilet Emoji at Bottom (2x size) */
     #toilet {
       position: absolute;
       bottom: 70px;
-      font-size: 40px;
+      font-size: 80px;
       user-select: none;
       z-index: 5;
     }
@@ -100,6 +113,7 @@
       font-size: 30px;
       user-select: none;
       z-index: 5;
+      text-shadow: 1px 1px 2px #000;
     }
   </style>
 </head>
@@ -120,8 +134,8 @@
 
   <script>
     // ----- Game Constants & Variables -----
-    const gameWidth = 600;
-    const gameHeight = 800;
+    let gameWidth = document.getElementById('gameContainer').clientWidth;
+    let gameHeight = document.getElementById('gameContainer').clientHeight;
     const maxPooMeter = 8;  // 8 units = full
     const poopCost = 1;     // Each poop uses 1 unit
     let score = 0;
@@ -134,6 +148,13 @@
 
     let fallingPoops = [];
     let lastFrame = performance.now();
+
+    // Update game dimensions on resize
+    const gameContainer = document.getElementById('gameContainer');
+    window.addEventListener('resize', function() {
+      gameWidth = gameContainer.clientWidth;
+      gameHeight = gameContainer.clientHeight;
+    });
 
     // Food types with varying fill values
     const foods = [
@@ -151,7 +172,6 @@
     ];
 
     // ----- DOM Elements -----
-    const gameContainer = document.getElementById('gameContainer');
     const foodContainer = document.getElementById('foodContainer');
     const pooMeterFill = document.getElementById('pooMeterFill');
     const scoreDisplay = document.getElementById('score');
@@ -184,9 +204,9 @@
       foodElem.classList.add('food');
       foodElem.innerText = foodObj.emoji;
       foodElem.setAttribute('data-value', foodObj.value);
-      // Random x position within game width (leave 40px padding)
+      // Random x position within game width (with padding)
       const x = Math.random() * (gameWidth - 60) + 30;
-      // Random y within the top 80px of the foodContainer
+      // Random y within the top part of the foodContainer
       const y = Math.random() * (80 - 30) + 10;
       foodElem.style.left = x + 'px';
       foodElem.style.top = y + 'px';
@@ -217,7 +237,7 @@
         const poopElem = document.createElement('div');
         poopElem.classList.add('poop');
         poopElem.innerText = '💩';
-        // Starting position: fixed x at center, just below the meter
+        // Starting position: center horizontally, just below the meter
         const startX = gameWidth / 2 - 15;
         const startY = 170;
         poopElem.style.left = startX + 'px';
@@ -234,7 +254,6 @@
       const amplitude = (gameWidth - 80) / 2;
       const centerX = gameWidth / 2;
       const period = 5000; // full cycle in ms
-      // time is in ms; adjust sine wave accordingly
       const x = centerX + amplitude * Math.sin((2 * Math.PI / period) * time) - 40;
       toilet.style.left = x + 'px';
     }
@@ -250,9 +269,8 @@
         const poop = fallingPoops[i];
         poop.y += poopSpeed * dt;
         poop.element.style.top = poop.y + 'px';
-        // When poop nears the bottom (within 100px of gameHeight)
+        // When poop nears the bottom of the game container
         if (poop.y > gameHeight - 120) {
-          // Get center x of poop
           const poopRect = poop.element.getBoundingClientRect();
           const poopCenterX = poopRect.left + poopRect.width / 2;
           const toiletRect = toilet.getBoundingClientRect();
@@ -274,7 +292,6 @@
             consecutiveHits = 0;
             updateMissesDisplay();
           }
-          // Remove poop element and from our array
           poop.element.remove();
           fallingPoops.splice(i, 1);
         }
