@@ -115,6 +115,29 @@
       z-index: 5;
       text-shadow: 1px 1px 2px #000;
     }
+    /* Floating text animation */
+    @keyframes rise {
+      0% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-50px); }
+    }
+    .floatingText {
+      position: absolute;
+      font-size: 20px;
+      font-weight: bold;
+      color: #ff0;
+      text-shadow: 1px 1px 2px #000;
+      animation: rise 1s ease-out forwards;
+      pointer-events: none;
+      z-index: 15;
+    }
+    /* Squish and fade animation for misses */
+    @keyframes squish {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.2, 0.5); opacity: 0; }
+    }
+    .squish {
+      animation: squish 0.5s ease-out forwards;
+    }
     /* Splash and Game Over Overlays */
     #splashScreen,
     #gameOverScreen {
@@ -253,6 +276,15 @@
     function updateMissesDisplay() {
       missesDisplay.innerText = 'Misses: ' + misses;
     }
+    function showFloatingText(text, x, y) {
+      const ft = document.createElement('div');
+      ft.classList.add('floatingText');
+      ft.innerText = text;
+      ft.style.left = x + 'px';
+      ft.style.top = y + 'px';
+      gameContainer.appendChild(ft);
+      setTimeout(() => { ft.remove(); }, 1000);
+    }
 
     // ----- Food Emoji Spawn & Handling -----
     function spawnFood(foodObj) {
@@ -260,9 +292,7 @@
       foodElem.classList.add('food');
       foodElem.innerText = foodObj.emoji;
       foodElem.setAttribute('data-value', foodObj.value);
-      // Random x position within game width (with padding)
       const x = Math.random() * (gameWidth - 60) + 30;
-      // Random y within the top part of the foodContainer
       const y = Math.random() * (80 - 30) + 10;
       foodElem.style.left = x + 'px';
       foodElem.style.top = y + 'px';
@@ -277,7 +307,6 @@
 
       foodContainer.appendChild(foodElem);
     }
-    // Initialize food emojis
     function initFood() {
       foodContainer.innerHTML = '';
       foods.forEach(food => spawnFood(food));
@@ -325,6 +354,7 @@
           const poopCenterX = poopRect.left + poopRect.width / 2;
           const toiletRect = toilet.getBoundingClientRect();
           if (poopCenterX >= toiletRect.left && poopCenterX <= toiletRect.right) {
+            // Hit: update score and show floating text
             score += 10;
             consecutiveHits++;
             if (consecutiveHits > 1) {
@@ -333,12 +363,19 @@
             }
             updateScoreDisplay();
             updateTimerDisplay();
+            const gameRect = gameContainer.getBoundingClientRect();
+            const floatX = toiletRect.left - gameRect.left + (toiletRect.width / 2) - 20;
+            const floatY = toiletRect.top - gameRect.top - 40;
+            showFloatingText("+10", floatX, floatY);
+            poop.element.remove();
           } else {
+            // Miss: update misses and animate squish
             misses++;
             consecutiveHits = 0;
             updateMissesDisplay();
+            poop.element.classList.add('squish');
+            setTimeout(() => { poop.element.remove(); }, 500);
           }
-          poop.element.remove();
           fallingPoops.splice(i, 1);
         }
       }
@@ -370,7 +407,6 @@
 
     // ----- Start / Reset Game -----
     function startGame() {
-      // Reset Variables
       score = 0;
       timer = 330;
       misses = 0;
