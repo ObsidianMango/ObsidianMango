@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🐕 Daily Dog Delight</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #ff6f61;
+      --secondary-color: #ff4b3a;
+      --bg-color: #121212;
+      --container-bg-start: #1e1e1e;
+      --container-bg-end: #2a2a2a;
+      --text-color: #ffffff;
+      --fact-text-color: #cccccc;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: 'Poppins', sans-serif;
+      background: var(--bg-color) url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Ctext%20x='0'%20y='32'%20font-size='32'%3E%F0%9F%90%B6%3C/text%3E%3C/svg%3E") repeat;
+      background-size: 40px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      width: 80%;
+      max-width: 600px;
+      margin: 40px auto;
+      min-height: calc(100vh - 80px);
+      background: linear-gradient(135deg, var(--container-bg-start), var(--container-bg-end));
+      border-radius: 20px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+      padding: 1px 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      overflow-y: auto;
+      position: relative;
+    }
+    h1 {
+      font-size: 1.2rem;
+      color: var(--text-color);
+      margin-bottom: 10px;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    .image-container {
+      position: relative;
+      width: 100%;
+      /* Maintain a responsive 16:9 aspect ratio */
+      aspect-ratio: 16 / 9;
+      border-radius: 15px;
+      background: #333;
+      overflow: hidden; /* ensures cropping for a full-width image */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .dog-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover; /* zooms and covers container width */
+      display: block;
+      opacity: 0;
+      transition: opacity 0.5s ease-in-out;
+    }
+    .loader {
+      position: absolute;
+      font-size: 3rem;
+      color: var(--primary-color);
+      animation: spin 2s linear infinite;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    @keyframes spin {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    .fact {
+      font-size: 1.3rem;
+      margin: 20px 0;
+      color: var(--fact-text-color);
+      padding: 0 10px;
+      transition: color 0.3s;
+    }
+    .btn {
+      background-color: var(--primary-color);
+      color: #fff;
+      padding: 15px 30px;
+      border: none;
+      border-radius: 30px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: background-color 0.3s, transform 0.2s;
+      margin-top: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .btn:hover {
+      background-color: var(--secondary-color);
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Daily Dog Delight</h1>
+    <div class="image-container">
+      <img src="" alt="Cute Dog" class="dog-img" id="dogImage" />
+      <div id="loader" class="loader">🐶</div>
+    </div>
+    <p class="fact" id="dogFact"></p>
+    <button class="btn" id="refreshBtn">Another Dog!</button>
+  </div>
+
+  <script>
+    let attemptedFallback = false;
+
+    async function fetchDogData() {
+      const dogImage = document.getElementById('dogImage');
+      const dogFact = document.getElementById('dogFact');
+      const loader = document.getElementById('loader');
+
+      attemptedFallback = false;
+      loader.style.display = 'block';
+      dogFact.textContent = '';
+      dogImage.style.opacity = 0;
+      dogImage.src = '';
+
+      try {
+        // Fetch a random dog fact
+        const factResponse = await fetch('https://dog-api.kinduff.com/api/facts?number=1');
+        const factData = await factResponse.json();
+        const factText = factData.facts[0];
+        dogFact.textContent = factText;
+
+        // Keyword-based search
+        let query = null;
+        const lowerFact = factText.toLowerCase();
+        const keywordMapping = [
+          { keywords: ['sleep', 'nap', 'bed'], query: 'sleeping dog' },
+          { keywords: ['breed', 'husky', 'bulldog', 'retriever', 'poodle'], query: 'husky dog' },
+          { keywords: ['teeth', 'dental', 'fang'], query: 'dog teeth' }
+        ];
+        for (let mapping of keywordMapping) {
+          for (let keyword of mapping.keywords) {
+            if (lowerFact.includes(keyword)) {
+              query = mapping.query;
+              break;
+            }
+          }
+          if (query) break;
+        }
+
+        let imageUrl = '';
+        if (query) {
+          // Use Unsplash for a related dog image
+          imageUrl = `https://source.unsplash.com/featured/?dog,${encodeURIComponent(query)}`;
+        } else {
+          // Fallback to Dog CEO for a random image
+          const imageResponse = await fetch('https://dog.ceo/api/breeds/image/random');
+          const imageData = await imageResponse.json();
+          imageUrl = imageData.message;
+        }
+
+        // Handle image loading
+        dogImage.onload = () => {
+          dogImage.style.opacity = 1;
+          loader.style.display = 'none';
+        };
+        dogImage.onerror = () => {
+          if (!attemptedFallback && query) {
+            attemptedFallback = true;
+            fetch('https://dog.ceo/api/breeds/image/random')
+              .then(response => response.json())
+              .then(data => {
+                dogImage.src = data.message;
+              })
+              .catch(err => {
+                loader.style.display = 'none';
+                dogFact.textContent = 'Oops! Unable to load dog image after multiple attempts.';
+              });
+          } else {
+            loader.style.display = 'none';
+            dogFact.textContent = 'Oops! Unable to load dog image after multiple attempts.';
+          }
+        };
+
+        dogImage.src = imageUrl;
+      } catch (error) {
+        console.error('Error fetching dog data:', error);
+        loader.style.display = 'none';
+        dogFact.textContent = 'Oops! Something went wrong fetching dog data.';
+      }
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', fetchDogData);
+    fetchDogData();
+  </script>
+</body>
+</html>
