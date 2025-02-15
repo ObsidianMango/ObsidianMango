@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smithsonian Random Art Viewer</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #1e1e1e;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        #controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        #image-container {
+            position: relative;
+            width: 90vw;
+            height: 65vh;
+            background: black;
+            border-radius: 15px;
+            box-shadow: 0 6px 15px rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        #image-container img {
+            max-width: 100%;
+            max-height: 100%;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        #image-container img:active {
+            transform: scale(1.1);
+        }
+
+        /* Loading spinner */
+        #loader {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border: 6px solid rgba(255, 255, 255, 0.3);
+            border-top: 6px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Button styling */
+        button {
+            padding: 14px 28px;
+            font-size: 20px;
+            border: none;
+            cursor: pointer;
+            background: linear-gradient(135deg, #ff9800, #ff5722);
+            color: white;
+            border-radius: 10px;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        button:hover {
+            background: linear-gradient(135deg, #e68900, #d84315);
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            #image-container {
+                width: 95vw;
+                height: 50vh;
+            }
+        }
+        
+        #status {
+            min-height: 20px;
+            font-size: 14px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <h1>Smithsonian Random Art & Sculpture Viewer</h1>
+    <div id="controls">
+        <div id="status"></div>
+        <button onclick="fetchRandomImage()">Get New Image</button>
+    </div>
+
+    <div id="image-container">
+        <div id="loader"></div>
+        <img id="image" src="" alt="Random Smithsonian Artwork" onclick="openFullScreen(this)">
+    </div>
+
+    <script>
+        const API_KEY = "eGeUbXcavqdhpFIblnEHvMiDvQh8AWwRWdkmXNEZ";
+        const imageElement = document.getElementById("image");
+        const loader = document.getElementById("loader");
+        const statusMsg = document.getElementById("status");
+
+        const galleryList = [
+            "American Art Museum",
+            "Cooper Hewitt Smithsonian Design Museum",
+            "Freer Gallery of Art",
+            "Hirshhorn Museum",
+            "National Museum of African Art",
+            "National Portrait Gallery",
+            "Smithsonian Institution Archives",
+            "Archives of American Art",
+            "National Museum of American History",
+            "National Museum of Natural History"
+        ];
+
+        // Attempt up to 'maxTries' times to find a valid image across random galleries.
+        async function fetchRandomImage(maxTries = 3) {
+            showLoader(true);
+            setStatus("Loading a random image...");
+            imageElement.src = "";
+
+            let attempts = 0;
+            let imageUrl = null;
+
+            while (attempts < maxTries && !imageUrl) {
+                attempts++;
+                try {
+                    const randomGallery = galleryList[Math.floor(Math.random() * galleryList.length)];
+                    // Combine gallery with a requirement for Images in online_media_type
+                    // Also search for 'art' or 'sculpture' specifically.
+                    const query = `((art OR sculpture) AND online_media_type:"Images" AND ${encodeURIComponent(randomGallery)})`;
+
+                    setStatus(`Attempt ${attempts}: Searching in "${randomGallery}"...`);
+
+                    let response = await fetch(
+                        `https://api.si.edu/openaccess/api/v1.0/search?q=${query}&rows=200&api_key=${API_KEY}`
+                    );
+
+                    let data = await response.json();
+                    let items = data.response.rows;
+
+                    if (items.length === 0) {
+                        console.warn("No items returned for", randomGallery);
+                        continue;
+                    }
+
+                    // Filter out items without IDs.
+                    let validImageItems = items.filter(item => item.id);
+
+                    // Try to pick a valid image from these items.
+                    while (validImageItems.length > 0 && !imageUrl) {
+                        let randomIndex = Math.floor(Math.random() * validImageItems.length);
+                        let randomItem = validImageItems[randomIndex];
+
+                        try {
+                            let objectResponse = await fetch(`https://api.si.edu/openaccess/api/v1.0/content/${randomItem.id}?api_key=${API_KEY}`);
+                            let objectData = await objectResponse.json();
+                            let resources = objectData.response?.content?.descriptiveNonRepeating?.online_media?.media || [];
+
+                            let validImage = resources.find(r => r.type === "Images" && r.content);
+                            if (validImage) {
+                                imageUrl = validImage.content;
+                                break;
+                            } else {
+                                validImageItems.splice(randomIndex, 1);
+                            }
+                        } catch (innerErr) {
+                            console.error("Error fetching content for", randomItem.id, innerErr);
+                            validImageItems.splice(randomIndex, 1);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error in attempt", attempts, err);
+                }
+            }
+
+            if (imageUrl) {
+                setStatus("Success! Image loaded.");
+                imageElement.src = imageUrl;
+            } else {
+                setStatus("No valid images found after multiple attempts.");
+            }
+
+            showLoader(false);
+        }
+
+        function openFullScreen(img) {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                img.requestFullscreen();
+            }
+        }
+
+        function showLoader(show) {
+            loader.style.display = show ? "block" : "none";
+        }
+
+        function setStatus(message) {
+            statusMsg.textContent = message;
+        }
+
+        // Load an image on startup
+        fetchRandomImage();
+    </script>
+</body>
+</html>
