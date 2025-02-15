@@ -40,6 +40,7 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) |
+| **DogFact**   | 🐕 [DogFacts](https://obsidianmango.github.io/ObsidianMango/dog.html) |
 | **CatFact**   | 🐈 [CatFacts](https://obsidianmango.github.io/ObsidianMango/cat.html) | 
 | **MetArt**   | 🖼 [RandArt](https://obsidianmango.github.io/ObsidianMango/art.html) | 
 | **Asteroid 2032**   | ☄️ [Odds Sim](https://obsidianmango.github.io/ObsidianMango/ast.html) | 
