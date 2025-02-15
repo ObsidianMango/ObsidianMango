@@ -40,6 +40,7 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) | 
+| **MetArt**   | 🖼 [RandArt](https://obsidianmango.github.io/ObsidianMango/art.html) | 
 | **Asteroid 2032**   | ☄️ [Odds Sim](https://obsidianmango.github.io/ObsidianMango/ast.html) | 
 | **CCalc**   | 💵 [CPI Calc](https://obsidianmango.github.io/ObsidianMango/ccc.html) | 
 | **Motivemate**   | 🏁 [Motivemate](https://obsidianmango.github.io/ObsidianMango/mm.html) | 
