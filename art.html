@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Allow pinch zoom on mobile -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">
+  <title>Random Art Explorer</title>
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+  <!-- Load Color Thief library for dominant color extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.2/color-thief.umd.js"></script>
+  <style>
+    :root {
+      --primary-color: #ff416c;
+      --secondary-color: #ff4b2b;
+      --text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+      --button-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+      --transition-duration: 0.5s;
+    }
+    /* Global Styles */
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      transition: background var(--transition-duration) ease;
+    }
+    body {
+      font-family: 'Montserrat', sans-serif;
+      background: radial-gradient(circle, #2b5876, #4e4376);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    /* Main Container */
+    .container {
+      width: 90%;
+      max-width: 800px;
+      height: 100vh;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(10px);
+      opacity: 0;
+      animation: fadeIn var(--transition-duration) forwards;
+    }
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+    /* Header */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      margin-bottom: 10px;
+    }
+    #header h1 {
+      margin: 0;
+      font-size: 1.8em;
+      text-shadow: var(--text-shadow);
+    }
+    #back-button {
+      position: absolute;
+      right: 10px;
+      font-size: 1.5em;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #back-button.visible {
+      opacity: 1;
+    }
+    /* Art Type Buttons */
+    #buttons-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+    #buttons-container button {
+      flex: 1 1 auto;
+      max-width: 150px;
+      padding: 8px;
+      background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: transform 0.3s, box-shadow 0.3s;
+      text-shadow: 1px 1px 2px var(--button-shadow);
+    }
+    #buttons-container button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    /* Art Display Area */
+    #art-display {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 5px;
+      text-align: center;
+      opacity: 0;
+      animation: fadeIn var(--transition-duration) forwards;
+    }
+    #art-display h2 {
+      margin: 10px 0 5px;
+      font-size: 1.5em;
+      text-shadow: var(--text-shadow);
+    }
+    #art-display img {
+      max-width: 100%;
+      max-height: 50vh;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: transform 0.3s, box-shadow 0.3s, opacity 0.3s;
+      border: 3px solid #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      opacity: 0;
+      animation: scaleIn var(--transition-duration) forwards;
+    }
+    @keyframes scaleIn {
+      from { transform: scale(0.95); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    #art-display p {
+      margin: 5px 0;
+      text-shadow: 1px 1px 2px var(--text-shadow);
+    }
+    /* Spinner */
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid #fff;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    /* Modal Styles */
+    .modal {
+      display: none; /* Modal is created dynamically */
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: slideFadeIn var(--transition-duration) forwards;
+      transition: background-color 0.5s;
+    }
+    @keyframes slideFadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .modal-content {
+      border-radius: 5px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      transition: transform 0.3s;
+    }
+    .modal-content:hover {
+      transform: scale(1.02);
+    }
+    .close {
+      position: absolute;
+      top: 20px;
+      right: 35px;
+      color: #fff;
+      font-size: 40px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.3s;
+    }
+    .close:hover {
+      transform: scale(1.1);
+    }
+    /* Responsive */
+    @media (max-width: 600px) {
+      #header h1 { font-size: 1.5em; }
+      #buttons-container button { font-size: 12px; padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header with Title and Back Emoji -->
+    <div id="header">
+      <h1>Random Art Explorer</h1>
+      <span id="back-button">🔙</span>
+    </div>
+    <!-- Art Type Buttons -->
+    <div id="buttons-container">
+      <!-- Buttons will be inserted here -->
+    </div>
+    <!-- Art Display Area -->
+    <div id="art-display">
+      <p>Select an art type above to explore a random art piece.</p>
+    </div>
+  </div>
+
+  <script>
+    // Global history variables
+    let artHistory = [];
+    let currentArt = null;
+    
+    // Array of art types for buttons
+    const artTypes = [
+      "Painting", "Sculpture", "Textile", "Photograph",
+      "Print", "Drawing", "Ceramic", "Costume",
+      "Weapon", "Furniture", "Jewelry", "Medal"
+    ];
+    const buttonsContainer = document.getElementById('buttons-container');
+    const backButton = document.getElementById('back-button');
+
+    // Create buttons for each art type
+    artTypes.forEach(type => {
+      const btn = document.createElement('button');
+      btn.textContent = type;
+      btn.addEventListener('click', () => fetchArt(type));
+      buttonsContainer.appendChild(btn);
+    });
+
+    // Back button functionality
+    backButton.addEventListener('click', () => {
+      if (artHistory.length > 0) {
+        const previousArt = artHistory.pop();
+        displayArt(previousArt, false);
+        updateBackButton();
+      }
+    });
+
+    function updateBackButton() {
+      backButton.classList.toggle('visible', artHistory.length > 0);
+    }
+
+    // On page load, pick a random art type and load it
+    window.addEventListener('load', () => {
+      const randomType = artTypes[Math.floor(Math.random() * artTypes.length)];
+      fetchArt(randomType);
+    });
+
+    // Fetch a random art piece based on selected art type
+    async function fetchArt(artType) {
+      const artDisplay = document.getElementById('art-display');
+      artDisplay.innerHTML = `<div class="spinner"></div><p>Loading a ${artType} art piece...</p>`;
+      try {
+        const searchURL = `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${encodeURIComponent(artType)}`;
+        const searchResponse = await fetch(searchURL);
+        const searchData = await searchResponse.json();
+
+        if (!searchData.objectIDs || searchData.objectIDs.length === 0) {
+          artDisplay.innerHTML = `<p>No art found for "${artType}". Try another category.</p>`;
+          return;
+        }
+
+        const objectIDs = searchData.objectIDs;
+        let art = null;
+        let attempts = 0;
+        while (!art && attempts < 15) {
+          const randomID = objectIDs[Math.floor(Math.random() * objectIDs.length)];
+          const artResponse = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${randomID}`);
+          const artData = await artResponse.json();
+          if (artData && (artData.primaryImageSmall || artData.primaryImage)) {
+            art = artData;
+          }
+          attempts++;
+        }
+
+        if (art) {
+          displayArt(art, true);
+        } else {
+          artDisplay.innerHTML = `<p>Could not find a suitable art piece. Please try again!</p>`;
+        }
+      } catch (error) {
+        console.error('Error fetching art:', error);
+        artDisplay.innerHTML = `<p>Error loading art piece. Please try again later.</p>`;
+      }
+    }
+
+    // Display art details on main screen
+    function displayArt(art, addHistory = true) {
+      const artDisplay = document.getElementById('art-display');
+      const title = art.title || 'Untitled';
+      const artist = art.artistDisplayName || 'Unknown Artist';
+      const date = art.objectDate || 'Date Unknown';
+      const medium = art.medium || '';
+      
+      // Compute origin from city/state/country or culture
+      let origin = "";
+      if (art.city) {
+        origin = art.city + (art.state ? `, ${art.state}` : '') + (art.country ? `, ${art.country}` : '');
+      } else if (art.country) {
+        origin = art.country;
+      } else if (art.culture) {
+        origin = art.culture;
+      }
+      if (!origin) origin = "Unknown Origin";
+      
+      if (addHistory && currentArt) {
+        artHistory.push(currentArt);
+      }
+      currentArt = art;
+      updateBackButton();
+
+      artDisplay.innerHTML = `
+        <h2>${title}</h2>
+        <img id="art-image" src="${art.primaryImageSmall ? art.primaryImageSmall : art.primaryImage}" alt="${title}">
+        <p><strong>Artist:</strong> ${artist}</p>
+        <p><strong>Date:</strong> ${date}</p>
+        ${medium ? `<p><strong>Medium:</strong> ${medium}</p>` : ''}
+        <p><strong>Origin:</strong> ${origin}</p>
+      `;
+
+      const artImg = document.getElementById('art-image');
+      artImg.crossOrigin = "Anonymous";
+      artImg.dataset.retries = 0;
+      artImg.addEventListener('error', function reloadMain() {
+        let retries = Number(artImg.dataset.retries);
+        if (retries < 2) {
+          artImg.dataset.retries = retries + 1;
+          artImg.src = artImg.src.split('?')[0] + '?reload=' + new Date().getTime();
+        } else {
+          console.error("Main image failed to load after retries.");
+          artDisplay.innerHTML = `<p>Sorry, the image failed to load. Please try another art piece.</p>`;
+        }
+      });
+      artImg.addEventListener('load', function() {
+        try {
+          const colorThief = new ColorThief();
+          const dominantColor = colorThief.getColor(artImg);
+          const darkColor = `rgb(${Math.floor(dominantColor[0]*0.6)}, ${Math.floor(dominantColor[1]*0.6)}, ${Math.floor(dominantColor[2]*0.6)})`;
+          document.body.style.background = `radial-gradient(circle, rgb(${dominantColor.join(',')}) 0%, ${darkColor} 100%)`;
+        } catch (e) {
+          console.error("Error extracting color:", e);
+        }
+      });
+      // Open modal for full-screen view when the image is clicked.
+      artImg.addEventListener('click', () => openModal(art));
+    }
+
+    // Open modal with full-screen image view (create dynamically)
+    function openModal(art) {
+      // Create modal container dynamically
+      const modal = document.createElement('div');
+      modal.id = 'modal';
+      modal.style.cssText = `
+        position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
+        background-color: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center;
+        padding: 20px; animation: slideFadeIn var(--transition-duration) forwards; transition: background-color 0.5s;
+      `;
+      // Close button
+      const closeBtn = document.createElement('span');
+      closeBtn.textContent = '×';
+      closeBtn.style.cssText = `
+        position: absolute; top: 20px; right: 35px; color: #fff; font-size: 40px; font-weight: bold; cursor: pointer;
+        transition: transform 0.3s;
+      `;
+      closeBtn.addEventListener('mouseover', () => closeBtn.style.transform = 'scale(1.1)');
+      closeBtn.addEventListener('mouseout', () => closeBtn.style.transform = 'scale(1)');
+      closeBtn.addEventListener('click', () => document.body.removeChild(modal));
+      modal.appendChild(closeBtn);
+      
+      // Create modal image element dynamically with styles to fit screen
+      const modalImg = document.createElement('img');
+      modalImg.id = 'modal-img';
+      modalImg.alt = 'Enlarged Art';
+      modalImg.crossOrigin = "Anonymous";
+      modalImg.dataset.retries = 0;
+      // Set styles so it fits within the viewport and uses object-fit contain
+      modalImg.style.maxWidth = "100%";
+      modalImg.style.maxHeight = "100%";
+      modalImg.style.width = "auto";
+      modalImg.style.height = "auto";
+      modalImg.style.objectFit = "contain";
+      
+      const fullImageURL = art.primaryImage ? art.primaryImage : art.primaryImageSmall;
+      modalImg.src = fullImageURL;
+      
+      // Retry logic for modal image
+      modalImg.addEventListener('error', function reloadModal() {
+        let retries = Number(modalImg.dataset.retries);
+        if (retries < 2) {
+          modalImg.dataset.retries = retries + 1;
+          modalImg.src = fullImageURL.split('?')[0] + '?reload=' + new Date().getTime();
+        } else {
+          console.error("Modal image failed to load after retries.");
+          document.body.removeChild(modal);
+          alert("Image failed to load in zoomed view.");
+        }
+      }, { once: true });
+      
+      // Once loaded, adjust modal background based on image's dominant color.
+      modalImg.addEventListener('load', function() {
+        try {
+          const colorThief = new ColorThief();
+          const dominantColor = colorThief.getColor(modalImg);
+          modal.style.backgroundColor = `rgb(${Math.floor(dominantColor[0]*0.6)}, ${Math.floor(dominantColor[1]*0.6)}, ${Math.floor(dominantColor[2]*0.6)})`;
+        } catch (e) {
+          console.error("Error extracting color:", e);
+          modal.style.backgroundColor = "rgba(0,0,0,0.9)";
+        }
+      }, { once: true });
+      
+      modal.appendChild(modalImg);
+      // Close modal when clicking outside the image
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+          document.body.removeChild(modal);
+        }
+      });
+      document.body.appendChild(modal);
+    }
+  </script>
+</body>
+</html>
