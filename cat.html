@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Cat Delight - Dark Mode</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #ff6f61;
+      --secondary-color: #ff4b3a;
+      --bg-color: #121212;
+      --container-bg-start: #1e1e1e;
+      --container-bg-end: #2a2a2a;
+      --text-color: #ffffff;
+      --fact-text-color: #cccccc;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: 'Poppins', sans-serif;
+      /* Repeating background with cat emoji "🐱" */
+      background: var(--bg-color) url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Ctext%20x='0'%20y='32'%20font-size='32'%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E") repeat;
+      background-size: 40px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      width: 80%;
+      max-width: 600px;
+      /* Make container slightly smaller than viewport to reveal background on top and bottom */
+      margin: 40px auto;
+      min-height: calc(100vh - 80px);
+      background: linear-gradient(135deg, var(--container-bg-start), var(--container-bg-end));
+      border-radius: 20px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+      padding: 1px 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      overflow-y: auto;
+      position: relative;
+    }
+    h1 {
+      font-size: 2.5rem;
+      color: var(--text-color);
+      margin-bottom: 10px;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    .image-container {
+      position: relative;
+      width: 100%;
+      max-height: 50vh;
+      overflow: hidden;
+      border-radius: 15px;
+      background: #333;
+    }
+    .cat-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      opacity: 0;
+      transition: opacity 0.5s ease-in-out;
+    }
+    .loader {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 3rem;
+      color: var(--primary-color);
+      animation: spin 2s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    .fact {
+      font-size: 1.3rem;
+      margin: 20px 0;
+      color: var(--fact-text-color);
+      padding: 0 10px;
+      transition: color 0.3s;
+    }
+    .btn {
+      background-color: var(--primary-color);
+      color: #fff;
+      padding: 15px 30px;
+      border: none;
+      border-radius: 30px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: background-color 0.3s, transform 0.2s;
+      margin-top: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .btn:hover {
+      background-color: var(--secondary-color);
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Daily Cat Delight</h1>
+    <div class="image-container">
+      <img src="" alt="Cute Cat" class="cat-img" id="catImage" />
+      <div id="loader" class="loader">😺</div>
+    </div>
+    <p class="fact" id="catFact"></p>
+    <button class="btn" id="refreshBtn">Another Cat!</button>
+  </div>
+
+  <script>
+    let attemptedFallback = false;
+
+    async function fetchCatData() {
+      const catImage = document.getElementById('catImage');
+      const catFact = document.getElementById('catFact');
+      const loader = document.getElementById('loader');
+
+      // Reset state
+      attemptedFallback = false;
+      loader.style.display = 'block';
+      catFact.textContent = '';
+      catImage.style.opacity = 0;
+      catImage.src = '';
+
+      try {
+        // Fetch a random cat fact
+        const factResponse = await fetch('https://catfact.ninja/fact');
+        const factData = await factResponse.json();
+        const factText = factData.fact;
+        catFact.textContent = factText;
+
+        // Determine query for a related image based on keywords
+        let query = null;
+        const lowerFact = factText.toLowerCase();
+        const keywordMapping = [
+          { keywords: ['sleep', 'nap', 'bed'], query: 'sleeping cat' },
+          { keywords: ['breed', 'siamese', 'persian', 'maine coon', 'bengal', 'sphynx'], query: 'siamese cat' },
+          { keywords: ['teeth', 'dental', 'fang'], query: 'cat teeth' }
+        ];
+        for (let mapping of keywordMapping) {
+          for (let keyword of mapping.keywords) {
+            if (lowerFact.includes(keyword)) {
+              query = mapping.query;
+              break;
+            }
+          }
+          if (query) break;
+        }
+
+        let imageUrl = '';
+        if (query) {
+          // Use Unsplash for a related cat image
+          imageUrl = `https://source.unsplash.com/featured/?cat,${encodeURIComponent(query)}`;
+        } else {
+          // Fallback to The Cat API for a random image
+          const imageResponse = await fetch('https://api.thecatapi.com/v1/images/search');
+          const imageData = await imageResponse.json();
+          imageUrl = imageData[0].url;
+        }
+
+        // Set up image load handling
+        catImage.onload = () => {
+          catImage.style.opacity = 1;
+          loader.style.display = 'none';
+        };
+        catImage.onerror = () => {
+          if (!attemptedFallback && query) {
+            attemptedFallback = true;
+            fetch('https://api.thecatapi.com/v1/images/search')
+              .then(response => response.json())
+              .then(data => {
+                catImage.src = data[0].url;
+              })
+              .catch(err => {
+                loader.style.display = 'none';
+                catFact.textContent = 'Oops! Unable to load cat image after multiple attempts.';
+              });
+          } else {
+            loader.style.display = 'none';
+            catFact.textContent = 'Oops! Unable to load cat image after multiple attempts.';
+          }
+        };
+
+        catImage.src = imageUrl;
+      } catch (error) {
+        console.error('Error fetching cat data:', error);
+        loader.style.display = 'none';
+        catFact.textContent = 'Oops! Something went wrong fetching the cat data.';
+      }
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', fetchCatData);
+    fetchCatData();
+  </script>
+</body>
+</html>
+ 
