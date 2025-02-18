@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dangle Dash - Elephant Arm Edition</title>
+    <title>Dangle Dash - Ultimate Articulated Edition</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
     <style>
         body { text-align: center; }
@@ -18,14 +18,15 @@
 
     <div class="buttons">
         <button class="boost" onclick="boostSwing()">Boost Swing</button>
-        <button class="release" onclick="releaseBob()">Release</button>
+        <button class="release" onclick="releaseBall()">Release</button>
     </div>
 
     <script>
         let pivotX, pivotY;
-        let armLength1 = 80, armLength2 = 70;
-        let angle1 = Math.PI / 4, angle2 = Math.PI / 6;
-        let angularVelocity1 = 0, angularVelocity2 = 0;
+        let segments = 5;
+        let armLengths = [];
+        let angles = [];
+        let angularVelocities = [];
         let gravity = 0.02;
         let damping = 0.99;
         let ball;
@@ -38,6 +39,13 @@
             createCanvas(400, 600);
             pivotX = width / 2;
             pivotY = 80;
+
+            for (let i = 0; i < segments; i++) {
+                armLengths.push(40 + i * 10); // Slightly increasing segment length
+                angles.push(Math.PI / 4);
+                angularVelocities.push(0);
+            }
+
             ball = { x: 0, y: 0, radius: 12, speedX: 0, speedY: 0 };
 
             for (let i = 0; i < 4; i++) {
@@ -52,36 +60,38 @@
         function draw() {
             background(240);
 
+            let prevX = pivotX;
+            let prevY = pivotY;
+
+            for (let i = 0; i < segments; i++) {
+                if (!released) {
+                    let force = -gravity * sin(angles[i]);
+                    angularVelocities[i] += force;
+                    angularVelocities[i] *= damping;
+                    angles[i] += angularVelocities[i];
+                }
+
+                let newX = prevX + armLengths[i] * sin(angles[i]);
+                let newY = prevY + armLengths[i] * cos(angles[i]);
+
+                stroke(0);
+                line(prevX, prevY, newX, newY);
+
+                prevX = newX;
+                prevY = newY;
+            }
+
             if (!released) {
-                let force1 = -gravity * sin(angle1);
-                angularVelocity1 += force1;
-                angularVelocity1 *= damping;
-                angle1 += angularVelocity1;
-
-                let force2 = -gravity * sin(angle2);
-                angularVelocity2 += force2;
-                angularVelocity2 *= damping;
-                angle2 += angularVelocity2;
-
-                let elbowX = pivotX + armLength1 * sin(angle1);
-                let elbowY = pivotY + armLength1 * cos(angle1);
-                ball.x = elbowX + armLength2 * sin(angle2);
-                ball.y = elbowY + armLength2 * cos(angle2);
+                ball.x = prevX;
+                ball.y = prevY;
             } else {
                 ball.x += ball.speedX;
                 ball.y += ball.speedY;
-                ball.speedY += gravity; // Apply gravity after release
+                ball.speedY += gravity;
 
-                if (ball.y > height) {
-                    resetPendulum();
-                }
+                if (ball.x < 0 || ball.x > width) ball.speedX *= -1; // Bounce off walls
+                if (ball.y > height) resetPendulum();
             }
-
-            stroke(0);
-            let elbowX = pivotX + armLength1 * sin(angle1);
-            let elbowY = pivotY + armLength1 * cos(angle1);
-            line(pivotX, pivotY, elbowX, elbowY);
-            line(elbowX, elbowY, ball.x, ball.y);
 
             fill(0);
             ellipse(ball.x, ball.y, ball.radius * 2);
@@ -99,8 +109,8 @@
             for (let i = 0; i < targets.length; i++) {
                 if (dist(ball.x, ball.y, targets[i].x, targets[i].y) < ball.radius + targets[i].radius) {
                     score += 1;
-                    ball.speedX *= 0.7; // Slight bounce effect
-                    ball.speedY *= -0.6;
+                    ball.speedX *= 0.9; // Slow slightly after hitting a target
+                    ball.speedY *= -0.7;
                     targets[i].x = random(50, width - 50);
                     targets[i].y = random(250, height - 100);
                 }
@@ -109,8 +119,8 @@
             for (let i = 0; i < hazards.length; i++) {
                 if (dist(ball.x, ball.y, hazards[i].x, hazards[i].y) < ball.radius + hazards[i].radius) {
                     score -= 1;
-                    ball.speedX *= 0.7;
-                    ball.speedY *= -0.6;
+                    ball.speedX *= 0.9;
+                    ball.speedY *= -0.7;
                     hazards[i].x = random(50, width - 50);
                     hazards[i].y = random(250, height - 100);
                 }
@@ -121,27 +131,28 @@
             text("Score: " + score, 10, 30);
         }
 
-        function releaseBob() {
+        function releaseBall() {
             if (!released) {
                 released = true;
-                ball.speedX = angularVelocity2 * 20; // Extra velocity from arm
-                ball.speedY = angularVelocity1 * 15;
+                ball.speedX = angularVelocities[segments - 1] * 25; // Stronger fling effect
+                ball.speedY = angularVelocities[segments - 2] * 18;
             }
         }
 
         function boostSwing() {
             if (!released) {
-                angularVelocity1 += 0.05;
-                angularVelocity2 += 0.08;
+                for (let i = 0; i < segments; i++) {
+                    angularVelocities[i] += 0.05 + i * 0.01; // Increasing boost effect per segment
+                }
             }
         }
 
         function resetPendulum() {
             released = false;
-            angle1 = Math.PI / 4;
-            angle2 = Math.PI / 6;
-            angularVelocity1 = 0;
-            angularVelocity2 = 0;
+            for (let i = 0; i < segments; i++) {
+                angles[i] = Math.PI / 4;
+                angularVelocities[i] = 0;
+            }
             ball.speedX = 0;
             ball.speedY = 0;
         }
