@@ -12,46 +12,60 @@
         let ropeLength = 120;
         let angle = Math.PI / 4;
         let angularVelocity = 0;
-        let gravity = 0.01;
+        let gravity = 0.02;
         let damping = 0.99;
         let bob;
         let targets = [];
         let hazards = [];
         let score = 0;
+        let released = false;  // Determines if the bob has been released
 
         function setup() {
             createCanvas(400, 600);
             pivotX = width / 2;
             pivotY = 80;
-            bob = { x: 0, y: 0, radius: 12 };
+            bob = { x: 0, y: 0, radius: 12, speedY: 0 };
 
             // Generate targets
             for (let i = 0; i < 3; i++) {
-                targets.push({ x: random(50, width - 50), y: random(200, height - 100), radius: 15 });
+                targets.push({ x: random(50, width - 50), y: random(250, height - 100), radius: 15 });
             }
 
             // Generate hazards
             for (let i = 0; i < 2; i++) {
-                hazards.push({ x: random(50, width - 50), y: random(200, height - 100), radius: 10 });
+                hazards.push({ x: random(50, width - 50), y: random(250, height - 100), radius: 10 });
             }
         }
 
         function draw() {
             background(240);
 
-            // Physics update
-            let force = -gravity * sin(angle);
-            angularVelocity += force;
-            angularVelocity *= damping;
-            angle += angularVelocity;
+            if (!released) {
+                // Pendulum physics (before release)
+                let force = -gravity * sin(angle);
+                angularVelocity += force;
+                angularVelocity *= damping;
+                angle += angularVelocity;
 
-            // Update bob position
-            bob.x = pivotX + ropeLength * sin(angle);
-            bob.y = pivotY + ropeLength * cos(angle);
+                // Update bob position
+                bob.x = pivotX + ropeLength * sin(angle);
+                bob.y = pivotY + ropeLength * cos(angle);
+            } else {
+                // Free-falling physics (after release)
+                bob.speedY += gravity;
+                bob.y += bob.speedY;
 
-            // Draw rope
-            stroke(0);
-            line(pivotX, pivotY, bob.x, bob.y);
+                // Check for landing (if it goes off-screen, reset)
+                if (bob.y > height) {
+                    resetPendulum();
+                }
+            }
+
+            // Draw rope (only when swinging)
+            if (!released) {
+                stroke(0);
+                line(pivotX, pivotY, bob.x, bob.y);
+            }
 
             // Draw bob
             fill(0);
@@ -74,7 +88,8 @@
                 if (dist(bob.x, bob.y, targets[i].x, targets[i].y) < bob.radius + targets[i].radius) {
                     score += 1;
                     targets[i].x = random(50, width - 50);
-                    targets[i].y = random(200, height - 100);
+                    targets[i].y = random(250, height - 100);
+                    resetPendulum();
                 }
             }
 
@@ -83,7 +98,8 @@
                 if (dist(bob.x, bob.y, hazards[i].x, hazards[i].y) < bob.radius + hazards[i].radius) {
                     score -= 1;
                     hazards[i].x = random(50, width - 50);
-                    hazards[i].y = random(200, height - 100);
+                    hazards[i].y = random(250, height - 100);
+                    resetPendulum();
                 }
             }
 
@@ -94,7 +110,18 @@
         }
 
         function mousePressed() {
-            angularVelocity += random(-0.05, 0.05);
+            if (!released) {
+                released = true;
+            }
+        }
+
+        function resetPendulum() {
+            released = false;
+            angle = Math.PI / 4;
+            angularVelocity = 0;
+            bob.speedY = 0;
+            bob.x = pivotX + ropeLength * sin(angle);
+            bob.y = pivotY + ropeLength * cos(angle);
         }
     </script>
 </body>
