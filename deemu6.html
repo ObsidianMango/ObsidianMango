@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interactive Pixel Hurricane - Mango (Mobile Enhanced)</title>
+  <title>Interactive Pixel Hurricane</title>
   <style>
     body { margin: 0; overflow: hidden; background: #000; }
     /* Make the canvas cover the full screen and sit behind overlays */
@@ -30,7 +30,7 @@
       display: none;
     }
     /* Instruction text styling for mobile:
-       It only appears when SPLODE is pressed and is offset near the top with a dark shadow */
+       It only appears when SPLODE is pressed and slides into view */
     #instruction {
       position: fixed;
       top: -40px; /* off-screen initially */
@@ -63,7 +63,7 @@
     camera.position.z = 100;
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    document.getElementById('canvas').parentNode.appendChild(renderer.domElement);
+    document.body.appendChild(renderer.domElement);
 
     // ----- GLOBAL VARIABLES -----
     const numParticles = 3000;
@@ -81,8 +81,8 @@
       blending: THREE.AdditiveBlending,
       transparent: true
     });
-    const particles = new THREE.Points(geometry, material);
-    scene.add(particles);
+    const particlesMesh = new THREE.Points(geometry, material);
+    scene.add(particlesMesh);
 
     // For mouse/touch interaction (world coordinates on plane z=0)
     const mouseWorld = new THREE.Vector3(0, 0, 0);
@@ -97,7 +97,8 @@
     // Mode control for mobile: "normal", "suck", "waitingForTarget"
     let mode = "normal";
     let targetPos = new THREE.Vector3();
-    const suckStrength = 0.1;
+    // Increase suckStrength for a stronger pull effect
+    const suckStrength = 0.5;
     
     // Determine if mobile/touch device
     const isMobile = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
@@ -178,6 +179,7 @@
         mode = "waitingForTarget";
         // Slide instruction into view
         instructionDiv.classList.add('active');
+        // Wait for target selection on canvas (one-time touch)
         canvas.addEventListener('touchstart', onCanvasTouch, { once: true });
       });
     }
@@ -190,9 +192,11 @@
       );
       raycaster.setFromCamera(ndc, camera);
       raycaster.ray.intersectPlane(planeZ, targetPos);
-      // Hide instruction overlay
+      // Hide instruction overlay immediately
       document.getElementById('instruction').classList.remove('active');
+      // Enter suck mode: particles are pulled rapidly toward target
       mode = "suck";
+      // After 1 second, trigger explosion force and return to normal mode
       setTimeout(() => {
         for (let i = 0; i < numParticles; i++) {
           const ix = i * 3;
@@ -214,11 +218,11 @@
       
       for (let i = 0; i < numParticles; i++) {
         const ix = i * 3;
-        const px = positions[ix], py = positions[ix + 1], pz = positions[ix + 2];
+        // When in normal mode, apply swirl force toward mouseWorld
         if (mode === "normal") {
-          const dx = px - mouseWorld.x;
-          const dy = py - mouseWorld.y;
-          const dz = pz - mouseWorld.z;
+          const dx = positions[ix] - mouseWorld.x;
+          const dy = positions[ix + 1] - mouseWorld.y;
+          const dz = positions[ix + 2] - mouseWorld.z;
           const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
           const swirlX = -dz, swirlZ = dx;
           const swirlLen = Math.sqrt(swirlX * swirlX + swirlZ * swirlZ) || 1;
@@ -228,8 +232,9 @@
           velocities[ix]     += normSwirlX * forceMag;
           velocities[ix + 2] += normSwirlZ * forceMag;
           velocities[ix + 1] += (Math.random() - 0.5) * 0.02;
-        }
-        if (mode === "suck") {
+        } 
+        // When in suck mode, apply a stronger pull toward the target
+        else if (mode === "suck") {
           velocities[ix]     += (targetPos.x - positions[ix]) * suckStrength;
           velocities[ix + 1] += (targetPos.y - positions[ix + 1]) * suckStrength;
           velocities[ix + 2] += (targetPos.z - positions[ix + 2]) * suckStrength;
@@ -242,6 +247,7 @@
         velocities[ix + 1] *= damping;
         velocities[ix + 2] *= damping;
         
+        // Reinitialize particles that stray too far
         const distOrigin = Math.sqrt(
           positions[ix] * positions[ix] +
           positions[ix + 1] * positions[ix + 1] +
