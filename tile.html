@@ -6,7 +6,7 @@
   <title>Space Block Breaker</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; user-select: none; }
-    body { background: black; overflow: hidden; }
+    body { background: black; overflow: hidden; font-family: 'Courier New', monospace; }
     canvas { display: block; position: absolute; top: 0; left: 0; }
     #playAgain {
       position: absolute;
@@ -35,35 +35,45 @@
     let width = canvas.width = window.innerWidth;
     let height = canvas.height = window.innerHeight;
 
+    // Paddle settings
     let basePaddleWidth = width * 0.2;
     let paddleWidth = basePaddleWidth;
     const paddleHeight = 12;
     let paddleX = (width - paddleWidth) / 2;
 
+    // Ball settings
     let ballRadius = 10;
     let balls = [];
-    let ballTrailLength = 15; // Number of previous positions to keep
-    let ballCount = 3; // Start with 3 balls
+    let ballTrailLength = 15;
+    let ballCount = 3; // start with 3 balls (lives)
 
+    // Game state
     let particles = [];
     let powerUps = [];
     let starfield = [];
     let level = 1;
     let gameOver = false;
-
+    let win = false;
     let leftPressed = false;
     let rightPressed = false;
 
+    // Blocks & Boss
     let blocks = [];
     const rows = 6, cols = 10;
     const blockWidth = width / cols - 4;
     const blockHeight = 30;
+    let boss = null;
+    let currentBlockHP = 1; // starting HP for blocks
 
+    // Power-up flags/timers
     let superBallActive = false;
-    let paddleEffectTimer = null; // Timer for paddle extend/shorten effect
+    let shieldActive = false;
+    let shieldTimer = null;
+    let paddleEffectTimer = null;
 
+    // Create or reset ball
     function resetBall() {
-      if (!gameOver) {
+      if (!gameOver && !win) {
         balls.push({
           x: width / 2,
           y: height - 50,
@@ -76,32 +86,64 @@
       }
     }
 
+    // Create level: boss every 5th level, normal blocks otherwise.
+    function createLevel() {
+      boss = null;
+      if (level % 5 === 0) {
+        createBoss();
+      } else {
+        createBlocks();
+      }
+    }
+
     function init() {
       ballCount = 3;
       level = 1;
+      currentBlockHP = 1;
       gameOver = false;
+      win = false;
       paddleWidth = basePaddleWidth;
       paddleX = (width - paddleWidth) / 2;
       balls = [];
       particles = [];
       powerUps = [];
-      createBlocks();
+      shieldActive = false;
+      if (shieldTimer) { clearTimeout(shieldTimer); shieldTimer = null; }
+      if (paddleEffectTimer) { clearTimeout(paddleEffectTimer); paddleEffectTimer = null; }
       createStarfield();
+      createLevel();
       resetBall();
     }
 
+    // Create normal blocks with durability.
     function createBlocks() {
       blocks = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
+          let hue = Math.random() * 360;
           blocks.push({
             x: c * (blockWidth + 4) + 2,
             y: r * (blockHeight + 4) + 50,
             status: true,
-            color: `hsl(${Math.random() * 360}, 100%, 60%)`
+            hp: currentBlockHP,
+            maxHP: currentBlockHP,
+            hue: hue
           });
         }
       }
+    }
+
+    // Create a boss for boss levels.
+    function createBoss() {
+      boss = {
+        x: (width - 150) / 2,
+        y: 50,
+        width: 150,
+        height: 30,
+        hp: 10,
+        color: "#ff0",
+        vx: (Math.random() - 0.5) * 3
+      };
     }
 
     function createStarfield() {
@@ -128,19 +170,24 @@
     function drawPaddle() {
       ctx.fillStyle = "#0ff";
       ctx.fillRect(paddleX, height - paddleHeight - 10, paddleWidth, paddleHeight);
+      if (shieldActive) {
+        ctx.strokeStyle = "#00f";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(paddleX - 4, height - paddleHeight - 14, paddleWidth + 8, paddleHeight + 8);
+      }
     }
 
     function drawBall(ball) {
-      // Draw trail
+      // Draw the trail.
       for (let i = 0; i < ball.trail.length; i++) {
         let pos = ball.trail[i];
         let alpha = ((i + 1) / ball.trail.length) * 0.5;
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, ballRadius, 0, Math.PI * 2);
-        ctx.fillStyle = ball.power ? `rgba(240, 0, 240, ${alpha})` : `rgba(255, 255, 255, ${alpha})`;
+        ctx.fillStyle = ball.power ? `rgba(240,0,240,${alpha})` : `rgba(255,255,255,${alpha})`;
         ctx.fill();
       }
-      // Draw current ball with a 3D radial gradient
+      // Draw the ball with a 3D radial gradient.
       let gradient = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 3, ball.x, ball.y, ballRadius);
       gradient.addColorStop(0, ball.power ? "#f0f" : "#fff");
       gradient.addColorStop(0.5, ball.power ? "#ff0" : "#ff0");
@@ -154,12 +201,40 @@
     function drawBlocks() {
       blocks.forEach(block => {
         if (block.status) {
-          ctx.fillStyle = block.color;
+          let lightness = 60 * (block.hp / block.maxHP);
+          ctx.fillStyle = `hsl(${block.hue}, 100%, ${lightness}%)`;
           ctx.fillRect(block.x, block.y, blockWidth, blockHeight);
         }
       });
     }
 
+    function drawBoss() {
+      if (boss) {
+        ctx.fillStyle = boss.color;
+        ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+        ctx.fillStyle = "#000";
+        ctx.font = "16px 'Courier New', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("HP: " + boss.hp, boss.x + boss.width / 2, boss.y + boss.height - 8);
+      }
+    }
+
+    // Dramatic explosion for bosses.
+    function createBossExplosion(x, y, color) {
+      for (let i = 0; i < 100; i++) {
+        particles.push({
+          x: x,
+          y: y,
+          dx: (Math.random() - 0.5) * 10,
+          dy: (Math.random() - 0.5) * 10,
+          size: Math.random() * 10 + 2,
+          color: color,
+          life: Math.random() * 60 + 40
+        });
+      }
+    }
+
+    // Normal explosion (for blocks).
     function createExplosion(x, y, color) {
       for (let i = 0; i < 50; i++) {
         particles.push({
@@ -181,13 +256,14 @@
         p.x += p.dx;
         p.y += p.dy;
         p.dy += 0.1;
+        p.size *= 0.99;
         p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       });
     }
 
     function dropPowerUp(x, y) {
-      const types = ["extend", "super", "extra", "shorten"];
+      const types = ["extend", "super", "extra", "shorten", "shield"];
       let type = types[Math.floor(Math.random() * types.length)];
       powerUps.push({ x: x, y: y, dy: 2, type: type });
     }
@@ -199,6 +275,7 @@
         else if (p.type === "super") color = "#f0f";
         else if (p.type === "extra") color = "#ff0";
         else if (p.type === "shorten") color = "#f00";
+        else if (p.type === "shield") color = "#00f";
         ctx.fillStyle = color;
         ctx.fillRect(p.x, p.y, 20, 20);
         p.y += p.dy;
@@ -209,22 +286,16 @@
       });
     }
 
-    // Updated activatePowerUp to prevent overlapping effects
+    // Activate power-ups (clearing overlapping paddle timers as needed)
     function activatePowerUp(type) {
       if (type === "extend") {
         if (paddleEffectTimer) clearTimeout(paddleEffectTimer);
         paddleWidth = basePaddleWidth * 1.5;
-        paddleEffectTimer = setTimeout(() => {
-          paddleWidth = basePaddleWidth;
-          paddleEffectTimer = null;
-        }, 10000);
+        paddleEffectTimer = setTimeout(() => { paddleWidth = basePaddleWidth; paddleEffectTimer = null; }, 10000);
       } else if (type === "shorten") {
         if (paddleEffectTimer) clearTimeout(paddleEffectTimer);
         paddleWidth = basePaddleWidth * 0.5;
-        paddleEffectTimer = setTimeout(() => {
-          paddleWidth = basePaddleWidth;
-          paddleEffectTimer = null;
-        }, 10000);
+        paddleEffectTimer = setTimeout(() => { paddleWidth = basePaddleWidth; paddleEffectTimer = null; }, 10000);
       } else if (type === "super") {
         superBallActive = true;
         balls.forEach(ball => ball.power = true);
@@ -243,12 +314,15 @@
           power: false,
           trail: []
         });
+      } else if (type === "shield") {
+        if (shieldTimer) clearTimeout(shieldTimer);
+        shieldActive = true;
+        shieldTimer = setTimeout(() => { shieldActive = false; shieldTimer = null; }, 10000);
       }
     }
 
     function moveBalls() {
       balls.forEach((ball, index) => {
-        // Update ball trail
         ball.trail.push({ x: ball.x, y: ball.y });
         if (ball.trail.length > ballTrailLength) ball.trail.shift();
         ball.x += ball.dx;
@@ -256,35 +330,67 @@
         if (ball.x < ballRadius || ball.x > width - ballRadius) ball.dx *= -1;
         if (ball.y < ballRadius) ball.dy *= -1;
         if (ball.y > height) {
-          balls.splice(index, 1);
-          ballCount--;
-          if (ballCount <= -10) { gameOver = true; }
-          if (!gameOver && balls.length === 0) { resetBall(); }
+          if (shieldActive) {
+            ball.dy = -Math.abs(ball.dy);
+            ball.y = height - ballRadius;
+          } else {
+            balls.splice(index, 1);
+            ballCount--;
+            if (ballCount <= -10) { gameOver = true; }
+            if (!gameOver && balls.length === 0) { resetBall(); }
+          }
         }
-        // Paddle collision with velocity & hit-position effect
-        if (ball.y + ballRadius >= height - paddleHeight - 10 && ball.x > paddleX && ball.x < paddleX + paddleWidth && ball.dy > 0) {
+        if (ball.y + ballRadius >= height - paddleHeight - 10 &&
+            ball.x > paddleX && ball.x < paddleX + paddleWidth && ball.dy > 0) {
           let hitPos = (ball.x - paddleX) / paddleWidth;
-          let angle = (hitPos - 0.5) * (Math.PI / 3); // -60 to 60 degrees
+          let angle = (hitPos - 0.5) * (Math.PI / 3);
           ball.dx = ball.speed * Math.sin(angle);
           ball.dy = -ball.speed * Math.cos(angle);
         }
-        // Block collision
-        blocks.forEach(block => {
-          if (block.status &&
-              ball.x > block.x &&
-              ball.x < block.x + blockWidth &&
-              ball.y > block.y &&
-              ball.y < block.y + blockHeight) {
-            if (!superBallActive) ball.dy *= -1;
-            block.status = false;
-            createExplosion(block.x + blockWidth / 2, block.y + blockHeight / 2, block.color);
-            if (Math.random() < 0.3) dropPowerUp(block.x + blockWidth / 2, block.y + blockHeight / 2);
+        if (!boss) {
+          blocks.forEach(block => {
+            if (block.status &&
+                ball.x > block.x &&
+                ball.x < block.x + blockWidth &&
+                ball.y > block.y &&
+                ball.y < block.y + blockHeight) {
+              if (!superBallActive) ball.dy *= -1;
+              block.hp--;
+              if (block.hp <= 0) {
+                block.status = false;
+                createExplosion(block.x + blockWidth / 2, block.y + blockHeight / 2, `hsl(${block.hue}, 100%, 30%)`);
+                if (Math.random() < 0.3) dropPowerUp(block.x + blockWidth / 2, block.y + blockHeight / 2);
+              }
+            }
+          });
+          if (blocks.every(block => !block.status)) {
+            level++;
+            createLevel();
           }
-        });
+        } else {
+          if (ball.x > boss.x && ball.x < boss.x + boss.width &&
+              ball.y > boss.y && ball.y < boss.y + boss.height) {
+            if (!superBallActive) ball.dy *= -1;
+            boss.hp--;
+            createBossExplosion(ball.x, ball.y, boss.color);
+            if (boss.hp <= 0) {
+              currentBlockHP++;
+              boss = null;
+              level++;
+              createLevel();
+            }
+          }
+        }
       });
-      if (blocks.every(block => !block.status)) {
-        level++;
-        createBlocks();
+    }
+
+    function moveBoss() {
+      if (boss) {
+        boss.x += boss.vx;
+        if (boss.x < 0 || boss.x + boss.width > width) boss.vx *= -1;
+        if (Math.random() < 0.01) {
+          boss.vx = (Math.random() - 0.5) * 3;
+        }
       }
     }
 
@@ -301,7 +407,6 @@
 
     function drawHUD() {
       ctx.font = "20px 'Courier New', monospace";
-      // Centered retro HUD with different neon colors
       let levelText = "LEVEL: " + level;
       let ballText = "BALLS: " + ballCount;
       ctx.textAlign = "left";
@@ -309,10 +414,31 @@
       let ballWidth = ctx.measureText(ballText).width;
       let totalWidth = levelWidth + ballWidth + 40;
       let startX = (width - totalWidth) / 2;
-      ctx.fillStyle = "#0f0"; // Neon green for level
+      ctx.fillStyle = "#0f0";
       ctx.fillText(levelText, startX, 30);
-      ctx.fillStyle = "#f0f"; // Neon magenta for balls
+      ctx.fillStyle = "#f0f";
       ctx.fillText(ballText, startX + levelWidth + 40, 30);
+      if (boss) {
+        ctx.fillStyle = "#fff";
+        ctx.font = "16px 'Courier New', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("BOSS", width / 2, boss.y - 10);
+      }
+    }
+
+    function drawFireworks() {
+      if (Math.random() < 0.05) {
+        particles.push({
+          x: Math.random() * width,
+          y: height,
+          dx: (Math.random() - 0.5) * 6,
+          dy: -Math.random() * 8 - 4,
+          size: Math.random() * 8 + 4,
+          color: `hsl(${Math.random() * 360}, 100%, 70%)`,
+          life: Math.random() * 50 + 50
+        });
+      }
+      drawParticles();
     }
 
     function update() {
@@ -321,12 +447,23 @@
       movePaddle();
       drawPaddle();
       balls.forEach(drawBall);
-      drawBlocks();
-      drawParticles();
+      if (boss) {
+        drawBoss();
+        moveBoss();
+      } else {
+        drawBlocks();
+      }
       drawPowerUps();
       moveBalls();
       drawHUD();
-      if (!gameOver) {
+      if (win || level > 25) {
+        win = true;
+        drawFireworks();
+        ctx.fillStyle = "#fff";
+        ctx.font = "40px 'Courier New', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("You Win! Now go outside and do something!", width / 2, height / 2);
+      } else if (!gameOver) {
         requestAnimationFrame(update);
       } else {
         ctx.fillStyle = "#fff";
@@ -338,13 +475,9 @@
     }
     update();
 
-    // Smooth mouse/touch & keyboard controls
-    document.addEventListener("mousemove", e => {
-      paddleX = e.clientX - paddleWidth / 2;
-    });
-    document.addEventListener("touchmove", e => {
-      paddleX = e.touches[0].clientX - paddleWidth / 2;
-    });
+    // Controls
+    document.addEventListener("mousemove", e => { paddleX = e.clientX - paddleWidth / 2; });
+    document.addEventListener("touchmove", e => { paddleX = e.touches[0].clientX - paddleWidth / 2; });
     document.addEventListener("keydown", e => {
       if (e.key === "ArrowRight" || e.key === "d") rightPressed = true;
       if (e.key === "ArrowLeft" || e.key === "a") leftPressed = true;
@@ -365,9 +498,10 @@
       paddleWidth = basePaddleWidth;
       paddleX = (width - paddleWidth) / 2;
       createStarfield();
-      createBlocks();
+      createLevel();
     });
     init();
   </script>
 </body>
 </html>
+
