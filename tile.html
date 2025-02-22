@@ -1,1 +1,158 @@
- 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>15 Puzzle - Me Open API</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #222;
+            margin: 0;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #game-container {
+            width: 300px;
+            height: 300px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 2px;
+            background: black;
+            position: relative;
+        }
+        .tile {
+            width: 100%;
+            height: 100%;
+            background-size: 400px 400px;
+            background-position: center;
+            cursor: pointer;
+            transition: 0.2s;
+            border-radius: 3px;
+        }
+        .empty {
+            background: black;
+        }
+    </style>
+</head>
+<body>
+
+    <div>
+        <h2>15 Puzzle</h2>
+        <button onclick="fetchImage()">New Image</button>
+        <div id="game-container"></div>
+    </div>
+
+    <script>
+        const gridSize = 4;
+        let tiles = [];
+        let emptyTile = { x: 3, y: 3 };
+        let imageUrl = '';
+
+        function fetchImage() {
+            fetch('https://source.unsplash.com/400x400/?random')
+                .then(response => {
+                    imageUrl = response.url;
+                    generatePuzzle();
+                })
+                .catch(error => console.error('Error fetching image:', error));
+        }
+
+        function generatePuzzle() {
+            let container = document.getElementById('game-container');
+            container.innerHTML = '';
+            tiles = [];
+
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    if (x === 3 && y === 3) {
+                        emptyTile = { x, y };
+                        tiles.push(null);
+                        continue;
+                    }
+                    let tile = document.createElement('div');
+                    tile.classList.add('tile');
+                    tile.style.backgroundImage = `url(${imageUrl})`;
+                    tile.style.backgroundPosition = `-${x * 100}px -${y * 100}px`;
+                    tile.dataset.x = x;
+                    tile.dataset.y = y;
+                    tile.addEventListener('click', () => moveTile(x, y));
+                    container.appendChild(tile);
+                    tiles.push(tile);
+                }
+            }
+
+            shuffleTiles();
+        }
+
+        function shuffleTiles() {
+            for (let i = 0; i < 100; i++) {
+                let moves = getValidMoves();
+                let randomMove = moves[Math.floor(Math.random() * moves.length)];
+                moveTile(randomMove.x, randomMove.y, true);
+            }
+        }
+
+        function getValidMoves() {
+            let moves = [];
+            let { x, y } = emptyTile;
+            if (x > 0) moves.push({ x: x - 1, y });
+            if (x < 3) moves.push({ x: x + 1, y });
+            if (y > 0) moves.push({ x, y: y - 1 });
+            if (y < 3) moves.push({ x, y: y + 1 });
+            return moves;
+        }
+
+        function moveTile(x, y, isShuffling = false) {
+            let tileIndex = y * gridSize + x;
+            let emptyIndex = emptyTile.y * gridSize + emptyTile.x;
+            
+            if (getValidMoves().some(move => move.x === x && move.y === y)) {
+                tiles[emptyIndex] = tiles[tileIndex];
+                tiles[tileIndex] = null;
+                emptyTile = { x, y };
+
+                updateTiles();
+                if (!isShuffling) checkWin();
+            }
+        }
+
+        function updateTiles() {
+            let container = document.getElementById('game-container');
+            container.innerHTML = '';
+            tiles.forEach((tile, index) => {
+                if (tile) {
+                    let x = index % gridSize;
+                    let y = Math.floor(index / gridSize);
+                    tile.dataset.x = x;
+                    tile.dataset.y = y;
+                    container.appendChild(tile);
+                } else {
+                    let emptyDiv = document.createElement('div');
+                    emptyDiv.classList.add('tile', 'empty');
+                    container.appendChild(emptyDiv);
+                }
+            });
+        }
+
+        function checkWin() {
+            let isSolved = tiles.every((tile, index) => {
+                if (!tile) return index === tiles.length - 1;
+                let x = index % gridSize;
+                let y = Math.floor(index / gridSize);
+                return tile.dataset.x == x && tile.dataset.y == y;
+            });
+
+            if (isSolved) alert('You solved the puzzle!');
+        }
+
+        fetchImage(); // Load a random image at start
+    </script>
+
+</body>
+</html>
