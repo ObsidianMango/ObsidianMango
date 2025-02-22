@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sliding Puzzle - European Portraits</title>
+  <title>Dynamic Sliding Puzzle - European Paintings</title>
   <style>
     body {
       display: flex;
@@ -39,23 +39,20 @@
       to { transform: rotate(360deg); }
     }
     #game-container {
-      width: 300px;
-      height: 400px;
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      grid-template-rows: repeat(4, 1fr);
       gap: 2px;
       background: black;
       position: relative;
+      /* width and height set dynamically */
     }
     .tile {
       width: 100%;
       height: 100%;
-      background-size: 300px 400px;
-      background-position: center;
       cursor: pointer;
       transition: 0.2s;
       border-radius: 3px;
+      /* background-size is set dynamically */
+      background-position: center;
     }
     .empty {
       background: black;
@@ -87,25 +84,47 @@
   </div>
 
   <script>
-    const containerWidth = 300,
-          containerHeight = 400,
-          gridCols = 3,
-          gridRows = 4;
-    const totalCells = gridCols * gridRows;
-
+    let imageUrl = "";
+    let gridCols, gridRows;
+    const fixedWidth = 300; // Fixed container width in pixels
+    let containerHeight = 300; // Will be computed dynamically
+    let tileWidth, tileHeight;
     let tiles = [];
-    let emptyTile = { x: gridCols - 1, y: gridRows - 1 };
-    let imageUrl = '';
+    let emptyTile = { x: 0, y: 0 };
 
     function fetchImage() {
       document.getElementById('loading').style.display = 'block';
-      fetch('https://source.unsplash.com/300x400/?european,painting,portrait')
+      // Fetch a random European painting from Unsplash
+      fetch('https://source.unsplash.com/random/?european,painting')
         .then(response => {
           imageUrl = response.url;
-          // Preload the image before generating the puzzle
           const img = new Image();
           img.onload = () => {
             document.getElementById('loading').style.display = 'none';
+            // Compute container height to preserve image ratio
+            containerHeight = fixedWidth * (img.naturalHeight / img.naturalWidth);
+            // Determine grid layout based on orientation
+            if (containerHeight > fixedWidth) {
+              // Portrait: 3 columns x 4 rows
+              gridCols = 3;
+              gridRows = 4;
+            } else if (containerHeight < fixedWidth) {
+              // Landscape: 4 columns x 3 rows
+              gridCols = 4;
+              gridRows = 3;
+            } else {
+              // Square: 4x4 grid
+              gridCols = 4;
+              gridRows = 4;
+            }
+            tileWidth = fixedWidth / gridCols;
+            tileHeight = containerHeight / gridRows;
+            // Update container dimensions and grid template
+            const containerDiv = document.getElementById('game-container');
+            containerDiv.style.width = fixedWidth + "px";
+            containerDiv.style.height = containerHeight + "px";
+            containerDiv.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
+            containerDiv.style.gridTemplateRows = `repeat(${gridRows}, 1fr)`;
             generatePuzzle();
           };
           img.onerror = () => {
@@ -121,10 +140,11 @@
     }
 
     function generatePuzzle() {
-      const container = document.getElementById('game-container');
-      container.innerHTML = '';
+      const containerDiv = document.getElementById('game-container');
+      containerDiv.innerHTML = '';
       tiles = [];
-
+      const totalCells = gridCols * gridRows;
+      // Create tiles; the last cell is the empty space
       for (let y = 0; y < gridRows; y++) {
         for (let x = 0; x < gridCols; x++) {
           if (x === gridCols - 1 && y === gridRows - 1) {
@@ -135,11 +155,13 @@
           const tile = document.createElement('div');
           tile.classList.add('tile');
           tile.style.backgroundImage = `url(${imageUrl})`;
-          tile.style.backgroundPosition = `-${x * (containerWidth / gridCols)}px -${y * (containerHeight / gridRows)}px`;
+          tile.style.backgroundSize = `${fixedWidth}px ${containerHeight}px`;
+          tile.style.backgroundPosition = `-${x * tileWidth}px -${y * tileHeight}px`;
+          // Store the correct position for win-checking
           tile.dataset.correctX = x;
           tile.dataset.correctY = y;
           tile.addEventListener('click', () => moveTile(x, y));
-          container.appendChild(tile);
+          containerDiv.appendChild(tile);
           tiles.push(tile);
         }
       }
@@ -147,6 +169,7 @@
     }
 
     function shuffleTiles() {
+      // Execute a series of valid random moves to shuffle the puzzle
       for (let i = 0; i < 100; i++) {
         const moves = getValidMoves();
         const randomMove = moves[Math.floor(Math.random() * moves.length)];
@@ -177,29 +200,30 @@
     }
 
     function updateTiles() {
-      const container = document.getElementById('game-container');
-      container.innerHTML = '';
-      tiles.forEach((tile, index) => {
+      const containerDiv = document.getElementById('game-container');
+      containerDiv.innerHTML = '';
+      tiles.forEach(tile => {
         if (tile) {
-          container.appendChild(tile);
+          containerDiv.appendChild(tile);
         } else {
           const emptyDiv = document.createElement('div');
           emptyDiv.classList.add('tile', 'empty');
-          container.appendChild(emptyDiv);
+          containerDiv.appendChild(emptyDiv);
         }
       });
     }
 
     function checkWin() {
-      const isSolved = tiles.every((tile, index) => {
+      const solved = tiles.every((tile, index) => {
         if (!tile) return index === tiles.length - 1;
         const currentX = index % gridCols;
         const currentY = Math.floor(index / gridCols);
         return tile.dataset.correctX == currentX && tile.dataset.correctY == currentY;
       });
-      if (isSolved) alert('You solved the puzzle!');
+      if (solved) alert('You solved the puzzle!');
     }
 
+    // Load an image on startup
     fetchImage();
   </script>
 </body>
