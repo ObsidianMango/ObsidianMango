@@ -87,7 +87,6 @@
   </div>
 
   <script>
-    // Set container dimensions and grid layout
     const containerWidth = 300,
           containerHeight = 400,
           gridCols = 3,
@@ -100,12 +99,20 @@
 
     function fetchImage() {
       document.getElementById('loading').style.display = 'block';
-      // Fetch a portrait European painting (using Unsplash as a proxy)
       fetch('https://source.unsplash.com/300x400/?european,painting,portrait')
         .then(response => {
           imageUrl = response.url;
-          document.getElementById('loading').style.display = 'none';
-          generatePuzzle();
+          // Preload the image before generating the puzzle
+          const img = new Image();
+          img.onload = () => {
+            document.getElementById('loading').style.display = 'none';
+            generatePuzzle();
+          };
+          img.onerror = () => {
+            console.error("Error loading image");
+            document.getElementById('loading').innerText = 'Failed to load image. Try again!';
+          };
+          img.src = imageUrl;
         })
         .catch(error => {
           console.error('Error fetching image:', error);
@@ -118,21 +125,17 @@
       container.innerHTML = '';
       tiles = [];
 
-      // Create grid cells
       for (let y = 0; y < gridRows; y++) {
         for (let x = 0; x < gridCols; x++) {
-          // Set the last cell as empty
           if (x === gridCols - 1 && y === gridRows - 1) {
             emptyTile = { x, y };
             tiles.push(null);
             continue;
           }
-          let tile = document.createElement('div');
+          const tile = document.createElement('div');
           tile.classList.add('tile');
           tile.style.backgroundImage = `url(${imageUrl})`;
-          // Slice the image: each tile gets its proper background position
           tile.style.backgroundPosition = `-${x * (containerWidth / gridCols)}px -${y * (containerHeight / gridRows)}px`;
-          // Store the correct position for win-checking
           tile.dataset.correctX = x;
           tile.dataset.correctY = y;
           tile.addEventListener('click', () => moveTile(x, y));
@@ -144,7 +147,6 @@
     }
 
     function shuffleTiles() {
-      // Make 100 random valid moves to shuffle the puzzle
       for (let i = 0; i < 100; i++) {
         const moves = getValidMoves();
         const randomMove = moves[Math.floor(Math.random() * moves.length)];
@@ -165,8 +167,6 @@
     function moveTile(x, y, isShuffling = false) {
       const tileIndex = y * gridCols + x;
       const emptyIndex = emptyTile.y * gridCols + emptyTile.x;
-
-      // Ensure the selected tile is adjacent to the empty cell
       if (getValidMoves().some(move => move.x === x && move.y === y)) {
         tiles[emptyIndex] = tiles[tileIndex];
         tiles[tileIndex] = null;
@@ -180,13 +180,9 @@
       const container = document.getElementById('game-container');
       container.innerHTML = '';
       tiles.forEach((tile, index) => {
-        const currentX = index % gridCols;
-        const currentY = Math.floor(index / gridCols);
         if (tile) {
-          // No need to update background as it remains constant
           container.appendChild(tile);
         } else {
-          // Render empty cell
           const emptyDiv = document.createElement('div');
           emptyDiv.classList.add('tile', 'empty');
           container.appendChild(emptyDiv);
@@ -195,7 +191,6 @@
     }
 
     function checkWin() {
-      // Puzzle is solved if each tile's current position matches its stored correct position
       const isSolved = tiles.every((tile, index) => {
         if (!tile) return index === tiles.length - 1;
         const currentX = index % gridCols;
@@ -205,7 +200,7 @@
       if (isSolved) alert('You solved the puzzle!');
     }
 
-    fetchImage(); // Load an image at start
+    fetchImage();
   </script>
 </body>
 </html>
