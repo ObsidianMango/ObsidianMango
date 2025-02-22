@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Power-up Block Breaker</title>
+    <title>Space Block Breaker</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; user-select: none; }
-        body { background: radial-gradient(circle, #111, #000); overflow: hidden; }
+        body { background: black; overflow: hidden; }
         canvas { display: block; position: absolute; top: 0; left: 0; }
     </style>
 </head>
@@ -19,12 +19,13 @@
         let width = canvas.width = window.innerWidth;
         let height = canvas.height = window.innerHeight;
         let paddleWidth = width * 0.2, paddleHeight = 12, paddleX = (width - paddleWidth) / 2;
-        let rightPressed = false, leftPressed = false, stickyMode = false;
-        let ballRadius = 10, balls = [{ x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6, sticky: false }];
-        let particles = [], powerUps = [];
-        let superBall = false, multiBall = false, extendedPaddle = false;
+        let rightPressed = false, leftPressed = false;
+        let ballRadius = 10, balls = [{ x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6, power: false }];
+        let particles = [], powerUps = [], starfield = [];
+
         let blocks = [];
         const rows = 6, cols = 10, blockWidth = width / cols - 4, blockHeight = 30;
+        let superBall = false, extendedPaddle = false, level = 1;
 
         function createBlocks() {
             blocks = [];
@@ -36,6 +37,23 @@
         }
         createBlocks();
 
+        function createStarfield() {
+            starfield = [];
+            for (let i = 0; i < 100; i++) {
+                starfield.push({ x: Math.random() * width, y: Math.random() * height, size: Math.random() * 2, speed: Math.random() * 3 + 1 });
+            }
+        }
+        createStarfield();
+
+        function drawStarfield() {
+            ctx.fillStyle = "white";
+            starfield.forEach(star => {
+                ctx.fillRect(star.x, star.y, star.size, star.size);
+                star.y += star.speed;
+                if (star.y > height) star.y = 0;
+            });
+        }
+
         function drawPaddle() {
             ctx.fillStyle = "#0ff";
             ctx.fillRect(paddleX, height - paddleHeight - 10, paddleWidth, paddleHeight);
@@ -43,9 +61,9 @@
 
         function drawBall(ball) {
             let gradient = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 3, ball.x, ball.y, ballRadius);
-            gradient.addColorStop(0, "#fff");
-            gradient.addColorStop(0.5, "#ff0");
-            gradient.addColorStop(1, "#f00");
+            gradient.addColorStop(0, ball.power ? "#f0f" : "#fff");
+            gradient.addColorStop(0.5, ball.power ? "#ff0" : "#ff0");
+            gradient.addColorStop(1, ball.power ? "#f00" : "#f00");
             ctx.fillStyle = gradient;
             ctx.beginPath();
             ctx.arc(ball.x, ball.y, ballRadius, 0, Math.PI * 2);
@@ -63,7 +81,7 @@
 
         function createExplosion(x, y, color) {
             for (let i = 0; i < 15; i++) {
-                particles.push({ x: x, y: y, dx: (Math.random() - 0.5) * 4, dy: (Math.random() - 0.5) * 4, size: Math.random() * 6 + 2, color: color, life: 30 });
+                particles.push({ x, y, dx: (Math.random() - 0.5) * 4, dy: (Math.random() - 0.5) * 4, size: Math.random() * 6 + 2, color, life: 40 });
             }
         }
 
@@ -79,14 +97,14 @@
         }
 
         function dropPowerUp(x, y) {
-            const powerUpTypes = ["extend", "multi", "sticky", "super"];
+            const powerUpTypes = ["extend", "super"];
             let type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
             powerUps.push({ x, y, dy: 2, type });
         }
 
         function drawPowerUps() {
             powerUps.forEach((p, i) => {
-                ctx.fillStyle = p.type === "extend" ? "#0f0" : p.type === "multi" ? "#ff0" : p.type === "sticky" ? "#09f" : "#f00";
+                ctx.fillStyle = p.type === "extend" ? "#0f0" : "#f0f";
                 ctx.fillRect(p.x, p.y, 20, 20);
                 p.y += p.dy;
                 if (p.y > height - paddleHeight - 20 && p.x > paddleX && p.x < paddleX + paddleWidth) {
@@ -99,31 +117,27 @@
         function activatePowerUp(type) {
             if (type === "extend") {
                 paddleWidth *= 1.5;
-                setTimeout(() => paddleWidth = width * 0.2, 5000);
-            } else if (type === "multi") {
-                balls.push({ x: ball.x, y: ball.y, dx: -ball.dx, dy: ball.dy, speed: 6, sticky: false });
-                balls.push({ x: ball.x, y: ball.y, dx: ball.dx, dy: -ball.dy, speed: 6, sticky: false });
-            } else if (type === "sticky") {
-                stickyMode = true;
-                balls.forEach(ball => ball.sticky = true);
+                setTimeout(() => paddleWidth = width * 0.2, 10000);
             } else if (type === "super") {
                 superBall = true;
-                setTimeout(() => superBall = false, 5000);
+                balls.forEach(ball => ball.power = true);
+                setTimeout(() => {
+                    superBall = false;
+                    balls.forEach(ball => ball.power = false);
+                }, 10000);
             }
         }
 
         function moveBall() {
             balls.forEach((ball, index) => {
-                if (ball.sticky) return;
                 ball.x += ball.dx;
                 ball.y += ball.dy;
                 if (ball.x < ballRadius || ball.x > width - ballRadius) ball.dx *= -1;
                 if (ball.y < ballRadius) ball.dy *= -1;
                 if (ball.y > height) balls.splice(index, 1);
-                if (balls.length === 0) balls.push({ x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6, sticky: false });
+                if (balls.length === 0) balls.push({ x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6, power: false });
 
                 if (ball.y > height - paddleHeight - 20 && ball.x > paddleX && ball.x < paddleX + paddleWidth) {
-                    if (stickyMode) ball.sticky = true;
                     ball.dy = -Math.abs(ball.dy);
                 }
 
@@ -136,10 +150,16 @@
                     }
                 });
             });
+
+            if (blocks.every(block => !block.status)) {
+                level++;
+                createBlocks();
+            }
         }
 
         function update() {
             ctx.clearRect(0, 0, width, height);
+            drawStarfield();
             drawPaddle();
             balls.forEach(drawBall);
             drawBlocks();
@@ -150,7 +170,6 @@
         }
         update();
 
-        document.addEventListener("keydown", e => { if (e.key === " ") balls.forEach(ball => ball.sticky = false); });
         document.addEventListener("mousemove", e => paddleX = e.clientX - paddleWidth / 2);
         document.addEventListener("touchmove", e => paddleX = e.touches[0].clientX - paddleWidth / 2);
     </script>
