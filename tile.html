@@ -19,22 +19,18 @@
         let width = canvas.width = window.innerWidth;
         let height = canvas.height = window.innerHeight;
         let paddleWidth = width * 0.2, paddleHeight = 12, paddleX = (width - paddleWidth) / 2;
-        let ballRadius = 10, ball = { x: width / 2, y: height - 50, dx: 0, dy: 0, speed: 6, power: false };
-        let particles = [], powerUps = [], starfield = [], ballTrail = [];
-        let blocks = [], indestructibleBlocks = [];
+        let ballRadius = 10, balls = [{ x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6, power: false }];
+        let particles = [], powerUps = [], starfield = [];
+
+        let blocks = [];
         const rows = 6, cols = 10, blockWidth = width / cols - 4, blockHeight = 30;
-        let superBall = false, extendedPaddle = false, level = 1, gameStarted = false;
+        let superBall = false, extendedPaddle = false, level = 1;
 
         function createBlocks() {
             blocks = [];
-            indestructibleBlocks = [];
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
-                    if (level > 1 && (r + c) % Math.floor(10 / level) === 0) {
-                        indestructibleBlocks.push({ x: c * (blockWidth + 4) + 2, y: r * (blockHeight + 4) + 50 });
-                    } else {
-                        blocks.push({ x: c * (blockWidth + 4) + 2, y: r * (blockHeight + 4) + 50, status: true, color: `hsl(${Math.random() * 360}, 100%, 60%)` });
-                    }
+                    blocks.push({ x: c * (blockWidth + 4) + 2, y: r * (blockHeight + 4) + 50, status: true, color: `hsl(${Math.random() * 360}, 100%, 60%)` });
                 }
             }
         }
@@ -62,18 +58,12 @@
             ctx.fillRect(paddleX, height - paddleHeight - 10, paddleWidth, paddleHeight);
         }
 
-        function drawBall() {
-            ballTrail.push({ x: ball.x, y: ball.y, opacity: 1 });
-            ballTrail = ballTrail.map(t => ({ ...t, opacity: t.opacity - 0.05 })).filter(t => t.opacity > 0);
-
-            ballTrail.forEach(trail => {
-                ctx.fillStyle = `rgba(255, 255, 255, ${trail.opacity})`;
-                ctx.beginPath();
-                ctx.arc(trail.x, trail.y, ballRadius * 0.8, 0, Math.PI * 2);
-                ctx.fill();
-            });
-
-            ctx.fillStyle = ball.power ? "#f0f" : "#fff";
+        function drawBall(ball) {
+            let gradient = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 3, ball.x, ball.y, ballRadius);
+            gradient.addColorStop(0, ball.power ? "#f0f" : "#fff");
+            gradient.addColorStop(0.5, ball.power ? "#ff0" : "#ff0");
+            gradient.addColorStop(1, ball.power ? "#f00" : "#f00");
+            ctx.fillStyle = gradient;
             ctx.beginPath();
             ctx.arc(ball.x, ball.y, ballRadius, 0, Math.PI * 2);
             ctx.fill();
@@ -86,92 +76,75 @@
                     ctx.fillRect(block.x, block.y, blockWidth, blockHeight);
                 }
             });
+        }
 
-            ctx.fillStyle = "#777";
-            indestructibleBlocks.forEach(block => {
-                ctx.fillRect(block.x, block.y, blockWidth, blockHeight);
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 50; i++) { // Increased explosion size!
+                particles.push({ 
+                    x, y, 
+                    dx: (Math.random() - 0.5) * 8, // More chaotic motion
+                    dy: (Math.random() - 0.5) * 8,
+                    size: Math.random() * 8 + 2, // Larger pixels
+                    color,
+                    life: Math.random() * 50 + 30 // Longer lasting
+                });
+            }
+        }
+
+        function drawParticles() {
+            particles.forEach((p, i) => {
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+                p.x += p.dx;
+                p.y += p.dy;
+                p.dy += 0.1; // Slight gravity effect
+                p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
             });
         }
 
         function moveBall() {
-            if (!gameStarted) return;
+            balls.forEach((ball, index) => {
+                ball.x += ball.dx;
+                ball.y += ball.dy;
+                if (ball.x < ballRadius || ball.x > width - ballRadius) ball.dx *= -1;
+                if (ball.y < ballRadius) ball.dy *= -1;
+                if (ball.y > height) balls.splice(index, 1);
+                if (balls.length === 0) balls.push({ x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6, power: false });
 
-            ball.x += ball.dx;
-            ball.y += ball.dy;
-
-            if (ball.x < ballRadius || ball.x > width - ballRadius) ball.dx *= -1;
-            if (ball.y < ballRadius) ball.dy *= -1;
-            if (ball.y > height) resetGame();
-
-            if (ball.y > height - paddleHeight - 20 && ball.x > paddleX && ball.x < paddleX + paddleWidth) {
-                ball.dy = -Math.abs(ball.dy);
-                if (!gameStarted) gameStarted = true;
-            }
-
-            blocks.forEach((block, i) => {
-                if (block.status && ball.x > block.x && ball.x < block.x + blockWidth && ball.y > block.y && ball.y < block.y + blockHeight) {
-                    if (!superBall) ball.dy *= -1;
-                    block.status = false;
+                if (ball.y > height - paddleHeight - 20 && ball.x > paddleX && ball.x < paddleX + paddleWidth) {
+                    ball.dy = -Math.abs(ball.dy);
                 }
-            });
 
-            indestructibleBlocks.forEach(block => {
-                if (ball.x > block.x && ball.x < block.x + blockWidth && ball.y > block.y && ball.y < block.y + blockHeight) {
-                    ball.dy *= -1;
-                }
+                blocks.forEach((block, i) => {
+                    if (block.status && ball.x > block.x && ball.x < block.x + blockWidth && ball.y > block.y && ball.y < block.y + blockHeight) {
+                        if (!superBall) ball.dy *= -1;
+                        block.status = false;
+                        createExplosion(block.x + blockWidth / 2, block.y + blockHeight / 2, block.color);
+                    }
+                });
             });
 
             if (blocks.every(block => !block.status)) {
                 level++;
                 createBlocks();
-                resetBall();
             }
-        }
-
-        function resetBall() {
-            ball.x = width / 2;
-            ball.y = height - 50;
-            ball.dx = 0;
-            ball.dy = 0;
-            gameStarted = false;
-        }
-
-        function resetGame() {
-            level = 1;
-            createBlocks();
-            resetBall();
         }
 
         function update() {
             ctx.clearRect(0, 0, width, height);
             drawStarfield();
             drawPaddle();
-            drawBall();
+            balls.forEach(drawBall);
             drawBlocks();
+            drawParticles();
             moveBall();
             requestAnimationFrame(update);
         }
         update();
 
-        document.addEventListener("keydown", e => {
-            if (e.key === " ") {
-                if (!gameStarted) {
-                    ball.dx = Math.random() > 0.5 ? 4 : -4;
-                    ball.dy = -6;
-                    gameStarted = true;
-                }
-            }
-        });
-
         document.addEventListener("mousemove", e => paddleX = e.clientX - paddleWidth / 2);
         document.addEventListener("touchmove", e => paddleX = e.touches[0].clientX - paddleWidth / 2);
-        document.addEventListener("click", () => {
-            if (!gameStarted) {
-                ball.dx = Math.random() > 0.5 ? 4 : -4;
-                ball.dy = -6;
-                gameStarted = true;
-            }
-        });
     </script>
 </body>
 </html>
