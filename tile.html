@@ -3,58 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Flashy Block Breaker</title>
+    <title>Power-up Block Breaker</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            touch-action: none; /* Prevent page scrolling on touch */
-            user-select: none;
-        }
-        body {
-            background: radial-gradient(circle, #111, #000);
-            overflow: hidden;
-        }
-        canvas {
-            display: block;
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; user-select: none; }
+        body { background: radial-gradient(circle, #111, #000); overflow: hidden; }
+        canvas { display: block; position: absolute; top: 0; left: 0; }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
-
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
         let width = canvas.width = window.innerWidth;
         let height = canvas.height = window.innerHeight;
-        let paddleWidth = width * 0.2, paddleHeight = 12;
-        let paddleX = (width - paddleWidth) / 2;
-        let rightPressed = false, leftPressed = false;
-        let ballRadius = 10;
-        let ball = { x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6 };
-        let particles = [];
-
+        let paddleWidth = width * 0.2, paddleHeight = 12, paddleX = (width - paddleWidth) / 2;
+        let rightPressed = false, leftPressed = false, stickyMode = false;
+        let ballRadius = 10, balls = [{ x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6, sticky: false }];
+        let particles = [], powerUps = [];
+        let superBall = false, multiBall = false, extendedPaddle = false;
         let blocks = [];
-        const rows = 6, cols = 10;
-        let blockWidth = width / cols - 4;
-        let blockHeight = 30;
+        const rows = 6, cols = 10, blockWidth = width / cols - 4, blockHeight = 30;
 
         function createBlocks() {
             blocks = [];
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
-                    blocks.push({
-                        x: c * (blockWidth + 4) + 2,
-                        y: r * (blockHeight + 4) + 50,
-                        status: true,
-                        color: `hsl(${Math.random() * 360}, 100%, 60%)`
-                    });
+                    blocks.push({ x: c * (blockWidth + 4) + 2, y: r * (blockHeight + 4) + 50, status: true, color: `hsl(${Math.random() * 360}, 100%, 60%)` });
                 }
             }
         }
@@ -65,7 +41,7 @@
             ctx.fillRect(paddleX, height - paddleHeight - 10, paddleWidth, paddleHeight);
         }
 
-        function drawBall() {
+        function drawBall(ball) {
             let gradient = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 3, ball.x, ball.y, ballRadius);
             gradient.addColorStop(0, "#fff");
             gradient.addColorStop(0.5, "#ff0");
@@ -87,15 +63,7 @@
 
         function createExplosion(x, y, color) {
             for (let i = 0; i < 15; i++) {
-                particles.push({
-                    x: x,
-                    y: y,
-                    dx: (Math.random() - 0.5) * 4,
-                    dy: (Math.random() - 0.5) * 4,
-                    size: Math.random() * 6 + 2,
-                    color: color,
-                    life: 30
-                });
+                particles.push({ x: x, y: y, dx: (Math.random() - 0.5) * 4, dy: (Math.random() - 0.5) * 4, size: Math.random() * 6 + 2, color: color, life: 30 });
             }
         }
 
@@ -110,81 +78,81 @@
             });
         }
 
-        function moveBall() {
-            ball.x += ball.dx;
-            ball.y += ball.dy;
+        function dropPowerUp(x, y) {
+            const powerUpTypes = ["extend", "multi", "sticky", "super"];
+            let type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+            powerUps.push({ x, y, dy: 2, type });
+        }
 
-            if (ball.x < ballRadius || ball.x > width - ballRadius) ball.dx *= -1;
-            if (ball.y < ballRadius) ball.dy *= -1;
-            if (ball.y > height) {
-                ball.x = width / 2;
-                ball.y = height - 50;
-                ball.dy = -ball.speed;
-            }
-
-            if (
-                ball.y > height - paddleHeight - 20 &&
-                ball.x > paddleX &&
-                ball.x < paddleX + paddleWidth
-            ) {
-                let offset = (ball.x - (paddleX + paddleWidth / 2)) / (paddleWidth / 2);
-                ball.dx = offset * 6;
-                ball.dy = -Math.abs(ball.dy);
-            }
-
-            blocks.forEach(block => {
-                if (block.status && ball.x > block.x && ball.x < block.x + blockWidth && ball.y > block.y && ball.y < block.y + blockHeight) {
-                    ball.dy *= -1;
-                    block.status = false;
-                    createExplosion(block.x + blockWidth / 2, block.y + blockHeight / 2, block.color);
+        function drawPowerUps() {
+            powerUps.forEach((p, i) => {
+                ctx.fillStyle = p.type === "extend" ? "#0f0" : p.type === "multi" ? "#ff0" : p.type === "sticky" ? "#09f" : "#f00";
+                ctx.fillRect(p.x, p.y, 20, 20);
+                p.y += p.dy;
+                if (p.y > height - paddleHeight - 20 && p.x > paddleX && p.x < paddleX + paddleWidth) {
+                    activatePowerUp(p.type);
+                    powerUps.splice(i, 1);
                 }
             });
         }
 
-        function movePaddle() {
-            if (rightPressed && paddleX < width - paddleWidth) paddleX += 10;
-            if (leftPressed && paddleX > 0) paddleX -= 10;
+        function activatePowerUp(type) {
+            if (type === "extend") {
+                paddleWidth *= 1.5;
+                setTimeout(() => paddleWidth = width * 0.2, 5000);
+            } else if (type === "multi") {
+                balls.push({ x: ball.x, y: ball.y, dx: -ball.dx, dy: ball.dy, speed: 6, sticky: false });
+                balls.push({ x: ball.x, y: ball.y, dx: ball.dx, dy: -ball.dy, speed: 6, sticky: false });
+            } else if (type === "sticky") {
+                stickyMode = true;
+                balls.forEach(ball => ball.sticky = true);
+            } else if (type === "super") {
+                superBall = true;
+                setTimeout(() => superBall = false, 5000);
+            }
+        }
+
+        function moveBall() {
+            balls.forEach((ball, index) => {
+                if (ball.sticky) return;
+                ball.x += ball.dx;
+                ball.y += ball.dy;
+                if (ball.x < ballRadius || ball.x > width - ballRadius) ball.dx *= -1;
+                if (ball.y < ballRadius) ball.dy *= -1;
+                if (ball.y > height) balls.splice(index, 1);
+                if (balls.length === 0) balls.push({ x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6, sticky: false });
+
+                if (ball.y > height - paddleHeight - 20 && ball.x > paddleX && ball.x < paddleX + paddleWidth) {
+                    if (stickyMode) ball.sticky = true;
+                    ball.dy = -Math.abs(ball.dy);
+                }
+
+                blocks.forEach((block, i) => {
+                    if (block.status && ball.x > block.x && ball.x < block.x + blockWidth && ball.y > block.y && ball.y < block.y + blockHeight) {
+                        if (!superBall) ball.dy *= -1;
+                        block.status = false;
+                        createExplosion(block.x + blockWidth / 2, block.y + blockHeight / 2, block.color);
+                        if (Math.random() < 0.3) dropPowerUp(block.x + blockWidth / 2, block.y + blockHeight / 2);
+                    }
+                });
+            });
         }
 
         function update() {
             ctx.clearRect(0, 0, width, height);
             drawPaddle();
-            drawBall();
+            balls.forEach(drawBall);
             drawBlocks();
             drawParticles();
+            drawPowerUps();
             moveBall();
-            movePaddle();
             requestAnimationFrame(update);
         }
         update();
 
-        document.addEventListener("keydown", e => {
-            if (e.key === "ArrowRight") rightPressed = true;
-            if (e.key === "ArrowLeft") leftPressed = true;
-        });
-
-        document.addEventListener("keyup", e => {
-            if (e.key === "ArrowRight") rightPressed = false;
-            if (e.key === "ArrowLeft") leftPressed = false;
-        });
-
-        document.addEventListener("touchstart", e => {
-            let touchX = e.touches[0].clientX;
-            paddleX = touchX - paddleWidth / 2;
-        });
-
-        document.addEventListener("touchmove", e => {
-            let touchX = e.touches[0].clientX;
-            paddleX = touchX - paddleWidth / 2;
-        });
-
-        window.addEventListener("resize", () => {
-            width = canvas.width = window.innerWidth;
-            height = canvas.height = window.innerHeight;
-            paddleWidth = width * 0.2;
-            blockWidth = width / cols - 4;
-            createBlocks();
-        });
+        document.addEventListener("keydown", e => { if (e.key === " ") balls.forEach(ball => ball.sticky = false); });
+        document.addEventListener("mousemove", e => paddleX = e.clientX - paddleWidth / 2);
+        document.addEventListener("touchmove", e => paddleX = e.touches[0].clientX - paddleWidth / 2);
     </script>
 </body>
 </html>
