@@ -2,13 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Flashy Block Breaker</title>
     <style>
-        body {
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none; /* Prevent page scrolling on touch */
+            user-select: none;
+        }
+        body {
+            background: radial-gradient(circle, #111, #000);
             overflow: hidden;
-            background: radial-gradient(circle, #222, #000);
         }
         canvas {
             display: block;
@@ -27,19 +33,18 @@
 
         let width = canvas.width = window.innerWidth;
         let height = canvas.height = window.innerHeight;
-        let paddleWidth = width * 0.2;
-        let paddleHeight = 10;
+        let paddleWidth = width * 0.2, paddleHeight = 12;
         let paddleX = (width - paddleWidth) / 2;
-        let rightPressed = false;
-        let leftPressed = false;
+        let rightPressed = false, leftPressed = false;
         let ballRadius = 10;
         let ball = { x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6 };
+        let particles = [];
 
         let blocks = [];
         const rows = 6, cols = 10;
         let blockWidth = width / cols - 4;
         let blockHeight = 30;
-        
+
         function createBlocks() {
             blocks = [];
             for (let r = 0; r < rows; r++) {
@@ -56,14 +61,15 @@
         createBlocks();
 
         function drawPaddle() {
-            ctx.fillStyle = "#fff";
+            ctx.fillStyle = "#0ff";
             ctx.fillRect(paddleX, height - paddleHeight - 10, paddleWidth, paddleHeight);
         }
 
         function drawBall() {
             let gradient = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 3, ball.x, ball.y, ballRadius);
             gradient.addColorStop(0, "#fff");
-            gradient.addColorStop(1, "#ff0");
+            gradient.addColorStop(0.5, "#ff0");
+            gradient.addColorStop(1, "#f00");
             ctx.fillStyle = gradient;
             ctx.beginPath();
             ctx.arc(ball.x, ball.y, ballRadius, 0, Math.PI * 2);
@@ -79,12 +85,29 @@
             });
         }
 
-        function drawExplosion(x, y) {
+        function createExplosion(x, y, color) {
             for (let i = 0; i < 15; i++) {
-                ctx.fillStyle = `hsl(${Math.random() * 360}, 100%, 60%)`;
-                let size = Math.random() * 5 + 2;
-                ctx.fillRect(x + Math.random() * 20 - 10, y + Math.random() * 20 - 10, size, size);
+                particles.push({
+                    x: x,
+                    y: y,
+                    dx: (Math.random() - 0.5) * 4,
+                    dy: (Math.random() - 0.5) * 4,
+                    size: Math.random() * 6 + 2,
+                    color: color,
+                    life: 30
+                });
             }
+        }
+
+        function drawParticles() {
+            particles.forEach((p, i) => {
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
+                p.x += p.dx;
+                p.y += p.dy;
+                p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            });
         }
 
         function moveBall() {
@@ -113,14 +136,14 @@
                 if (block.status && ball.x > block.x && ball.x < block.x + blockWidth && ball.y > block.y && ball.y < block.y + blockHeight) {
                     ball.dy *= -1;
                     block.status = false;
-                    drawExplosion(block.x + blockWidth / 2, block.y + blockHeight / 2);
+                    createExplosion(block.x + blockWidth / 2, block.y + blockHeight / 2, block.color);
                 }
             });
         }
 
         function movePaddle() {
-            if (rightPressed && paddleX < width - paddleWidth) paddleX += 8;
-            if (leftPressed && paddleX > 0) paddleX -= 8;
+            if (rightPressed && paddleX < width - paddleWidth) paddleX += 10;
+            if (leftPressed && paddleX > 0) paddleX -= 10;
         }
 
         function update() {
@@ -128,6 +151,7 @@
             drawPaddle();
             drawBall();
             drawBlocks();
+            drawParticles();
             moveBall();
             movePaddle();
             requestAnimationFrame(update);
@@ -144,11 +168,14 @@
             if (e.key === "ArrowLeft") leftPressed = false;
         });
 
-        document.addEventListener("mousemove", e => {
-            let relativeX = e.clientX;
-            if (relativeX > paddleWidth / 2 && relativeX < width - paddleWidth / 2) {
-                paddleX = relativeX - paddleWidth / 2;
-            }
+        document.addEventListener("touchstart", e => {
+            let touchX = e.touches[0].clientX;
+            paddleX = touchX - paddleWidth / 2;
+        });
+
+        document.addEventListener("touchmove", e => {
+            let touchX = e.touches[0].clientX;
+            paddleX = touchX - paddleWidth / 2;
         });
 
         window.addEventListener("resize", () => {
