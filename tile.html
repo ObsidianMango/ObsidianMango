@@ -1,230 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dynamic Sliding Puzzle - European Paintings</title>
-  <style>
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      background: #222;
-      margin: 0;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
-    }
-    #container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    #loading {
-      display: none;
-      margin-bottom: 10px;
-      text-align: center;
-    }
-    .spinner {
-      border: 4px solid rgba(255, 255, 255, 0.3);
-      border-top: 4px solid #fff;
-      border-radius: 50%;
-      width: 30px;
-      height: 30px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 5px;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    #game-container {
-      display: grid;
-      gap: 2px;
-      background: black;
-      position: relative;
-      /* width and height set dynamically */
-    }
-    .tile {
-      width: 100%;
-      height: 100%;
-      cursor: pointer;
-      transition: 0.2s;
-      border-radius: 3px;
-      /* background-size is set dynamically */
-      background-position: center;
-    }
-    .empty {
-      background: black;
-    }
-    button {
-      padding: 8px 12px;
-      font-size: 16px;
-      cursor: pointer;
-      background: #007bff;
-      color: white;
-      border: none;
-      margin-bottom: 10px;
-      border-radius: 5px;
-    }
-    button:hover {
-      background: #0056b3;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashy Block Breaker</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: radial-gradient(circle, #222, #000);
+        }
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
 </head>
 <body>
-  <div id="container">
-    <h2>Sliding Puzzle</h2>
-    <div id="loading">
-      <div class="spinner"></div>
-      Loading image...
-    </div>
-    <button onclick="fetchImage()">New Image</button>
-    <div id="game-container"></div>
-  </div>
+    <canvas id="gameCanvas"></canvas>
 
-  <script>
-    let imageUrl = "";
-    let gridCols, gridRows;
-    const fixedWidth = 300; // Fixed container width in pixels
-    let containerHeight = 300; // Will be computed dynamically
-    let tileWidth, tileHeight;
-    let tiles = [];
-    let emptyTile = { x: 0, y: 0 };
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
 
-    function fetchImage() {
-      document.getElementById('loading').style.display = 'block';
-      // Fetch a random European painting from Unsplash
-      fetch('https://source.unsplash.com/random/?european,painting')
-        .then(response => {
-          imageUrl = response.url;
-          const img = new Image();
-          img.onload = () => {
-            document.getElementById('loading').style.display = 'none';
-            // Compute container height to preserve image ratio
-            containerHeight = fixedWidth * (img.naturalHeight / img.naturalWidth);
-            // Determine grid layout based on orientation
-            if (containerHeight > fixedWidth) {
-              // Portrait: 3 columns x 4 rows
-              gridCols = 3;
-              gridRows = 4;
-            } else if (containerHeight < fixedWidth) {
-              // Landscape: 4 columns x 3 rows
-              gridCols = 4;
-              gridRows = 3;
-            } else {
-              // Square: 4x4 grid
-              gridCols = 4;
-              gridRows = 4;
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+        let paddleWidth = width * 0.2;
+        let paddleHeight = 10;
+        let paddleX = (width - paddleWidth) / 2;
+        let rightPressed = false;
+        let leftPressed = false;
+        let ballRadius = 10;
+        let ball = { x: width / 2, y: height - 50, dx: 4, dy: -4, speed: 6 };
+
+        let blocks = [];
+        const rows = 6, cols = 10;
+        let blockWidth = width / cols - 4;
+        let blockHeight = 30;
+        
+        function createBlocks() {
+            blocks = [];
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    blocks.push({
+                        x: c * (blockWidth + 4) + 2,
+                        y: r * (blockHeight + 4) + 50,
+                        status: true,
+                        color: `hsl(${Math.random() * 360}, 100%, 60%)`
+                    });
+                }
             }
-            tileWidth = fixedWidth / gridCols;
-            tileHeight = containerHeight / gridRows;
-            // Update container dimensions and grid template
-            const containerDiv = document.getElementById('game-container');
-            containerDiv.style.width = fixedWidth + "px";
-            containerDiv.style.height = containerHeight + "px";
-            containerDiv.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
-            containerDiv.style.gridTemplateRows = `repeat(${gridRows}, 1fr)`;
-            generatePuzzle();
-          };
-          img.onerror = () => {
-            console.error("Error loading image");
-            document.getElementById('loading').innerText = 'Failed to load image. Try again!';
-          };
-          img.src = imageUrl;
-        })
-        .catch(error => {
-          console.error('Error fetching image:', error);
-          document.getElementById('loading').innerText = 'Failed to load. Try again!';
+        }
+        createBlocks();
+
+        function drawPaddle() {
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(paddleX, height - paddleHeight - 10, paddleWidth, paddleHeight);
+        }
+
+        function drawBall() {
+            let gradient = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 3, ball.x, ball.y, ballRadius);
+            gradient.addColorStop(0, "#fff");
+            gradient.addColorStop(1, "#ff0");
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ballRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawBlocks() {
+            blocks.forEach(block => {
+                if (block.status) {
+                    ctx.fillStyle = block.color;
+                    ctx.fillRect(block.x, block.y, blockWidth, blockHeight);
+                }
+            });
+        }
+
+        function drawExplosion(x, y) {
+            for (let i = 0; i < 15; i++) {
+                ctx.fillStyle = `hsl(${Math.random() * 360}, 100%, 60%)`;
+                let size = Math.random() * 5 + 2;
+                ctx.fillRect(x + Math.random() * 20 - 10, y + Math.random() * 20 - 10, size, size);
+            }
+        }
+
+        function moveBall() {
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            if (ball.x < ballRadius || ball.x > width - ballRadius) ball.dx *= -1;
+            if (ball.y < ballRadius) ball.dy *= -1;
+            if (ball.y > height) {
+                ball.x = width / 2;
+                ball.y = height - 50;
+                ball.dy = -ball.speed;
+            }
+
+            if (
+                ball.y > height - paddleHeight - 20 &&
+                ball.x > paddleX &&
+                ball.x < paddleX + paddleWidth
+            ) {
+                let offset = (ball.x - (paddleX + paddleWidth / 2)) / (paddleWidth / 2);
+                ball.dx = offset * 6;
+                ball.dy = -Math.abs(ball.dy);
+            }
+
+            blocks.forEach(block => {
+                if (block.status && ball.x > block.x && ball.x < block.x + blockWidth && ball.y > block.y && ball.y < block.y + blockHeight) {
+                    ball.dy *= -1;
+                    block.status = false;
+                    drawExplosion(block.x + blockWidth / 2, block.y + blockHeight / 2);
+                }
+            });
+        }
+
+        function movePaddle() {
+            if (rightPressed && paddleX < width - paddleWidth) paddleX += 8;
+            if (leftPressed && paddleX > 0) paddleX -= 8;
+        }
+
+        function update() {
+            ctx.clearRect(0, 0, width, height);
+            drawPaddle();
+            drawBall();
+            drawBlocks();
+            moveBall();
+            movePaddle();
+            requestAnimationFrame(update);
+        }
+        update();
+
+        document.addEventListener("keydown", e => {
+            if (e.key === "ArrowRight") rightPressed = true;
+            if (e.key === "ArrowLeft") leftPressed = true;
         });
-    }
 
-    function generatePuzzle() {
-      const containerDiv = document.getElementById('game-container');
-      containerDiv.innerHTML = '';
-      tiles = [];
-      const totalCells = gridCols * gridRows;
-      // Create tiles; the last cell is the empty space
-      for (let y = 0; y < gridRows; y++) {
-        for (let x = 0; x < gridCols; x++) {
-          if (x === gridCols - 1 && y === gridRows - 1) {
-            emptyTile = { x, y };
-            tiles.push(null);
-            continue;
-          }
-          const tile = document.createElement('div');
-          tile.classList.add('tile');
-          tile.style.backgroundImage = `url(${imageUrl})`;
-          tile.style.backgroundSize = `${fixedWidth}px ${containerHeight}px`;
-          tile.style.backgroundPosition = `-${x * tileWidth}px -${y * tileHeight}px`;
-          // Store the correct position for win-checking
-          tile.dataset.correctX = x;
-          tile.dataset.correctY = y;
-          tile.addEventListener('click', () => moveTile(x, y));
-          containerDiv.appendChild(tile);
-          tiles.push(tile);
-        }
-      }
-      shuffleTiles();
-    }
+        document.addEventListener("keyup", e => {
+            if (e.key === "ArrowRight") rightPressed = false;
+            if (e.key === "ArrowLeft") leftPressed = false;
+        });
 
-    function shuffleTiles() {
-      // Execute a series of valid random moves to shuffle the puzzle
-      for (let i = 0; i < 100; i++) {
-        const moves = getValidMoves();
-        const randomMove = moves[Math.floor(Math.random() * moves.length)];
-        moveTile(randomMove.x, randomMove.y, true);
-      }
-    }
+        document.addEventListener("mousemove", e => {
+            let relativeX = e.clientX;
+            if (relativeX > paddleWidth / 2 && relativeX < width - paddleWidth / 2) {
+                paddleX = relativeX - paddleWidth / 2;
+            }
+        });
 
-    function getValidMoves() {
-      const moves = [];
-      const { x, y } = emptyTile;
-      if (x > 0) moves.push({ x: x - 1, y });
-      if (x < gridCols - 1) moves.push({ x: x + 1, y });
-      if (y > 0) moves.push({ x, y: y - 1 });
-      if (y < gridRows - 1) moves.push({ x, y: y + 1 });
-      return moves;
-    }
-
-    function moveTile(x, y, isShuffling = false) {
-      const tileIndex = y * gridCols + x;
-      const emptyIndex = emptyTile.y * gridCols + emptyTile.x;
-      if (getValidMoves().some(move => move.x === x && move.y === y)) {
-        tiles[emptyIndex] = tiles[tileIndex];
-        tiles[tileIndex] = null;
-        emptyTile = { x, y };
-        updateTiles();
-        if (!isShuffling) checkWin();
-      }
-    }
-
-    function updateTiles() {
-      const containerDiv = document.getElementById('game-container');
-      containerDiv.innerHTML = '';
-      tiles.forEach(tile => {
-        if (tile) {
-          containerDiv.appendChild(tile);
-        } else {
-          const emptyDiv = document.createElement('div');
-          emptyDiv.classList.add('tile', 'empty');
-          containerDiv.appendChild(emptyDiv);
-        }
-      });
-    }
-
-    function checkWin() {
-      const solved = tiles.every((tile, index) => {
-        if (!tile) return index === tiles.length - 1;
-        const currentX = index % gridCols;
-        const currentY = Math.floor(index / gridCols);
-        return tile.dataset.correctX == currentX && tile.dataset.correctY == currentY;
-      });
-      if (solved) alert('You solved the puzzle!');
-    }
-
-    // Load an image on startup
-    fetchImage();
-  </script>
+        window.addEventListener("resize", () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            paddleWidth = width * 0.2;
+            blockWidth = width / cols - 4;
+            createBlocks();
+        });
+    </script>
 </body>
 </html>
