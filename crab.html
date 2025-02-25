@@ -1,203 +1,274 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Refined Crab Walker</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #87CEEB;
-            touch-action: none;
-        }
-        canvas { display: block; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crab Walking Simulator</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #87CEEB;
+    }
+    canvas {
+      display: block;
+    }
+    /* Onscreen Joystick Styles */
+    #joystick {
+      position: absolute;
+      left: 20px;
+      bottom: 20px;
+      width: 100px;
+      height: 100px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 50%;
+      touch-action: none;
+    }
+    #joystick-inner {
+      position: absolute;
+      left: 35px;
+      top: 35px;
+      width: 30px;
+      height: 30px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 50%;
+      touch-action: none;
+    }
+  </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
-<script>
+  <canvas id="gameCanvas"></canvas>
+  <div id="joystick">
+    <div id="joystick-inner"></div>
+  </div>
+
+  <script>
+    // Setup canvas
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // Crab properties
+    // Game objects
     const crab = {
-        x: canvas.width / 2,
-        y: canvas.height / 2,
-        speed: 3,
-        angle: 0,
-        legCycle: 0,
-        moving: false,
-        bodySize: 50
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 20,
+      speed: 2,
+      color: 'red'
     };
 
-    // Define 6 double-jointed legs (3 per side)
-    const legs = [
-        { side: -1, offsetY: -25, phase: 0 },
-        { side: -1, offsetY:  0, phase: Math.PI },
-        { side: -1, offsetY: 25, phase: 0 },
-        { side:  1, offsetY: -25, phase: Math.PI },
-        { side:  1, offsetY:  0, phase: 0 },
-        { side:  1, offsetY: 25, phase: Math.PI }
-    ];
+    let foodItems = [];
+    let enemies = [];
+    let bullets = [];
 
-    // Define 2 claw arms at the front
-    const claws = [
-        { side: -1, offsetX: 30, offsetY: -20, phase: 0 },
-        { side:  1, offsetX: 30, offsetY: -20, phase: Math.PI }
-    ];
+    // Spawn a food item at a random position
+    function spawnFood() {
+      foodItems.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        radius: 10,
+        color: 'green'
+      });
+    }
 
-    // Input states
-    const keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false, a: false, d: false, w: false, s: false };
-    let touchActive = false, touchDX = 0, touchDY = 0;
+    // Spawn an enemy with simple bouncing movement
+    function spawnEnemy() {
+      enemies.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        radius: 20,
+        color: 'purple',
+        speed: 1,
+        dx: Math.random() < 0.5 ? -1 : 1,
+        dy: Math.random() < 0.5 ? -1 : 1
+      });
+    }
 
-    document.addEventListener("keydown", e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
-    document.addEventListener("keyup", e => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+    // Create initial food and enemy objects
+    for (let i = 0; i < 5; i++) spawnFood();
+    for (let i = 0; i < 3; i++) spawnEnemy();
 
-    // Touch controls
-    canvas.addEventListener("touchstart", e => { touchActive = true; });
-    canvas.addEventListener("touchmove", e => {
-        const touch = e.touches[0];
-        touchDX = touch.clientX - crab.x;
-        touchDY = touch.clientY - crab.y;
-        crab.angle = Math.atan2(touchDY, touchDX);
-        crab.moving = true;
+    // Joystick variables and elements
+    const joystick = document.getElementById("joystick");
+    const joystickInner = document.getElementById("joystick-inner");
+    const joystickCenter = { x: joystick.offsetWidth / 2, y: joystick.offsetHeight / 2 };
+    let joystickActive = false;
+    let joystickTouchId = null;
+    let moveVector = { x: 0, y: 0 };
+
+    // Joystick event listeners
+    joystick.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      joystickActive = true;
+      const touch = e.changedTouches[0];
+      joystickTouchId = touch.identifier;
+      updateJoystick(touch);
     });
-    canvas.addEventListener("touchend", () => { touchActive = false; crab.moving = false; });
 
-    // Update function
+    joystick.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      for (let touch of e.changedTouches) {
+        if (touch.identifier === joystickTouchId) {
+          updateJoystick(touch);
+          break;
+        }
+      }
+    });
+
+    joystick.addEventListener("touchend", (e) => {
+      for (let touch of e.changedTouches) {
+        if (touch.identifier === joystickTouchId) {
+          joystickActive = false;
+          moveVector = { x: 0, y: 0 };
+          // Reset joystick inner position
+          joystickInner.style.left = "35px";
+          joystickInner.style.top = "35px";
+          break;
+        }
+      }
+    });
+
+    function updateJoystick(touch) {
+      const rect = joystick.getBoundingClientRect();
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      const dx = x - joystickCenter.x;
+      const dy = y - joystickCenter.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const maxDistance = joystick.offsetWidth / 2;
+      let normX = dx, normY = dy;
+      if (distance > maxDistance) {
+        normX = (dx / distance) * maxDistance;
+        normY = (dy / distance) * maxDistance;
+      }
+      joystickInner.style.left = (joystickCenter.x - joystickInner.offsetWidth / 2 + normX) + "px";
+      joystickInner.style.top = (joystickCenter.y - joystickInner.offsetHeight / 2 + normY) + "px";
+      // Normalize the movement vector for crab control
+      moveVector.x = normX / maxDistance;
+      moveVector.y = normY / maxDistance;
+    }
+
+    // Handle touch for shooting on the right side of the screen
+    canvas.addEventListener("touchstart", (e) => {
+      for (let touch of e.changedTouches) {
+        // Only consider touches on the right half (to avoid conflict with the joystick)
+        if (touch.clientX > canvas.width / 2) {
+          const angle = Math.atan2(touch.clientY - crab.y, touch.clientX - crab.x);
+          bullets.push({
+            x: crab.x,
+            y: crab.y,
+            radius: 5,
+            speed: 5,
+            angle: angle,
+            color: 'black'
+          });
+        }
+      }
+    });
+
+    // Update game objects
     function update() {
-        let dx = 0, dy = 0;
-        crab.moving = false;
+      // Update crab position based on joystick input
+      crab.x += moveVector.x * crab.speed;
+      crab.y += moveVector.y * crab.speed;
+      // Keep crab within canvas boundaries
+      crab.x = Math.max(crab.radius, Math.min(canvas.width - crab.radius, crab.x));
+      crab.y = Math.max(crab.radius, Math.min(canvas.height - crab.radius, crab.y));
 
-        // Keyboard movement
-        if (keys.ArrowLeft || keys.a) { dx = -1; crab.angle = Math.PI; crab.moving = true; }
-        if (keys.ArrowRight || keys.d) { dx = 1; crab.angle = 0; crab.moving = true; }
-        if (keys.ArrowUp || keys.w) { dy = -1; crab.moving = true; }
-        if (keys.ArrowDown || keys.s) { dy = 1; crab.moving = true; }
-
-        // Normalize movement
-        if (dx !== 0 || dy !== 0) {
-            const len = Math.sqrt(dx * dx + dy * dy);
-            dx /= len;
-            dy /= len;
+      // Update bullets movement and remove if off-screen
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        let bullet = bullets[i];
+        bullet.x += Math.cos(bullet.angle) * bullet.speed;
+        bullet.y += Math.sin(bullet.angle) * bullet.speed;
+        if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+          bullets.splice(i, 1);
         }
+      }
 
-        // Touch movement overrides keyboard
-        if (touchActive) {
-            const len = Math.sqrt(touchDX * touchDX + touchDY * touchDY);
-            dx = touchDX / len;
-            dy = touchDY / len;
-            crab.moving = true;
+      // Update enemies with simple bouncing movement
+      enemies.forEach(enemy => {
+        enemy.x += enemy.dx * enemy.speed;
+        enemy.y += enemy.dy * enemy.speed;
+        if (enemy.x < enemy.radius || enemy.x > canvas.width - enemy.radius) enemy.dx *= -1;
+        if (enemy.y < enemy.radius || enemy.y > canvas.height - enemy.radius) enemy.dy *= -1;
+      });
+
+      // Check collision: Crab collecting food
+      for (let i = foodItems.length - 1; i >= 0; i--) {
+        const food = foodItems[i];
+        const dist = Math.hypot(crab.x - food.x, crab.y - food.y);
+        if (dist < crab.radius + food.radius) {
+          foodItems.splice(i, 1);
+          spawnFood();
         }
+      }
 
-        // Move crab
-        if (crab.moving) {
-            crab.x += dx * crab.speed;
-            crab.y += dy * crab.speed;
-            crab.legCycle += 0.15;
-            if (crab.legCycle > Math.PI * 2) crab.legCycle -= Math.PI * 2;
+      // Check collision: Bullets hitting enemies
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        let enemy = enemies[i];
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          let bullet = bullets[j];
+          const dist = Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y);
+          if (dist < enemy.radius + bullet.radius) {
+            enemies.splice(i, 1);
+            bullets.splice(j, 1);
+            spawnEnemy();
+            break;
+          }
         }
+      }
     }
 
-    // Draw function
-    function drawCrab() {
-        ctx.save();
-        ctx.translate(crab.x, crab.y);
-        ctx.rotate(crab.angle);
+    // Draw game objects
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw body
-        ctx.fillStyle = "red";
+      // Draw the crab
+      ctx.fillStyle = crab.color;
+      ctx.beginPath();
+      ctx.arc(crab.x, crab.y, crab.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw food items
+      foodItems.forEach(food => {
+        ctx.fillStyle = food.color;
         ctx.beginPath();
-        ctx.ellipse(0, 0, crab.bodySize, crab.bodySize * 0.6, 0, 0, Math.PI * 2);
+        ctx.arc(food.x, food.y, food.radius, 0, Math.PI * 2);
         ctx.fill();
+      });
 
-        // Draw eyes
-        ctx.fillStyle = "white";
+      // Draw enemies
+      enemies.forEach(enemy => {
+        ctx.fillStyle = enemy.color;
         ctx.beginPath();
-        ctx.arc(-15, -20, 6, 0, Math.PI * 2);
-        ctx.arc(15, -20, 6, 0, Math.PI * 2);
+        ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
         ctx.fill();
+      });
 
-        ctx.fillStyle = "black";
+      // Draw bullets
+      bullets.forEach(bullet => {
+        ctx.fillStyle = bullet.color;
         ctx.beginPath();
-        ctx.arc(-15, -20, 3, 0, Math.PI * 2);
-        ctx.arc(15, -20, 3, 0, Math.PI * 2);
+        ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
         ctx.fill();
-
-        // Draw legs
-        ctx.strokeStyle = "red";
-        ctx.lineWidth = 4;
-        legs.forEach(leg => drawLeg(leg));
-
-        // Draw claws
-        claws.forEach(claw => drawClaw(claw));
-
-        ctx.restore();
+      });
     }
 
-    // Function to draw a double-jointed leg
-    function drawLeg(leg) {
-        ctx.save();
-        const baseX = leg.side * 40;
-        const baseY = leg.offsetY;
-        ctx.translate(baseX, baseY);
-
-        const phaseOffset = Math.sin(crab.legCycle + leg.phase) * 5;
-
-        // First segment
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(leg.side * 20, phaseOffset);
-        ctx.stroke();
-
-        // Second segment
-        ctx.translate(leg.side * 20, phaseOffset);
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(leg.side * 15, -phaseOffset);
-        ctx.stroke();
-
-        ctx.restore();
-    }
-
-    // Function to draw claw arms with subtle movement
-    function drawClaw(claw) {
-        ctx.save();
-        ctx.translate(claw.offsetX, claw.offsetY);
-
-        const clawSwing = Math.sin(crab.legCycle + claw.phase) * 3;
-
-        // First segment
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(20, clawSwing);
-        ctx.stroke();
-
-        // Second segment (claw tip)
-        ctx.translate(20, clawSwing);
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(15, -clawSwing);
-        ctx.stroke();
-
-        ctx.fillStyle = "red";
-        ctx.beginPath();
-        ctx.arc(15, 0, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-    }
-
+    // Main game loop
     function gameLoop() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        update();
-        drawCrab();
-        requestAnimationFrame(gameLoop);
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
     }
     gameLoop();
-</script>
+
+    // Adjust canvas size on window resize
+    window.addEventListener("resize", () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+  </script>
 </body>
 </html>
