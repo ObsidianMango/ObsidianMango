@@ -1,97 +1,368 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>3D Cookie Biting</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
-  </style>
+  <meta charset="UTF-8">
+  <title>Fish Stick</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.js"></script>
 </head>
 <body>
+<script>
+  // ----- Global Fish Parameters -----
+  let fishLength = 150;        // Overall fish spine length (grows when fed)
+  let fishWidth = 20;          // Overall fish half-width (grows when fed)
+  let bendAmplitude = 20;      // Vertical bending amplitude
+  let numPoints = 40;          // Number of points along the spine
+  let tailLength = 30;         // Tail extension length
+  let tailWidth = 20;          // Tail fin width
+  let timeSpeed = 0.1;         // Swimming speed factor
 
-<script type="module">
-  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js';
-  import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/controls/OrbitControls.js';
+  // Food container
+  let foods = [];
 
-  const cookieTextures = [
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAArklEQVR4nGP4////fwY8OnRqwAHMnJycOy9evSDB9+vXQHk6nBhR6PNmzYMIZ/+9//+MDDIUzMjCxZ8+exMDAgQYGBkZGRv7///2bN29gUHLly+oCRQUEBHbu3FkYGBj4kyZP4P+//1/hkYGBhgYGJIDgMP//f1GxP///+T0zZs2gcPi/AEiBGIgw8eP/5lqA4S/C+/evYJB4ED4/CiQBAogMPnz6+Dg4Ovy8vIgdx6bNm3jhw8f/gF3lAGmDeT79A+RNk/GAd3FQZhxwAAAAASUVORK5CYII=',
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAAoElEQVR4nGP4////fwY8OnRqwAEU5ubm7LMnT9gwfv36YCH/8+fP4Dz+//8fzMwMG/v379/8GBQcwMp4+ffqAwu7du6B2Y8eOcGE6u7t7f+RkZGBcx/8B+4ePH0BH5Nh2ITbgdghEBhQUFB92HPPp0c6diw4SPbMsWMH+////FzCyZMn6jx8+HECABYBgeACFAgIGBj/AMeIFxA/OiCl4JRAYMEAAAoGBYdQuxpFQAAAABJRU5ErkJggg==',
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAAm0lEQVR4nGP4////fwY8OnRqwAGsVFRU7L179wxfv35YMP79+7/ww8//w8FmZ2cjC/+/Pn/wYFBDIxMTH/pEmTiK0AwGAw2foLLmD9+vWMGjVqIDu4uLgfa9atgBQUFHTt2jUZXggggGf/D7AxGXs5c+YNDhw4ACFA4OBg7ODAgQPEA8dQYERhQ+gBgxS5LAEixE4QAAhAqRtENsiOrAAAAAElFTkSuQmCC',
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAAqElEQVR4nGP4////fwY8OnRqwAGsKioq+ZMnT9gxY8a4AP7+/fv3//4O/v7+7y8vBzgA4yNDQ0Pf3///+8/fv359vXr1+fMAwMD/b179973w8MDA/v/+/YFAw7kZGCYGBgYXCiQGBsVERGG3ZsWcIAcOhQxeqPDKq04yKCg4OBvwB2g78AwvpVA0gZtoOIw9nQeYFCC8CqwKMHBwcDAwM3/Xr1/95pK3zwcoABAM2W/Gi4drx4AAAAASUVORK5CYII=',
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAANUlEQVR4nGP4////PwMxARMDgwENEB8Aa/++fQY8f/gfKr83mIdl4FqIow6YTqgkofACDYAIDhw4f/AEZgJXOwboEf6QAAAABJRU5ErkJggg=='
-  ];
+  // Fish stick appears when fish is big enough.
+  let fishStick = null;
+  // Thresholds:
+  const fishStickThreshold = () => width / 3;      // initial appearance threshold
+  const fishStickBigThreshold = () => (2 * width) / 3; // big mode threshold
 
-  let biteIndex = 0;
-  let scene, camera, renderer, controls, cookieMesh;
-
-  init();
-  animate();
-
-  function init() {
-    scene = new THREE.Scene();
-
-    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 0, 5);
-
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(5, 5, 5);
-    scene.add(directionalLight);
-
-    // OrbitControls
-    controls = new OrbitControls(camera, renderer.domElement);
-
-    // Cookie geometry
-    const geometry = new THREE.SphereGeometry(1, 32, 32);
-    const texture = new THREE.TextureLoader().load(cookieTextures[biteIndex]);
-    const material = new THREE.MeshStandardMaterial({
-      map: texture,
-      metalness: 0,
-      roughness: 1
-    });
-
-    cookieMesh = new THREE.Mesh(geometry, material);
-    scene.add(cookieMesh);
-
-    // Click to progress bites
-    document.addEventListener('click', onDocumentClick, false);
-    window.addEventListener('resize', onWindowResize, false);
+  function setup() {
+    createCanvas(windowWidth, windowHeight, WEBGL);
+    noStroke();
   }
 
-  function onDocumentClick() {
-    biteIndex++;
-    if (biteIndex < cookieTextures.length) {
-      const newTexture = new THREE.TextureLoader().load(cookieTextures[biteIndex]);
-      cookieMesh.material.map = newTexture;
-      cookieMesh.material.needsUpdate = true;
-    } else {
-      scene.remove(cookieMesh);
+  function draw() {
+    background(70, 130, 180); // Watery blue background
+    ambientLight(150);
+    directionalLight(255, 255, 255, 0, -1, -1);
+    let time = frameCount * timeSpeed;
+
+    // Draw the fish in its own coordinate frame.
+    // Translate so that the tail (t = 0) is at (-fishLength/2, 0).
+    push();
+      translate(-fishLength/2, 0, 0);
+      drawFishBody(time);
+      drawTail(time);
+      drawEye(time);
+      // Show the fish stick only if fish is at least the initial threshold.
+      if (fishLength >= fishStickThreshold()) {
+        if (!fishStick) {
+          fishStick = new FishStick();
+        }
+        fishStick.updateAndDraw(time, fishLength);
+      } else {
+        fishStick = null;
+      }
+    pop();
+
+    // Compute fish head position (t = 1) for food targeting.
+    let fishHeadX = fishLength / 2;
+    // Flip vertical: head is on top, so use -sin.
+    let fishHeadY = -bendAmplitude * sin(PI + time);
+    let fishHeadWorld = createVector(fishHeadX, fishHeadY);
+
+    // Update and draw food items.
+    for (let i = foods.length - 1; i >= 0; i--) {
+      foods[i].update(fishHeadWorld);
+      foods[i].display();
+      // "Eat" food if it gets close to the fish head.
+      if (foods[i].pos.dist(fishHeadWorld) < 10) {
+        foods.splice(i, 1);
+        fishLength += 3;
+        fishWidth += 1;
+      }
     }
   }
 
-  function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+  // ----- Fish Drawing Functions -----
+  function drawFishBody(time) {
+    let upper = [];
+    let lower = [];
+    for (let i = 0; i <= numPoints; i++) {
+      let t = i / numPoints;
+      let sx = t * fishLength;
+      // Flip vertical by negating the sine term.
+      let sy = -bendAmplitude * sin(PI * t + time);
+      // Derivative: dx = fishLength, dy = -bendAmplitude*PI*cos(PI*t+time)
+      let dx = fishLength;
+      let dy = -bendAmplitude * PI * cos(PI * t + time);
+      let mag = sqrt(dx * dx + dy * dy);
+      let nx = -dy / mag;
+      let ny = dx / mag;
+      // Half-width follows a bell curve (0 at head & tail, max at midbody).
+      let w = fishWidth * 4 * t * (1 - t);
+      upper.push({x: sx + nx * w, y: sy + ny * w});
+      lower.push({x: sx - nx * w, y: sy - ny * w});
+    }
+    beginShape();
+      fill(255, 100, 100);
+      noStroke();
+      // Upper outline.
+      for (let pt of upper) {
+        vertex(pt.x, pt.y);
+      }
+      // Lower outline (in reverse order).
+      for (let i = lower.length - 1; i >= 0; i--) {
+        vertex(lower[i].x, lower[i].y);
+      }
+    endShape(CLOSE);
   }
 
-  function animate() {
-    requestAnimationFrame(animate);
-    if (cookieMesh) {
-      cookieMesh.rotation.y += 0.01;
+  function drawTail(time) {
+    let baseX = 0;
+    let baseY = -bendAmplitude * sin(time);
+    // Derivative at t = 0.
+    let dx = fishLength;
+    let dy = -bendAmplitude * PI * cos(time);
+    let mag = sqrt(dx * dx + dy * dy);
+    let tx = dx / mag;
+    let ty = dy / mag;
+    // Reverse tangent for tail direction.
+    tx = -tx;
+    ty = -ty;
+    // Normal vector.
+    let nx = -ty;
+    let ny = tx;
+    let tipX = baseX + tailLength * tx;
+    let tipY = baseY + tailLength * ty;
+    let v1x = tipX + (tailWidth / 2) * nx;
+    let v1y = tipY + (tailWidth / 2) * ny;
+    let v2x = tipX - (tailWidth / 2) * nx;
+    let v2y = tipY - (tailWidth / 2) * ny;
+    beginShape();
+      fill(255, 80, 80);
+      noStroke();
+      vertex(baseX, baseY);
+      vertex(v1x, v1y);
+      vertex(v2x, v2y);
+    endShape(CLOSE);
+  }
+
+  // Place the eye on the top of the head at t = 0.95.
+  function drawEye(time) {
+    let tEye = 0.95;
+    let ex = tEye * fishLength;
+    let ey = -bendAmplitude * sin(PI * tEye + time);
+    // Compute tangent at tEye.
+    let dx = fishLength;
+    let dy = -bendAmplitude * PI * cos(PI * tEye + time);
+    let mag = sqrt(dx * dx + dy * dy);
+    let tx = dx / mag;
+    let ty = dy / mag;
+    // Normal for lateral offset.
+    let nx = -ty;
+    let ny = tx;
+    // Offset so the eye sits nicely on the top.
+    let offsetT = -3;
+    let offsetN = -5; // Negative to shift upward.
+    let eyeX = ex + tx * offsetT + nx * offsetN;
+    let eyeY = ey + ty * offsetT + ny * offsetN;
+    push();
+      translate(eyeX, eyeY, 5);
+      fill(0);
+      sphere(3);
+    pop();
+  }
+
+  // ----- Food Class -----
+  class Food {
+    constructor(x, y) {
+      this.pos = createVector(x, y);
+      this.speed = 1.5;
     }
-    controls.update();
-    renderer.render(scene, camera);
+    update(target) {
+      let dir = p5.Vector.sub(target, this.pos);
+      if (dir.mag() > 0) {
+        dir.normalize().mult(this.speed);
+        this.pos.add(dir);
+      }
+    }
+    display() {
+      push();
+        translate(this.pos.x, this.pos.y, 0);
+        fill(200, 200, 0);
+        sphere(4);
+      pop();
+    }
+  }
+
+  // Clicking or tapping spawns food off the right side.
+  function mousePressed() {
+    let spawnX = width / 2 + 50;
+    let spawnY = random(-height / 2, height / 2);
+    foods.push(new Food(spawnX, spawnY));
+  }
+
+  // ----- Fish Stick Class -----
+  class FishStick {
+    constructor() {
+      this.state = "idle";  // States: idle, growing, stiffening, shrinking
+      this.timer = 0;
+      this.idleLength = 10;
+      this.maxLength = 40;  // Mode 1 max length
+      this.currentLength = this.idleLength;
+      // Durations for mode 1.
+      this.durationGrow = 60;
+      this.durationStiff = 30;
+      this.durationShrink = 60;
+      this.particles = [];  // For the pop explosion
+      this.popDone = false; // Ensure the pop happens only once in mode 1.
+      this.mode = 1;        // Mode 1: initial; Mode 2: big mode.
+    }
+
+    update(time, fishLength) {
+      // Switch to mode 2 if fish grows large enough.
+      if (fishLength >= fishStickBigThreshold()) {
+        this.mode = 2;
+        // Set mode 2 parameters (triple max length and longer durations).
+        this.maxLength = 40 * 3;
+        this.durationGrow = 90;
+        this.durationStiff = 60;
+        this.durationShrink = 90;
+        // In mode 2, allow repeated pops.
+      }
+      // State machine.
+      if (this.state === "idle") {
+        this.timer++;
+        if (this.mode === 1) {
+          // In mode 1, only trigger the pop once.
+          if (!this.popDone && this.timer > 120) {
+            this.state = "growing";
+            this.timer = 0;
+          }
+        } else if (this.mode === 2) {
+          // In mode 2, trigger the cycle repeatedly.
+          if (this.timer > 120) {
+            this.state = "growing";
+            this.timer = 0;
+          }
+        }
+        this.currentLength = this.idleLength;
+      } else if (this.state === "growing") {
+        this.timer++;
+        let progress = this.timer / this.durationGrow;
+        this.currentLength = lerp(this.idleLength, this.maxLength, progress);
+        if (this.timer >= this.durationGrow) {
+          this.state = "stiffening";
+          this.timer = 0;
+        }
+      } else if (this.state === "stiffening") {
+        this.timer++;
+        this.currentLength = this.maxLength;
+        if (this.timer >= this.durationStiff && !this.popDone) {
+          // Spawn a one-time burst of white particles.
+          let origin = this.getGroinPoint(time, fishLength);
+          let dir = this.getDirection(time, fishLength);
+          let tip = p5.Vector.add(origin, p5.Vector.mult(dir, this.currentLength));
+          let count = (this.mode === 1) ? 20 : 60;
+          for (let i = 0; i < count; i++) {
+            this.particles.push(new WhiteParticle(tip));
+          }
+          // In mode 1, mark pop as done so it only happens once.
+          if (this.mode === 1) {
+            this.popDone = true;
+          }
+          this.state = "shrinking";
+          this.timer = 0;
+        }
+      } else if (this.state === "shrinking") {
+        this.timer++;
+        let progress = this.timer / this.durationShrink;
+        this.currentLength = lerp(this.maxLength, this.idleLength, progress);
+        if (this.timer >= this.durationShrink) {
+          this.state = "idle";
+          this.timer = 0;
+          this.particles = [];
+        }
+      }
+    }
+
+    // Get groin point on the fish body (lower side) at t = 0.3.
+    getGroinPoint(time, fishLength) {
+      let t = 0.3;
+      let sx = t * fishLength;
+      let sy = -bendAmplitude * sin(PI * t + time);
+      let dx = fishLength;
+      let dy = -bendAmplitude * PI * cos(PI * t + time);
+      let mag = sqrt(dx * dx + dy * dy);
+      let nx = -dy / mag;
+      let ny = dx / mag;
+      // For the groin, use the lower side offset (add the normal).
+      let w = fishWidth * 4 * t * (1 - t);
+      let originX = sx + nx * w;
+      let originY = sy + ny * w;
+      return createVector(originX, originY);
+    }
+
+    // Get direction for the stick from the fish body's normal at t = 0.3.
+    getDirection(time, fishLength) {
+      let t = 0.3;
+      let dx = fishLength;
+      let dy = -bendAmplitude * PI * cos(PI * t + time);
+      let mag = sqrt(dx * dx + dy * dy);
+      let nx = -dy / mag;
+      let ny = dx / mag;
+      // This normal points outward (downward) from the groin.
+      return createVector(nx, ny);
+    }
+
+    updateAndDraw(time, fishLength) {
+      this.update(time, fishLength);
+      let origin = this.getGroinPoint(time, fishLength);
+      let dir = this.getDirection(time, fishLength);
+      // In idle (floppy) state, add extra oscillation.
+      let angleOffset = 0;
+      if (this.state === "idle") {
+        angleOffset = 0.5 * sin(frameCount * 0.2);
+      }
+      let cosA = cos(angleOffset);
+      let sinA = sin(angleOffset);
+      let newDir = createVector(dir.x * cosA - dir.y * sinA, dir.x * sinA + dir.y * cosA);
+      let tip = p5.Vector.add(origin, p5.Vector.mult(newDir, this.currentLength));
+      
+      // Draw the fish stick as a thick line.
+      push();
+        strokeWeight(4);
+        stroke(150, 0, 0);
+        line(origin.x, origin.y, tip.x, tip.y);
+      pop();
+
+      // Update and display white particles.
+      for (let i = this.particles.length - 1; i >= 0; i--) {
+        this.particles[i].update();
+        if (this.particles[i].lifespan <= 0) {
+          this.particles.splice(i, 1);
+        }
+      }
+      for (let p of this.particles) {
+        p.display();
+      }
+    }
+  }
+
+  // ----- White Particle Class (for pop effect) -----
+  class WhiteParticle {
+    constructor(pos) {
+      this.pos = pos.copy();
+      let angle = random(TWO_PI);
+      this.vel = p5.Vector.fromAngle(angle).mult(random(1, 3));
+      this.lifespan = 60; // frames
+    }
+    update() {
+      this.pos.add(this.vel);
+      this.lifespan--;
+    }
+    display() {
+      push();
+        noStroke();
+        fill(255, this.lifespan * 4);
+        ellipse(this.pos.x, this.pos.y, 3);
+      pop();
+    }
+  }
+
+  function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
   }
 </script>
-
 </body>
 </html>
