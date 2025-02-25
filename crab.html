@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Natural Crab Walker</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Articulated Crab Walker</title>
   <style>
     body {
       margin: 0;
@@ -11,7 +11,9 @@
       background-color: #87CEEB;
       touch-action: none; /* Prevent default touch gestures */
     }
-    canvas { display: block; }
+    canvas {
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -27,13 +29,31 @@
     x: canvas.width / 2,
     y: canvas.height / 2,
     speed: 3,
-    angle: 0,           // Current facing direction (radians)
-    legCycle: 0,        // Leg animation phase
-    moving: false,
-    bodySize: 40        // Base size for body and leg calculations
+    angle: 0,          // Direction (radians)
+    bodySize: 40,      // Base size for body and limb calculations
+    legCycle: 0,       // Animation phase for legs/claws
+    moving: false
   };
 
-  // Input state for keyboard
+  // Define 6 double-jointed legs (3 per side)
+  // Each leg: side (-1 for left, 1 for right), vertical offset relative to body, and a phase offset for alternating gait.
+  const legs = [
+    { side: -1, offsetY: -crab.bodySize * 0.6, phase: 0 },
+    { side: -1, offsetY: 0,                  phase: Math.PI },
+    { side: -1, offsetY:  crab.bodySize * 0.6, phase: 0 },
+    { side:  1, offsetY: -crab.bodySize * 0.6, phase: Math.PI },
+    { side:  1, offsetY: 0,                  phase: 0 },
+    { side:  1, offsetY:  crab.bodySize * 0.6, phase: Math.PI }
+  ];
+
+  // Define 2 claw arms on the front (left and right)
+  // Each claw: side (-1 for left, 1 for right), horizontal offset, vertical offset, and phase offset for a slight open/close animation.
+  const claws = [
+    { side: -1, offsetX: crab.bodySize * 0.9, offsetY: -crab.bodySize * 0.3, phase: 0 },
+    { side:  1, offsetX: crab.bodySize * 0.9, offsetY: -crab.bodySize * 0.3, phase: Math.PI }
+  ];
+
+  // Keyboard input state
   const keys = { left: false, right: false, up: false, down: false };
   document.addEventListener('keydown', e => {
     if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
@@ -74,7 +94,7 @@
     crab.moving = false;
   });
 
-  // Update crab position and leg animation
+  // Update crab position and animation phase
   function update() {
     let moveX = 0, moveY = 0;
     crab.moving = false;
@@ -85,14 +105,14 @@
     if (keys.up) { moveY -= 1; crab.moving = true; }
     if (keys.down) { moveY += 1; crab.moving = true; }
 
-    // Normalize keyboard movement vector
+    // Normalize keyboard movement
     if (moveX !== 0 || moveY !== 0) {
-      const len = Math.sqrt(moveX * moveX + moveY * moveY);
+      let len = Math.sqrt(moveX * moveX + moveY * moveY);
       moveX /= len;
       moveY /= len;
     }
 
-    // Override with touch control if active
+    // Touch control (overrides keyboard if active)
     if (touchActive) {
       const tLen = Math.sqrt(touchDX * touchDX + touchDY * touchDY);
       if (tLen > 0) {
@@ -103,68 +123,112 @@
       }
     }
 
-    // Update crab position
     crab.x += moveX * crab.speed;
     crab.y += moveY * crab.speed;
 
-    // Advance leg animation if moving
     if (crab.moving) {
       crab.legCycle += 0.15;
+      if (crab.legCycle > Math.PI * 2) crab.legCycle -= Math.PI * 2;
     }
   }
 
-  // Draw crab body, eyes, and four legs (2 per side)
+  // Draw the crab body, legs, and claws
   function drawCrab() {
     ctx.save();
     ctx.translate(crab.x, crab.y);
     ctx.rotate(crab.angle);
 
-    // Draw body
+    // Draw body (ellipse)
     ctx.fillStyle = 'red';
     ctx.beginPath();
-    ctx.ellipse(0, 0, crab.bodySize, crab.bodySize * 0.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, crab.bodySize, crab.bodySize * 0.7, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Draw eyes
     ctx.fillStyle = 'white';
     ctx.beginPath();
-    ctx.arc(-crab.bodySize * 0.3, -crab.bodySize * 0.6, 5, 0, Math.PI * 2);
-    ctx.arc(crab.bodySize * 0.3, -crab.bodySize * 0.6, 5, 0, Math.PI * 2);
+    ctx.arc(-crab.bodySize * 0.3, -crab.bodySize * 0.9, 5, 0, Math.PI * 2);
+    ctx.arc(crab.bodySize * 0.3, -crab.bodySize * 0.9, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = 'black';
     ctx.beginPath();
-    ctx.arc(-crab.bodySize * 0.3, -crab.bodySize * 0.6, 2, 0, Math.PI * 2);
-    ctx.arc(crab.bodySize * 0.3, -crab.bodySize * 0.6, 2, 0, Math.PI * 2);
+    ctx.arc(-crab.bodySize * 0.3, -crab.bodySize * 0.9, 2, 0, Math.PI * 2);
+    ctx.arc(crab.bodySize * 0.3, -crab.bodySize * 0.9, 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw legs using a sine-wave swing.
-    ctx.strokeStyle = 'red';
-    ctx.lineWidth = 3;
-    // Two legs on left, two on right. Legs are drawn relative to the body.
-    // For left side, side = -1; for right side, side = 1.
-    drawLeg(-1, -crab.bodySize * 0.3, crab.legCycle);
-    drawLeg(-1, crab.bodySize * 0.3, crab.legCycle + Math.PI);
-    drawLeg(1, -crab.bodySize * 0.3, crab.legCycle + Math.PI);
-    drawLeg(1, crab.bodySize * 0.3, crab.legCycle);
+    // Draw 6 double-jointed legs
+    legs.forEach(leg => {
+      drawLeg(leg);
+    });
+
+    // Draw 2 claw arms
+    claws.forEach(claw => {
+      drawClaw(claw);
+    });
 
     ctx.restore();
   }
 
-  // Draw a single leg as a line that swings using a sine function.
-  // side: -1 (left) or 1 (right), offsetY: vertical offset, phase: phase offset for leg swing.
-  function drawLeg(side, offsetY, phase) {
+  // Draw a double-jointed leg (two segments) that swings using a sine function.
+  function drawLeg(leg) {
     ctx.save();
-    // Base of the leg relative to the crab's center.
-    const baseX = side * crab.bodySize;
-    ctx.translate(baseX, offsetY);
-    // Calculate swing angle: legs on opposite sides swing in opposite directions.
-    const swing = Math.sin(phase) * 0.5; // ~ -0.5 to 0.5 radians
-    ctx.rotate(swing * side);
-    // Draw leg as a simple line.
+    // Base position relative to body
+    const baseX = leg.side * crab.bodySize * 0.9;
+    const baseY = leg.offsetY;
+    ctx.translate(baseX, baseY);
+    // Swing angle (amplitude of 0.6 radians)
+    const swing = Math.sin(crab.legCycle + leg.phase) * 0.6;
+    // First segment
+    const L1 = crab.bodySize * 0.8;
+    ctx.rotate(swing * leg.side);
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(side * crab.bodySize * 0.8, 0);
+    ctx.lineTo(L1, 0);
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 3;
     ctx.stroke();
+
+    // Joint for second segment
+    ctx.translate(L1, 0);
+    // Second segment bends oppositely for a natural look
+    const L2 = crab.bodySize * 0.6;
+    ctx.rotate(-swing * leg.side * 0.5);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(L2, 0);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Draw a claw arm (double-jointed) that slightly opens and closes.
+  function drawClaw(claw) {
+    ctx.save();
+    // Position at the front of the crab
+    ctx.translate(claw.offsetX, claw.offsetY);
+    // Claw swing animation (amplitude of 0.3 radians)
+    const clawSwing = Math.sin(crab.legCycle + claw.phase) * 0.3;
+    ctx.rotate(clawSwing * claw.side);
+    // First segment of the claw
+    const C1 = crab.bodySize * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(C1, 0);
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    // Second segment
+    ctx.translate(C1, 0);
+    ctx.rotate(-clawSwing * 0.5);
+    const C2 = crab.bodySize * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(C2, 0);
+    ctx.stroke();
+    // Claw tip
+    ctx.fillStyle = 'red';
+    ctx.beginPath();
+    ctx.arc(C2, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 
