@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Crab Walker</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+        }
+        #joystick {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 100px;
+            height: 100px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 50%;
+            touch-action: none;
+        }
+        #joystickInner {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: red;
+            border-radius: 50%;
+            top: 25px;
+            left: 25px;
+            transition: 0.1s;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="joystick">
+        <div id="joystickInner"></div>
+    </div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const crab = {
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        size: 50,
+        speed: 4,
+        angle: 0,
+        legOffset: 0, // Leg movement animation
+        moving: false
+    };
+
+    const keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false, a: false, d: false, w: false, s: false };
+    let joystickActive = false, joystickX = 0, joystickY = 0;
+
+    document.addEventListener("keydown", (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = true; });
+    document.addEventListener("keyup", (e) => { if (keys.hasOwnProperty(e.key)) keys[e.key] = false; });
+
+    // Joystick Controls
+    const joystick = document.getElementById("joystick");
+    const joystickInner = document.getElementById("joystickInner");
+
+    function updateJoystick(e) {
+        const rect = joystick.getBoundingClientRect();
+        const touch = e.touches ? e.touches[0] : e;
+        const dx = touch.clientX - (rect.left + rect.width / 2);
+        const dy = touch.clientY - (rect.top + rect.height / 2);
+        const distance = Math.min(Math.sqrt(dx * dx + dy * dy), rect.width / 2);
+        const angle = Math.atan2(dy, dx);
+
+        joystickX = Math.cos(angle) * distance / (rect.width / 2);
+        joystickY = Math.sin(angle) * distance / (rect.height / 2);
+        
+        joystickInner.style.transform = `translate(${joystickX * 25}px, ${joystickY * 25}px)`;
+        joystickActive = true;
+    }
+
+    function resetJoystick() {
+        joystickX = 0;
+        joystickY = 0;
+        joystickInner.style.transform = "translate(0, 0)";
+        joystickActive = false;
+    }
+
+    joystick.addEventListener("touchstart", updateJoystick);
+    joystick.addEventListener("touchmove", updateJoystick);
+    joystick.addEventListener("touchend", resetJoystick);
+
+    function update() {
+        let dx = 0, dy = 0;
+        crab.moving = false;
+
+        // Keyboard movement
+        if (keys.ArrowLeft || keys.a) { dx = -1; crab.angle = Math.PI; crab.moving = true; }
+        if (keys.ArrowRight || keys.d) { dx = 1; crab.angle = 0; crab.moving = true; }
+        if (keys.ArrowUp || keys.w) { dy = -1; crab.moving = true; }
+        if (keys.ArrowDown || keys.s) { dy = 1; crab.moving = true; }
+
+        // Joystick movement
+        if (joystickActive) {
+            dx = joystickX;
+            dy = joystickY;
+            if (dx < 0) crab.angle = Math.PI;
+            else if (dx > 0) crab.angle = 0;
+            crab.moving = true;
+        }
+
+        // Normalize diagonal movement
+        if (dx !== 0 || dy !== 0) {
+            const length = Math.sqrt(dx * dx + dy * dy);
+            dx /= length;
+            dy /= length;
+        }
+
+        // Move crab
+        crab.x += dx * crab.speed;
+        crab.y += dy * crab.speed;
+
+        // Animate legs when moving
+        if (crab.moving) {
+            crab.legOffset += 0.2;
+            if (crab.legOffset > Math.PI * 2) crab.legOffset = 0;
+        }
+    }
+
+    function drawCrab() {
+        ctx.save();
+        ctx.translate(crab.x, crab.y);
+        ctx.rotate(crab.angle);
+        
+        // Crab Body
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, crab.size, crab.size * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Animated Legs
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 5;
+        for (let i = -1; i <= 1; i += 2) { // Left & Right legs
+            for (let j = 0; j < 3; j++) {
+                let legMove = Math.sin(crab.legOffset + j * 1.5) * 6;
+                ctx.beginPath();
+                ctx.moveTo(i * crab.size * 0.9, -j * 12);
+                ctx.lineTo(i * (crab.size * 1.2 + legMove), -j * 15);
+                ctx.stroke();
+            }
+        }
+
+        // Eyes
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc(-15, -20, 8, 0, Math.PI * 2);
+        ctx.arc(15, -20, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pupils
+        ctx.fillStyle = "black";
+        ctx.beginPath();
+        ctx.arc(-15, -20, 4, 0, Math.PI * 2);
+        ctx.arc(15, -20, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    function gameLoop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        update();
+        drawCrab();
+        requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+</script>
+</body>
+</html>
