@@ -40,7 +40,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
     <script>
-      // Polyfill for SceneUtils.attach/detach (not included by default in r128)
+      // Polyfill for SceneUtils.attach/detach
       if (THREE.SceneUtils === undefined) {
         THREE.SceneUtils = {
           detach: function (child, parent, scene) {
@@ -50,13 +50,12 @@
             child.updateMatrixWorld();
           },
           attach: function (child, scene, parent) {
-            child.applyMatrix4(
-              new THREE.Matrix4().getInverse(parent.matrixWorld)
-            );
+            // Updated inversion method to support r128+
+            child.applyMatrix4(new THREE.Matrix4().copy(parent.matrixWorld).invert());
             scene.remove(child);
             parent.add(child);
             child.updateMatrixWorld();
-          },
+          }
         };
       }
 
@@ -101,8 +100,7 @@
         for (let x of positions) {
           for (let y of positions) {
             for (let z of positions) {
-              // Create materials for each face.
-              // BoxGeometry material order: [right, left, top, bottom, front, back]
+              // Materials for each face in order: [right, left, top, bottom, front, back]
               let materials = [];
               materials.push(
                 new THREE.MeshBasicMaterial({
@@ -147,7 +145,6 @@
                 z * (cubeSize + gap)
               );
               scene.add(cube);
-              // Optional: store initial coordinate for potential future use
               cube.userData.coord = { x: x, y: y, z: z };
               cubes.push(cube);
             }
@@ -169,53 +166,40 @@
         renderer.render(scene, camera);
       }
 
-      // rotateFace(face): rotates a face (U, D, L, R, F, B) by 90°.
+      // Rotate a face (U, D, L, R, F, B) by 90°.
       function rotateFace(face) {
         if (isAnimating) return;
         isAnimating = true;
         let axis, condition, angle;
-        // Determine the rotation axis, cube selection condition, and rotation angle.
         switch (face) {
           case "U":
             axis = new THREE.Vector3(0, 1, 0);
-            condition = (cube) =>
-              cube.position.y >
-              (cubeSize + gap) * 0.5;
+            condition = (cube) => cube.position.y > (cubeSize + gap) * 0.5;
             angle = -Math.PI / 2;
             break;
           case "D":
             axis = new THREE.Vector3(0, 1, 0);
-            condition = (cube) =>
-              cube.position.y <
-              -(cubeSize + gap) * 0.5;
+            condition = (cube) => cube.position.y < -(cubeSize + gap) * 0.5;
             angle = Math.PI / 2;
             break;
           case "L":
             axis = new THREE.Vector3(1, 0, 0);
-            condition = (cube) =>
-              cube.position.x <
-              -(cubeSize + gap) * 0.5;
+            condition = (cube) => cube.position.x < -(cubeSize + gap) * 0.5;
             angle = Math.PI / 2;
             break;
           case "R":
             axis = new THREE.Vector3(1, 0, 0);
-            condition = (cube) =>
-              cube.position.x >
-              (cubeSize + gap) * 0.5;
+            condition = (cube) => cube.position.x > (cubeSize + gap) * 0.5;
             angle = -Math.PI / 2;
             break;
           case "F":
             axis = new THREE.Vector3(0, 0, 1);
-            condition = (cube) =>
-              cube.position.z >
-              (cubeSize + gap) * 0.5;
+            condition = (cube) => cube.position.z > (cubeSize + gap) * 0.5;
             angle = -Math.PI / 2;
             break;
           case "B":
             axis = new THREE.Vector3(0, 0, 1);
-            condition = (cube) =>
-              cube.position.z <
-              -(cubeSize + gap) * 0.5;
+            condition = (cube) => cube.position.z < -(cubeSize + gap) * 0.5;
             angle = Math.PI / 2;
             break;
           default:
@@ -223,7 +207,6 @@
             return;
         }
         const cubesToRotate = cubes.filter(condition);
-        // Create a temporary group and attach selected cubes to it.
         const rotationGroup = new THREE.Group();
         scene.add(rotationGroup);
         cubesToRotate.forEach((cube) => {
@@ -231,7 +214,7 @@
         });
 
         let totalRotation = 0;
-        const duration = 300; // in ms
+        const duration = 300; // ms
         let lastTime = performance.now();
 
         function animateRotation() {
@@ -247,12 +230,9 @@
           if (totalRotation < Math.abs(angle)) {
             requestAnimationFrame(animateRotation);
           } else {
-            // Finalize the rotation.
-            rotationGroup.rotation.setFromVector3(
-              axis.clone().multiplyScalar(angle)
-            );
+            // Finalize rotation precisely using quaternion.
+            rotationGroup.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(axis, angle));
             rotationGroup.updateMatrixWorld();
-            // Detach cubes from the temporary group.
             while (rotationGroup.children.length > 0) {
               let child = rotationGroup.children[0];
               THREE.SceneUtils.detach(child, rotationGroup, scene);
@@ -264,11 +244,10 @@
         animateRotation();
       }
 
-      // scrambleCube(): performs 10 random moves in sequence.
+      // Scramble the cube with 10 random moves.
       async function scrambleCube() {
         const moves = ["U", "D", "L", "R", "F", "B"];
         for (let i = 0; i < 10; i++) {
-          // Wait if an animation is in progress.
           while (isAnimating) {
             await new Promise((r) => setTimeout(r, 50));
           }
