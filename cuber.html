@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>3D Rubik's Cube</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+      }
+      #ui {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 10;
+      }
+      button {
+        margin: 2px;
+        padding: 8px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui">
+      <button onclick="rotateFace('U')">Up (U)</button>
+      <button onclick="rotateFace('D')">Down (D)</button>
+      <button onclick="rotateFace('L')">Left (L)</button>
+      <button onclick="rotateFace('R')">Right (R)</button>
+      <button onclick="rotateFace('F')">Front (F)</button>
+      <button onclick="rotateFace('B')">Back (B)</button>
+      <button onclick="scrambleCube()">Scramble</button>
+    </div>
+    <!-- Three.js & OrbitControls from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
+    <script>
+      // Polyfill for SceneUtils.attach/detach (not included by default in r128)
+      if (THREE.SceneUtils === undefined) {
+        THREE.SceneUtils = {
+          detach: function (child, parent, scene) {
+            child.applyMatrix4(parent.matrixWorld);
+            parent.remove(child);
+            scene.add(child);
+            child.updateMatrixWorld();
+          },
+          attach: function (child, scene, parent) {
+            child.applyMatrix4(
+              new THREE.Matrix4().getInverse(parent.matrixWorld)
+            );
+            scene.remove(child);
+            parent.add(child);
+            child.updateMatrixWorld();
+          },
+        };
+      }
+
+      let scene, camera, renderer, controls;
+      let cubes = [];
+      let isAnimating = false;
+      const cubeSize = 0.9,
+        gap = 0.1;
+
+      init();
+      animate();
+
+      function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x202020);
+
+        camera = new THREE.PerspectiveCamera(
+          45,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          1000
+        );
+        camera.position.set(5, 5, 5);
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Lights
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambient);
+        const directional = new THREE.DirectionalLight(0xffffff, 0.6);
+        directional.position.set(5, 10, 7.5);
+        scene.add(directional);
+
+        // Create Rubik's cube pieces (3x3x3)
+        const positions = [-1, 0, 1];
+        for (let x of positions) {
+          for (let y of positions) {
+            for (let z of positions) {
+              // Create materials for each face.
+              // BoxGeometry material order: [right, left, top, bottom, front, back]
+              let materials = [];
+              materials.push(
+                new THREE.MeshBasicMaterial({
+                  color: x === 1 ? 0xff0000 : 0x111111,
+                })
+              ); // Right (red)
+              materials.push(
+                new THREE.MeshBasicMaterial({
+                  color: x === -1 ? 0xffa500 : 0x111111,
+                })
+              ); // Left (orange)
+              materials.push(
+                new THREE.MeshBasicMaterial({
+                  color: y === 1 ? 0xffffff : 0x111111,
+                })
+              ); // Top (white)
+              materials.push(
+                new THREE.MeshBasicMaterial({
+                  color: y === -1 ? 0xffff00 : 0x111111,
+                })
+              ); // Bottom (yellow)
+              materials.push(
+                new THREE.MeshBasicMaterial({
+                  color: z === 1 ? 0x0000ff : 0x111111,
+                })
+              ); // Front (blue)
+              materials.push(
+                new THREE.MeshBasicMaterial({
+                  color: z === -1 ? 0x00ff00 : 0x111111,
+                })
+              ); // Back (green)
+
+              const geometry = new THREE.BoxGeometry(
+                cubeSize,
+                cubeSize,
+                cubeSize
+              );
+              const cube = new THREE.Mesh(geometry, materials);
+              cube.position.set(
+                x * (cubeSize + gap),
+                y * (cubeSize + gap),
+                z * (cubeSize + gap)
+              );
+              scene.add(cube);
+              // Optional: store initial coordinate for potential future use
+              cube.userData.coord = { x: x, y: y, z: z };
+              cubes.push(cube);
+            }
+          }
+        }
+
+        window.addEventListener("resize", onWindowResize, false);
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      // rotateFace(face): rotates a face (U, D, L, R, F, B) by 90°.
+      function rotateFace(face) {
+        if (isAnimating) return;
+        isAnimating = true;
+        let axis, condition, angle;
+        // Determine the rotation axis, cube selection condition, and rotation angle.
+        switch (face) {
+          case "U":
+            axis = new THREE.Vector3(0, 1, 0);
+            condition = (cube) =>
+              cube.position.y >
+              (cubeSize + gap) * 0.5;
+            angle = -Math.PI / 2;
+            break;
+          case "D":
+            axis = new THREE.Vector3(0, 1, 0);
+            condition = (cube) =>
+              cube.position.y <
+              -(cubeSize + gap) * 0.5;
+            angle = Math.PI / 2;
+            break;
+          case "L":
+            axis = new THREE.Vector3(1, 0, 0);
+            condition = (cube) =>
+              cube.position.x <
+              -(cubeSize + gap) * 0.5;
+            angle = Math.PI / 2;
+            break;
+          case "R":
+            axis = new THREE.Vector3(1, 0, 0);
+            condition = (cube) =>
+              cube.position.x >
+              (cubeSize + gap) * 0.5;
+            angle = -Math.PI / 2;
+            break;
+          case "F":
+            axis = new THREE.Vector3(0, 0, 1);
+            condition = (cube) =>
+              cube.position.z >
+              (cubeSize + gap) * 0.5;
+            angle = -Math.PI / 2;
+            break;
+          case "B":
+            axis = new THREE.Vector3(0, 0, 1);
+            condition = (cube) =>
+              cube.position.z <
+              -(cubeSize + gap) * 0.5;
+            angle = Math.PI / 2;
+            break;
+          default:
+            isAnimating = false;
+            return;
+        }
+        const cubesToRotate = cubes.filter(condition);
+        // Create a temporary group and attach selected cubes to it.
+        const rotationGroup = new THREE.Group();
+        scene.add(rotationGroup);
+        cubesToRotate.forEach((cube) => {
+          THREE.SceneUtils.attach(cube, scene, rotationGroup);
+        });
+
+        let totalRotation = 0;
+        const duration = 300; // in ms
+        let lastTime = performance.now();
+
+        function animateRotation() {
+          let now = performance.now();
+          let deltaTime = now - lastTime;
+          lastTime = now;
+          let deltaAngle = (Math.abs(angle) / duration) * deltaTime;
+          if (totalRotation + deltaAngle > Math.abs(angle)) {
+            deltaAngle = Math.abs(angle) - totalRotation;
+          }
+          rotationGroup.rotateOnAxis(axis, Math.sign(angle) * deltaAngle);
+          totalRotation += deltaAngle;
+          if (totalRotation < Math.abs(angle)) {
+            requestAnimationFrame(animateRotation);
+          } else {
+            // Finalize the rotation.
+            rotationGroup.rotation.setFromVector3(
+              axis.clone().multiplyScalar(angle)
+            );
+            rotationGroup.updateMatrixWorld();
+            // Detach cubes from the temporary group.
+            while (rotationGroup.children.length > 0) {
+              let child = rotationGroup.children[0];
+              THREE.SceneUtils.detach(child, rotationGroup, scene);
+            }
+            scene.remove(rotationGroup);
+            isAnimating = false;
+          }
+        }
+        animateRotation();
+      }
+
+      // scrambleCube(): performs 10 random moves in sequence.
+      async function scrambleCube() {
+        const moves = ["U", "D", "L", "R", "F", "B"];
+        for (let i = 0; i < 10; i++) {
+          // Wait if an animation is in progress.
+          while (isAnimating) {
+            await new Promise((r) => setTimeout(r, 50));
+          }
+          let move = moves[Math.floor(Math.random() * moves.length)];
+          rotateFace(move);
+          await new Promise((r) => setTimeout(r, 350));
+        }
+      }
+    </script>
+  </body>
+</html>
