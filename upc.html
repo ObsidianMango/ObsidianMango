@@ -1,4 +1,4 @@
-l<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -21,6 +21,7 @@ l<!DOCTYPE html>
             margin: auto;
             overflow: hidden;
             background: black;
+            display: none;
         }
         video {
             width: 100%;
@@ -48,12 +49,21 @@ l<!DOCTYPE html>
             margin: 10px auto;
             display: block;
             color: black;
+            background: white;
+            border: none;
         }
         button {
             padding: 10px;
             font-size: 16px;
-            margin: 5px;
+            margin: 10px;
             cursor: pointer;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:active {
+            background-color: #218838;
         }
     </style>
 </head>
@@ -68,22 +78,26 @@ l<!DOCTYPE html>
 
     <input type="text" id="upc" placeholder="UPC will appear here..." readonly>
 
-    <button onclick="startScanner()">Start Scanner</button>
-    <button onclick="stopScanner()">Stop Scanner</button>
+    <button onclick="startScanner()">Scan</button>
 
     <script>
         let scannerActive = false;
         let videoStream = null;
+        let lastScannedCode = "";
 
         async function startScanner() {
             if (scannerActive) return;
             scannerActive = true;
+            lastScannedCode = "";
+
+            document.getElementById("scanner-container").style.display = "block"; // Show camera
 
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                 document.getElementById("video").srcObject = videoStream;
             } catch (err) {
                 alert("Camera access denied or unavailable.");
+                stopScanner();
                 return;
             }
 
@@ -100,24 +114,34 @@ l<!DOCTYPE html>
                 },
                 locator: {
                     patchSize: "medium",
-                    halfSample: true
+                    halfSample: false
                 },
                 decoder: {
-                    readers: ["ean_reader", "upc_reader", "upc_e_reader"]
-                }
+                    readers: ["upc_reader", "upc_e_reader", "ean_reader"]
+                },
+                locate: true,
+                numOfWorkers: 4,
+                frequency: 10
             }, function(err) {
                 if (err) {
                     console.error(err);
+                    stopScanner();
                     return;
                 }
                 Quagga.start();
             });
 
-            Quagga.onDetected(async function(result) {
+            Quagga.onDetected(function(result) {
                 let code = result.codeResult.code;
-                document.getElementById("upc").value = code;
-                await copyToClipboard(code);
-                vibratePhone();
+
+                // Ensure the scan is valid and not a repeated bad read
+                if (code && code !== lastScannedCode) {
+                    lastScannedCode = code;
+                    document.getElementById("upc").value = code;
+                    copyToClipboard(code);
+                    vibratePhone();
+                    stopScanner();
+                }
             });
         }
 
@@ -129,6 +153,7 @@ l<!DOCTYPE html>
                     let tracks = videoStream.getTracks();
                     tracks.forEach(track => track.stop());
                 }
+                document.getElementById("scanner-container").style.display = "none"; // Hide camera
             }
         }
 
@@ -143,7 +168,7 @@ l<!DOCTYPE html>
 
         function vibratePhone() {
             if (navigator.vibrate) {
-                navigator.vibrate(200); // Vibrate for 200ms
+                navigator.vibrate(200);
             }
         }
     </script>
