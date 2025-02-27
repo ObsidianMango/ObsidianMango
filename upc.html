@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UPC Scanner</title>
     <script src="https://unpkg.com/quagga"></script>
+    <script src="https://bwip-js.metafloor.com/bwip-js"></script> <!-- Barcode Generator -->
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -12,6 +13,17 @@
             margin: 0;
             background-color: #222;
             color: white;
+        }
+        #scanned-upcs {
+            margin: 10px auto;
+            width: 90%;
+            text-align: center;
+        }
+        .barcode-container {
+            background: white;
+            padding: 5px;
+            margin-bottom: 10px;
+            display: inline-block;
         }
         #scanner-container {
             position: relative;
@@ -60,13 +72,19 @@
 <body>
 
     <h2>UPC Scanner</h2>
+
+    <div id="scanned-upcs"></div> <!-- Area to display generated UPCs -->
+
     <div id="scanner-container">
         <video id="video" autoplay playsinline></video>
         <div id="scan-line"></div>
     </div>
+
     <input type="text" id="upc" placeholder="UPC will appear here..." readonly>
+    
     <button onclick="startScanner()">Start Scanner</button>
     <button onclick="stopScanner()">Stop Scanner</button>
+    <button onclick="clearUPCs()">Clear List</button>
 
     <script>
         let scannerActive = false;
@@ -76,7 +94,6 @@
             if (scannerActive) return;
             scannerActive = true;
 
-            // Request camera access and start the video stream
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                 document.getElementById("video").srcObject = videoStream;
@@ -116,6 +133,7 @@
                 document.getElementById("upc").value = code;
                 copyToClipboard(code);
                 vibratePhone();
+                generateUPC(code);
                 stopScanner();
             });
         }
@@ -141,8 +159,36 @@
 
         function vibratePhone() {
             if ("vibrate" in navigator) {
-                navigator.vibrate(200); // Vibrate for 200ms
+                navigator.vibrate(200);
             }
+        }
+
+        function generateUPC(upc) {
+            let upcContainer = document.createElement("div");
+            upcContainer.className = "barcode-container";
+
+            let canvas = document.createElement("canvas");
+            canvas.id = "barcode-" + upc;
+
+            upcContainer.appendChild(canvas);
+            let scannedUPCs = document.getElementById("scanned-upcs");
+            scannedUPCs.insertBefore(upcContainer, scannedUPCs.firstChild); // Add new UPCs to the top
+
+            try {
+                bwipjs.toCanvas(canvas, {
+                    bcid: "upc", // Barcode type
+                    text: upc, 
+                    scale: 3, 
+                    height: 20, 
+                    includetext: true
+                });
+            } catch (err) {
+                console.error("Error generating barcode:", err);
+            }
+        }
+
+        function clearUPCs() {
+            document.getElementById("scanned-upcs").innerHTML = ""; // Clear all UPC barcodes
         }
     </script>
 
