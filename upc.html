@@ -83,12 +83,13 @@
     <script>
         let scannerActive = false;
         let videoStream = null;
-        let lastScannedCode = "";
+        let lastValidScans = []; // Stores the last few successful scans for accuracy
+        let requiredMatches = 2; // Require this many identical scans before accepting
 
         async function startScanner() {
             if (scannerActive) return;
             scannerActive = true;
-            lastScannedCode = "";
+            lastValidScans = [];
 
             document.getElementById("scanner-container").style.display = "block"; // Show camera
 
@@ -107,8 +108,8 @@
                     type: "LiveStream",
                     target: document.querySelector("#video"),
                     constraints: {
-                        width: 640,
-                        height: 480,
+                        width: 1280, // High-resolution input for better accuracy
+                        height: 720,
                         facingMode: "environment"
                     }
                 },
@@ -121,7 +122,7 @@
                 },
                 locate: true,
                 numOfWorkers: 4,
-                frequency: 10
+                frequency: 15, // Increase scan frequency
             }, function(err) {
                 if (err) {
                     console.error(err);
@@ -134,9 +135,17 @@
             Quagga.onDetected(function(result) {
                 let code = result.codeResult.code;
 
-                // Ensure the scan is valid and not a repeated bad read
-                if (code && code !== lastScannedCode) {
-                    lastScannedCode = code;
+                // Validate barcode length (UPC-A = 12 digits, UPC-E = 8 digits)
+                if (!code || (code.length !== 12 && code.length !== 8)) return;
+
+                // Store the last valid scan attempts
+                lastValidScans.push(code);
+                if (lastValidScans.length > requiredMatches) {
+                    lastValidScans.shift(); // Keep only the last few
+                }
+
+                // Ensure two consecutive identical reads before confirming scan
+                if (lastValidScans.length === requiredMatches && lastValidScans.every(v => v === code)) {
                     document.getElementById("upc").value = code;
                     copyToClipboard(code);
                     vibratePhone();
