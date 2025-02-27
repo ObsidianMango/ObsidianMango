@@ -17,11 +17,15 @@
             position: relative;
             width: 100%;
             max-width: 500px;
+            height: 300px;
             margin: auto;
+            overflow: hidden;
+            background: black;
         }
-        #video {
+        video {
             width: 100%;
-            display: block;
+            height: 100%;
+            object-fit: cover;
         }
         #scan-line {
             position: absolute;
@@ -66,10 +70,20 @@
 
     <script>
         let scannerActive = false;
+        let videoStream = null;
 
-        function startScanner() {
+        async function startScanner() {
             if (scannerActive) return;
             scannerActive = true;
+
+            // Request camera access and start the video stream
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                document.getElementById("video").srcObject = videoStream;
+            } catch (err) {
+                alert("Camera access denied or unavailable.");
+                return;
+            }
 
             Quagga.init({
                 inputStream: {
@@ -101,6 +115,7 @@
                 let code = result.codeResult.code;
                 document.getElementById("upc").value = code;
                 copyToClipboard(code);
+                vibratePhone();
                 stopScanner();
             });
         }
@@ -109,6 +124,10 @@
             if (scannerActive) {
                 Quagga.stop();
                 scannerActive = false;
+                if (videoStream) {
+                    let tracks = videoStream.getTracks();
+                    tracks.forEach(track => track.stop());
+                }
             }
         }
 
@@ -118,6 +137,12 @@
             }).catch(err => {
                 console.error("Copy failed: ", err);
             });
+        }
+
+        function vibratePhone() {
+            if ("vibrate" in navigator) {
+                navigator.vibrate(200); // Vibrate for 200ms
+            }
         }
     </script>
 
