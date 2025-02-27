@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPC Scanner</title>
+    <script src="https://unpkg.com/quagga"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        video {
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 10px;
+        }
+        input {
+            width: 90%;
+            padding: 10px;
+            font-size: 18px;
+            text-align: center;
+        }
+        button {
+            padding: 10px;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>UPC Scanner</h2>
+    <video id="video" autoplay></video>
+    <input type="text" id="upc" placeholder="UPC will appear here..." readonly>
+
+    <button onclick="startScanner()">Start Scanner</button>
+    <button onclick="stopScanner()">Stop Scanner</button>
+
+    <script>
+        let scannerActive = false;
+
+        function startScanner() {
+            if (scannerActive) return;
+            scannerActive = true;
+            
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector("#video"),
+                    constraints: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "environment"
+                    }
+                },
+                decoder: {
+                    readers: ["ean_reader", "upc_reader", "upc_e_reader"]
+                }
+            }, function(err) {
+                if (err) {
+                    console.error(err);
+                    return;
+                }
+                Quagga.start();
+            });
+
+            Quagga.onDetected(function(result) {
+                let code = result.codeResult.code;
+                document.getElementById("upc").value = code;
+                copyToClipboard(code);
+                stopScanner();
+            });
+        }
+
+        function stopScanner() {
+            if (scannerActive) {
+                Quagga.stop();
+                scannerActive = false;
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert("Copied: " + text);
+            }).catch(err => {
+                console.error("Copy failed: ", err);
+            });
+        }
+    </script>
+
+</body>
+</html>
