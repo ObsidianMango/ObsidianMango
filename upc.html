@@ -41,13 +41,14 @@
             from { opacity: 1; }
             to { opacity: 0.3; }
         }
-        #confidence {
+        #confidence-bar {
             position: absolute;
-            top: 5px;
-            left: 10px;
-            font-size: 14px;
-            color: rgba(255, 0, 0, 0.8);
-            font-weight: bold;
+            top: 0;
+            left: 0;
+            width: 0%;
+            height: 5px;
+            background: rgba(255, 0, 0, 0.8);
+            transition: width 0.1s ease-in-out;
         }
         input {
             width: 90%;
@@ -80,9 +81,9 @@
     <h2>UPC Scanner</h2>
 
     <div id="scanner-container">
+        <div id="confidence-bar"></div>
         <video id="video" autoplay playsinline></video>
         <div id="scan-line"></div>
-        <div id="confidence">Confidence: 0%</div>
     </div>
 
     <input type="text" id="upc" placeholder="UPC will appear here..." readonly>
@@ -92,14 +93,15 @@
     <script>
         let scannerActive = false;
         let videoStream = null;
-        let lastValidScans = []; // Store last few successful scans
-        let requiredMatches = 2; // Number of identical reads required
+        let lastValidScans = [];
+        let requiredMatches = 2;
         let lastConfidence = 0;
 
         async function startScanner() {
             if (scannerActive) return;
             scannerActive = true;
             lastValidScans = [];
+            updateConfidence(0); // Reset confidence bar
 
             document.getElementById("scanner-container").style.display = "block"; // Show camera
 
@@ -132,7 +134,7 @@
                 },
                 locate: true,
                 numOfWorkers: 4,
-                frequency: 20, // Increased scan frequency
+                frequency: 20,
             }, function(err) {
                 if (err) {
                     console.error(err);
@@ -145,10 +147,9 @@
             Quagga.onDetected(function(result) {
                 let code = result.codeResult.code;
                 let confidence = result.codeResult.decodedCodes.reduce((sum, d) => sum + (d.error || 0), 0) / result.codeResult.decodedCodes.length;
+                let normalizedConfidence = Math.max(0, Math.min(100, 100 - (confidence * 100))); // Normalize to percentage
 
-                // Update confidence display
-                lastConfidence = Math.max(0, Math.min(100, 100 - (confidence * 100))); // Normalize
-                document.getElementById("confidence").textContent = `Confidence: ${lastConfidence.toFixed(1)}%`;
+                updateConfidence(normalizedConfidence); // Update the confidence meter
 
                 // Validate barcode length (UPC-A = 12 digits, UPC-E = 8 digits)
                 if (!code || (code.length !== 12 && code.length !== 8)) return;
@@ -163,7 +164,6 @@
                 if (lastValidScans.length === requiredMatches && lastValidScans.every(v => v === code)) {
                     document.getElementById("upc").value = code;
                     copyToClipboard(code);
-                    vibratePhone();
                     stopScanner();
                 }
             });
@@ -178,6 +178,7 @@
                     tracks.forEach(track => track.stop());
                 }
                 document.getElementById("scanner-container").style.display = "none"; // Hide camera
+                updateConfidence(0); // Reset confidence bar
             }
         }
 
@@ -190,10 +191,8 @@
             }
         }
 
-        function vibratePhone() {
-            if (navigator.vibrate) {
-                navigator.vibrate(200);
-            }
+        function updateConfidence(value) {
+            document.getElementById("confidence-bar").style.width = value + "%";
         }
     </script>
 
