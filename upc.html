@@ -41,6 +41,14 @@
             from { opacity: 1; }
             to { opacity: 0.3; }
         }
+        #confidence {
+            position: absolute;
+            top: 5px;
+            left: 10px;
+            font-size: 14px;
+            color: rgba(255, 0, 0, 0.8);
+            font-weight: bold;
+        }
         input {
             width: 90%;
             padding: 10px;
@@ -74,6 +82,7 @@
     <div id="scanner-container">
         <video id="video" autoplay playsinline></video>
         <div id="scan-line"></div>
+        <div id="confidence">Confidence: 0%</div>
     </div>
 
     <input type="text" id="upc" placeholder="UPC will appear here..." readonly>
@@ -83,8 +92,9 @@
     <script>
         let scannerActive = false;
         let videoStream = null;
-        let lastValidScans = []; // Stores the last few successful scans for accuracy
-        let requiredMatches = 2; // Require this many identical scans before accepting
+        let lastValidScans = []; // Store last few successful scans
+        let requiredMatches = 2; // Number of identical reads required
+        let lastConfidence = 0;
 
         async function startScanner() {
             if (scannerActive) return;
@@ -108,7 +118,7 @@
                     type: "LiveStream",
                     target: document.querySelector("#video"),
                     constraints: {
-                        width: 1280, // High-resolution input for better accuracy
+                        width: 1280,
                         height: 720,
                         facingMode: "environment"
                     }
@@ -122,7 +132,7 @@
                 },
                 locate: true,
                 numOfWorkers: 4,
-                frequency: 15, // Increase scan frequency
+                frequency: 20, // Increased scan frequency
             }, function(err) {
                 if (err) {
                     console.error(err);
@@ -134,11 +144,16 @@
 
             Quagga.onDetected(function(result) {
                 let code = result.codeResult.code;
+                let confidence = result.codeResult.decodedCodes.reduce((sum, d) => sum + (d.error || 0), 0) / result.codeResult.decodedCodes.length;
+
+                // Update confidence display
+                lastConfidence = Math.max(0, Math.min(100, 100 - (confidence * 100))); // Normalize
+                document.getElementById("confidence").textContent = `Confidence: ${lastConfidence.toFixed(1)}%`;
 
                 // Validate barcode length (UPC-A = 12 digits, UPC-E = 8 digits)
                 if (!code || (code.length !== 12 && code.length !== 8)) return;
 
-                // Store the last valid scan attempts
+                // Store last valid scan attempts
                 lastValidScans.push(code);
                 if (lastValidScans.length > requiredMatches) {
                     lastValidScans.shift(); // Keep only the last few
