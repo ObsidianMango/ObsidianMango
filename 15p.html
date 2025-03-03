@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>15 Puzzle</title>
+  <style>
+    @import url('https://fonts.cdnfonts.com/css/press-start-2p');
+
+    /* Basic reset & setup */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: 'Press Start 2P', sans-serif;
+    }
+
+    /* Aurora background behind everything */
+    #canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      display: block;
+    }
+
+    /* Centered Title & Move Counter up top */
+    h1 {
+      position: absolute;
+      top: 5%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      text-shadow: 3px 3px 0px #ff0077;
+      color: #fff;
+      z-index: 1;
+    }
+    .move-counter {
+      position: absolute;
+      top: 12%;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      font-size: 14px;
+      z-index: 1;
+    }
+
+    /* Puzzle Container (288×288) in the center */
+    .puzzle-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 288px;
+      height: 288px;
+      background: #222;
+      /* Slight offset in border size: left & top = 4px, right & bottom = 6px */
+      border-style: solid;
+      border-color: #ff0077;
+      border-width: 4px 6px 6px 4px; /* pixel or two more on bottom/right side */
+      box-shadow: 0 0 15px #ff0077;
+      overflow: hidden;
+      z-index: 1;
+      transition: border-color 0.3s ease;
+    }
+
+    /* Buttons row below puzzle */
+    .controls {
+      position: absolute;
+      top: calc(50% + 180px);
+      left: 50%;
+      transform: translate(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 1;
+    }
+    .button {
+      font-family: 'Press Start 2P', sans-serif;
+      font-size: 14px;
+      background: #ff0077;
+      color: white;
+      border: 2px solid #fff;
+      cursor: pointer;
+      box-shadow: 2px 2px 0px #000;
+      transition: 0.2s ease-in-out;
+      padding: 8px 12px;
+    }
+    .button:hover {
+      background: #ffcc00;
+      color: #121212;
+      transform: scale(1.05);
+    }
+
+    /* Each tile: absolute positioning for smooth slides */
+    .tile {
+      position: absolute;
+      width: 72px;
+      height: 72px;
+      border: 2px solid #000;
+      box-shadow: 2px 2px 0px #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: #121212;
+      text-shadow: 1px 1px 0px #000;
+      cursor: pointer;
+
+      /* Smooth "slide" transitions */
+      transition: top 0.3s ease, left 0.3s ease;
+
+      /* Default diagonal shimmering gradient (all same palette) */
+      background: linear-gradient(135deg, #ffcc00, #ff77cc, #ffcc00);
+      background-size: 200% 200%;
+      animation: shimmer 3s linear infinite;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* Empty tile = black shimmer */
+    .empty {
+      background: linear-gradient(135deg, #111, #333, #111);
+      background-size: 200% 200%;
+      animation: blackShimmer 3s linear infinite;
+    }
+    @keyframes blackShimmer {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* Win animations: border flash & tile bounce */
+    .win-border {
+      animation: borderFlash 0.5s alternate infinite;
+    }
+    @keyframes borderFlash {
+      0%   { border-color: #ff0077; }
+      100% { border-color: #00ff77; }
+    }
+
+    .bounce {
+      animation: bounce 0.5s alternate infinite;
+    }
+    @keyframes bounce {
+      0%   { transform: translateY(0px); }
+      100% { transform: translateY(-8px); }
+    }
+
+    /* ================== Pop-up Shuffle Menu ==================== */
+    .overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      display: none; /* hidden by default */
+      z-index: 2; /* above puzzle & everything */
+    }
+    .overlay.active {
+      display: block;
+    }
+    .modal {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: #222;
+      border: 3px solid #fff;
+      box-shadow: 0 0 10px #ff0077;
+      padding: 20px;
+      min-width: 250px;
+    }
+    .modal h2 {
+      margin-bottom: 10px;
+      font-size: 16px;
+      text-align: center;
+      color: #fff;
+      text-shadow: 1px 1px 0 #ff0077;
+    }
+    .modal-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .modal-button {
+      font-family: 'Press Start 2P', sans-serif;
+      background: #ff0077;
+      color: white;
+      border: 2px solid #fff;
+      padding: 8px 12px;
+      text-align: center;
+      cursor: pointer;
+      box-shadow: 2px 2px 0px #000;
+      transition: 0.2s ease-in-out;
+    }
+    .modal-button:hover {
+      background: #ffcc00;
+      color: #121212;
+      transform: scale(1.05);
+    }
+
+    /* Close button (X) in top-right corner of modal */
+    .modal-close {
+      position: absolute;
+      top: 4px;
+      right: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      color: #fff;
+      background: transparent;
+      border: none;
+      font-family: 'Press Start 2P', sans-serif;
+    }
+    .modal-close:hover {
+      color: #ffcc00;
+      transform: scale(1.1);
+    }
+  </style>
+</head>
+<body>
+  <!-- Aurora Background Canvas -->
+  <canvas id="canvas"></canvas>
+
+  <h1>15 Puzzle</h1>
+  <!-- Move counter below title -->
+  <div class="move-counter" id="moveCounter">Moves: 0</div>
+
+  <!-- Puzzle Container -->
+  <div class="puzzle-container" id="puzzle"></div>
+
+  <!-- Controls: Shuffle triggers popup menu now -->
+  <div class="controls">
+    <button class="button" onclick="openShuffleMenu()">SHUFFLE</button>
+  </div>
+
+  <!-- Overlay & Modal for Shuffle Options -->
+  <div class="overlay" id="shuffleOverlay" onclick="overlayClick(event)">
+    <div class="modal" id="shuffleModal">
+      <button class="modal-close" onclick="closeShuffleMenu()">X</button>
+      <h2>Choose Shuffle Difficulty</h2>
+      <div class="modal-buttons">
+        <div class="modal-button" onclick="chooseShuffle('easy')">Easy</div>
+        <div class="modal-button" onclick="chooseShuffle('medium')">Medium</div>
+        <div class="modal-button" onclick="chooseShuffle('hard')">Hard</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /*======================
+     = Aurora Wave Background =
+     ======================*/
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let t = 0;
+    function auroraLoop() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const lines = 5;
+      for (let i = 0; i < lines; i++) {
+        ctx.beginPath();
+        let offsetY = canvas.height * (0.2 + 0.15 * i);
+        for (let x = 0; x <= canvas.width; x += 10) {
+          let y = offsetY +
+                  Math.sin(x * 0.01 + t + i) * 50 +
+                  Math.sin(x * 0.02 + t * 0.5) * 20;
+          ctx.lineTo(x, y);
+        }
+        let grad = ctx.createLinearGradient(0, offsetY - 50, 0, offsetY + 50);
+        grad.addColorStop(0, `hsla(${(t*100 + i*40) % 360}, 80%, 60%, 0.7)`);
+        grad.addColorStop(1, `hsla(${(t*100 + i*40 + 60) % 360}, 80%, 60%, 0.1)`);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      t += 0.03;
+      requestAnimationFrame(auroraLoop);
+    }
+    auroraLoop();
+
+    /*=====================
+     = 15 Puzzle Mechanics =
+     =====================*/
+    const puzzle = document.getElementById('puzzle');
+    const moveCounterEl = document.getElementById('moveCounter');
+
+    // The puzzle arrangement: 1..15 plus null
+    let tiles = [...Array(15).keys()].map(n => n + 1);
+    tiles.push(null);
+
+    // We'll store references to 16 tile DIVs
+    let tileElements = [];
+    let moves = 0;
+    let puzzleClickable = true;
+
+    function initPuzzle() {
+      for(let i=0; i<16; i++){
+        const div = document.createElement('div');
+        div.classList.add('tile');
+        puzzle.appendChild(div);
+        tileElements.push(div);
+
+        // On click, attempt a move
+        (function(idx){
+          div.addEventListener('click', () => tryMove(idx));
+        })(i);
+      }
+
+      document.addEventListener('keydown', handleKey);
+    }
+
+    // We'll do a "standard" shuffle for easy mode, or additional passes for harder
+    // Easy: 10 random swaps
+    // Medium: 30 random swaps
+    // Hard: 50 random swaps
+    function shuffleTimes(count) {
+      for(let i=0; i<count; i++){
+        const emptyIdx = tiles.indexOf(null);
+        // possible moves
+        const validMoves = [emptyIdx-1, emptyIdx+1, emptyIdx-4, emptyIdx+4]
+          .filter(m => m >=0 && m<16)
+          .filter(m => !(m%4===3 && emptyIdx%4===0) && !(m%4===0 && emptyIdx%4===3));
+        const rnd = Math.floor(Math.random() * validMoves.length);
+        const tileIdx = validMoves[rnd];
+        [tiles[emptyIdx], tiles[tileIdx]] = [tiles[tileIdx], tiles[emptyIdx]];
+      }
+    }
+
+    // Called when user chooses Easy/Med/Hard in the modal
+    function chooseShuffle(difficulty) {
+      // reset puzzle, then do partial random moves
+      puzzle.classList.remove('win-border');
+      tileElements.forEach(tile => tile.classList.remove('bounce'));
+      puzzleClickable = true;
+
+      // Put tiles in solved state
+      tiles = [...Array(15).keys()].map(n => n + 1);
+      tiles.push(null);
+
+      moves = 0;
+      updatePositions();
+      updateMoveCounter();
+
+      if(difficulty==='easy') {
+        shuffleTimes(10);
+      } else if(difficulty==='medium') {
+        shuffleTimes(30);
+      } else if(difficulty==='hard') {
+        shuffleTimes(50);
+      }
+
+      updatePositions();
+      closeShuffleMenu();
+    }
+
+    function updatePositions() {
+      for(let i=0; i<16; i++){
+        const tileVal = tiles[i];
+        const tileEl = tileElements[i];
+
+        const r = Math.floor(i / 4);
+        const c = i % 4;
+        tileEl.style.top = (r * 72) + 'px';
+        tileEl.style.left = (c * 72) + 'px';
+
+        if(tileVal === null) {
+          tileEl.textContent = '';
+          tileEl.classList.add('empty');
+        } else {
+          tileEl.classList.remove('empty');
+          tileEl.textContent = tileVal;
+        }
+      }
+    }
+
+    function tryMove(tileIdx) {
+      if(!puzzleClickable) return;
+
+      const emptyIdx = tiles.indexOf(null);
+      const validMoves = [ emptyIdx - 1, emptyIdx + 1, emptyIdx - 4, emptyIdx + 4 ];
+
+      // check wrap
+      if(validMoves.includes(tileIdx)
+         && !(tileIdx % 4 === 3 && emptyIdx % 4 === 0)
+         && !(tileIdx % 4 === 0 && emptyIdx % 4 === 3)) {
+        [tiles[emptyIdx], tiles[tileIdx]] = [tiles[tileIdx], tiles[emptyIdx]];
+        moves++;
+        updateMoveCounter();
+        updatePositions();
+        checkWin();
+      }
+    }
+
+    function handleKey(e) {
+      if(!puzzleClickable) return;
+
+      const emptyIdx = tiles.indexOf(null);
+      const er = Math.floor(emptyIdx / 4);
+      const ec = emptyIdx % 4;
+      let moveIdx = null;
+
+      switch(e.key.toLowerCase()) {
+        case 'arrowleft':
+        case 'a':
+          if(ec < 3) moveIdx = emptyIdx + 1;
+          break;
+        case 'arrowright':
+        case 'd':
+          if(ec > 0) moveIdx = emptyIdx - 1;
+          break;
+        case 'arrowup':
+        case 'w':
+          if(er < 3) moveIdx = emptyIdx + 4;
+          break;
+        case 'arrowdown':
+        case 's':
+          if(er > 0) moveIdx = emptyIdx - 4;
+          break;
+        default:
+          break;
+      }
+
+      if(moveIdx !== null) {
+        tryMove(moveIdx);
+      }
+    }
+
+    /*================
+     = Move Counter  =
+     ================*/
+    function updateMoveCounter() {
+      moveCounterEl.textContent = `Moves: ${moves}`;
+    }
+
+    /*=================
+     = Check for Win =
+     =================*/
+    function checkWin() {
+      for(let i=0; i<15; i++){
+        if(tiles[i] !== i+1) return;
+      }
+      triggerWin();
+    }
+
+    function triggerWin() {
+      puzzleClickable = false;
+      puzzle.classList.add('win-border');
+      tileElements.forEach(tile => tile.classList.add('bounce'));
+    }
+
+    /*======================
+     = Shuffle Menu Overlay =
+     =======================*/
+    const overlay = document.getElementById('shuffleOverlay');
+    const modal = document.getElementById('shuffleModal');
+
+    function openShuffleMenu() {
+      overlay.classList.add('active');
+    }
+    function closeShuffleMenu() {
+      overlay.classList.remove('active');
+    }
+    // If user clicks outside the modal (overlay), close it
+    function overlayClick(e) {
+      if(e.target === overlay) {
+        closeShuffleMenu();
+      }
+    }
+
+    /*======================
+     =  Page Initialization =
+     =======================*/
+    initPuzzle();
+    /* Start in solved state (like "no shuffle" yet), so user picks difficulty */
+    updatePositions();
+    updateMoveCounter();
+  </script>
+</body>
+</html>
