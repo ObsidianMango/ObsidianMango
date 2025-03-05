@@ -907,14 +907,13 @@ function touchHandler(event) {
   switch(event.type) {
     case "touchstart":
       type = "mousedown";
-      // Initialize a flag on the target to track movement.
+      // Mark that no movement has happened yet.
       first.target.__touchMoved = false;
       break;
     case "touchmove":
       type = "mousemove";
-      // Mark that a move has occurred.
       first.target.__touchMoved = true;
-      break;        
+      break;
     case "touchend":
       type = "mouseup";
       break;
@@ -932,22 +931,43 @@ function touchHandler(event) {
   });
   first.target.dispatchEvent(simulatedEvent);
   
-  // On touchend, if no movement occurred, simulate a click event.
-  if (event.type === "touchend" && !first.target.__touchMoved) {
-    var clickEvent = new MouseEvent("click", {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      clientX: first.clientX,
-      clientY: first.clientY
-    });
-    first.target.dispatchEvent(clickEvent);
+  if (event.type === "touchend") {
+    // Get current time and compare with last tap time on this target.
+    var currentTime = new Date().getTime();
+    var lastTap = first.target.__lastTap || 0;
+    var tapGap = currentTime - lastTap;
+    
+    if (tapGap < 300 && !first.target.__touchMoved) {
+      // Dispatch a simulated dblclick event.
+      var dblClickEvent = new MouseEvent("dblclick", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: first.clientX,
+        clientY: first.clientY
+      });
+      first.target.dispatchEvent(dblClickEvent);
+      first.target.__lastTap = 0; // Reset after double tap.
+    } else {
+      // If not a double tap and no movement, dispatch a click event.
+      if (!first.target.__touchMoved) {
+        var clickEvent = new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX: first.clientX,
+          clientY: first.clientY
+        });
+        first.target.dispatchEvent(clickEvent);
+      }
+      first.target.__lastTap = currentTime;
+    }
   }
   
   event.preventDefault();
 }
 
-// Initialize touch support after the DOM is ready.
+// Initialize touch support
 initTouchSupport();
 </script>
 </body>
