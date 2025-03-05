@@ -40,6 +40,7 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) |
+| **ThreeOne**   | 🖥️ [SteveOS](https://obsidianmango.github.io/ObsidianMango/31win.html) |
 | **RubiksCube**   | 🧊 [Cuber](https://obsidianmango.github.io/ObsidianMango/cuber.html) |
 | **BlockBreaker**   | ☐ [BlkBrkr](https://obsidianmango.github.io/ObsidianMango/tile.html) |
 | **15 Piece**   | 🧩 [Puzzle](https://obsidianmango.github.io/ObsidianMango/15p.html) |
