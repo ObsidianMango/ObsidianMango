@@ -6,222 +6,204 @@
     <title>Minesweeper Clone</title>
     <style>
         body {
-            background: #bdbdbd;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            flex-direction: column;
             font-family: sans-serif;
+            text-align: center;
+            background-color: #C0C0C0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
         }
-
-        .menu {
-            margin-bottom: 10px;
-        }
-
-        .game-container {
-            background: #bdbdbd;
+        .board-container {
+            display: inline-block;
+            background: silver;
             padding: 10px;
-            border: 3px solid #7b7b7b;
-            box-shadow: inset -2px -2px 0 #fff, inset 2px 2px 0 #3b3b3b;
+            border: 3px solid gray;
         }
-
-        .top-bar {
+        .status-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: #bdbdbd;
+            background: gray;
             padding: 5px;
-            border: 3px solid #7b7b7b;
-            box-shadow: inset -2px -2px 0 #fff, inset 2px 2px 0 #3b3b3b;
+            border: 2px solid black;
         }
-
-        .counter {
-            width: 50px;
-            height: 30px;
-            background: black;
-            color: red;
+        .led {
             font-family: monospace;
             font-size: 24px;
+            color: red;
+            background: black;
+            padding: 5px 10px;
+            width: 50px;
             text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 3px;
+            border: 2px inset darkgray;
         }
-
-        .smiley {
-            width: 30px;
-            height: 30px;
-            background: yellow;
-            border: 2px solid #7b7b7b;
-            box-shadow: inset -2px -2px 0 #fff, inset 2px 2px 0 #3b3b3b;
-            font-size: 20px;
-            text-align: center;
+        .face-button {
+            font-size: 24px;
+            padding: 5px;
+            background: lightgray;
+            border: 2px outset white;
             cursor: pointer;
         }
-
         .grid {
             display: grid;
             gap: 2px;
-            background: #bdbdbd;
-            padding: 5px;
-            border: 3px solid #7b7b7b;
-            box-shadow: inset -2px -2px 0 #fff, inset 2px 2px 0 #3b3b3b;
+            margin-top: 10px;
         }
-
         .cell {
             width: 25px;
             height: 25px;
-            background: #bdbdbd;
-            border: 2px solid #7b7b7b;
-            box-shadow: inset -2px -2px 0 #fff, inset 2px 2px 0 #3b3b3b;
+            background: lightgray;
+            border: 2px outset white;
             text-align: center;
-            font-size: 16px;
+            vertical-align: middle;
+            font-weight: bold;
+            font-size: 18px;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
         }
-
-        .cell.open {
-            background: #dcdcdc;
-            box-shadow: none;
-            border: 1px solid #7b7b7b;
+        .cell:disabled {
+            border: 2px inset gray;
+            cursor: default;
         }
-
-        .cell.flag {
-            background: #bdbdbd;
+        .mine {
             color: red;
-            font-weight: bold;
-        }
-
-        .cell.mine {
-            background: red;
+            font-size: 20px;
         }
     </style>
 </head>
 <body>
 
-    <div class="menu">
-        <button onclick="promptBoardSize()">New Game</button>
+<div class="board-container">
+    <div class="status-bar">
+        <div id="moveCounter" class="led">000</div>
+        <button id="faceButton" class="face-button">😊</button>
+        <div id="timeCounter" class="led">000</div>
     </div>
+    <div id="gridContainer"></div>
+</div>
 
-    <div class="game-container">
-        <div class="top-bar">
-            <div id="time-counter" class="counter">000</div>
-            <div id="smiley" class="smiley" onclick="initGame()">😊</div>
-            <div id="move-counter" class="counter">000</div>
-        </div>
-        <div id="board" class="grid"></div>
-    </div>
+<script>
+    const LEVELS = {
+        easy: { size: 9, mines: 10 },
+        medium: { size: 16, mines: 40 },
+        hard: { size: 30, mines: 99 }
+    };
 
-    <script>
-        let rows = 10, cols = 10, mines = 15;
-        let board = [];
-        let revealed = [];
-        let flagged = [];
-        let gameActive = true;
-        let moves = 0;
-        let timer = 0;
-        let timerInterval;
+    let boardSize = 9, mineCount = 10, board = [];
+    let moveCounter = 0, timer = 0, timerInterval;
+    let firstClick = true;
 
-        function promptBoardSize() {
-            let size = prompt("Enter board size (e.g. 10 for 10x10, default is 10):", "10");
-            let mineCount = prompt("Enter number of mines:", "15");
-            rows = cols = parseInt(size) || 10;
-            mines = parseInt(mineCount) || 15;
-            initGame();
+    function createBoard(size, mines) {
+        const gridContainer = document.getElementById("gridContainer");
+        gridContainer.innerHTML = "";
+        gridContainer.style.gridTemplateColumns = `repeat(${size}, 25px)`;
+        boardSize = size;
+        mineCount = mines;
+        moveCounter = 0;
+        timer = 0;
+        firstClick = true;
+        clearInterval(timerInterval);
+        document.getElementById("moveCounter").textContent = "000";
+        document.getElementById("timeCounter").textContent = "000";
+        document.getElementById("faceButton").textContent = "😊";
+
+        // Initialize board
+        board = Array.from({ length: size }, () => Array(size).fill(0));
+
+        // Place mines
+        let placedMines = 0;
+        while (placedMines < mines) {
+            let x = Math.floor(Math.random() * size);
+            let y = Math.floor(Math.random() * size);
+            if (board[x][y] === 0) {
+                board[x][y] = "M";
+                placedMines++;
+            }
         }
 
-        function initGame() {
-            clearInterval(timerInterval);
-            moves = 0;
-            timer = 0;
-            document.getElementById("time-counter").textContent = "000";
-            document.getElementById("move-counter").textContent = "000";
-            document.getElementById("smiley").textContent = "😊";
-            gameActive = true;
-
-            board = Array(rows).fill().map(() => Array(cols).fill(0));
-            revealed = Array(rows).fill().map(() => Array(cols).fill(false));
-            flagged = Array(rows).fill().map(() => Array(cols).fill(false));
-
-            placeMines();
-            updateBoardUI();
-
-            timerInterval = setInterval(() => {
-                if (gameActive) {
-                    timer++;
-                    document.getElementById("time-counter").textContent = timer.toString().padStart(3, '0');
+        // Calculate numbers
+        for (let x = 0; x < size; x++) {
+            for (let y = 0; y < size; y++) {
+                if (board[x][y] === "M") continue;
+                let count = 0;
+                for (let dx of [-1, 0, 1]) {
+                    for (let dy of [-1, 0, 1]) {
+                        let nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < size && ny >= 0 && ny < size && board[nx][ny] === "M") {
+                            count++;
+                        }
+                    }
                 }
+                board[x][y] = count;
+            }
+        }
+
+        // Create grid
+        for (let x = 0; x < size; x++) {
+            for (let y = 0; y < size; y++) {
+                let button = document.createElement("button");
+                button.className = "cell";
+                button.dataset.x = x;
+                button.dataset.y = y;
+                button.onclick = () => revealCell(x, y);
+                gridContainer.appendChild(button);
+            }
+        }
+    }
+
+    function revealCell(x, y) {
+        let button = document.querySelector(`button[data-x="${x}"][data-y="${y}"]`);
+        if (!button || button.disabled) return;
+
+        if (firstClick) {
+            firstClick = false;
+            timerInterval = setInterval(() => {
+                timer++;
+                document.getElementById("timeCounter").textContent = String(timer).padStart(3, "0");
             }, 1000);
         }
 
-        function placeMines() {
-            let placed = 0;
-            while (placed < mines) {
-                let r = Math.floor(Math.random() * rows);
-                let c = Math.floor(Math.random() * cols);
-                if (board[r][c] !== 'X') {
-                    board[r][c] = 'X';
-                    placed++;
+        moveCounter++;
+        document.getElementById("moveCounter").textContent = String(moveCounter).padStart(3, "0");
+
+        if (board[x][y] === "M") {
+            button.innerHTML = "💣";
+            button.classList.add("mine");
+            gameOver();
+            return;
+        }
+
+        button.textContent = board[x][y] > 0 ? board[x][y] : "";
+        button.disabled = true;
+        button.style.background = "#D3D3D3";
+
+        if (board[x][y] === 0) {
+            for (let dx of [-1, 0, 1]) {
+                for (let dy of [-1, 0, 1]) {
+                    let nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && nx < boardSize && ny >= 0 && ny < boardSize) {
+                        revealCell(nx, ny);
+                    }
                 }
             }
         }
+    }
 
-        function updateBoardUI() {
-            let boardElem = document.getElementById("board");
-            boardElem.innerHTML = "";
-            boardElem.style.gridTemplateColumns = `repeat(${cols}, 25px)`;
-            boardElem.style.gridTemplateRows = `repeat(${rows}, 25px)`;
+    function gameOver() {
+        clearInterval(timerInterval);
+        document.getElementById("faceButton").textContent = "☠️";
+        document.querySelectorAll(".cell").forEach(btn => btn.disabled = true);
+    }
 
-            for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                    let cell = document.createElement("div");
-                    cell.classList.add("cell");
-                    cell.dataset.row = r;
-                    cell.dataset.col = c;
-                    cell.addEventListener("click", () => revealCell(r, c));
-                    cell.addEventListener("contextmenu", (e) => {
-                        e.preventDefault();
-                        toggleFlag(r, c);
-                    });
-                    boardElem.appendChild(cell);
-                }
-            }
+    document.getElementById("faceButton").onclick = () => {
+        let difficulty = prompt("Enter difficulty: easy, medium, or hard").toLowerCase();
+        if (LEVELS[difficulty]) {
+            createBoard(LEVELS[difficulty].size, LEVELS[difficulty].mines);
         }
+    };
 
-        function revealCell(r, c) {
-            if (!gameActive || revealed[r][c] || flagged[r][c]) return;
-
-            moves++;
-            document.getElementById("move-counter").textContent = moves.toString().padStart(3, '0');
-
-            let cell = document.querySelector(`[data-row='${r}'][data-col='${c}']`);
-            revealed[r][c] = true;
-            cell.classList.add("open");
-
-            if (board[r][c] === 'X') {
-                cell.classList.add("mine");
-                document.getElementById("smiley").textContent = "😵";
-                gameActive = false;
-                clearInterval(timerInterval);
-            }
-        }
-
-        function toggleFlag(r, c) {
-            if (!gameActive || revealed[r][c]) return;
-
-            let cell = document.querySelector(`[data-row='${r}'][data-col='${c}']`);
-            flagged[r][c] = !flagged[r][c];
-            cell.textContent = flagged[r][c] ? "🚩" : "";
-            cell.classList.toggle("flag", flagged[r][c]);
-        }
-
-        initGame();
-    </script>
+    createBoard(9, 10);
+</script>
 
 </body>
 </html>
