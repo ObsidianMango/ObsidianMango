@@ -931,7 +931,6 @@ function touchHandler(event) {
   switch(event.type) {
     case "touchstart":
       type = "mousedown";
-      // Mark that no movement has happened yet.
       first.target.__touchMoved = false;
       break;
     case "touchmove":
@@ -944,6 +943,52 @@ function touchHandler(event) {
     default:
       return;
   }
+  
+  // Create and dispatch the simulated mouse event.
+  var simulatedEvent = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    view: window,
+    clientX: first.clientX,
+    clientY: first.clientY
+  });
+  first.target.dispatchEvent(simulatedEvent);
+  
+  if (event.type === "touchend") {
+    var currentTime = new Date().getTime();
+    var lastTap = first.target.__lastTap || 0;
+    var tapGap = currentTime - lastTap;
+    
+    if (tapGap < 300 && !first.target.__touchMoved) {
+      var dblClickEvent = new MouseEvent("dblclick", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: first.clientX,
+        clientY: first.clientY
+      });
+      first.target.dispatchEvent(dblClickEvent);
+      first.target.__lastTap = 0;
+    } else {
+      if (!first.target.__touchMoved) {
+        var clickEvent = new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX: first.clientX,
+          clientY: first.clientY
+        });
+        first.target.dispatchEvent(clickEvent);
+      }
+      first.target.__lastTap = currentTime;
+    }
+  }
+  
+  // Only prevent default for TouchEvents.
+  if (event instanceof TouchEvent) {
+    event.preventDefault();
+  }
+}
   
   // Create and dispatch the simulated mouse event.
   var simulatedEvent = new MouseEvent(type, {
