@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>🎨 Paint </title>
+  <style>
+    /* Base styles */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: "MS Sans Serif", Geneva, sans-serif;
+      background-color: #c0c0c0;
+    }
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+    .toolbox {
+      width: 140px;
+      background-color: #d4d0c8;
+      border-right: 2px solid #fff;
+      border-bottom: 2px solid #fff;
+      padding: 6px;
+      box-sizing: border-box;
+    }
+    .toolbox button,
+    .toolbox input[type="button"] {
+      width: 100%;
+      margin-bottom: 4px;
+      font-size: 18px;
+      border: 2px outset #fff;
+      background-color: #d0d0d0;
+      cursor: pointer;
+      padding: 3px 0;
+    }
+    .toolbox button:active,
+    .toolbox input[type="button"]:active {
+      border: 2px inset #fff;
+    }
+    .toolbox button.active {
+      border: 2px inset #fff;
+      background-color: #b0b0b0;
+    }
+    .toolbox input[type="color"] {
+      width: 100%;
+      height: 24px;
+      border: 2px inset #fff;
+      margin-bottom: 4px;
+      padding: 0;
+      cursor: pointer;
+    }
+    .toolbox input[type="range"] {
+      width: 100%;
+      margin-bottom: 4px;
+    }
+    .undo-redo-container {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .undo-redo-container button {
+      width: 48%;
+      margin-bottom: 0;
+    }
+    #brushPreview {
+      margin-bottom: 4px;
+      text-align: center;
+    }
+    .canvas-container {
+      flex-grow: 1;
+      background-color: #fff;
+      position: relative;
+      padding: 10px;
+      box-sizing: border-box;
+      resize: both;
+      overflow: auto;
+    }
+    canvas {
+      border: 2px inset #fff;
+      background-color: #fff;
+      display: block;
+    }
+    /* Cursor guide for drawing */
+    #cursorGuide {
+      position: absolute;
+      border: 1px dashed #000;
+      border-radius: 50%;
+      pointer-events: none;
+      display: none;
+      z-index: 10;
+    }
+    /* Updated Selection overlay and inner canvas */
+    #selectionOverlay {
+      position: absolute;
+      border: 1px dashed blue;
+      background: rgba(173,216,230,0.2);
+      display: none;
+      z-index: 15;
+      box-sizing: border-box;
+    }
+    #selectionCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    .handle {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: blue;
+      border: 1px solid white;
+      cursor: pointer;
+      z-index: 16;
+    }
+    /* Responsive adjustments */
+    @media (max-width: 600px) {
+      .toolbox {
+        width: 110px;
+        padding: 4px;
+      }
+      .toolbox button,
+      .toolbox input[type="button"] {
+        font-size: 16px;
+        padding: 2px 0;
+      }
+      .undo-redo-container button {
+        font-size: 16px;
+      }
+    }
+    @media (max-width: 400px) {
+      .toolbox {
+        width: 90px;
+        padding: 3px;
+      }
+      .toolbox button,
+      .toolbox input[type="button"] {
+        font-size: 14px;
+        padding: 1px 0;
+      }
+      .undo-redo-container button {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="toolbox">
+      <!-- Tool buttons -->
+      <button id="pencilBtn" title="Pencil">✏️</button>
+      <button id="eraserBtn" title="Eraser">🧽</button>
+      <button id="eyeDropperBtn" title="Eye Dropper">👁️</button>
+      <button id="rectBtn" title="Square">□</button>
+      <button id="circleBtn" title="Circle">○</button>
+      <button id="lineBtn" title="Line">📏</button>
+      <button id="bucketBtn" title="Fill">🖌️</button>
+      <button id="selectBtn" title="Select/Transform">🔲</button>
+      <input type="color" id="colorPicker" title="Pick Color" value="#000000">
+      <input type="range" id="brushSize" title="Brush Size" min="1" max="20" value="2">
+      <div id="brushPreview"></div>
+      <div class="undo-redo-container">
+        <button id="undoBtn" title="Undo">⟲</button>
+        <button id="redoBtn" title="Redo">⟳</button>
+      </div>
+      <button id="clearBtn" title="Clear Canvas">🗑️</button>
+      <button id="saveBtn" title="Save Canvas">💾</button>
+    </div>
+    <div class="canvas-container" id="canvasContainer">
+      <canvas id="paintCanvas" width="800" height="600"></canvas>
+      <div id="cursorGuide"></div>
+      <!-- Selection overlay with inner canvas -->
+      <div id="selectionOverlay">
+        <canvas id="selectionCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+  <script>
+    /* === Global Variables & Initialization === */
+    const canvas = document.getElementById('paintCanvas');
+    const ctx = canvas.getContext('2d');
+    const canvasContainer = document.getElementById('canvasContainer');
+    const cursorGuide = document.getElementById('cursorGuide');
+    const selectionOverlay = document.getElementById('selectionOverlay');
+    const selectionCanvas = document.getElementById('selectionCanvas');
+
+    let drawing = false;
+    let currentTool = 'pencil';
+    let brushColor = document.getElementById('colorPicker').value;
+    let brushSize = document.getElementById('brushSize').value;
+    let shapeStartX = 0, shapeStartY = 0;
+    let savedImageData = null;
+    let undoStack = [];
+    let redoStack = [];
+
+    // Selection tool variables
+    let selectionActive = false;
+    let isSelecting = false;
+    let isMovingSelection = false;
+    let isResizingSelection = false;
+    let activeHandle = null;
+    let selectionDragStart = null;
+    let selectionRect = null; // {x, y, w, h}
+    let selectedImageData = null;
+    let originalSelectionImage = null; // Copy for live preview
+
+    function updateUndoState() {
+      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      redoStack = [];
+    }
+
+    function initializeCanvas() {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      updateUndoState();
+    }
+    initializeCanvas();
+
+    // For canvas events
+    function getMousePos(e) {
+      return { x: e.offsetX, y: e.offsetY };
+    }
+    // For container events
+    function getContainerMousePos(e) {
+      const rect = canvasContainer.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    function updateBrushPreview() {
+      const preview = document.getElementById('brushPreview');
+      if (currentTool === 'pencil' || currentTool === 'eraser') {
+        const size = parseInt(brushSize);
+        preview.style.display = "block";
+        preview.innerHTML = `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${currentTool==='eraser'?'#fff':brushColor};border:1px solid #000;margin:auto;"></div>`;
+      } else {
+        preview.style.display = "none";
+      }
+    }
+
+    function updateCursorGuide(e) {
+      if (currentTool === 'pencil' || currentTool === 'eraser') {
+        const size = parseInt(brushSize);
+        const rect = canvasContainer.getBoundingClientRect();
+        const guideX = e.clientX - rect.left - size / 2;
+        const guideY = e.clientY - rect.top - size / 2;
+        cursorGuide.style.width = size + 'px';
+        cursorGuide.style.height = size + 'px';
+        cursorGuide.style.left = guideX + 'px';
+        cursorGuide.style.top = guideY + 'px';
+        cursorGuide.style.display = 'block';
+      } else {
+        cursorGuide.style.display = 'none';
+      }
+    }
+
+    function setActiveTool(tool, btnId) {
+      currentTool = tool;
+      document.querySelectorAll('.toolbox button').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(btnId).classList.add('active');
+      updateBrushPreview();
+      if (selectionActive && tool !== 'select') clearSelection();
+    }
+
+    /* === Drawing Functions === */
+    function startFreehand(pos) {
+      drawing = true;
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      cursorGuide.style.display = 'none';
+    }
+    function freehandDraw(pos) {
+      if (!drawing) return;
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = (currentTool === 'eraser') ? '#fff' : brushColor;
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+    }
+    function endFreehand() {
+      drawing = false;
+      ctx.beginPath();
+      cursorGuide.style.display = 'block';
+      updateUndoState();
+    }
+    function drawShape(x1, y1, x2, y2) {
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = brushColor;
+      ctx.beginPath();
+      if (currentTool === 'rect') {
+        ctx.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
+      } else if (currentTool === 'circle') {
+        const radius = Math.hypot(x2 - x1, y2 - y1);
+        ctx.arc(x1, y1, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+      } else if (currentTool === 'line') {
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      updateUndoState();
+    }
+    function floodFill(startX, startY, fillColor) {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      const width = canvas.width;
+      const stack = [];
+      const pixelPos = (startY * width + startX) * 4;
+      const targetColor = [data[pixelPos], data[pixelPos + 1], data[pixelPos + 2], data[pixelPos + 3]];
+      if (targetColor[0] === fillColor[0] &&
+          targetColor[1] === fillColor[1] &&
+          targetColor[2] === fillColor[2] &&
+          targetColor[3] === fillColor[3]) return;
+      stack.push([startX, startY]);
+      while (stack.length) {
+        const [x, y] = stack.pop();
+        const pos = (y * width + x) * 4;
+        const currentColor = [data[pos], data[pos+1], data[pos+2], data[pos+3]];
+        if (currentColor.every((v,i) => v === targetColor[i])) {
+          data[pos] = fillColor[0];
+          data[pos+1] = fillColor[1];
+          data[pos+2] = fillColor[2];
+          data[pos+3] = fillColor[3];
+          if (x > 0) stack.push([x-1, y]);
+          if (x < width-1) stack.push([x+1, y]);
+          if (y > 0) stack.push([x, y-1]);
+          if (y < canvas.height-1) stack.push([x, y+1]);
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+      updateUndoState();
+    }
+    
+    /* === Selection/Transform Tool Functions === */
+    function startSelection(pos) {
+      isSelecting = true;
+      selectionRect = { x: pos.x, y: pos.y, w: 0, h: 0 };
+      selectionOverlay.style.display = 'block';
+      updateSelectionOverlay();
+    }
+    function updateSelection(pos) {
+      if (!isSelecting) return;
+      selectionRect.w = pos.x - selectionRect.x;
+      selectionRect.h = pos.y - selectionRect.y;
+      updateSelectionOverlay();
+      if (originalSelectionImage) updateSelectionCanvas();
+    }
+    function finalizeSelection() {
+      isSelecting = false;
+      if (selectionRect.w < 0) {
+        selectionRect.x += selectionRect.w;
+        selectionRect.w = Math.abs(selectionRect.w);
+      }
+      if (selectionRect.h < 0) {
+        selectionRect.y += selectionRect.h;
+        selectionRect.h = Math.abs(selectionRect.h);
+      }
+      selectedImageData = ctx.getImageData(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h);
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = selectionRect.w;
+      tempCanvas.height = selectionRect.h;
+      tempCanvas.getContext('2d').putImageData(selectedImageData, 0, 0);
+      originalSelectionImage = tempCanvas;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h);
+      updateUndoState();
+      updateSelectionOverlay();
+      updateSelectionCanvas();
+      createSelectionHandles();
+      selectionActive = true;
+    }
+    function updateSelectionOverlay() {
+      if (selectionRect) {
+        selectionOverlay.style.left = selectionRect.x + 'px';
+        selectionOverlay.style.top = selectionRect.y + 'px';
+        selectionOverlay.style.width = Math.abs(selectionRect.w) + 'px';
+        selectionOverlay.style.height = Math.abs(selectionRect.h) + 'px';
+      }
+    }
+    function updateSelectionCanvas() {
+      if (!selectionRect || !originalSelectionImage) return;
+      selectionCanvas.width = selectionOverlay.clientWidth;  // Use overlay's content box
+      selectionCanvas.height = selectionOverlay.clientHeight;
+      const selCtx = selectionCanvas.getContext('2d');
+      selCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+      selCtx.drawImage(originalSelectionImage, 0, 0, originalSelectionImage.width, originalSelectionImage.height, 0, 0, selectionCanvas.width, selectionCanvas.height);
+    }
+    function clearSelection() {
+      selectionActive = false;
+      selectionRect = null;
+      selectionOverlay.style.display = 'none';
+      document.querySelectorAll('.handle').forEach(h => h.remove());
+    }
+    function createSelectionHandles() {
+      document.querySelectorAll('.handle').forEach(h => h.remove());
+      const handleSize = 8;
+      const positions = [
+        { x: 0, y: 0, id: 'nw' },
+        { x: 0.5, y: 0, id: 'n' },
+        { x: 1, y: 0, id: 'ne' },
+        { x: 0, y: 0.5, id: 'w' },
+        { x: 1, y: 0.5, id: 'e' },
+        { x: 0, y: 1, id: 'sw' },
+        { x: 0.5, y: 1, id: 's' },
+        { x: 1, y: 1, id: 'se' }
+      ];
+      positions.forEach(pos => {
+        const handle = document.createElement('div');
+        handle.className = 'handle';
+        handle.dataset.handle = pos.id;
+        const rectW = Math.abs(selectionRect.w);
+        const rectH = Math.abs(selectionRect.h);
+        handle.style.left = (pos.x * rectW - handleSize / 2) + 'px';
+        handle.style.top = (pos.y * rectH - handleSize / 2) + 'px';
+        handle.style.width = handleSize + 'px';
+        handle.style.height = handleSize + 'px';
+        selectionOverlay.appendChild(handle);
+        handle.addEventListener('mousedown', (e) => {
+          e.stopPropagation();
+          isResizingSelection = true;
+          activeHandle = pos.id;
+        });
+      });
+    }
+    
+    // Container events for live selection preview, moving/resizing
+    canvasContainer.addEventListener('mousemove', (e) => {
+      if (currentTool === 'select') {
+        const pos = getContainerMousePos(e);
+        if (isSelecting) {
+          updateSelection(pos);
+        }
+        if (isMovingSelection && selectionDragStart) {
+          const dx = pos.x - selectionDragStart.x;
+          const dy = pos.y - selectionDragStart.y;
+          selectionRect.x = selectionDragStart.origX + dx;
+          selectionRect.y = selectionDragStart.origY + dy;
+          updateSelectionOverlay();
+        }
+        if (isResizingSelection && selectionActive) {
+          if (activeHandle === 'nw') {
+            const newW = selectionRect.w + (selectionRect.x - pos.x);
+            const newH = selectionRect.h + (selectionRect.y - pos.y);
+            selectionRect.x = pos.x;
+            selectionRect.y = pos.y;
+            selectionRect.w = newW;
+            selectionRect.h = newH;
+          } else if (activeHandle === 'n') {
+            const newH = selectionRect.h + (selectionRect.y - pos.y);
+            selectionRect.y = pos.y;
+            selectionRect.h = newH;
+          } else if (activeHandle === 'ne') {
+            const newW = pos.x - selectionRect.x;
+            const newH = selectionRect.h + (selectionRect.y - pos.y);
+            selectionRect.y = pos.y;
+            selectionRect.w = newW;
+            selectionRect.h = newH;
+          } else if (activeHandle === 'w') {
+            const newW = selectionRect.w + (selectionRect.x - pos.x);
+            selectionRect.x = pos.x;
+            selectionRect.w = newW;
+          } else if (activeHandle === 'e') {
+            selectionRect.w = pos.x - selectionRect.x;
+          } else if (activeHandle === 'sw') {
+            const newW = selectionRect.w + (selectionRect.x - pos.x);
+            const newH = pos.y - selectionRect.y;
+            selectionRect.x = pos.x;
+            selectionRect.w = newW;
+            selectionRect.h = newH;
+          } else if (activeHandle === 's') {
+            selectionRect.h = pos.y - selectionRect.y;
+          } else if (activeHandle === 'se') {
+            selectionRect.w = pos.x - selectionRect.x;
+            selectionRect.h = pos.y - selectionRect.y;
+          }
+          updateSelectionOverlay();
+          updateSelectionCanvas();
+          createSelectionHandles();
+        }
+      }
+    });
+    canvasContainer.addEventListener('mouseup', (e) => {
+      if (currentTool === 'select') {
+        if (isSelecting) {
+          finalizeSelection();
+        }
+        if (isMovingSelection) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = selectionRect.w;
+          tempCanvas.height = selectionRect.h;
+          tempCanvas.getContext('2d').drawImage(selectionCanvas, 0, 0);
+          originalSelectionImage = tempCanvas;
+        }
+        isMovingSelection = false;
+        isResizingSelection = false;
+        activeHandle = null;
+        selectionDragStart = null;
+      }
+    });
+    selectionOverlay.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      if (currentTool === 'select') {
+        isMovingSelection = true;
+        selectionDragStart = Object.assign({}, getContainerMousePos(e), { origX: selectionRect.x, origY: selectionRect.y });
+      }
+    });
+    canvasContainer.addEventListener('mousedown', (e) => {
+      if (currentTool === 'select' && selectionActive) {
+        const selRect = selectionOverlay.getBoundingClientRect();
+        if (!(e.clientX >= selRect.left && e.clientX <= selRect.right &&
+              e.clientY >= selRect.top && e.clientY <= selRect.bottom)) {
+          ctx.drawImage(selectionCanvas, selectionRect.x, selectionRect.y, selectionRect.w, selectionRect.h);
+          updateUndoState();
+          clearSelection();
+        }
+      }
+    });
+    
+    /* === Canvas Mouse Events === */
+    canvas.addEventListener('mousedown', (e) => {
+      const pos = getMousePos(e);
+      if (currentTool === 'pencil' || currentTool === 'eraser') {
+        startFreehand(pos);
+      } else if (currentTool === 'eyeDropper') {
+        const pixel = ctx.getImageData(pos.x, pos.y, 1, 1).data;
+        const hexColor = "#" +
+          ("0" + pixel[0].toString(16)).slice(-2) +
+          ("0" + pixel[1].toString(16)).slice(-2) +
+          ("0" + pixel[2].toString(16)).slice(-2);
+        brushColor = hexColor;
+        document.getElementById('colorPicker').value = hexColor;
+        setActiveTool('pencil', 'pencilBtn');
+      } else if (currentTool === 'rect' || currentTool === 'circle' || currentTool === 'line') {
+        drawing = true;
+        shapeStartX = pos.x;
+        shapeStartY = pos.y;
+        savedImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      } else if (currentTool === 'bucket') {
+        const fillRgb = (function(hex){
+          hex = hex.replace('#','');
+          if(hex.length===3){ hex = hex.split('').map(c=>c+c).join(''); }
+          const bigint = parseInt(hex,16);
+          return { r:(bigint>>16)&255, g:(bigint>>8)&255, b:bigint&255 };
+        })(brushColor);
+        floodFill(pos.x, pos.y, [fillRgb.r, fillRgb.g, fillRgb.b, 255]);
+      } else if (currentTool === 'select') {
+        if (!selectionActive) startSelection(pos);
+      }
+    });
+    canvas.addEventListener('mousemove', (e) => {
+      const pos = getMousePos(e);
+      if ((currentTool === 'pencil' || currentTool === 'eraser') && drawing) {
+        freehandDraw(pos);
+      } else if ((currentTool === 'rect' || currentTool === 'circle' || currentTool === 'line') && drawing) {
+        ctx.putImageData(savedImageData, 0, 0);
+        drawShape(shapeStartX, shapeStartY, pos.x, pos.y);
+      }
+      updateCursorGuide(e);
+    });
+    canvas.addEventListener('mouseup', (e) => {
+      const pos = getMousePos(e);
+      if (currentTool === 'pencil' || currentTool === 'eraser') {
+        endFreehand();
+      } else if ((currentTool === 'rect' || currentTool === 'circle' || currentTool === 'line') && drawing) {
+        drawing = false;
+        drawShape(shapeStartX, shapeStartY, pos.x, pos.y);
+      }
+    });
+    canvas.addEventListener('mouseenter', (e) => { updateCursorGuide(e); });
+    canvas.addEventListener('mouseleave', () => { cursorGuide.style.display = 'none'; });
+    
+    /* === Button Event Listeners === */
+    document.getElementById('pencilBtn').addEventListener('click', () => { setActiveTool('pencil', 'pencilBtn'); });
+    document.getElementById('eraserBtn').addEventListener('click', () => { setActiveTool('eraser', 'eraserBtn'); });
+    document.getElementById('eyeDropperBtn').addEventListener('click', () => { setActiveTool('eyeDropper', 'eyeDropperBtn'); });
+    document.getElementById('rectBtn').addEventListener('click', () => { setActiveTool('rect', 'rectBtn'); });
+    document.getElementById('circleBtn').addEventListener('click', () => { setActiveTool('circle', 'circleBtn'); });
+    document.getElementById('lineBtn').addEventListener('click', () => { setActiveTool('line', 'lineBtn'); });
+    document.getElementById('bucketBtn').addEventListener('click', () => { setActiveTool('bucket', 'bucketBtn'); });
+    document.getElementById('selectBtn').addEventListener('click', () => { setActiveTool('select', 'selectBtn'); });
+    document.getElementById('colorPicker').addEventListener('change', (e) => { brushColor = e.target.value; updateBrushPreview(); });
+    document.getElementById('brushSize').addEventListener('change', (e) => { brushSize = e.target.value; updateBrushPreview(); });
+    document.getElementById('undoBtn').addEventListener('click', () => {
+      if (undoStack.length > 1) {
+        redoStack.push(undoStack.pop());
+        const previous = undoStack[undoStack.length - 1];
+        ctx.putImageData(previous, 0, 0);
+      }
+    });
+    document.getElementById('redoBtn').addEventListener('click', () => {
+      if (redoStack.length) {
+        const redoState = redoStack.pop();
+        ctx.putImageData(redoState, 0, 0);
+        undoStack.push(redoState);
+      }
+    });
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      initializeCanvas();
+    });
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = 'mspaint_relica.png';
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    });
+    
+    // Resize observer for canvas container
+    const resizeObserver = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        const newWidth = entry.contentRect.width;
+        const newHeight = entry.contentRect.height;
+        if (newWidth !== canvas.width || newHeight !== canvas.height) {
+          const temp = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          canvas.width = newWidth;
+          canvas.height = newHeight;
+          ctx.putImageData(temp, 0, 0);
+        }
+      }
+    });
+    resizeObserver.observe(canvasContainer);
+    
+    updateBrushPreview();
+  </script>
+</body>
+</html>
