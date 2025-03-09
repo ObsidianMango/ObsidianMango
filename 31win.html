@@ -28,7 +28,7 @@
     position: absolute;
     top: 50px;
     left: 50px;
-    width: 600px;  /* Default non-folder window size */
+    width: 600px;
     height: 400px;
     border: 2px solid #FFFFFF;
     box-shadow: inset -1px -1px 0 #808080, inset 1px 1px 0 #808080;
@@ -71,10 +71,6 @@
     user-select: none;
     pointer-events: none;
   }
-  .minimized-icon.selected .app-label {
-    background-color: blue;
-    color: white;
-  }
   .window-controls { display: flex; }
   /* Menu bar */
   .window-menu-bar {
@@ -115,7 +111,7 @@
   /* Window content area */
   .window-content {
     position: absolute;
-    top: 40px; /* 20px title + 20px menu */
+    top: 40px;
     left: 0;
     right: 0;
     bottom: 0;
@@ -282,6 +278,7 @@ let dragOffsetY = 0;
 let resizeWindowEl = null;
 let resizeOffsetX = 0;
 let resizeOffsetY = 0;
+let currentDragWindow = null; // New variable for tracking drag window
 
 /* Global variable for potential icon dragging */
 let potentialDrag = null;
@@ -297,22 +294,40 @@ function bringWindowToFront(windowEl) {
   windowEl.style.zIndex = ++zIndexCounter;
 }
 
-/* Window dragging */
+/* Updated Window Dragging Functions */
 function beginDrag(e, windowEl) {
   e = e || window.event;
   isDragging = true;
+  currentDragWindow = windowEl; // Store the window being dragged
   windowEl.style.zIndex = ++zIndexCounter;
   dragOffsetX = e.clientX - windowEl.offsetLeft;
   dragOffsetY = e.clientY - windowEl.offsetTop;
+  
+  // Disable pointer events on any iframe within the window
+  let iframe = windowEl.querySelector('iframe');
+  if (iframe) {
+    iframe.style.pointerEvents = 'none';
+  }
+  
   document.onmousemove = (ev) => doDrag(ev, windowEl);
   document.onmouseup = stopDrag;
 }
+
 function doDrag(e, windowEl) {
   if (!isDragging) return;
   windowEl.style.left = (e.clientX - dragOffsetX) + 'px';
   windowEl.style.top = (e.clientY - dragOffsetY) + 'px';
 }
+
 function stopDrag() {
+  if (currentDragWindow) {
+    // Re-enable pointer events on the iframe
+    let iframe = currentDragWindow.querySelector('iframe');
+    if (iframe) {
+      iframe.style.pointerEvents = 'auto';
+    }
+    currentDragWindow = null;
+  }
   isDragging = false;
   document.onmousemove = null;
   document.onmouseup = null;
@@ -354,23 +369,39 @@ function selectIcon(e) {
   e.currentTarget.classList.add('selected');
 }
 
-/* Window resizing */
+/* Updated Window Resizing Functions */
 function beginResize(e, windowEl) {
   e = e || window.event;
   e.stopPropagation();
   resizeWindowEl = windowEl;
   resizeOffsetX = windowEl.offsetWidth - e.clientX;
   resizeOffsetY = windowEl.offsetHeight - e.clientY;
+  
+  // Disable pointer events on any iframe within the window
+  let iframe = windowEl.querySelector('iframe');
+  if (iframe) {
+    iframe.style.pointerEvents = 'none';
+  }
+  
   document.onmousemove = doResize;
   document.onmouseup = stopResize;
 }
+
 function doResize(e) {
   if (!resizeWindowEl) return;
   resizeWindowEl.style.width = (e.clientX + resizeOffsetX) + 'px';
   resizeWindowEl.style.height = (e.clientY + resizeOffsetY) + 'px';
   if (resizeWindowEl.id === "clockWindow") adjustClockFont(resizeWindowEl);
 }
+
 function stopResize() {
+  if (resizeWindowEl) {
+    // Re-enable pointer events on the iframe
+    let iframe = resizeWindowEl.querySelector('iframe');
+    if (iframe) {
+      iframe.style.pointerEvents = 'auto';
+    }
+  }
   resizeWindowEl = null;
   document.onmousemove = null;
   document.onmouseup = null;
