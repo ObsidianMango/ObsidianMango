@@ -40,8 +40,9 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) |
+| **Been Franklin**           | 👁 [BeenFranklin](https://obsidianmango.github.io/ObsidianMango/beenf.html) |
 | **ThreeOne**   | 🖥️ [SteveOS](https://obsidianmango.github.io/ObsidianMango/31win.html) |
-| **Paint**   | 🎨 [Paint](https://obsidianmango.github.io/ObsidianMango/paint.html) |
+| **Virtues**   | △ [Virtues](https://obsidianmango.github.io/ObsidianMango/virtu.html) |
 | **LunchSpin**   | 🥨 [Lunch](https://obsidianmango.github.io/ObsidianMango/lspin.html) |
 | **RubiksCube**   | 🧊 [Cuber](https://obsidianmango.github.io/ObsidianMango/cuber.html) |
 | **BlockBreaker**   | ☐ [BlkBrkr](https://obsidianmango.github.io/ObsidianMango/tile.html) |
