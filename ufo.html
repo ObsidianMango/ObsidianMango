@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Infinite UFO Combat Simulator – Endless Adventure</title>
+  <!-- iPhone friendly meta tags -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+    #startScreen {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.9); color: #fff; z-index: 20;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+    }
+    #startScreen button {
+      padding: 15px 30px; font-size: 20px; margin-top: 20px;
+      background: #555; border: none; border-radius: 5px; color: #fff;
+    }
+    #score {
+      position: absolute; top: 10px; left: 10px;
+      color: #fff; font-size: 24px; z-index: 10;
+    }
+    #level {
+      position: absolute; top: 10px; right: 10px;
+      color: #fff; font-size: 24px; z-index: 10;
+    }
+    /* Minimap (top-right) */
+    #minimap {
+      position: absolute; top: 50px; right: 10px;
+      border: 2px solid #fff; background: rgba(0,0,0,0.5);
+      z-index: 10;
+    }
+    /* Virtual Joystick Container (bottom-left) */
+    #joystickContainer {
+      position: fixed; bottom: 20px; left: 20px;
+      width: 100px; height: 100px; background: rgba(255,255,255,0.1);
+      border-radius: 50%; z-index: 10; touch-action: none;
+    }
+    /* Joystick Knob */
+    #joystick {
+      position: absolute; top: 50%; left: 50%;
+      width: 40px; height: 40px; margin: -20px 0 0 -20px;
+      background: rgba(255,255,255,0.5); border-radius: 50%;
+    }
+    /* Vertical Controls & Boost (bottom-right) */
+    #verticalControls {
+      position: fixed; bottom: 20px; right: 20px; z-index: 10;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    #verticalControls button {
+      width: 60px; height: 60px; font-size: 16px;
+      border: none; border-radius: 10px; background: rgba(255,255,255,0.3); color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <!-- Start Screen -->
+  <div id="startScreen">
+    <h1>Infinite UFO Combat Simulator</h1>
+    <p>Tap to Start, Fly Your UFO, Beam Up Targets, and Explore an Endless World!</p>
+    <button id="startBtn">Start Game</button>
+  </div>
+  <!-- Score and Level Display -->
+  <div id="score">Score: 0</div>
+  <div id="level">Level: 1</div>
+  <!-- Minimap -->
+  <canvas id="minimap" width="150" height="150"></canvas>
+  <!-- Virtual Joystick -->
+  <div id="joystickContainer">
+    <div id="joystick"></div>
+  </div>
+  <!-- Vertical Controls and Boost -->
+  <div id="verticalControls">
+    <button id="upBtn">Up</button>
+    <button id="downBtn">Down</button>
+    <button id="boostBtn">Boost</button>
+  </div>
+  <!-- Audio Elements (replace src with your own audio files if desired) -->
+  <audio id="bgMusic" src="https://cdn.pixabay.com/download/audio/2021/10/25/audio_2a7f02a10d.mp3?filename=ambient-space-109455.mp3" loop></audio>
+  <audio id="beamSound" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_1b6f54f185.mp3?filename=laser-124464.mp3"></audio>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // --- Global Variables ---
+    let scene, camera, renderer;
+    let ufo, people = [], trees = [];
+    let score = 0;
+    let level = 1;
+    let activeBeams = [];
+    let particles = [];
+    const beamDuration = 500; // ms
+    const clock = new THREE.Clock();
+
+    // UFO physics parameters
+    const accelerationRate = 30;
+    const friction = 0.98;
+    const maxSpeed = 50;
+    const boostMultiplier = 2;
+    let isBoosting = false;
+    let boostCooldown = 0;
+
+    // Ground tiles for infinite map
+    const groundTiles = [];
+    const tileSize = 200; // each ground tile is 200x200
+    const gridSize = 3;   // 3x3 grid
+
+    // Control state: keyboard + touchscreen joystick
+    const controls = {
+      forward: false, backward: false, left: false, right: false,
+      up: false, down: false, 
+      joystickX: 0, joystickY: 0,
+      boost: false
+    };
+
+    // --- Audio ---
+    const bgMusic = document.getElementById("bgMusic");
+    const beamSound = document.getElementById("beamSound");
+
+    // --- Initialization ---
+    function init() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x000000);
+
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 5, 10);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // Lighting
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(10, 20, 10);
+      scene.add(directionalLight);
+
+      // Create Ground Tiles (3x3 grid)
+      const groundGeometry = new THREE.PlaneGeometry(tileSize, tileSize);
+      const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+      for (let i = 0; i < gridSize * gridSize; i++) {
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+        groundTiles.push(ground);
+      }
+
+      // Starfield background
+      const starGeometry = new THREE.BufferGeometry();
+      const starCount = 1500;
+      const starVertices = [];
+      for (let i = 0; i < starCount; i++) {
+        starVertices.push((Math.random()-0.5)*600);
+        starVertices.push((Math.random()-0.5)*600);
+        starVertices.push((Math.random()-0.5)*600);
+      }
+      starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+      const starMaterial = new THREE.PointsMaterial({ color: 0xffffff });
+      const stars = new THREE.Points(starGeometry, starMaterial);
+      scene.add(stars);
+
+      // UFO creation with physics
+      ufo = new THREE.Group();
+      ufo.velocity = new THREE.Vector3(0, 0, 0);
+      // UFO Base
+      const baseGeom = new THREE.CylinderGeometry(1.5, 1.5, 0.3, 32);
+      const baseMat = new THREE.MeshStandardMaterial({ color: 0x5555ff });
+      const baseMesh = new THREE.Mesh(baseGeom, baseMat);
+      ufo.add(baseMesh);
+      // UFO Dome
+      const domeGeom = new THREE.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+      const domeMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.8 });
+      const domeMesh = new THREE.Mesh(domeGeom, domeMat);
+      domeMesh.position.y = 0.8;
+      ufo.add(domeMesh);
+      // Rotating Ring for extra flair
+      const ringGeom = new THREE.TorusGeometry(1.7, 0.1, 16, 100);
+      const ringMat = new THREE.MeshStandardMaterial({ color: 0xffff00 });
+      const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+      ringMesh.rotation.x = Math.PI / 2;
+      ufo.add(ringMesh);
+      ufo.position.set(0, 3, 0);
+      scene.add(ufo);
+
+      // Create People targets
+      spawnPeople(30);
+
+      // Create Trees
+      spawnTrees(50);
+
+      // Event listeners for keyboard
+      window.addEventListener('keydown', onKeyDown);
+      window.addEventListener('keyup', onKeyUp);
+      window.addEventListener('resize', onWindowResize);
+
+      // Setup touchscreen controls
+      setupJoystick();
+      setupVerticalButtons();
+    }
+
+    // Spawn a number of people (targets) with a slight random drift
+    function spawnPeople(num) {
+      const personGeom = new THREE.BoxGeometry(0.5, 1.5, 0.5);
+      const personMat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+      for (let i = 0; i < num; i++) {
+        const person = new THREE.Mesh(personGeom, personMat);
+        person.position.set((Math.random()-0.5)*150, 0.75, (Math.random()-0.5)*150);
+        // Give each person a small drift vector
+        person.userData.drift = new THREE.Vector3((Math.random()-0.5)*0.05, 0, (Math.random()-0.5)*0.05);
+        // Also store a timer to occasionally change drift
+        person.userData.changeDriftTimer = Math.random() * 2;
+        scene.add(person);
+        people.push(person);
+      }
+    }
+
+    // Spawn a number of simple trees
+    function spawnTrees(num) {
+      for (let i = 0; i < num; i++) {
+        const tree = new THREE.Group();
+        // Trunk
+        const trunkGeom = new THREE.CylinderGeometry(0.2, 0.2, 2);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+        const trunk = new THREE.Mesh(trunkGeom, trunkMat);
+        trunk.position.y = 1;
+        tree.add(trunk);
+        // Leaves
+        const leavesGeom = new THREE.ConeGeometry(1, 2, 8);
+        const leavesMat = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+        const leaves = new THREE.Mesh(leavesGeom, leavesMat);
+        leaves.position.y = 3;
+        tree.add(leaves);
+        // Place tree at random position
+        tree.position.set((Math.random()-0.5)*150, 0, (Math.random()-0.5)*150);
+        scene.add(tree);
+        trees.push(tree);
+      }
+    }
+
+    // Update ground tiles so they follow the UFO and repeat infinitely
+    function updateGroundTiles() {
+      const cellX = Math.floor(ufo.position.x / tileSize);
+      const cellZ = Math.floor(ufo.position.z / tileSize);
+      let index = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          if (groundTiles[index]) {
+            groundTiles[index].position.set(
+              (cellX + i) * tileSize + tileSize/2,
+              0,
+              (cellZ + j) * tileSize + tileSize/2
+            );
+            index++;
+          }
+        }
+      }
+    }
+
+    // Reposition people that wander too far from the UFO (simulate infinite spawn)
+    function updatePeople(delta) {
+      const repositionDistance = 250;
+      people.forEach(person => {
+        // Update drift movement
+        person.position.add(person.userData.drift.clone().multiplyScalar(delta));
+        // Change drift occasionally
+        person.userData.changeDriftTimer -= delta;
+        if (person.userData.changeDriftTimer <= 0) {
+          person.userData.drift = new THREE.Vector3((Math.random()-0.5)*0.05, 0, (Math.random()-0.5)*0.05);
+          person.userData.changeDriftTimer = Math.random() * 2;
+        }
+        // Reposition if too far away
+        if (person.position.distanceTo(ufo.position) > repositionDistance) {
+          person.position.set(
+            ufo.position.x + (Math.random()-0.5)*150,
+            0.75,
+            ufo.position.z + (Math.random()-0.5)*150
+          );
+        }
+      });
+    }
+
+    // Reposition trees that are too far away to always keep them in view
+    function updateTrees() {
+      const repositionDistance = 300;
+      trees.forEach(tree => {
+        if (tree.position.distanceTo(ufo.position) > repositionDistance) {
+          tree.position.set(
+            ufo.position.x + (Math.random()-0.5)*200,
+            0,
+            ufo.position.z + (Math.random()-0.5)*200
+          );
+        }
+      });
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function onKeyDown(event) {
+      switch(event.key.toLowerCase()){
+        case 'w': case 'arrowup': controls.forward = true; break;
+        case 's': case 'arrowdown': controls.backward = true; break;
+        case 'a': case 'arrowleft': controls.left = true; break;
+        case 'd': case 'arrowright': controls.right = true; break;
+        case 'q': controls.up = true; break;
+        case 'e': controls.down = true; break;
+        case ' ': controls.boost = true; break;
+      }
+    }
+    function onKeyUp(event) {
+      switch(event.key.toLowerCase()){
+        case 'w': case 'arrowup': controls.forward = false; break;
+        case 's': case 'arrowdown': controls.backward = false; break;
+        case 'a': case 'arrowleft': controls.left = false; break;
+        case 'd': case 'arrowright': controls.right = false; break;
+        case 'q': controls.up = false; break;
+        case 'e': controls.down = false; break;
+        case ' ': controls.boost = false; break;
+      }
+    }
+
+    // Touchscreen Joystick Setup
+    function setupJoystick() {
+      const joystickContainer = document.getElementById("joystickContainer");
+      const joystick = document.getElementById("joystick");
+      const maxDist = joystickContainer.clientWidth/2;
+      let dragging = false;
+      let rect = joystickContainer.getBoundingClientRect();
+
+      function updateJoystick(clientX, clientY) {
+        const centerX = rect.left + rect.width/2;
+        const centerY = rect.top + rect.height/2;
+        let dx = clientX - centerX, dy = clientY - centerY;
+        const dist = Math.min(Math.sqrt(dx*dx+dy*dy), maxDist);
+        const angle = Math.atan2(dy, dx);
+        const clampedX = Math.cos(angle) * dist;
+        const clampedY = Math.sin(angle) * dist;
+        joystick.style.transform = `translate(${clampedX}px, ${clampedY}px)`;
+        controls.joystickX = clampedX / maxDist;
+        controls.joystickY = clampedY / maxDist;
+      }
+      joystickContainer.addEventListener("touchstart", function(e){
+        e.preventDefault();
+        dragging = true;
+        rect = joystickContainer.getBoundingClientRect();
+        updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+      });
+      joystickContainer.addEventListener("touchmove", function(e){
+        if(dragging) updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+      });
+      joystickContainer.addEventListener("touchend", function(e){
+        dragging = false;
+        joystick.style.transform = "translate(0px,0px)";
+        controls.joystickX = 0; controls.joystickY = 0;
+      });
+      joystickContainer.addEventListener("mousedown", function(e){
+        e.preventDefault();
+        dragging = true;
+        rect = joystickContainer.getBoundingClientRect();
+        updateJoystick(e.clientX, e.clientY);
+      });
+      window.addEventListener("mousemove", function(e){
+        if(dragging) updateJoystick(e.clientX, e.clientY);
+      });
+      window.addEventListener("mouseup", function(e){
+        dragging = false;
+        joystick.style.transform = "translate(0px,0px)";
+        controls.joystickX = 0; controls.joystickY = 0;
+      });
+    }
+
+    // Vertical Buttons & Boost Setup
+    function setupVerticalButtons() {
+      const upBtn = document.getElementById("upBtn");
+      const downBtn = document.getElementById("downBtn");
+      const boostBtn = document.getElementById("boostBtn");
+      upBtn.addEventListener("touchstart", e => { e.preventDefault(); controls.up = true; });
+      upBtn.addEventListener("touchend", e => { e.preventDefault(); controls.up = false; });
+      upBtn.addEventListener("mousedown", () => { controls.up = true; });
+      upBtn.addEventListener("mouseup", () => { controls.up = false; });
+      downBtn.addEventListener("touchstart", e => { e.preventDefault(); controls.down = true; });
+      downBtn.addEventListener("touchend", e => { e.preventDefault(); controls.down = false; });
+      downBtn.addEventListener("mousedown", () => { controls.down = true; });
+      downBtn.addEventListener("mouseup", () => { controls.down = false; });
+      boostBtn.addEventListener("touchstart", e => { e.preventDefault(); controls.boost = true; });
+      boostBtn.addEventListener("touchend", e => { e.preventDefault(); controls.boost = false; });
+      boostBtn.addEventListener("mousedown", () => { controls.boost = true; });
+      boostBtn.addEventListener("mouseup", () => { controls.boost = false; });
+    }
+
+    // Beam effect: yellow line with sound and explosion particles
+    function createBeam(startPos, endPos) {
+      const beamMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
+      const beamGeometry = new THREE.BufferGeometry().setFromPoints([startPos, endPos]);
+      const beam = new THREE.Line(beamGeometry, beamMaterial);
+      scene.add(beam);
+      activeBeams.push({ beam: beam, time: Date.now() });
+      beamSound.currentTime = 0;
+      beamSound.play();
+    }
+
+    // Particle explosion effect for beamed-up targets
+    function createParticles(position) {
+      const particleCount = 30;
+      for (let i = 0; i < particleCount; i++) {
+        const particleGeom = new THREE.SphereGeometry(0.05, 8, 8);
+        const particleMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const particle = new THREE.Mesh(particleGeom, particleMat);
+        particle.position.copy(position);
+        particle.userData.velocity = new THREE.Vector3(
+          (Math.random()-0.5)*3,
+          Math.random()*3,
+          (Math.random()-0.5)*3
+        );
+        particle.userData.startTime = Date.now();
+        particles.push(particle);
+        scene.add(particle);
+      }
+    }
+
+    // Update beams and particles
+    function updateEffects() {
+      const now = Date.now();
+      for (let i = activeBeams.length - 1; i >= 0; i--) {
+        if (now - activeBeams[i].time > beamDuration) {
+          scene.remove(activeBeams[i].beam);
+          activeBeams.splice(i, 1);
+        }
+      }
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        const dt = (now - p.userData.startTime) / 1000;
+        p.position.add(p.userData.velocity.clone().multiplyScalar(dt));
+        let fade = 1 - ((now - p.userData.startTime) / 1000);
+        p.material.opacity = Math.max(fade, 0);
+        p.material.transparent = true;
+        if (now - p.userData.startTime > 1000) {
+          scene.remove(p);
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    // --- Main Animation Loop ---
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+
+      // --- Inertial Flight Mechanics ---
+      let inputVector = new THREE.Vector3();
+      const joystickMag = Math.sqrt(controls.joystickX**2 + controls.joystickY**2);
+      const deadzone = 0.2;
+      if(joystickMag > deadzone) {
+        let targetAngle = Math.atan2(controls.joystickX, -controls.joystickY);
+        let angleDiff = targetAngle - ufo.rotation.y;
+        angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+        ufo.rotation.y += angleDiff * 0.1;
+        inputVector.set(Math.sin(ufo.rotation.y), 0, Math.cos(ufo.rotation.y))
+                   .multiplyScalar(joystickMag);
+      } else {
+        if (controls.forward) inputVector.z -= 1;
+        if (controls.backward) inputVector.z += 1;
+        if (controls.left) inputVector.x -= 1;
+        if (controls.right) inputVector.x += 1;
+      }
+      if(inputVector.length() > 0) {
+        inputVector.normalize().multiplyScalar(accelerationRate * delta * (controls.boost || isBoosting ? boostMultiplier : 1));
+        ufo.velocity.add(inputVector);
+      }
+      if(controls.up) ufo.position.y += accelerationRate * delta;
+      if(controls.down) ufo.position.y -= accelerationRate * delta;
+      if(ufo.position.y < 1) ufo.position.y = 1;
+      if(ufo.velocity.length() > maxSpeed * (controls.boost || isBoosting ? boostMultiplier : 1)) {
+        ufo.velocity.setLength(maxSpeed * (controls.boost || isBoosting ? boostMultiplier : 1));
+      }
+      ufo.velocity.multiplyScalar(friction);
+      ufo.position.add(ufo.velocity.clone().multiplyScalar(delta));
+
+      if(controls.boost && boostCooldown <= 0) {
+        isBoosting = true;
+        boostCooldown = 2;
+      }
+      if(isBoosting) {
+        boostCooldown -= delta;
+        if(boostCooldown <= 0) { isBoosting = false; boostCooldown = 0; }
+      }
+      if(ufo.children[2]) ufo.children[2].rotation.z += delta;
+
+      // --- Update drifting People and reposition if too far ---
+      updatePeople(delta);
+
+      // --- Update Trees to keep them in view ---
+      updateTrees();
+
+      // --- Collision detection with targets ---
+      for (let i = people.length - 1; i >= 0; i--) {
+        const person = people[i];
+        if(ufo.position.distanceTo(person.position) < 3) {
+          createBeam(person.position.clone(), ufo.position.clone());
+          createParticles(person.position.clone());
+          scene.remove(person);
+          people.splice(i, 1);
+          score += 10;
+          document.getElementById("score").innerText = "Score: " + score;
+          // Level up check: every 100 points, increase level and spawn extra targets
+          if(score >= level * 100) {
+            level++;
+            document.getElementById("level").innerText = "Level: " + level;
+            spawnPeople(10);
+          }
+          // Spawn a replacement target
+          const personGeom = new THREE.BoxGeometry(0.5,1.5,0.5);
+          const personMat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+          const newPerson = new THREE.Mesh(personGeom, personMat);
+          newPerson.position.set(ufo.position.x + (Math.random()-0.5)*150, 0.75, ufo.position.z + (Math.random()-0.5)*150);
+          newPerson.userData.drift = new THREE.Vector3((Math.random()-0.5)*0.05, 0, (Math.random()-0.5)*0.05);
+          newPerson.userData.changeDriftTimer = Math.random() * 2;
+          scene.add(newPerson);
+          people.push(newPerson);
+        }
+      }
+
+      updateEffects();
+      updateGroundTiles();
+
+      // --- Camera Follow ---
+      const offset = new THREE.Vector3(0, 5, -15);
+      offset.applyQuaternion(ufo.quaternion);
+      const cameraTarget = new THREE.Vector3().copy(ufo.position).add(offset);
+      camera.position.lerp(cameraTarget, 0.1);
+      camera.lookAt(ufo.position);
+
+      // --- Minimap Update ---
+      updateMinimap();
+
+      renderer.render(scene, camera);
+    }
+
+    // Minimap update (simple top-down view)
+    function updateMinimap() {
+      const minimap = document.getElementById("minimap");
+      const ctx = minimap.getContext("2d");
+      ctx.clearRect(0, 0, minimap.width, minimap.height);
+      // Draw UFO (center)
+      ctx.fillStyle = "red";
+      ctx.beginPath();
+      ctx.arc(minimap.width/2, minimap.height/2, 5, 0, Math.PI*2);
+      ctx.fill();
+      // Draw targets relative to UFO position
+      ctx.fillStyle = "lime";
+      people.forEach(person => {
+        const dx = person.position.x - ufo.position.x;
+        const dz = person.position.z - ufo.position.z;
+        const scale = 0.5;
+        const x = minimap.width/2 + dx * scale;
+        const y = minimap.height/2 + dz * scale;
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI*2);
+        ctx.fill();
+      });
+    }
+
+    // --- Start Game on Button Tap & Request Fullscreen ---
+    document.getElementById("startBtn").addEventListener("click", () => {
+      document.getElementById("startScreen").style.display = "none";
+      if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen();
+      }
+      bgMusic.currentTime = 0;
+      bgMusic.play();
+    });
+
+    init();
+    animate();
+  </script>
+</body>
+</html>
