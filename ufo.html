@@ -1,296 +1,316 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Infinite UFO Combat Simulator – Endless Adventure</title>
-  <!-- iPhone friendly meta tags -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>UFO Flight Sim - Joystick Edition</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
-    #startScreen {
-      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.9); color: #fff; z-index: 20;
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
+    body { margin: 0; overflow: hidden; background: #000; }
+    #score, #level {
+      position: absolute;
+      top: 10px;
+      color: #fff;
+      font-size: 24px;
+      font-family: Arial, sans-serif;
+      z-index: 3;
     }
-    #startScreen button {
-      padding: 15px 30px; font-size: 20px; margin-top: 20px;
-      background: #555; border: none; border-radius: 5px; color: #fff;
+    #score { left: 10px; }
+    #level { right: 10px; }
+    #instructions {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      font-size: 16px;
+      font-family: Arial, sans-serif;
+      z-index: 3;
+      text-align: center;
     }
-    #score {
-      position: absolute; top: 10px; left: 10px;
-      color: #fff; font-size: 24px; z-index: 10;
-    }
-    #level {
-      position: absolute; top: 10px; right: 10px;
-      color: #fff; font-size: 24px; z-index: 10;
-    }
-    /* Minimap (top-right) */
-    #minimap {
-      position: absolute; top: 50px; right: 10px;
-      border: 2px solid #fff; background: rgba(0,0,0,0.5);
-      z-index: 10;
-    }
-    /* Virtual Joystick Container (bottom-left) */
+    /* Joystick styling */
     #joystickContainer {
-      position: fixed; bottom: 20px; left: 20px;
-      width: 100px; height: 100px; background: rgba(255,255,255,0.1);
-      border-radius: 50%; z-index: 10; touch-action: none;
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      width: 100px;
+      height: 100px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      z-index: 4;
+      touch-action: none;
     }
-    /* Joystick Knob */
-    #joystick {
-      position: absolute; top: 50%; left: 50%;
-      width: 40px; height: 40px; margin: -20px 0 0 -20px;
-      background: rgba(255,255,255,0.5); border-radius: 50%;
-    }
-    /* Vertical Controls & Boost (bottom-right) */
-    #verticalControls {
-      position: fixed; bottom: 20px; right: 20px; z-index: 10;
-      display: flex; flex-direction: column; gap: 10px;
-    }
-    #verticalControls button {
-      width: 60px; height: 60px; font-size: 16px;
-      border: none; border-radius: 10px; background: rgba(255,255,255,0.3); color: #fff;
+    #joystickKnob {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      background: rgba(255, 255, 255, 0.5);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      left: 25px;
+      top: 25px;
+      z-index: 5;
+      touch-action: none;
     }
   </style>
 </head>
 <body>
-  <!-- Start Screen -->
-  <div id="startScreen">
-    <h1>Infinite UFO Combat Simulator</h1>
-    <p>Tap to Start, Fly Your UFO, Beam Up Targets, and Explore an Endless World!</p>
-    <button id="startBtn">Start Game</button>
-  </div>
-  <!-- Score and Level Display -->
   <div id="score">Score: 0</div>
   <div id="level">Level: 1</div>
-  <!-- Minimap -->
-  <canvas id="minimap" width="150" height="150"></canvas>
-  <!-- Virtual Joystick -->
+  <div id="instructions">
+    Use the joystick to move<br>
+    Q/E: Up/Down<br>
+    Hold Space or tap the screen for beam<br>
+    (At Level 100, you'll be redirected)
+  </div>
+  <!-- Joystick container -->
   <div id="joystickContainer">
-    <div id="joystick"></div>
+    <div id="joystickKnob"></div>
   </div>
-  <!-- Vertical Controls and Boost -->
-  <div id="verticalControls">
-    <button id="upBtn">Up</button>
-    <button id="downBtn">Down</button>
-    <button id="boostBtn">Boost</button>
-  </div>
-  <!-- Audio Elements (replace src with your own audio files if desired) -->
-  <audio id="bgMusic" src="https://cdn.pixabay.com/download/audio/2021/10/25/audio_2a7f02a10d.mp3?filename=ambient-space-109455.mp3" loop></audio>
-  <audio id="beamSound" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_1b6f54f185.mp3?filename=laser-124464.mp3"></audio>
+  
+  <!-- Include Three.js library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    // --- Global Variables ---
-    let scene, camera, renderer;
-    let ufo, people = [], trees = [];
-    let score = 0;
-    let level = 1;
-    let activeBeams = [];
-    let particles = [];
-    const beamDuration = 500; // ms
-    const clock = new THREE.Clock();
+    // Global variables
+    let scene, camera, renderer, ground;
+    let ufo, beam;
+    let score = 0, level = 1;
+    const scoreElement = document.getElementById('score');
+    const levelElement = document.getElementById('level');
 
-    // UFO physics parameters
-    const accelerationRate = 30;
-    const friction = 0.98;
-    const maxSpeed = 50;
-    const boostMultiplier = 2;
-    let isBoosting = false;
-    let boostCooldown = 0;
+    // Global explosion array
+    let explosions = [];
 
-    // Ground tiles for infinite map
-    const groundTiles = [];
-    const tileSize = 200; // each ground tile is 200x200
-    const gridSize = 3;   // 3x3 grid
+    let movingTargets = [];  // Moving enemies: cows and people
+    let obstacles = [];      // Static obstacles: trees and buildings
+    let keys = {};           // For Q/E vertical control and desktop keyboard fallback
+    let isSucking = false;
+    let gameOver = false;
 
-    // Control state: keyboard + touchscreen joystick
-    const controls = {
-      forward: false, backward: false, left: false, right: false,
-      up: false, down: false, 
-      joystickX: 0, joystickY: 0,
-      boost: false
-    };
+    // World settings
+    const spawnRadius = 150; // Horizontal spawn radius
+    const desiredMovingTargets = () => 20 + level * 5;
+    const desiredObstacles = () => 10 + level * 3;
+    // Collision no longer ends the game.
+    const minAltitude = 5; // UFO stays above ground
 
-    // --- Audio ---
-    const bgMusic = document.getElementById("bgMusic");
-    const beamSound = document.getElementById("beamSound");
+    // Fog parameters
+    const fogNear = 100, fogFar = 300;
 
-    // --- Initialization ---
+    // Joystick globals
+    let joystickVector = new THREE.Vector2(0, 0);
+    let joystickActive = false;
+    const maxJoystickDist = 40;  // Maximum pixel distance from center
+
+    // Touch control variable (for other touches)
+    let touchStart = null;
+
     function init() {
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x000000);
+      scene.fog = new THREE.Fog(0x000000, fogNear, fogFar);
 
       camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-      camera.position.set(0, 5, 10);
+      camera.position.set(0, 25, 30);
 
       renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
 
       // Lighting
-      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(10, 20, 10);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+      scene.add(ambientLight);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(50, 100, 50);
       scene.add(directionalLight);
 
-      // Create Ground Tiles (3x3 grid)
-      const groundGeometry = new THREE.PlaneGeometry(tileSize, tileSize);
-      const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
-      for (let i = 0; i < gridSize * gridSize; i++) {
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        scene.add(ground);
-        groundTiles.push(ground);
-      }
+      // Ground: use a darker green and update its position to follow UFO
+      const groundGeo = new THREE.PlaneGeometry(1000, 1000, 10, 10);
+      const groundMat = new THREE.MeshLambertMaterial({ color: 0x006400 });
+      ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      // We update ground X/Z in updateCamera so it always appears under the UFO.
+      scene.add(ground);
 
-      // Starfield background
-      const starGeometry = new THREE.BufferGeometry();
-      const starCount = 1500;
-      const starVertices = [];
-      for (let i = 0; i < starCount; i++) {
-        starVertices.push((Math.random()-0.5)*600);
-        starVertices.push((Math.random()-0.5)*600);
-        starVertices.push((Math.random()-0.5)*600);
-      }
-      starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
-      const starMaterial = new THREE.PointsMaterial({ color: 0xffffff });
-      const stars = new THREE.Points(starGeometry, starMaterial);
-      scene.add(stars);
-
-      // UFO creation with physics
-      ufo = new THREE.Group();
-      ufo.velocity = new THREE.Vector3(0, 0, 0);
-      // UFO Base
-      const baseGeom = new THREE.CylinderGeometry(1.5, 1.5, 0.3, 32);
-      const baseMat = new THREE.MeshStandardMaterial({ color: 0x5555ff });
-      const baseMesh = new THREE.Mesh(baseGeom, baseMat);
-      ufo.add(baseMesh);
-      // UFO Dome
-      const domeGeom = new THREE.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-      const domeMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.8 });
-      const domeMesh = new THREE.Mesh(domeGeom, domeMat);
-      domeMesh.position.y = 0.8;
-      ufo.add(domeMesh);
-      // Rotating Ring for extra flair
-      const ringGeom = new THREE.TorusGeometry(1.7, 0.1, 16, 100);
-      const ringMat = new THREE.MeshStandardMaterial({ color: 0xffff00 });
-      const ringMesh = new THREE.Mesh(ringGeom, ringMat);
-      ringMesh.rotation.x = Math.PI / 2;
-      ufo.add(ringMesh);
-      ufo.position.set(0, 3, 0);
+      // Create player's UFO (it flies high) and the beam.
+      ufo = createPlayerUFO();
       scene.add(ufo);
+      beam = createBeam();
+      ufo.add(beam);
+      beam.visible = false;
 
-      // Create People targets
-      spawnPeople(30);
+      // Spawn initial objects.
+      spawnMovingTargets(desiredMovingTargets());
+      spawnObstacles(desiredObstacles());
 
-      // Create Trees
-      spawnTrees(50);
+      // Event listeners
+      window.addEventListener('resize', onWindowResize, false);
+      window.addEventListener('keydown', onKeyDown, false);
+      window.addEventListener('keyup', onKeyUp, false);
+      renderer.domElement.addEventListener('mousedown', onMouseDown, false);
+      renderer.domElement.addEventListener('mouseup', onMouseUp, false);
+      renderer.domElement.addEventListener('touchstart', onTouchStart, false);
+      renderer.domElement.addEventListener('touchmove', onTouchMove, false);
+      renderer.domElement.addEventListener('touchend', onTouchEnd, false);
 
-      // Event listeners for keyboard
-      window.addEventListener('keydown', onKeyDown);
-      window.addEventListener('keyup', onKeyUp);
-      window.addEventListener('resize', onWindowResize);
-
-      // Setup touchscreen controls
+      // Setup joystick
       setupJoystick();
-      setupVerticalButtons();
     }
 
-    // Spawn a number of people (targets) with a slight random drift
-    function spawnPeople(num) {
-      const personGeom = new THREE.BoxGeometry(0.5, 1.5, 0.5);
-      const personMat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-      for (let i = 0; i < num; i++) {
-        const person = new THREE.Mesh(personGeom, personMat);
-        person.position.set((Math.random()-0.5)*150, 0.75, (Math.random()-0.5)*150);
-        // Give each person a small drift vector
-        person.userData.drift = new THREE.Vector3((Math.random()-0.5)*0.05, 0, (Math.random()-0.5)*0.05);
-        // Also store a timer to occasionally change drift
-        person.userData.changeDriftTimer = Math.random() * 2;
-        scene.add(person);
-        people.push(person);
+    // Setup virtual joystick for mobile.
+    function setupJoystick() {
+      const container = document.getElementById("joystickContainer");
+      const knob = document.getElementById("joystickKnob");
+      container.addEventListener("touchstart", function(e) {
+        e.preventDefault();
+        joystickActive = true;
+        updateJoystick(e.touches[0], container, knob);
+      }, false);
+      container.addEventListener("touchmove", function(e) {
+        e.preventDefault();
+        updateJoystick(e.touches[0], container, knob);
+      }, false);
+      container.addEventListener("touchend", function(e) {
+        e.preventDefault();
+        joystickActive = false;
+        joystickVector.set(0, 0);
+        knob.style.transform = `translate(0px, 0px)`;
+      }, false);
+    }
+
+    function updateJoystick(touch, container, knob) {
+      const rect = container.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      let deltaX = touch.clientX - centerX;
+      let deltaY = touch.clientY - centerY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      if (distance > maxJoystickDist) {
+        const angle = Math.atan2(deltaY, deltaX);
+        deltaX = Math.cos(angle) * maxJoystickDist;
+        deltaY = Math.sin(angle) * maxJoystickDist;
       }
+      knob.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+      // Normalize joystick vector to range [-1, 1]
+      joystickVector.set(deltaX / maxJoystickDist, -deltaY / maxJoystickDist);
     }
 
-    // Spawn a number of simple trees
-    function spawnTrees(num) {
-      for (let i = 0; i < num; i++) {
-        const tree = new THREE.Group();
-        // Trunk
-        const trunkGeom = new THREE.CylinderGeometry(0.2, 0.2, 2);
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-        const trunk = new THREE.Mesh(trunkGeom, trunkMat);
-        trunk.position.y = 1;
-        tree.add(trunk);
-        // Leaves
-        const leavesGeom = new THREE.ConeGeometry(1, 2, 8);
-        const leavesMat = new THREE.MeshStandardMaterial({ color: 0x228B22 });
-        const leaves = new THREE.Mesh(leavesGeom, leavesMat);
-        leaves.position.y = 3;
-        tree.add(leaves);
-        // Place tree at random position
-        tree.position.set((Math.random()-0.5)*150, 0, (Math.random()-0.5)*150);
-        scene.add(tree);
-        trees.push(tree);
-      }
+    // Create UFO; the ship remains at Y = 10.
+    function createPlayerUFO() {
+      const ufoGroup = new THREE.Group();
+      const baseGeo = new THREE.CylinderGeometry(5, 5, 1, 32);
+      const baseMat = new THREE.MeshPhongMaterial({ color: 0x888888 });
+      const base = new THREE.Mesh(baseGeo, baseMat);
+      base.position.y = 0;
+      ufoGroup.add(base);
+      const domeGeo = new THREE.SphereGeometry(3, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+      const domeMat = new THREE.MeshPhongMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7 });
+      const dome = new THREE.Mesh(domeGeo, domeMat);
+      dome.position.y = 1;
+      ufoGroup.add(dome);
+      ufoGroup.position.set(0, 10, 0);
+      ufoGroup.userData.velocity = new THREE.Vector3(0, 0, 0);
+      return ufoGroup;
     }
 
-    // Update ground tiles so they follow the UFO and repeat infinitely
-    function updateGroundTiles() {
-      const cellX = Math.floor(ufo.position.x / tileSize);
-      const cellZ = Math.floor(ufo.position.z / tileSize);
-      let index = 0;
-      for (let i = -1; i <= 1; i++) {
-        for (let j = -1; j <= 1; j++) {
-          if (groundTiles[index]) {
-            groundTiles[index].position.set(
-              (cellX + i) * tileSize + tileSize/2,
-              0,
-              (cellZ + j) * tileSize + tileSize/2
-            );
-            index++;
-          }
-        }
-      }
-    }
-
-    // Reposition people that wander too far from the UFO (simulate infinite spawn)
-    function updatePeople(delta) {
-      const repositionDistance = 250;
-      people.forEach(person => {
-        // Update drift movement
-        person.position.add(person.userData.drift.clone().multiplyScalar(delta));
-        // Change drift occasionally
-        person.userData.changeDriftTimer -= delta;
-        if (person.userData.changeDriftTimer <= 0) {
-          person.userData.drift = new THREE.Vector3((Math.random()-0.5)*0.05, 0, (Math.random()-0.5)*0.05);
-          person.userData.changeDriftTimer = Math.random() * 2;
-        }
-        // Reposition if too far away
-        if (person.position.distanceTo(ufo.position) > repositionDistance) {
-          person.position.set(
-            ufo.position.x + (Math.random()-0.5)*150,
-            0.75,
-            ufo.position.z + (Math.random()-0.5)*150
-          );
-        }
+    // Create the suction beam. Adjusted: uses height 10 and is translated so its base is at Y = -10.
+    function createBeam() {
+      const beamGeo = new THREE.ConeGeometry(3, 10, 32);
+      beamGeo.translate(0, -10, 0);
+      const beamMat = new THREE.MeshBasicMaterial({
+        color: 0xffff00,
+        transparent: true,
+        opacity: 0.5,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -4
       });
+      const cone = new THREE.Mesh(beamGeo, beamMat);
+      return cone;
     }
 
-    // Reposition trees that are too far away to always keep them in view
-    function updateTrees() {
-      const repositionDistance = 300;
-      trees.forEach(tree => {
-        if (tree.position.distanceTo(ufo.position) > repositionDistance) {
-          tree.position.set(
-            ufo.position.x + (Math.random()-0.5)*200,
-            0,
-            ufo.position.z + (Math.random()-0.5)*200
-          );
+    // Spawn moving targets (cows/people) on the ground.
+    function spawnMovingTargets(n) {
+      for (let i = 0; i < n; i++) {
+        const isCow = Math.random() < 0.5;
+        const mesh = isCow ? createCow() : createPerson();
+        mesh.userData.explosionType = "target";
+        const spawnY = isCow ? 0.5 : 0.9; // so bottom touches Y=0
+        const offsetX = (Math.random()-0.5) * spawnRadius * 2;
+        const offsetZ = (Math.random()-0.5) * spawnRadius * 2;
+        const pos = new THREE.Vector3(ufo.position.x + offsetX, spawnY, ufo.position.z + offsetZ);
+        mesh.userData.worldPosition = pos.clone();
+        mesh.userData.groundY = spawnY;
+        mesh.position.copy(pos);
+        const velocity = new THREE.Vector3((Math.random()-0.5)*0.1, 0, (Math.random()-0.5)*0.1);
+        movingTargets.push({ mesh: mesh, type: isCow ? 'cow' : 'person', velocity: velocity });
+        scene.add(mesh);
+      }
+    }
+
+    // Spawn obstacles (trees/buildings) on the ground.
+    function spawnObstacles(n) {
+      for (let i = 0; i < n; i++) {
+        const isTree = Math.random() < 0.5;
+        let mesh;
+        if (isTree) {
+          mesh = createTree();
+          mesh.userData.explosionType = "tree";
+        } else {
+          mesh = createBuilding();
+          mesh.userData.explosionType = "building";
         }
-      });
+        const offsetX = (Math.random()-0.5) * spawnRadius * 2;
+        const offsetZ = (Math.random()-0.5) * spawnRadius * 2;
+        const pos = new THREE.Vector3(ufo.position.x + offsetX, 0, ufo.position.z + offsetZ);
+        mesh.userData.worldPosition = pos.clone();
+        mesh.userData.groundY = 0;
+        mesh.position.copy(pos);
+        obstacles.push({ mesh: mesh, type: isTree ? 'tree' : 'building' });
+        scene.add(mesh);
+      }
+    }
+
+    // Create a cow.
+    function createCow() {
+      const geo = new THREE.BoxGeometry(1.5, 1, 0.8);
+      const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      return new THREE.Mesh(geo, mat);
+    }
+
+    // Create a person.
+    function createPerson() {
+      const geo = new THREE.BoxGeometry(0.8, 1.8, 0.5);
+      const mat = new THREE.MeshLambertMaterial({ color: 0xffc0cb });
+      return new THREE.Mesh(geo, mat);
+    }
+
+    // Create a tree.
+    function createTree() {
+      const tree = new THREE.Group();
+      const trunkGeo = new THREE.CylinderGeometry(0.3, 0.3, 2, 8);
+      const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      trunk.position.y = 1;
+      tree.add(trunk);
+      const foliageGeo = new THREE.ConeGeometry(1.5, 3, 8);
+      const foliageMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+      const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+      foliage.position.y = 3.5;
+      tree.add(foliage);
+      tree.userData.explosionColor = 0x228B22;
+      return tree;
+    }
+
+    // Create a building.
+    function createBuilding() {
+      const geo = new THREE.BoxGeometry(4, 8, 4);
+      const mat = new THREE.MeshLambertMaterial({ color: 0x808080 });
+      const building = new THREE.Mesh(geo, mat);
+      building.position.y = 4;
+      building.userData.explosionColor = 0x808080;
+      return building;
     }
 
     function onWindowResize() {
@@ -300,278 +320,248 @@
     }
 
     function onKeyDown(event) {
-      switch(event.key.toLowerCase()){
-        case 'w': case 'arrowup': controls.forward = true; break;
-        case 's': case 'arrowdown': controls.backward = true; break;
-        case 'a': case 'arrowleft': controls.left = true; break;
-        case 'd': case 'arrowright': controls.right = true; break;
-        case 'q': controls.up = true; break;
-        case 'e': controls.down = true; break;
-        case ' ': controls.boost = true; break;
+      keys[event.code] = true;
+      if (event.code === 'Space') {
+        isSucking = true;
+        beam.visible = true;
       }
     }
     function onKeyUp(event) {
-      switch(event.key.toLowerCase()){
-        case 'w': case 'arrowup': controls.forward = false; break;
-        case 's': case 'arrowdown': controls.backward = false; break;
-        case 'a': case 'arrowleft': controls.left = false; break;
-        case 'd': case 'arrowright': controls.right = false; break;
-        case 'q': controls.up = false; break;
-        case 'e': controls.down = false; break;
-        case ' ': controls.boost = false; break;
+      keys[event.code] = false;
+      if (event.code === 'Space') {
+        isSucking = false;
+        beam.visible = false;
+      }
+    }
+    function onMouseDown(event) {
+      isSucking = true;
+      beam.visible = true;
+    }
+    function onMouseUp(event) {
+      isSucking = false;
+      beam.visible = false;
+    }
+    function onTouchStart(event) {
+      event.preventDefault();
+      if (event.touches.length === 1) {
+        touchStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+        isSucking = true;
+        beam.visible = true;
+      }
+    }
+    function onTouchMove(event) {
+      event.preventDefault();
+      if (event.touches.length === 1 && touchStart) {
+        const touch = event.touches[0];
+        const deltaX = touch.clientX - touchStart.x;
+        const deltaY = touch.clientY - touchStart.y;
+        // For non-joystick touches (if any), move the UFO.
+        ufo.position.x += deltaX * 0.05;
+        ufo.position.z += deltaY * 0.05;
+        touchStart = { x: touch.clientX, y: touch.clientY };
+      }
+    }
+    function onTouchEnd(event) {
+      event.preventDefault();
+      if (event.touches.length === 0) {
+        touchStart = null;
+        isSucking = false;
+        beam.visible = false;
       }
     }
 
-    // Touchscreen Joystick Setup
-    function setupJoystick() {
-      const joystickContainer = document.getElementById("joystickContainer");
-      const joystick = document.getElementById("joystick");
-      const maxDist = joystickContainer.clientWidth/2;
-      let dragging = false;
-      let rect = joystickContainer.getBoundingClientRect();
-
-      function updateJoystick(clientX, clientY) {
-        const centerX = rect.left + rect.width/2;
-        const centerY = rect.top + rect.height/2;
-        let dx = clientX - centerX, dy = clientY - centerY;
-        const dist = Math.min(Math.sqrt(dx*dx+dy*dy), maxDist);
-        const angle = Math.atan2(dy, dx);
-        const clampedX = Math.cos(angle) * dist;
-        const clampedY = Math.sin(angle) * dist;
-        joystick.style.transform = `translate(${clampedX}px, ${clampedY}px)`;
-        controls.joystickX = clampedX / maxDist;
-        controls.joystickY = clampedY / maxDist;
+    // Update the UFO.
+    function updateUFO() {
+      if (gameOver) return;
+      // Keyboard keys Q/E for vertical control remain.
+      if (keys['KeyQ']) {
+        ufo.userData.velocity.y += 0.05;
       }
-      joystickContainer.addEventListener("touchstart", function(e){
-        e.preventDefault();
-        dragging = true;
-        rect = joystickContainer.getBoundingClientRect();
-        updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
-      });
-      joystickContainer.addEventListener("touchmove", function(e){
-        if(dragging) updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
-      });
-      joystickContainer.addEventListener("touchend", function(e){
-        dragging = false;
-        joystick.style.transform = "translate(0px,0px)";
-        controls.joystickX = 0; controls.joystickY = 0;
-      });
-      joystickContainer.addEventListener("mousedown", function(e){
-        e.preventDefault();
-        dragging = true;
-        rect = joystickContainer.getBoundingClientRect();
-        updateJoystick(e.clientX, e.clientY);
-      });
-      window.addEventListener("mousemove", function(e){
-        if(dragging) updateJoystick(e.clientX, e.clientY);
-      });
-      window.addEventListener("mouseup", function(e){
-        dragging = false;
-        joystick.style.transform = "translate(0px,0px)";
-        controls.joystickX = 0; controls.joystickY = 0;
-      });
+      if (keys['KeyE']) {
+        ufo.userData.velocity.y -= 0.05;
+      }
+      // If joystick is active, override horizontal velocity.
+      if (joystickActive) {
+        const speed = 0.15;
+        ufo.userData.velocity.x = joystickVector.x * speed;
+        ufo.userData.velocity.z = joystickVector.y * speed;
+        // Rotate UFO to face movement direction if there is input.
+        if (joystickVector.length() > 0.1) {
+          ufo.rotation.y = Math.atan2(joystickVector.x, joystickVector.y);
+        }
+      } else {
+        // For desktop keyboard, allow arrow keys to rotate.
+        if (keys['ArrowLeft'] || keys['KeyA']) {
+          ufo.rotation.y += 0.03;
+        }
+        if (keys['ArrowRight'] || keys['KeyD']) {
+          ufo.rotation.y -= 0.03;
+        }
+        const forward = new THREE.Vector3(-Math.sin(ufo.rotation.y), 0, -Math.cos(ufo.rotation.y));
+        if (keys['ArrowUp'] || keys['KeyW']) {
+          ufo.userData.velocity.add(forward.clone().multiplyScalar(0.05));
+        }
+        if (keys['ArrowDown'] || keys['KeyS']) {
+          ufo.userData.velocity.add(forward.clone().multiplyScalar(-0.05));
+        }
+      }
+      if (ufo.userData.velocity.length() > 1.5) {
+        ufo.userData.velocity.setLength(1.5);
+      }
+      ufo.userData.velocity.multiplyScalar(0.98);
+      ufo.position.add(ufo.userData.velocity);
+      if (ufo.position.y < minAltitude) {
+        ufo.position.y = minAltitude;
+        if (ufo.userData.velocity.y < 0) ufo.userData.velocity.y = 0;
+      }
     }
 
-    // Vertical Buttons & Boost Setup
-    function setupVerticalButtons() {
-      const upBtn = document.getElementById("upBtn");
-      const downBtn = document.getElementById("downBtn");
-      const boostBtn = document.getElementById("boostBtn");
-      upBtn.addEventListener("touchstart", e => { e.preventDefault(); controls.up = true; });
-      upBtn.addEventListener("touchend", e => { e.preventDefault(); controls.up = false; });
-      upBtn.addEventListener("mousedown", () => { controls.up = true; });
-      upBtn.addEventListener("mouseup", () => { controls.up = false; });
-      downBtn.addEventListener("touchstart", e => { e.preventDefault(); controls.down = true; });
-      downBtn.addEventListener("touchend", e => { e.preventDefault(); controls.down = false; });
-      downBtn.addEventListener("mousedown", () => { controls.down = true; });
-      downBtn.addEventListener("mouseup", () => { controls.down = false; });
-      boostBtn.addEventListener("touchstart", e => { e.preventDefault(); controls.boost = true; });
-      boostBtn.addEventListener("touchend", e => { e.preventDefault(); controls.boost = false; });
-      boostBtn.addEventListener("mousedown", () => { controls.boost = true; });
-      boostBtn.addEventListener("mouseup", () => { controls.boost = false; });
+    // Update moving targets; force their Y to remain fixed.
+    function updateMovingTargets() {
+      for (let i = movingTargets.length - 1; i >= 0; i--) {
+        const targetObj = movingTargets[i];
+        targetObj.mesh.userData.worldPosition.add(targetObj.velocity);
+        targetObj.mesh.position.copy(targetObj.mesh.userData.worldPosition);
+        targetObj.mesh.position.y = targetObj.mesh.userData.groundY;
+        const d = ufo.position.distanceTo(targetObj.mesh.position);
+        if (isSucking && d < 14) {
+          explodeObject(targetObj.mesh, "target");
+          score += (targetObj.type === 'cow') ? 10 : 20;
+          updateScore();
+          scene.remove(targetObj.mesh);
+          movingTargets.splice(i, 1);
+        } else if (d > spawnRadius) {
+          scene.remove(targetObj.mesh);
+          movingTargets.splice(i, 1);
+        }
+      }
     }
 
-    // Beam effect: yellow line with sound and explosion particles
-    function createBeam(startPos, endPos) {
-      const beamMaterial = new THREE.LineBasicMaterial({ color: 0xffff00 });
-      const beamGeometry = new THREE.BufferGeometry().setFromPoints([startPos, endPos]);
-      const beam = new THREE.Line(beamGeometry, beamMaterial);
-      scene.add(beam);
-      activeBeams.push({ beam: beam, time: Date.now() });
-      beamSound.currentTime = 0;
-      beamSound.play();
+    // Update obstacles; force Y to remain fixed.
+    function updateObstacles() {
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        obs.mesh.position.copy(obs.mesh.userData.worldPosition);
+        obs.mesh.position.y = obs.mesh.userData.groundY;
+        const d = ufo.position.distanceTo(obs.mesh.position);
+        if (isSucking && d < 14) {
+          explodeObject(obs.mesh, obs.type);
+          score += (obs.type === 'building') ? 50 : 30;
+          updateScore();
+          scene.remove(obs.mesh);
+          obstacles.splice(i, 1);
+        } else if (d > spawnRadius) {
+          scene.remove(obs.mesh);
+          obstacles.splice(i, 1);
+        }
+      }
     }
 
-    // Particle explosion effect for beamed-up targets
-    function createParticles(position) {
-      const particleCount = 30;
-      for (let i = 0; i < particleCount; i++) {
-        const particleGeom = new THREE.SphereGeometry(0.05, 8, 8);
-        const particleMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-        const particle = new THREE.Mesh(particleGeom, particleMat);
-        particle.position.copy(position);
-        particle.userData.velocity = new THREE.Vector3(
-          (Math.random()-0.5)*3,
-          Math.random()*3,
-          (Math.random()-0.5)*3
+    // Explode an object into particles.
+    function explodeObject(mesh, typeOverride) {
+      let numParticles = 20;
+      let explosionColor;
+      if (mesh.material && mesh.material.color) {
+        explosionColor = mesh.material.color.getHex();
+      } else {
+        explosionColor = mesh.userData.explosionColor || 0xffffff;
+      }
+      if (typeOverride === "target") {
+        explosionColor = 0xff0000;
+      }
+      if (typeOverride === "building") {
+        numParticles = 60;
+      }
+      const explosionParticles = [];
+      for (let i = 0; i < numParticles; i++) {
+        const particleGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+        const particleMat = new THREE.MeshLambertMaterial({ color: explosionColor });
+        const particle = new THREE.Mesh(particleGeo, particleMat);
+        particle.position.copy(mesh.position);
+        const velocity = new THREE.Vector3(
+          (Math.random()-0.5)*0.5,
+          (Math.random()-0.5)*0.5,
+          (Math.random()-0.5)*0.5
         );
-        particle.userData.startTime = Date.now();
-        particles.push(particle);
+        explosionParticles.push({ mesh: particle, velocity: velocity });
         scene.add(particle);
       }
+      explosions.push({ particles: explosionParticles, lifetime: 60 });
     }
 
-    // Update beams and particles
-    function updateEffects() {
-      const now = Date.now();
-      for (let i = activeBeams.length - 1; i >= 0; i--) {
-        if (now - activeBeams[i].time > beamDuration) {
-          scene.remove(activeBeams[i].beam);
-          activeBeams.splice(i, 1);
-        }
-      }
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        const dt = (now - p.userData.startTime) / 1000;
-        p.position.add(p.userData.velocity.clone().multiplyScalar(dt));
-        let fade = 1 - ((now - p.userData.startTime) / 1000);
-        p.material.opacity = Math.max(fade, 0);
-        p.material.transparent = true;
-        if (now - p.userData.startTime > 1000) {
-          scene.remove(p);
-          particles.splice(i, 1);
+    function updateExplosions() {
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        const explosion = explosions[i];
+        explosion.lifetime--;
+        explosion.particles.forEach(p => {
+          p.mesh.position.add(p.velocity);
+        });
+        if (explosion.lifetime <= 0) {
+          explosion.particles.forEach(p => scene.remove(p.mesh));
+          explosions.splice(i, 1);
         }
       }
     }
 
-    // --- Main Animation Loop ---
-    function animate() {
-      requestAnimationFrame(animate);
-      const delta = clock.getDelta();
-
-      // --- Inertial Flight Mechanics ---
-      let inputVector = new THREE.Vector3();
-      const joystickMag = Math.sqrt(controls.joystickX**2 + controls.joystickY**2);
-      const deadzone = 0.2;
-      if(joystickMag > deadzone) {
-        let targetAngle = Math.atan2(controls.joystickX, -controls.joystickY);
-        let angleDiff = targetAngle - ufo.rotation.y;
-        angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
-        ufo.rotation.y += angleDiff * 0.1;
-        inputVector.set(Math.sin(ufo.rotation.y), 0, Math.cos(ufo.rotation.y))
-                   .multiplyScalar(joystickMag);
-      } else {
-        if (controls.forward) inputVector.z -= 1;
-        if (controls.backward) inputVector.z += 1;
-        if (controls.left) inputVector.x -= 1;
-        if (controls.right) inputVector.x += 1;
+    // Maintain spawns.
+    function maintainSpawns() {
+      if (movingTargets.length < desiredMovingTargets()) {
+        spawnMovingTargets(desiredMovingTargets() - movingTargets.length);
       }
-      if(inputVector.length() > 0) {
-        inputVector.normalize().multiplyScalar(accelerationRate * delta * (controls.boost || isBoosting ? boostMultiplier : 1));
-        ufo.velocity.add(inputVector);
+      if (obstacles.length < desiredObstacles()) {
+        spawnObstacles(desiredObstacles() - obstacles.length);
       }
-      if(controls.up) ufo.position.y += accelerationRate * delta;
-      if(controls.down) ufo.position.y -= accelerationRate * delta;
-      if(ufo.position.y < 1) ufo.position.y = 1;
-      if(ufo.velocity.length() > maxSpeed * (controls.boost || isBoosting ? boostMultiplier : 1)) {
-        ufo.velocity.setLength(maxSpeed * (controls.boost || isBoosting ? boostMultiplier : 1));
-      }
-      ufo.velocity.multiplyScalar(friction);
-      ufo.position.add(ufo.velocity.clone().multiplyScalar(delta));
+    }
 
-      if(controls.boost && boostCooldown <= 0) {
-        isBoosting = true;
-        boostCooldown = 2;
-      }
-      if(isBoosting) {
-        boostCooldown -= delta;
-        if(boostCooldown <= 0) { isBoosting = false; boostCooldown = 0; }
-      }
-      if(ufo.children[2]) ufo.children[2].rotation.z += delta;
-
-      // --- Update drifting People and reposition if too far ---
-      updatePeople(delta);
-
-      // --- Update Trees to keep them in view ---
-      updateTrees();
-
-      // --- Collision detection with targets ---
-      for (let i = people.length - 1; i >= 0; i--) {
-        const person = people[i];
-        if(ufo.position.distanceTo(person.position) < 3) {
-          createBeam(person.position.clone(), ufo.position.clone());
-          createParticles(person.position.clone());
-          scene.remove(person);
-          people.splice(i, 1);
-          score += 10;
-          document.getElementById("score").innerText = "Score: " + score;
-          // Level up check: every 100 points, increase level and spawn extra targets
-          if(score >= level * 100) {
-            level++;
-            document.getElementById("level").innerText = "Level: " + level;
-            spawnPeople(10);
-          }
-          // Spawn a replacement target
-          const personGeom = new THREE.BoxGeometry(0.5,1.5,0.5);
-          const personMat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-          const newPerson = new THREE.Mesh(personGeom, personMat);
-          newPerson.position.set(ufo.position.x + (Math.random()-0.5)*150, 0.75, ufo.position.z + (Math.random()-0.5)*150);
-          newPerson.userData.drift = new THREE.Vector3((Math.random()-0.5)*0.05, 0, (Math.random()-0.5)*0.05);
-          newPerson.userData.changeDriftTimer = Math.random() * 2;
-          scene.add(newPerson);
-          people.push(newPerson);
-        }
-      }
-
-      updateEffects();
-      updateGroundTiles();
-
-      // --- Camera Follow ---
-      const offset = new THREE.Vector3(0, 5, -15);
-      offset.applyQuaternion(ufo.quaternion);
-      const cameraTarget = new THREE.Vector3().copy(ufo.position).add(offset);
-      camera.position.lerp(cameraTarget, 0.1);
+    // Update camera: third-person view and move the ground to follow the UFO.
+    function updateCamera() {
+      const forward = new THREE.Vector3(-Math.sin(ufo.rotation.y), 0, -Math.cos(ufo.rotation.y));
+      const followDistance = 30;
+      const heightOffset = 15;
+      const desiredPosition = ufo.position.clone()
+        .sub(forward.clone().multiplyScalar(followDistance))
+        .add(new THREE.Vector3(0, heightOffset, 0));
+      camera.position.lerp(desiredPosition, 0.1);
       camera.lookAt(ufo.position);
+      // Move the ground so it always remains centered under the UFO.
+      ground.position.x = ufo.position.x;
+      ground.position.z = ufo.position.z;
+      // Attach the beam to the UFO's base.
+      beam.position.set(0, 0, 0);
+      beam.rotation.set(0, 0, 0);
+    }
 
-      // --- Minimap Update ---
-      updateMinimap();
+    function updateScore() {
+      scoreElement.textContent = "Score: " + score;
+      levelElement.textContent = "Level: " + level;
+    }
 
+    // Level progression: when score exceeds a threshold, increase level.
+    // When level reaches 100, open a new page with the provided video.
+    function nextLevel() {
+      level++;
+      if (level >= 100) {
+        window.location.href = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+        return;
+      }
+      updateScore();
+      spawnMovingTargets(desiredMovingTargets());
+      spawnObstacles(desiredObstacles());
+    }
+
+    function animate() {
+      if (!gameOver) requestAnimationFrame(animate);
+      updateUFO();
+      updateMovingTargets();
+      updateObstacles();
+      updateExplosions();
+      maintainSpawns();
+      updateCamera();
+      if (score > level * 500) {
+        nextLevel();
+      }
       renderer.render(scene, camera);
     }
-
-    // Minimap update (simple top-down view)
-    function updateMinimap() {
-      const minimap = document.getElementById("minimap");
-      const ctx = minimap.getContext("2d");
-      ctx.clearRect(0, 0, minimap.width, minimap.height);
-      // Draw UFO (center)
-      ctx.fillStyle = "red";
-      ctx.beginPath();
-      ctx.arc(minimap.width/2, minimap.height/2, 5, 0, Math.PI*2);
-      ctx.fill();
-      // Draw targets relative to UFO position
-      ctx.fillStyle = "lime";
-      people.forEach(person => {
-        const dx = person.position.x - ufo.position.x;
-        const dz = person.position.z - ufo.position.z;
-        const scale = 0.5;
-        const x = minimap.width/2 + dx * scale;
-        const y = minimap.height/2 + dz * scale;
-        ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI*2);
-        ctx.fill();
-      });
-    }
-
-    // --- Start Game on Button Tap & Request Fullscreen ---
-    document.getElementById("startBtn").addEventListener("click", () => {
-      document.getElementById("startScreen").style.display = "none";
-      if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen();
-      }
-      bgMusic.currentTime = 0;
-      bgMusic.play();
-    });
 
     init();
     animate();
