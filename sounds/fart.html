@@ -5,18 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fart Soundboard</title>
   <style>
-    /* Overall layout */
+    /* Reset and basic styling */
+    * {
+      box-sizing: border-box;
+    }
     body {
-      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      background: #2c2a25; /* dark brown/charcoal tone */
       margin: 0;
       padding: 20px;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      background: #2c2a25; /* Dark brown/charcoal tone */
+      color: #e0d8cf; /* Light creamy text */
       display: flex;
       flex-direction: column;
       align-items: center;
-      color: #e0d8cf; /* light, creamy text */
+      min-height: 100vh;
     }
-    /* Header styling with wind emoji */
+    /* Header styling */
     h1 {
       font-size: 2rem;
       margin-bottom: 10px;
@@ -27,17 +31,45 @@
     h1 .emoji {
       font-size: 2.5rem;
     }
-    /* Delay timer container */
-    .delay-option {
+    /* Controls container styling */
+    .controls {
       margin-bottom: 20px;
+      width: 100%;
+      max-width: 600px;
+      background: #3a352d;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .controls label {
+      display: block;
+      margin-bottom: 5px;
       font-size: 16px;
     }
-    .delay-option input {
-      margin-left: 10px;
-      width: 80px;
-      padding: 5px;
+    .controls input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      background: transparent;
+    }
+    .controls input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #e0d8cf;
+      cursor: pointer;
+      margin-top: -8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+    .controls input[type="range"]::-webkit-slider-runnable-track {
+      height: 5px;
+      background: #57534e;
       border-radius: 5px;
-      border: 1px solid #ccc;
+    }
+    .delay-display {
+      text-align: right;
+      font-size: 14px;
+      margin-top: 5px;
     }
     /* Grid layout for buttons */
     .grid {
@@ -47,7 +79,7 @@
       width: 100%;
       max-width: 600px;
     }
-    /* Button styles with gradient, shadows and relative positioning */
+    /* Button styling with gradients, shadows and playing indicator */
     .grid button {
       background: linear-gradient(145deg, #4b3b32, #362921);
       color: #e0d8cf;
@@ -68,7 +100,7 @@
       transform: scale(0.98);
       box-shadow: 2px 2px 5px #1e1b17, -2px -2px 5px #4d443b;
     }
-    /* Playing indicator: append a speaker icon when the button has the .playing class */
+    /* Playing indicator appended as a speaker icon */
     .grid button.playing::after {
       content: " 🔊";
       font-size: 1.2em;
@@ -81,9 +113,10 @@
 </head>
 <body>
   <h1><span class="emoji">💨</span> Fart Soundboard</h1>
-  <div class="delay-option">
-    <label for="delayInput">Delay Timer (ms):</label>
-    <input type="number" id="delayInput" min="0" value="0">
+  <div class="controls">
+    <label for="delaySlider">Delay Timer (seconds):</label>
+    <input type="range" id="delaySlider" min="0" max="180" step="1" value="0">
+    <div class="delay-display">0 seconds</div>
   </div>
   <div class="grid">
     <button data-src="fart1.mp3">Fart 1</button>
@@ -106,25 +139,44 @@
     <button data-src="fart18.mp3">Fart 18</button>
     <button data-src="fart19.mp3">Fart 19</button>
   </div>
-
+  
   <script>
-    // Attach event listener to each button
-    document.querySelectorAll('.grid button').forEach(button => {
-      // Initialize active audio counter for each button
+    // Preload audio files into an object for faster playback.
+    const preloadedAudios = {};
+    const buttons = document.querySelectorAll('.grid button');
+    
+    buttons.forEach(button => {
+      const src = button.getAttribute('data-src');
+      if (!preloadedAudios[src]) {
+        const audio = new Audio(src);
+        audio.preload = 'auto';
+        preloadedAudios[src] = audio;
+      }
+    });
+    
+    // Update the delay timer display when the slider moves.
+    const delaySlider = document.getElementById("delaySlider");
+    const delayDisplay = document.querySelector(".delay-display");
+    delaySlider.addEventListener("input", () => {
+      delayDisplay.textContent = delaySlider.value + " seconds";
+    });
+    
+    // Attach event listeners to each button.
+    buttons.forEach(button => {
       button.activeCount = 0;
-      
       button.addEventListener('click', function() {
-        const delayInput = document.getElementById("delayInput");
-        const delay = parseInt(delayInput.value, 10) || 0;
+        // Convert slider value (seconds) to milliseconds.
+        const delay = parseInt(delaySlider.value, 10) * 1000;
         const audioSrc = this.getAttribute('data-src');
         button.activeCount++;
         button.classList.add("playing");
-
-        const audio = new Audio(audioSrc);
+        
+        // Clone the preloaded audio to allow overlapping plays.
+        const audio = preloadedAudios[audioSrc].cloneNode();
         setTimeout(() => {
           audio.play();
         }, delay);
-
+        
         audio.addEventListener('ended', function() {
           button.activeCount--;
           if (button.activeCount <= 0) {
