@@ -20,10 +20,20 @@
       align-items: center;
       min-height: 100vh;
     }
+    /* Canvas for waveform visualization */
+    #visualizer {
+      width: 100%;
+      max-width: 600px;
+      height: 100px;
+      background: #2c2a25;
+      border: 1px solid #57534e;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
     /* Header styling */
     h1 {
       font-size: 2rem;
-      margin-bottom: 10px;
+      margin: 0 0 10px 0;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -120,12 +130,17 @@
   </style>
 </head>
 <body>
+  <!-- Canvas for waveform visualization -->
+  <canvas id="visualizer"></canvas>
+
   <h1><span class="emoji">💨</span> Fart Soundboard</h1>
+  
   <div class="controls">
     <label for="delaySlider">Delay Timer (seconds):</label>
     <input type="range" id="delaySlider" min="0" max="180" step="1" value="0">
     <div class="delay-display">0 seconds</div>
   </div>
+  
   <div class="grid">
     <!-- 19 Fart buttons -->
     <button data-src="fart1.mp3">Fart 1</button>
@@ -152,6 +167,46 @@
   </div>
   
   <script>
+    // Set up canvas visualization using the Web Audio API
+    const canvas = document.getElementById('visualizer');
+    const canvasCtx = canvas.getContext('2d');
+    // Resize canvas to match its display size
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    // Draw function that continuously renders the waveform
+    function drawVisualizer() {
+      requestAnimationFrame(drawVisualizer);
+      analyser.getByteTimeDomainData(dataArray);
+      canvasCtx.fillStyle = '#2c2a25';
+      canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      canvasCtx.lineWidth = 2;
+      canvasCtx.strokeStyle = '#e0d8cf';
+      canvasCtx.beginPath();
+      let sliceWidth = canvas.width / bufferLength;
+      let x = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        let v = dataArray[i] / 128.0;
+        let y = v * canvas.height / 2;
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+        x += sliceWidth;
+      }
+      canvasCtx.lineTo(canvas.width, canvas.height / 2);
+      canvasCtx.stroke();
+    }
+    drawVisualizer();
+    
     // Preload audio files for all non-random buttons.
     const preloadedAudios = {};
     const soundButtons = document.querySelectorAll('.grid button:not(.random-btn)');
@@ -172,6 +227,14 @@
       delayDisplay.textContent = delaySlider.value + " seconds";
     });
     
+    // Function to connect an audio element to the analyser.
+    function connectToVisualizer(audio) {
+      // Create a new MediaElementSource for the audio clone.
+      const source = audioCtx.createMediaElementSource(audio);
+      source.connect(analyser);
+      analyser.connect(audioCtx.destination);
+    }
+    
     // Attach event listeners to all sound buttons.
     soundButtons.forEach(button => {
       button.activeCount = 0;
@@ -184,7 +247,12 @@
         
         // Clone preloaded audio to allow overlapping plays.
         const audio = preloadedAudios[audioSrc].cloneNode();
+        // Connect the cloned audio to the visualizer.
+        connectToVisualizer(audio);
+        
         setTimeout(() => {
+          // Ensure the AudioContext is resumed on user interaction.
+          audioCtx.resume();
           audio.play();
         }, delay);
         
@@ -201,7 +269,6 @@
     // Random button functionality with highlight animation.
     const randomBtn = document.querySelector('.random-btn');
     randomBtn.addEventListener('click', () => {
-      // Disable random button during animation.
       randomBtn.disabled = true;
       const normalButtons = Array.from(soundButtons);
       let iterations = 15;
@@ -221,7 +288,6 @@
           clearInterval(randomInterval);
           setTimeout(() => {
             currentHighlighted.classList.remove("random-highlight");
-            // Simulate click on the randomly selected button.
             currentHighlighted.click();
             randomBtn.disabled = false;
           }, intervalTime);
