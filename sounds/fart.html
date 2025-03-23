@@ -1,24 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fart Soundboard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fart Soundboard with Three.js Gas</title>
+  <!-- Include Three.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <style>
-    /* Reset and basic styling */
-    * {
-      box-sizing: border-box;
-    }
+    /* Basic styling */
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       padding: 20px;
       font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      background: #1b1b1b; /* Deep dark background */
-      color: #e0d8cf; /* Off-white text */
+      background: #1b1b1b;
+      color: #e0d8cf;
       display: flex;
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
+      position: relative;
+    }
+    /* Three.js canvas for gas effect (covers entire background) */
+    #cloudCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -2;
+      pointer-events: none;
+      background: transparent;
     }
     /* Header styling */
     h1 {
@@ -28,10 +40,8 @@
       align-items: center;
       gap: 10px;
     }
-    h1 .emoji {
-      font-size: 2.5rem;
-    }
-    /* Controls container styling */
+    h1 .emoji { font-size: 2.5rem; }
+    /* Controls styling */
     .controls {
       margin-bottom: 20px;
       width: 100%;
@@ -39,13 +49,9 @@
       background: #2e2e2e;
       padding: 15px;
       border-radius: 10px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.5);
     }
-    .controls label {
-      display: block;
-      margin-bottom: 5px;
-      font-size: 16px;
-    }
+    .controls label { display: block; margin-bottom: 5px; font-size: 16px; }
     .controls input[type="range"] {
       width: 100%;
       -webkit-appearance: none;
@@ -59,7 +65,7 @@
       background: #e0d8cf;
       cursor: pointer;
       margin-top: -8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.7);
     }
     .controls input[type="range"]::-webkit-slider-runnable-track {
       height: 5px;
@@ -71,7 +77,7 @@
       font-size: 14px;
       margin-top: 5px;
     }
-    /* Grid layout for buttons */
+    /* Grid for sound buttons */
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -80,7 +86,6 @@
       max-width: 600px;
       margin-bottom: 20px;
     }
-    /* Button styling */
     .grid button {
       background: linear-gradient(145deg, #4e342e, #3e2723);
       color: #e0d8cf;
@@ -89,7 +94,7 @@
       font-size: 16px;
       border-radius: 10px;
       cursor: pointer;
-      box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.6);
+      box-shadow: 4px 4px 8px rgba(0,0,0,0.6);
       transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.3s ease;
       position: relative;
       overflow: hidden;
@@ -99,9 +104,8 @@
     }
     .grid button:active {
       transform: scale(0.98);
-      box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.7);
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.7);
     }
-    /* Playing indicator appended as a speaker icon */
     .grid button.playing::after {
       content: " 🔊";
       font-size: 1.2em;
@@ -110,18 +114,26 @@
       right: 10px;
       transform: translateY(-50%);
     }
-    /* Random selection highlight effect */
+    /* Random button highlight effect */
     .random-highlight {
-      box-shadow: 0 0 12px 3px #FFD700 !important;
+      outline: 3px solid #FFD700;
     }
-    /* Style for the Random Fart button */
-    .random-btn {
-      background: linear-gradient(145deg, #6d4c41, #5d4037);
+    /* Action buttons for fire and fan */
+    .action-buttons {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
     }
-    .random-btn:hover {
-      background: linear-gradient(145deg, #7d5a4f, #6d4c41);
+    .action-buttons button {
+      background: none;
+      border: none;
+      cursor: pointer;
     }
-    /* Visualizer canvas styling */
+    .action-buttons button img {
+      width: 50px;
+      height: auto;
+    }
+    /* Visualizer styling */
     #visualizer {
       width: 100%;
       max-width: 600px;
@@ -134,12 +146,17 @@
   </style>
 </head>
 <body>
+  <!-- Three.js canvas for gas effect -->
+  <canvas id="cloudCanvas"></canvas>
+  
   <h1><span class="emoji">💨</span> Fart Soundboard</h1>
+  
   <div class="controls">
     <label for="delaySlider">Delay Timer (seconds):</label>
     <input type="range" id="delaySlider" min="0" max="180" step="1" value="0">
     <div class="delay-display">0 seconds</div>
   </div>
+  
   <div class="grid">
     <!-- 19 Fart buttons -->
     <button data-src="fart1.mp3">Fart 1</button>
@@ -164,15 +181,173 @@
     <!-- 20th Random button -->
     <button class="random-btn">Random Fart</button>
   </div>
-  <!-- Visualizer canvas placed below the buttons -->
+  
+  <!-- Action buttons for fire and fan effects -->
+  <div class="action-buttons">
+    <button id="fireBtn"><img src="fire.png" alt="Fire" /></button>
+    <button id="fanBtn"><img src="fan.png" alt="Fan" /></button>
+  </div>
+  
+  <!-- Visualizer canvas -->
   <canvas id="visualizer"></canvas>
   
   <script>
-    // Resize canvas to match its display size
-    const canvas = document.getElementById('visualizer');
-    const canvasCtx = canvas.getContext('2d');
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
+    /********** Three.js Gas Particle System **********/
+    // Set up renderer, scene, and camera.
+    const cloudCanvas = document.getElementById('cloudCanvas');
+    const renderer = new THREE.WebGLRenderer({ canvas: cloudCanvas, antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+    });
+    
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(
+      window.innerWidth / -2, window.innerWidth / 2,
+      window.innerHeight / 2, window.innerHeight / -2,
+      -1000, 1000
+    );
+    camera.position.z = 1;
+    
+    // Increase maxParticles to allow many more particles.
+    const maxParticles = 3000;
+    const positions = new Float32Array(maxParticles * 3);
+    const colors = new Float32Array(maxParticles * 3);
+    const particleGeometry = new THREE.BufferGeometry();
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    
+    // Points material: lower opacity for more transparent gas.
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 10,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    
+    const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+    scene.add(particleSystem);
+    
+    // Global gas particles array.
+    // Each particle: { pos: THREE.Vector3, vel: THREE.Vector3, life, initialLife, ignited, fan }
+    let gasParticles = [];
+    
+    // Always spawn particles from the bottom of the screen (random x).
+    function addGasParticles(_unusedOriginX, _unusedOriginY, duration) {
+      const originY = -window.innerHeight / 2;
+      const originX = (Math.random() - 0.5) * window.innerWidth;
+      // Spawn more particles: 30 per second of duration, capped at 150.
+      const count = Math.min(Math.floor(duration * 30), 150);
+      const baseLife = 2000 + duration * 300;
+      for (let i = 0; i < count; i++) {
+        const life = baseLife * (0.8 + Math.random() * 0.4);
+        gasParticles.push({
+          pos: new THREE.Vector3(originX, originY, 0),
+          vel: new THREE.Vector3((Math.random() - 0.5) * 0.5, (Math.random() * 0.3 + 0.2), 0),
+          life: life,
+          initialLife: life,
+          ignited: false,
+          fan: false
+        });
+      }
+      if (gasParticles.length > maxParticles) {
+        gasParticles.splice(0, gasParticles.length - maxParticles);
+      }
+    }
+    
+    // Global fire set: holds particles present at fire button press.
+    let fireActiveSet = null;
+    // On fire button press, capture the current gasParticles.
+    const fireBtn = document.getElementById("fireBtn");
+    fireBtn.addEventListener("click", () => {
+      fireActiveSet = { particles: [...gasParticles], fireThreshold: -window.innerHeight/2 };
+    });
+    
+    // Update gas particles.
+    function updateGasParticles(delta) {
+      // If a fire set is active, update its threshold and ignite particles in it.
+      if (fireActiveSet) {
+        fireActiveSet.fireThreshold += 6 * delta; // Increase threshold faster for quicker burn.
+        let allBurned = true;
+        fireActiveSet.particles.forEach(p => {
+          if (!p.ignited && p.pos.y < fireActiveSet.fireThreshold) {
+            p.ignited = true;
+          }
+          if (!p.ignited) { allBurned = false; }
+        });
+        if (allBurned) {
+          fireActiveSet = null;
+        }
+      }
+      
+      for (let i = gasParticles.length - 1; i >= 0; i--) {
+        const p = gasParticles[i];
+        if (p.ignited) {
+          // Burn effect: very fast decay.
+          p.life -= 60 * delta;
+        } else if (p.fan) {
+          p.vel.x += 5 * delta;
+          p.life -= 10 * delta;
+        } else {
+          p.life -= 0.5 * delta;
+        }
+        p.pos.add(p.vel.clone().multiplyScalar(delta));
+        if (p.life <= 0) {
+          gasParticles.splice(i, 1);
+        }
+      }
+    }
+    
+    // Update particle geometry.
+    function updateGasGeometry() {
+      const posAttr = particleGeometry.attributes.position.array;
+      const colorAttr = particleGeometry.attributes.color.array;
+      for (let i = 0; i < gasParticles.length; i++) {
+        const p = gasParticles[i];
+        posAttr[i * 3] = p.pos.x;
+        posAttr[i * 3 + 1] = p.pos.y;
+        posAttr[i * 3 + 2] = 0;
+        let t = 1 - p.life / p.initialLife;
+        let color = new THREE.Color();
+        if (p.ignited) {
+          // Ignited particles: blend from bright orange to black as they fade.
+          color.set(0xff8c00);
+          color.lerp(new THREE.Color(0x000000), t);
+        } else {
+          // Normal gas: greenish.
+          color.set(0x00ff00);
+          color.lerp(new THREE.Color(0x000000), t);
+        }
+        colorAttr[i * 3] = color.r;
+        colorAttr[i * 3 + 1] = color.g;
+        colorAttr[i * 3 + 2] = color.b;
+      }
+      particleGeometry.setDrawRange(0, gasParticles.length);
+      particleGeometry.attributes.position.needsUpdate = true;
+      particleGeometry.attributes.color.needsUpdate = true;
+    }
+    
+    let lastTime = performance.now();
+    function animateGas() {
+      requestAnimationFrame(animateGas);
+      const now = performance.now();
+      const delta = (now - lastTime) / 16.67;
+      lastTime = now;
+      updateGasParticles(delta);
+      updateGasGeometry();
+      renderer.render(scene, camera);
+    }
+    animateGas();
+    
+    /********** Visualizer and Audio Playback **********/
+    const vizCanvas = document.getElementById('visualizer');
+    const vizCtx = vizCanvas.getContext('2d');
+    vizCanvas.width = vizCanvas.clientWidth;
+    vizCanvas.height = vizCanvas.clientHeight;
     
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const analyser = audioCtx.createAnalyser();
@@ -183,33 +358,31 @@
     function drawVisualizer() {
       requestAnimationFrame(drawVisualizer);
       analyser.getByteTimeDomainData(dataArray);
-      canvasCtx.fillStyle = '#151515';
-      canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      canvasCtx.lineWidth = 2;
-      canvasCtx.strokeStyle = '#e0d8cf';
-      canvasCtx.beginPath();
-      let sliceWidth = canvas.width / bufferLength;
+      vizCtx.fillStyle = '#151515';
+      vizCtx.fillRect(0, 0, vizCanvas.width, vizCanvas.height);
+      vizCtx.lineWidth = 2;
+      vizCtx.strokeStyle = '#e0d8cf';
+      vizCtx.beginPath();
+      let sliceWidth = vizCanvas.width / bufferLength;
       let x = 0;
       for (let i = 0; i < bufferLength; i++) {
         let v = dataArray[i] / 128.0;
-        let y = v * canvas.height / 2;
+        let y = v * vizCanvas.height / 2;
         if (i === 0) {
-          canvasCtx.moveTo(x, y);
+          vizCtx.moveTo(x, y);
         } else {
-          canvasCtx.lineTo(x, y);
+          vizCtx.lineTo(x, y);
         }
         x += sliceWidth;
       }
-      canvasCtx.lineTo(canvas.width, canvas.height / 2);
-      canvasCtx.stroke();
+      vizCtx.lineTo(vizCanvas.width, vizCanvas.height / 2);
+      vizCtx.stroke();
     }
     drawVisualizer();
     
-    // Preload audio files for all non-random buttons.
+    // Preload audio files for sound buttons.
     const preloadedAudios = {};
     const soundButtons = document.querySelectorAll('.grid button:not(.random-btn)');
-    
     soundButtons.forEach(button => {
       const src = button.getAttribute('data-src');
       if (!preloadedAudios[src]) {
@@ -219,7 +392,6 @@
       }
     });
     
-    // Update delay timer display.
     const delaySlider = document.getElementById("delaySlider");
     const delayDisplay = document.querySelector(".delay-display");
     delaySlider.addEventListener("input", () => {
@@ -240,15 +412,16 @@
         const audioSrc = this.getAttribute('data-src');
         button.activeCount++;
         button.classList.add("playing");
-        
         const audio = preloadedAudios[audioSrc].cloneNode();
         connectToVisualizer(audio);
-        
+        // Spawn gas particles from the bottom.
+        let duration = audio.duration;
+        if (isNaN(duration) || duration <= 0) { duration = 2; }
+        addGasParticles(null, null, duration);
         setTimeout(() => {
           audioCtx.resume();
           audio.play();
         }, delay);
-        
         audio.addEventListener('ended', function() {
           button.activeCount--;
           if (button.activeCount <= 0) {
@@ -259,7 +432,7 @@
       });
     });
     
-    // Random button functionality with highlight animation.
+    // Random button functionality: cycle through highlighting one button at a time.
     const randomBtn = document.querySelector('.random-btn');
     randomBtn.addEventListener('click', () => {
       randomBtn.disabled = true;
@@ -268,7 +441,6 @@
       let intervalTime = 100;
       let count = 0;
       let currentHighlighted = null;
-      
       const randomInterval = setInterval(() => {
         if (currentHighlighted) {
           currentHighlighted.classList.remove("random-highlight");
@@ -286,6 +458,16 @@
           }, intervalTime);
         }
       }, intervalTime);
+    });
+    
+    // Fan Action Button.
+    const fanBtn = document.getElementById("fanBtn");
+    fanBtn.addEventListener("click", () => {
+      // Fan: push all particles strongly to the right.
+      gasParticles.forEach(p => {
+        p.fan = true;
+        p.vel.x = Math.abs(p.vel.x) + 5;
+      });
     });
   </script>
 </body>
