@@ -236,7 +236,7 @@
     // Each particle: { pos: THREE.Vector3, vel: THREE.Vector3, life, initialLife, ignited, fan }
     let gasParticles = [];
     
-    // Always spawn particles from the bottom of the screen (random x).
+    // Spawn particles always from the bottom of the screen (random x).
     function addGasParticles(_unusedOriginX, _unusedOriginY, duration) {
       const originY = -window.innerHeight / 2;
       const originX = (Math.random() - 0.5) * window.innerWidth;
@@ -259,19 +259,38 @@
       }
     }
     
-    // Global fire set: holds particles present at fire button press.
+    // New: Spawn particles from audio amplitude.
+    function spawnParticlesFromAmplitude(count) {
+      const originY = -window.innerHeight / 2;
+      for (let i = 0; i < count; i++) {
+        const originX = (Math.random() - 0.5) * window.innerWidth;
+        const life = 2000 * (0.8 + Math.random() * 0.4);
+        gasParticles.push({
+          pos: new THREE.Vector3(originX, originY, 0),
+          vel: new THREE.Vector3((Math.random() - 0.5) * 0.5, (Math.random() * 0.3 + 0.2), 0),
+          life: life,
+          initialLife: life,
+          ignited: false,
+          fan: false
+        });
+      }
+      if (gasParticles.length > maxParticles) {
+        gasParticles.splice(0, gasParticles.length - maxParticles);
+      }
+    }
+    
+    // Global fire variables for this press only.
     let fireActiveSet = null;
-    // On fire button press, capture the current gasParticles.
     const fireBtn = document.getElementById("fireBtn");
     fireBtn.addEventListener("click", () => {
+      // Capture current particles as the "fire set"
       fireActiveSet = { particles: [...gasParticles], fireThreshold: -window.innerHeight/2 };
     });
     
     // Update gas particles.
     function updateGasParticles(delta) {
-      // If a fire set is active, update its threshold and ignite particles in it.
       if (fireActiveSet) {
-        fireActiveSet.fireThreshold += 6 * delta; // Increase threshold faster for quicker burn.
+        fireActiveSet.fireThreshold += 6 * delta; // Rapidly rise threshold.
         let allBurned = true;
         fireActiveSet.particles.forEach(p => {
           if (!p.ignited && p.pos.y < fireActiveSet.fireThreshold) {
@@ -287,8 +306,7 @@
       for (let i = gasParticles.length - 1; i >= 0; i--) {
         const p = gasParticles[i];
         if (p.ignited) {
-          // Burn effect: very fast decay.
-          p.life -= 60 * delta;
+          p.life -= 60 * delta; // Faster decay when burning.
         } else if (p.fan) {
           p.vel.x += 5 * delta;
           p.life -= 10 * delta;
@@ -314,7 +332,7 @@
         let t = 1 - p.life / p.initialLife;
         let color = new THREE.Color();
         if (p.ignited) {
-          // Ignited particles: blend from bright orange to black as they fade.
+          // Ignited particles: from bright orange to black.
           color.set(0xff8c00);
           color.lerp(new THREE.Color(0x000000), t);
         } else {
@@ -332,12 +350,29 @@
     }
     
     let lastTime = performance.now();
+    // Global flag to indicate if a fart sound is currently playing.
+    let currentSoundPlaying = false;
+    
     function animateGas() {
       requestAnimationFrame(animateGas);
       const now = performance.now();
       const delta = (now - lastTime) / 16.67;
       lastTime = now;
       updateGasParticles(delta);
+      
+      // If a sound is playing, use the analyser data to spawn particles in sync.
+      if (currentSoundPlaying) {
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        let avg = sum / (bufferLength * 128);
+        if (avg > 0.1) {
+          let spawnCount = Math.floor(avg * 10);
+          spawnParticlesFromAmplitude(spawnCount);
+        }
+      }
+      
       updateGasGeometry();
       renderer.render(scene, camera);
     }
@@ -380,7 +415,7 @@
     }
     drawVisualizer();
     
-    // Preload audio files for sound buttons.
+    // Preload audio for sound buttons.
     const preloadedAudios = {};
     const soundButtons = document.querySelectorAll('.grid button:not(.random-btn)');
     soundButtons.forEach(button => {
@@ -414,21 +449,24 @@
         button.classList.add("playing");
         const audio = preloadedAudios[audioSrc].cloneNode();
         connectToVisualizer(audio);
-        // Spawn gas particles from the bottom.
-        let duration = audio.duration;
-        if (isNaN(duration) || duration <= 0) { duration = 2; }
-        addGasParticles(null, null, duration);
-        setTimeout(() => {
-          audioCtx.resume();
-          audio.play();
-        }, delay);
+        // Set global flag when sound plays.
+        audio.addEventListener('play', () => { currentSoundPlaying = true; });
         audio.addEventListener('ended', function() {
           button.activeCount--;
           if (button.activeCount <= 0) {
             button.classList.remove("playing");
             button.activeCount = 0;
           }
+          currentSoundPlaying = false;
         });
+        let duration = audio.duration;
+        if (isNaN(duration) || duration <= 0) { duration = 2; }
+        // Also spawn a base burst of particles.
+        addGasParticles(null, null, duration);
+        setTimeout(() => {
+          audioCtx.resume();
+          audio.play();
+        }, delay);
       });
     });
     
