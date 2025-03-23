@@ -40,7 +40,11 @@
       align-items: center;
       gap: 10px;
     }
-    h1 .emoji { font-size: 2.5rem; }
+    /* Colorize the top emoji green */
+    h1 .emoji {
+      font-size: 2.5rem;
+      color: green;
+    }
     /* Controls styling */
     .controls {
       margin-bottom: 20px;
@@ -118,20 +122,20 @@
     .random-highlight {
       outline: 3px solid #FFD700;
     }
-    /* Action buttons for fire and fan */
+    /* Action buttons for fire and fan: text-only */
     .action-buttons {
       display: flex;
       gap: 20px;
       margin-bottom: 20px;
     }
     .action-buttons button {
-      background: none;
+      background: #2e2e2e;
       border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 10px;
       cursor: pointer;
-    }
-    .action-buttons button img {
-      width: 50px;
-      height: auto;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.7);
     }
     /* Visualizer styling */
     #visualizer {
@@ -158,7 +162,7 @@
   </div>
   
   <div class="grid">
-    <!-- 19 Fart buttons -->
+    <!-- 19 Fart buttons; these remain as text labels -->
     <button data-src="fart1.mp3">Fart 1</button>
     <button data-src="fart2.mp3">Fart 2</button>
     <button data-src="fart3.mp3">Fart 3</button>
@@ -182,10 +186,10 @@
     <button class="random-btn">Random Fart</button>
   </div>
   
-  <!-- Action buttons for fire and fan effects -->
+  <!-- Action buttons for fire and fan effects with text labels -->
   <div class="action-buttons">
-    <button id="fireBtn"><img src="fire.png" alt="Fire" /></button>
-    <button id="fanBtn"><img src="fan.png" alt="Fan" /></button>
+    <button id="fireBtn">🔥 Light Match</button>
+    <button id="fanBtn">💨 Gust Wind</button>
   </div>
   
   <!-- Visualizer canvas -->
@@ -236,7 +240,7 @@
     // Each particle: { pos: THREE.Vector3, vel: THREE.Vector3, life, initialLife, ignited, fan }
     let gasParticles = [];
     
-    // Spawn particles always from the bottom of the screen (random x).
+    // Always spawn particles from the bottom of the screen (random x).
     function addGasParticles(_unusedOriginX, _unusedOriginY, duration) {
       const originY = -window.innerHeight / 2;
       const originX = (Math.random() - 0.5) * window.innerWidth;
@@ -245,26 +249,6 @@
       const baseLife = 2000 + duration * 300;
       for (let i = 0; i < count; i++) {
         const life = baseLife * (0.8 + Math.random() * 0.4);
-        gasParticles.push({
-          pos: new THREE.Vector3(originX, originY, 0),
-          vel: new THREE.Vector3((Math.random() - 0.5) * 0.5, (Math.random() * 0.3 + 0.2), 0),
-          life: life,
-          initialLife: life,
-          ignited: false,
-          fan: false
-        });
-      }
-      if (gasParticles.length > maxParticles) {
-        gasParticles.splice(0, gasParticles.length - maxParticles);
-      }
-    }
-    
-    // New: Spawn particles from audio amplitude.
-    function spawnParticlesFromAmplitude(count) {
-      const originY = -window.innerHeight / 2;
-      for (let i = 0; i < count; i++) {
-        const originX = (Math.random() - 0.5) * window.innerWidth;
-        const life = 2000 * (0.8 + Math.random() * 0.4);
         gasParticles.push({
           pos: new THREE.Vector3(originX, originY, 0),
           vel: new THREE.Vector3((Math.random() - 0.5) * 0.5, (Math.random() * 0.3 + 0.2), 0),
@@ -290,7 +274,7 @@
     // Update gas particles.
     function updateGasParticles(delta) {
       if (fireActiveSet) {
-        fireActiveSet.fireThreshold += 6 * delta; // Rapidly rise threshold.
+        fireActiveSet.fireThreshold += 6 * delta; // Rapidly raise threshold.
         let allBurned = true;
         fireActiveSet.particles.forEach(p => {
           if (!p.ignited && p.pos.y < fireActiveSet.fireThreshold) {
@@ -332,7 +316,7 @@
         let t = 1 - p.life / p.initialLife;
         let color = new THREE.Color();
         if (p.ignited) {
-          // Ignited particles: from bright orange to black.
+          // Ignited particles: blend from bright orange to black.
           color.set(0xff8c00);
           color.lerp(new THREE.Color(0x000000), t);
         } else {
@@ -353,6 +337,26 @@
     // Global flag to indicate if a fart sound is currently playing.
     let currentSoundPlaying = false;
     
+    // New: spawn additional particles based on amplitude.
+    function spawnParticlesFromAmplitude(count) {
+      const originY = -window.innerHeight / 2;
+      for (let i = 0; i < count; i++) {
+        const originX = (Math.random() - 0.5) * window.innerWidth;
+        const life = 2000 * (0.8 + Math.random() * 0.4);
+        gasParticles.push({
+          pos: new THREE.Vector3(originX, originY, 0),
+          vel: new THREE.Vector3((Math.random() - 0.5) * 0.5, (Math.random() * 0.3 + 0.2), 0),
+          life: life,
+          initialLife: life,
+          ignited: false,
+          fan: false
+        });
+      }
+      if (gasParticles.length > maxParticles) {
+        gasParticles.splice(0, gasParticles.length - maxParticles);
+      }
+    }
+    
     function animateGas() {
       requestAnimationFrame(animateGas);
       const now = performance.now();
@@ -360,7 +364,7 @@
       lastTime = now;
       updateGasParticles(delta);
       
-      // If a sound is playing, use the analyser data to spawn particles in sync.
+      // If a sound is playing, compute average amplitude and spawn particles.
       if (currentSoundPlaying) {
         let sum = 0;
         for (let i = 0; i < bufferLength; i++) {
@@ -461,8 +465,10 @@
         });
         let duration = audio.duration;
         if (isNaN(duration) || duration <= 0) { duration = 2; }
-        // Also spawn a base burst of particles.
-        addGasParticles(null, null, duration);
+        // Delay particle spawn slightly (300ms delay).
+        setTimeout(() => {
+          addGasParticles(null, null, duration);
+        }, 300);
         setTimeout(() => {
           audioCtx.resume();
           audio.play();
