@@ -4,13 +4,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Emoji FPS Game</title>
   <style>
-    /* Fullscreen canvas and no page scrolling */
+    /* Fullscreen canvas and disable scrolling */
     html, body {
       margin: 0;
       padding: 0;
       background: #000;
       overflow: hidden;
-      touch-action: none; /* disable touch gestures like scrolling */
+      touch-action: none;
     }
     #gameCanvas {
       display: block;
@@ -32,7 +32,7 @@
       background: rgba(0,0,0,0.5);
       z-index: 1;
     }
-    /* Joystick base (bottom-left) */
+    /* Joystick (bottom-left) */
     #joystick {
       position: absolute;
       bottom: 10%;
@@ -103,15 +103,14 @@
   // Game state variables
   let currentLevel = 0;
   let score = 0;
-  let levelData = [];           // current level grid (0=empty, 1=wall)
-  let enemies = [];             // list of enemy positions
-  let player = { x: 0, y: 0, angle: 0 };  // player position and facing angle (radians)
-  let projectiles = [];         // active projectiles
-  let particles = [];           // explosion particles
+  let levelData = []; // 2D array for map: 0 = empty, 1 = wall
+  let enemies = [];   // Array of enemy objects {x, y, dx, dy}
+  let player = { x: 0, y: 0, angle: 0 };
+  let projectiles = []; // Array of projectile objects {x, y, dx, dy, rotation, rotationSpeed}
+  let particles = [];   // Explosion particles
 
-  // Level definitions (maps with multi-room layouts)
+  // Level definitions (each level is a grid using characters)
   const levels = [
-    // Level 1 map (multi-room with a wall and a doorway)
     [
       "#######",
       "#.....#",
@@ -123,7 +122,6 @@
       "#.....#",
       "#######"
     ],
-    // Level 2 map (larger, more complex room layout)
     [
       "############",
       "#....R.....#",
@@ -141,29 +139,29 @@
   ];
 
   // Colors and visual settings
-  const floorColor = "#444";       // floor (dark gray)
-  const ceilingColor = "#888";     // ceiling (lighter gray)
-  const wallColor = "#c0c0c0";     // wall base color (light gray)
-  const wallColorDark = "#888888"; // wall color when shaded (for side walls)
-  const explosionColors = ["255,165,0", "255,100,0", "255,255,0"]; // orange, dark orange, yellow
+  const floorColor = "#444";
+  const ceilingColor = "#888";
+  const wallColor = "#c0c0c0";
+  const wallColorDark = "#888888";
+  const explosionColors = ["255,165,0", "255,100,0", "255,255,0"];
 
-  // Movement control variables
-  let moveForward = 0;       // forward/back input (-1 back, 1 forward)
-  let turnDirection = 0;     // turning input (-1 left, 1 right)
-  const moveSpeed = 3.0;     // movement speed (units per second)
-  const turnSpeed = 2.0;     // turning speed (radians per second)
-  const joystickRadius = 40; // joystick max radius in px (half of base width)
+  // Movement control variables for joystick
+  let moveForward = 0;   // forward/back input (-1 to 1)
+  let turnDirection = 0; // left/right turning input (-1 to 1)
+  const moveSpeed = 3.0; // movement speed in units per second
+  const turnSpeed = 2.0; // turning speed in radians per second
+  const joystickRadius = 40; // max joystick displacement in pixels
   let joystickActive = false;
   let joystickPointerId = null;
   let joystickCenterX = 0;
   let joystickCenterY = 0;
 
-  // Overlay text update tracking (to avoid unnecessary DOM updates)
+  // HUD update tracking
   let lastLevelDisplay = -1;
   let lastEnemiesDisplay = -1;
   let lastScoreDisplay = -1;
 
-  // Load a level: setup map, player, and enemies
+  // Load a level: parse the level map and initialize player and enemies
   function loadLevel(index) {
     currentLevel = index;
     enemies = [];
@@ -177,19 +175,23 @@
       for (let x = 0; x < rowStr.length; x++) {
         const ch = rowStr[x];
         if (ch === '#') {
-          rowArr.push(1); // wall
+          rowArr.push(1);
         } else if (ch === 'P') {
-          // Player start position (center of cell)
+          // Set player start (center of cell)
           player.x = x + 0.5;
           player.y = y + 0.5;
-          player.angle = 0; // face "north" (upwards)
+          player.angle = 0;
           rowArr.push(0);
         } else if (ch === 'R') {
-          // Enemy position (center of cell)
-          enemies.push({ x: x + 0.5, y: y + 0.5 });
+          // Add enemy with random movement vector
+          enemies.push({
+            x: x + 0.5,
+            y: y + 0.5,
+            dx: (Math.random() - 0.5) * 1.5,
+            dy: (Math.random() - 0.5) * 1.5
+          });
           rowArr.push(0);
         } else {
-          // Empty space
           rowArr.push(0);
         }
       }
@@ -197,23 +199,20 @@
     }
   }
 
-  // Check if a position is a wall (for collision and raycast)
+  // Check if a position (x,y) is a wall
   function isWall(x, y) {
     const mx = Math.floor(x);
     const my = Math.floor(y);
-    // Out of bounds is treated as wall
-    if (my < 0 || my >= levelData.length || mx < 0 || mx >= levelData[0].length) {
-      return true;
-    }
+    if (my < 0 || my >= levelData.length || mx < 0 || mx >= levelData[0].length) return true;
     return levelData[my][mx] === 1;
   }
 
-  // Create an explosion at (x, y) with multiple particles
+  // Create an explosion at (x, y) with 150 particles
   function createExplosion(x, y) {
     const count = 150;
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * 2 * Math.PI;
-      const speed = Math.random() * 3 + 1; // random speed
+      const speed = Math.random() * 3 + 1;
       const vx = Math.sin(angle) * speed;
       const vy = -Math.cos(angle) * speed;
       const col = explosionColors[Math.floor(Math.random() * explosionColors.length)];
@@ -221,58 +220,65 @@
     }
   }
 
-  // Update game state (movement, physics, collisions)
+  // Update game state
   function update(dt) {
     // Update player rotation
     player.angle += turnDirection * turnSpeed * dt;
     if (player.angle < 0) player.angle += Math.PI * 2;
     if (player.angle >= Math.PI * 2) player.angle -= Math.PI * 2;
-    // Update player position (forward/backward movement)
+    // Update player forward/backward movement (move in direction of player.angle)
     if (moveForward !== 0) {
       const moveStep = moveForward * moveSpeed * dt;
-      // Compute proposed new position
       const newX = player.x + Math.sin(player.angle) * moveStep;
       const newY = player.y - Math.cos(player.angle) * moveStep;
-      // Collision check: only move if next cell is not a wall
-      if (!isWall(newX, player.y)) {
-        player.x = newX;
+      if (!isWall(newX, player.y)) player.x = newX;
+      if (!isWall(player.x, newY)) player.y = newY;
+    }
+    // Update enemy movement (basic bouncing off walls)
+    for (let i = 0; i < enemies.length; i++) {
+      const enemy = enemies[i];
+      let newX = enemy.x + enemy.dx * dt;
+      let newY = enemy.y + enemy.dy * dt;
+      if (!isWall(newX, enemy.y)) {
+        enemy.x = newX;
+      } else {
+        enemy.dx = -enemy.dx;
       }
-      if (!isWall(player.x, newY)) {
-        player.y = newY;
+      if (!isWall(enemy.x, newY)) {
+        enemy.y = newY;
+      } else {
+        enemy.dy = -enemy.dy;
       }
     }
-    // Update projectiles positions and check collisions
+    // Update projectiles: move them and update rotation
     for (let i = 0; i < projectiles.length; i++) {
       const proj = projectiles[i];
-      // Move projectile forward
       proj.x += proj.dx * dt;
       proj.y += proj.dy * dt;
-      // If projectile hits a wall, remove it
+      proj.rotation += proj.rotationSpeed * dt;
       if (isWall(proj.x, proj.y)) {
         projectiles.splice(i, 1);
         i--;
         continue;
       }
       // Remove projectile if it goes out of bounds
-      if (proj.x < 0 || proj.y < 0 || proj.y >= levelData.length || proj.x >= levelData[0].length) {
+      if (proj.x < 0 || proj.y < 0 || proj.x >= levelData[0].length || proj.y >= levelData.length) {
         projectiles.splice(i, 1);
         i--;
         continue;
       }
-      // Check if projectile hit any enemy
+      // Check collision with enemies
       for (let j = 0; j < enemies.length; j++) {
         const enemy = enemies[j];
         const dx = enemy.x - proj.x;
         const dy = enemy.y - proj.y;
-        if (Math.sqrt(dx*dx + dy*dy) < 0.5) {
-          // Hit detected: remove enemy and projectile
+        if (Math.hypot(dx, dy) < 0.5) {
+          createExplosion(enemy.x, enemy.y);
           enemies.splice(j, 1);
           j--;
           projectiles.splice(i, 1);
           i--;
-          // Increase score and create explosion
           score += 100;
-          createExplosion(enemy.x, enemy.y);
           break;
         }
       }
@@ -280,68 +286,56 @@
     // Update explosion particles
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
-      // Move particle outward
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      // Fade out (reduce life)
       p.life -= dt;
       if (p.life <= 0) {
-        // Remove particle when life ends
         particles.splice(i, 1);
         i--;
       }
     }
-    // Check if level is cleared (no remaining enemies)
+    // Check level completion (all enemies eliminated)
     if (enemies.length === 0) {
       if (currentLevel < levels.length - 1) {
-        // Load next level
         loadLevel(currentLevel + 1);
       } else {
-        // Last level completed: restart at level 1 (keep score)
         loadLevel(0);
       }
     }
   }
 
-  // Render the 3D scene and sprites
+  // Render the 3D scene and sprites using simple raycasting and sprite projection
   function render() {
     const w = canvas.width;
     const h = canvas.height;
-    // Fill ceiling (top half) and floor (bottom half)
+    // Draw ceiling and floor
     ctx.fillStyle = ceilingColor;
     ctx.fillRect(0, 0, w, h/2);
     ctx.fillStyle = floorColor;
     ctx.fillRect(0, h/2, w, h/2);
 
-    // Prepare values for ray casting (player perspective)
+    // Player variables for raycasting
     const posX = player.x;
     const posY = player.y;
     const dirX = Math.sin(player.angle);
     const dirY = -Math.cos(player.angle);
-    const fov = 1.0472; // 60 degrees field of view in radians
+    const fov = 1.0472; // 60° FOV in radians
     const planeLen = Math.tan(fov / 2);
     const planeX = -dirY * planeLen;
     const planeY =  dirX * planeLen;
 
-    // Raycast to draw walls column by column
+    // Raycasting: draw walls column-by-column
     for (let x = 0; x < w; x++) {
-      // Calculate ray direction for this column
       const cameraX = 2 * x / w - 1;
       const rayDirX = dirX + planeX * cameraX;
       const rayDirY = dirY + planeY * cameraX;
-      // Map coordinates of ray start (player cell)
       let mapX = Math.floor(posX);
       let mapY = Math.floor(posY);
-      // Length of ray to next x or y side
-      let sideDistX;
-      let sideDistY;
-      // Length of ray for one unit step in x or y
+      let sideDistX, sideDistY;
       const deltaDistX = (rayDirX === 0) ? Infinity : Math.abs(1 / rayDirX);
       const deltaDistY = (rayDirY === 0) ? Infinity : Math.abs(1 / rayDirY);
       let stepX, stepY;
-      let hit = 0;
-      let side = 0;
-      // Determine step direction and initial side distances
+      let hit = 0, side = 0;
       if (rayDirX < 0) {
         stepX = -1;
         sideDistX = (posX - mapX) * deltaDistX;
@@ -356,7 +350,6 @@
         stepY = 1;
         sideDistY = (mapY + 1.0 - posY) * deltaDistY;
       }
-      // Perform DDA (step through grid) to find wall
       while (hit === 0) {
         if (sideDistX < sideDistY) {
           sideDistX += deltaDistX;
@@ -367,55 +360,40 @@
           mapY += stepY;
           side = 1;
         }
-        // Stop if ray goes outside map bounds
         if (mapX < 0 || mapX >= levelData[0].length || mapY < 0 || mapY >= levelData.length) {
           hit = 1;
           break;
         }
-        // Check if we've hit a wall cell
-        if (levelData[mapY][mapX] === 1) {
-          hit = 1;
-        }
+        if (levelData[mapY][mapX] === 1) hit = 1;
       }
-      // Calculate distance to the hit wall (to avoid fish-eye distortion, use perpendicular distance)
-      let perpWallDist;
-      if (side === 0) {
-        perpWallDist = sideDistX - deltaDistX;
-      } else {
-        perpWallDist = sideDistY - deltaDistY;
-      }
-      if (perpWallDist < 0.01) perpWallDist = 0.01; // avoid division by very small numbers
-      // Calculate height of wall slice to draw on screen
+      let perpWallDist = (side === 0) ? sideDistX - deltaDistX : sideDistY - deltaDistY;
+      if (perpWallDist < 0.01) perpWallDist = 0.01;
       const lineHeight = Math.floor(h / perpWallDist);
-      // Calculate vertical boundaries of the wall slice
       let drawStart = Math.floor(-lineHeight / 2 + h / 2);
       if (drawStart < 0) drawStart = 0;
       let drawEnd = Math.floor(lineHeight / 2 + h / 2);
       if (drawEnd >= h) drawEnd = h - 1;
-      // Set wall color (darker shade for sides hit)
       ctx.fillStyle = (side === 1) ? wallColorDark : wallColor;
-      // Draw the wall column
       ctx.fillRect(x, drawStart, 1, drawEnd - drawStart + 1);
     }
 
-    // Prepare to render sprites (enemies, projectiles, particles)
+    // Sprite projection: enemies, projectiles, and particles
     const spriteList = [];
-    const invDet = 1.0 / (planeX * dirY - dirX * planeY); // inverse camera matrix determinant
+    const invDet = 1.0 / (planeX * dirY - dirX * planeY);
     const halfW = w / 2;
     const halfH = h / 2;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // Project each enemy into camera space
+    // Project enemies
     for (let i = 0; i < enemies.length; i++) {
       const ex = enemies[i].x - posX;
       const ey = enemies[i].y - posY;
-      // Transform enemy position relative to camera
       const transformX = invDet * (dirY * ex - dirX * ey);
       const transformY = invDet * (-planeY * ex + planeX * ey);
-      if (transformY <= 0) continue; // enemy is behind the camera
+      if (transformY <= 0) continue;
       const spriteX = halfW * (1 + transformX / transformY);
-      const spriteHeight = Math.abs(Math.floor(h / transformY)); // sprite height on screen
+      const spriteHeight = Math.abs(Math.floor(h / transformY));
       spriteList.push({
         type: 'enemy',
         char: "🐓",
@@ -424,8 +402,7 @@
         depth: transformY
       });
     }
-
-    // Project each projectile (chicken wing) as a sprite
+    // Project projectiles (include rotation)
     for (let i = 0; i < projectiles.length; i++) {
       const px = projectiles[i].x - posX;
       const py = projectiles[i].y - posY;
@@ -433,18 +410,17 @@
       const transformY = invDet * (-planeY * px + planeX * py);
       if (transformY <= 0) continue;
       const spriteX = halfW * (1 + transformX / transformY);
-      // Scale projectile sprite smaller (size factor 0.3)
       const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.3));
       spriteList.push({
         type: 'projectile',
         char: "🍗",
         x: spriteX,
-        height: spriteHeight < 1 ? 1 : spriteHeight, // minimum 1px
-        depth: transformY
+        height: spriteHeight < 1 ? 1 : spriteHeight,
+        depth: transformY,
+        rotation: projectiles[i].rotation
       });
     }
-
-    // Project each explosion particle
+    // Project explosion particles
     for (let i = 0; i < particles.length; i++) {
       const fx = particles[i].x - posX;
       const fy = particles[i].y - posY;
@@ -458,106 +434,86 @@
         x: spriteX,
         height: spriteHeight < 1 ? 1 : spriteHeight,
         depth: transformY,
-        alpha: particles[i].life,   // use remaining life as transparency
-        color: particles[i].color  // base color (string without alpha)
+        alpha: particles[i].life,
+        color: particles[i].color
       });
     }
-
-    // Sort sprites by depth (draw farthest first, nearest last for proper overlap)
+    // Sort sprites by depth (farthest drawn first)
     spriteList.sort((a, b) => b.depth - a.depth);
-
-    // Draw all sprites
+    // Draw sprites
     for (let i = 0; i < spriteList.length; i++) {
       const spr = spriteList[i];
-      // If sprite is off-screen horizontally, skip it
       if (spr.x < -spr.height || spr.x > w + spr.height) continue;
-      if (spr.type === 'enemy' || spr.type === 'projectile') {
-        // Draw enemy or projectile as emoji
+      if (spr.type === 'projectile') {
+        ctx.save();
+        ctx.translate(spr.x, halfH);
+        ctx.rotate(spr.rotation);
+        ctx.font = spr.height + "px sans-serif";
+        ctx.fillStyle = "#fff";
+        ctx.fillText(spr.char, 0, 0);
+        ctx.restore();
+      } else if (spr.type === 'enemy') {
         ctx.font = spr.height + "px sans-serif";
         ctx.fillStyle = "#fff";
         ctx.fillText(spr.char, spr.x, halfH);
       } else if (spr.type === 'particle') {
-        // Draw explosion particle as a colored square
         ctx.fillStyle = "rgba(" + spr.color + "," + spr.alpha.toFixed(2) + ")";
         ctx.fillRect(spr.x - spr.height/2, halfH - spr.height/2, spr.height, spr.height);
       }
     }
   }
 
-  // Joystick input handling
+  // Joystick handling (using pointer events)
   joystick.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    e.stopPropagation();
     joystickActive = true;
     joystickPointerId = e.pointerId;
-    // Calculate joystick center coordinates for this event
     const rect = joystick.getBoundingClientRect();
     joystickCenterX = rect.left + rect.width / 2;
     joystickCenterY = rect.top + rect.height / 2;
-    // Capture pointer to continue receiving moves even if it leaves the joystick element
     joystick.setPointerCapture(joystickPointerId);
-    // On touch start, update joystick values immediately
     const dx = e.clientX - joystickCenterX;
     const dy = e.clientY - joystickCenterY;
     const dist = Math.sqrt(dx*dx + dy*dy);
     let normX = dx / joystickRadius;
     let normY = dy / joystickRadius;
     if (dist > joystickRadius) {
-      // Clamp within circle
       normX = dx / dist;
       normY = dy / dist;
     }
-    if (dist < 5) {
-      normX = 0;
-      normY = 0;
-    }
+    if (dist < 5) { normX = 0; normY = 0; }
+    // Here, vertical controls forward/back (invert Y) and horizontal controls turning.
     moveForward = -normY;
     turnDirection = normX;
-    // Move knob visually to touch point
     joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
   });
   joystick.addEventListener('pointermove', (e) => {
     if (!joystickActive || e.pointerId !== joystickPointerId) return;
-    // Calculate offset from joystick center
     const dx = e.clientX - joystickCenterX;
     const dy = e.clientY - joystickCenterY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    // Normalize to [-1,1] range
     let normX = dx / joystickRadius;
     let normY = dy / joystickRadius;
     if (dist > joystickRadius) {
-      // Limit to circle boundary
       normX = dx / dist;
       normY = dy / dist;
     }
-    if (dist < 5) {
-      // Small deadzone for stability
-      normX = 0;
-      normY = 0;
-    }
-    // Joystick controls: vertical -> forward/back, horizontal -> turn
+    if (dist < 5) { normX = 0; normY = 0; }
     moveForward = -normY;
     turnDirection = normX;
-    // Update knob position
     joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
   });
   joystick.addEventListener('pointerup', (e) => {
     if (e.pointerId !== joystickPointerId) return;
-    e.preventDefault();
-    e.stopPropagation();
-    // Release joystick control
     joystick.releasePointerCapture(joystickPointerId);
     joystickActive = false;
     joystickPointerId = null;
-    // Reset movement input
     moveForward = 0;
     turnDirection = 0;
-    // Center the joystick knob
     joystickKnob.style.transform = 'translate(-50%, -50%)';
   });
   joystick.addEventListener('pointercancel', (e) => {
     if (e.pointerId !== joystickPointerId) return;
-    // Handle unexpected touch cancellation similar to pointerup
     joystickActive = false;
     joystickPointerId = null;
     moveForward = 0;
@@ -565,11 +521,9 @@
     joystickKnob.style.transform = 'translate(-50%, -50%)';
   });
 
-  // Shoot button handling
+  // Shoot button: fire a spinning chicken wing projectile
   shootBtn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    e.stopPropagation();
-    // Fire a new chicken wing projectile from player position
     const dirX = Math.sin(player.angle);
     const dirY = -Math.cos(player.angle);
     const speed = 6.0;
@@ -577,17 +531,18 @@
       x: player.x,
       y: player.y,
       dx: dirX * speed,
-      dy: dirY * speed
+      dy: dirY * speed,
+      rotation: 0,
+      rotationSpeed: Math.PI * 2  // one full rotation per second
     });
   });
 
-  // Main game loop using requestAnimationFrame
+  // Main game loop
   let lastTime = performance.now();
   function gameLoop(time) {
-    const dt = Math.min((time - lastTime) / 1000, 0.1); // delta time in seconds (max 0.1 to avoid large jumps)
+    const dt = Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
     update(dt);
-    // Update HUD overlay text if values changed
     if (currentLevel + 1 !== lastLevelDisplay || enemies.length !== lastEnemiesDisplay || score !== lastScoreDisplay) {
       overlay.textContent = `Level: ${currentLevel + 1} | Roosters: ${enemies.length} | Score: ${score}`;
       lastLevelDisplay = currentLevel + 1;
@@ -598,7 +553,6 @@
     requestAnimationFrame(gameLoop);
   }
 
-  // Start the game at level 1
   loadLevel(0);
   requestAnimationFrame(gameLoop);
 })();
