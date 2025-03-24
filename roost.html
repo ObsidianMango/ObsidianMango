@@ -34,7 +34,7 @@
       background: rgba(0,0,0,0.6);
       z-index: 2;
     }
-    /* Final screen overlay (hidden during gameplay) */
+    /* Final screen overlay */
     #finalScreen {
       position: absolute;
       top: 0;
@@ -118,7 +118,7 @@
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
-  <div id="overlay">Level: 1 | Roosters: 0 | Ghosts: 0 | HP: 3 | Weapon: 🍗 | Time: 0s | Score: 0</div>
+  <div id="overlay">Level: 1 | Roosters: 0 | Ghosts: 0 | HP: 10 | Weapon: 🍗 | Time: 0s | Score: 0</div>
   <div id="finalScreen">
     <h1>GAME OVER</h1>
     <p id="finalTime"></p>
@@ -154,14 +154,15 @@
   let score = 0;
   let levelData = []; // 2D map grid: 0 = empty, 1 = wall
   let enemies = [];   // {x, y, dx, dy, isGhost, health}
-  let pickups = [];   // {x, y, type} where type: 'rock' or 'dagger'
-  let player = { x: 0, y: 0, angle: 0, health: 3, weapon: "🍗" };
+  let pickups = [];   // {x, y, type} (type: 'rock' or 'dagger')
+  let player = { x: 0, y: 0, angle: 0, health: 10, weapon: "🍗" };
   let projectiles = []; // {x, y, dx, dy, rotation, rotationSpeed, weapon}
   let particles = [];   // {x, y, z, vx, vy, vz, life, color}
   let gameStartTime = performance.now();
   let gameOver = false;
+  let damageFlashTimer = 0;
 
-  // Level definitions (using characters: '#' wall, 'P' player, 'R' rooster, 'G' ghost, 'K' rock pickup, 'D' dagger pickup)
+  // Level definitions (characters: '#' wall, 'P' player, 'R' rooster, 'G' ghost, 'K' rock pickup, 'D' dagger pickup)
   const levels = [
     [
       "###########",
@@ -213,7 +214,7 @@
   let lastTimeDisplay = -1;
   let lastScoreDisplay = -1;
 
-  // Utility: Line-of-sight check (returns false if a wall blocks view)
+  // Utility: Line-of-sight check
   function lineOfSight(x1, y1, x2, y2) {
     const dx = x2 - x1, dy = y2 - y1;
     const dist = Math.hypot(dx, dy);
@@ -235,7 +236,7 @@
     pickups = [];
     gameStartTime = performance.now();
     gameOver = false;
-    player.health = 3;
+    player.health = 10;
     player.weapon = "🍗";
     const rows = levels[index];
     levelData = [];
@@ -273,7 +274,8 @@
 
   function isWall(x, y) {
     const mx = Math.floor(x), my = Math.floor(y);
-    if (my < 0 || my >= levelData.length || mx < 0 || mx >= levelData[0].length) return true;
+    if (my < 0 || my >= levelData.length || mx < 0 || mx >= levelData[0].length)
+      return true;
     return levelData[my][mx] === 1;
   }
 
@@ -302,7 +304,7 @@
     }
   }
 
-  // Shooting & Weapon pickups
+  // Shooting & weapon pickups
   function shoot() {
     const dirX = Math.sin(player.angle);
     const dirY = -Math.cos(player.angle);
@@ -348,7 +350,7 @@
       if (!isWall(newX, player.y)) player.x = newX;
       if (!isWall(player.x, newY)) player.y = newY;
     }
-    // Weapon pickups
+    // Weapon pickups (do not block progression)
     for (let i = 0; i < pickups.length; i++) {
       const pu = pickups[i];
       if (Math.hypot(player.x - pu.x, player.y - pu.y) < 0.5) {
@@ -372,9 +374,10 @@
       let newY = enemy.y + enemy.dy * dt;
       if (!isWall(newX, enemy.y)) enemy.x = newX; else enemy.dx = -enemy.dx;
       if (!isWall(enemy.x, newY)) enemy.y = newY; else enemy.dy = -enemy.dy;
-      // If ghost touches player, hurt player
+      // Ghost enemy damages player on contact and triggers screen flash
       if (enemy.isGhost && Math.hypot(player.x - enemy.x, player.y - enemy.y) < 0.5) {
         player.health--;
+        damageFlashTimer = 0.2; // flash red for 0.2 seconds
         enemy.x -= enemy.dx * dt * 2;
         enemy.y -= enemy.dy * dt * 2;
         if (player.health <= 0) gameOver = true;
@@ -397,14 +400,23 @@
         i--;
         continue;
       }
-      // Check collision with enemies
       for (let j = 0; j < enemies.length; j++) {
         const enemy = enemies[j];
         if (Math.hypot(enemy.x - proj.x, enemy.y - proj.y) < 0.5) {
           if (enemy.isGhost) {
             enemy.health--;
-            if (enemy.health <= 0) { createGhostExplosion(enemy.x, enemy.y); score += 300; enemies.splice(j, 1); j--; }
-          } else { createExplosion(enemy.x, enemy.y); score += 100; enemies.splice(j, 1); j--; }
+            if (enemy.health <= 0) {
+              createGhostExplosion(enemy.x, enemy.y);
+              score += 300;
+              enemies.splice(j, 1);
+              j--;
+            }
+          } else {
+            createExplosion(enemy.x, enemy.y);
+            score += 100;
+            enemies.splice(j, 1);
+            j--;
+          }
           projectiles.splice(i, 1);
           i--;
           break;
@@ -420,19 +432,18 @@
       p.life -= dt;
       if (p.life <= 0) { particles.splice(i, 1); i--; }
     }
-    // Level progression: if no enemies and no pickups, auto-load next level if available
-    if (enemies.length === 0 && pickups.length === 0 && currentLevel < levels.length - 1) {
-      loadLevel(currentLevel + 1);
+    // Level progression: if no enemies remain, progress to next level (or finish game on final level)
+    if (enemies.length === 0) {
+      if (currentLevel < levels.length - 1) loadLevel(currentLevel + 1);
+      else gameOver = true;
     }
+    // Update damage flash timer
+    if (damageFlashTimer > 0) damageFlashTimer = Math.max(damageFlashTimer - dt, 0);
     // Update HUD
     const elapsedTime = Math.floor((performance.now() - gameStartTime) / 1000);
     let roosterCount = 0, ghostCount = 0;
     for (const enemy of enemies) { enemy.isGhost ? ghostCount++ : roosterCount++; }
     overlay.textContent = `Level: ${currentLevel+1} | Roosters: ${roosterCount} | Ghosts: ${ghostCount} | HP: ${player.health} | Weapon: ${player.weapon} | Time: ${elapsedTime}s | Score: ${score}`;
-    // Game over conditions: if player dies or last level is cleared
-    if (player.health <= 0 || (currentLevel === levels.length - 1 && enemies.length === 0 && pickups.length === 0)) {
-      gameOver = true;
-    }
   }
 
   // Rendering
@@ -476,7 +487,7 @@
       ctx.fillStyle = (side === 1) ? wallColorDark : wallColor;
       ctx.fillRect(x, drawStart, 1, drawEnd - drawStart + 1);
     }
-    // Sprite projection: enemies, pickups, projectiles, particles
+    // Sprite projection: enemies, pickups, projectiles, particles.
     const spriteList = [];
     const invDet = 1.0 / (planeX * dirY - dirX * planeY);
     const halfW = w / 2, halfH = h / 2;
@@ -545,6 +556,11 @@
         ctx.fillRect(spr.x - spr.height/2, halfH - spr.yOffset - spr.height/2, spr.height, spr.height);
       }
     }
+    // Damage flash: if player was hit, flash a red overlay
+    if (damageFlashTimer > 0) {
+      ctx.fillStyle = "rgba(255,0,0,0.4)";
+      ctx.fillRect(0, 0, w, h);
+    }
   }
 
   // Joystick handling
@@ -596,7 +612,7 @@
     joystickKnob.style.transform = 'translate(-50%, -50%)';
   });
 
-  // Shoot button & keyboard
+  // Shoot button & keyboard input
   shootBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); shoot(); });
   window.addEventListener('keydown', (e) => {
     keys[e.key] = true;
