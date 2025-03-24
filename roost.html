@@ -162,22 +162,22 @@
   let gameOver = false;
   let damageFlashTimer = 0;
 
-  // Level definitions (characters: '#' wall, 'P' player, 'R' rooster, 'G' ghost, 'K' rock pickup, 'D' dagger pickup)
+  // Level definitions (using characters: '#' wall, 'P' player, 'R' rooster, 'G' ghost, 'K' rock pickup, 'D' dagger pickup)
   const levels = [
     [
       "###########",
-      "#.....R...#",
+      "#P....R...#",
       "#.....K..#",
       "#.........#",
       "#...#.....#",
-      "#..P..R..#",
+      "#.....R..#",
       "###########"
     ],
     [
       "###############",
       "#P...R...D...#",
       "#.....#.......#",
-      "#.....#...R..#",
+      "#..G..#...R..#",
       "#.....#.......#",
       "#...R...G....#",
       "###############"
@@ -205,14 +205,6 @@
 
   // Keyboard input
   const keys = {};
-
-  // HUD update tracking
-  let lastLevelDisplay = -1;
-  let lastEnemiesDisplay = -1;
-  let lastGhostsDisplay = -1;
-  let lastHPTally = -1;
-  let lastTimeDisplay = -1;
-  let lastScoreDisplay = -1;
 
   // Utility: Line-of-sight check
   function lineOfSight(x1, y1, x2, y2) {
@@ -350,7 +342,7 @@
       if (!isWall(newX, player.y)) player.x = newX;
       if (!isWall(player.x, newY)) player.y = newY;
     }
-    // Weapon pickups (do not block progression)
+    // Weapon pickups (now do not block level progression)
     for (let i = 0; i < pickups.length; i++) {
       const pu = pickups[i];
       if (Math.hypot(player.x - pu.x, player.y - pu.y) < 0.5) {
@@ -374,7 +366,7 @@
       let newY = enemy.y + enemy.dy * dt;
       if (!isWall(newX, enemy.y)) enemy.x = newX; else enemy.dx = -enemy.dx;
       if (!isWall(enemy.x, newY)) enemy.y = newY; else enemy.dy = -enemy.dy;
-      // Ghost enemy damages player on contact and triggers screen flash
+      // If ghost touches player, hurt player and flash screen red
       if (enemy.isGhost && Math.hypot(player.x - enemy.x, player.y - enemy.y) < 0.5) {
         player.health--;
         damageFlashTimer = 0.2; // flash red for 0.2 seconds
@@ -405,18 +397,8 @@
         if (Math.hypot(enemy.x - proj.x, enemy.y - proj.y) < 0.5) {
           if (enemy.isGhost) {
             enemy.health--;
-            if (enemy.health <= 0) {
-              createGhostExplosion(enemy.x, enemy.y);
-              score += 300;
-              enemies.splice(j, 1);
-              j--;
-            }
-          } else {
-            createExplosion(enemy.x, enemy.y);
-            score += 100;
-            enemies.splice(j, 1);
-            j--;
-          }
+            if (enemy.health <= 0) { createGhostExplosion(enemy.x, enemy.y); score += 300; enemies.splice(j, 1); j--; }
+          } else { createExplosion(enemy.x, enemy.y); score += 100; enemies.splice(j, 1); j--; }
           projectiles.splice(i, 1);
           i--;
           break;
@@ -433,9 +415,8 @@
       if (p.life <= 0) { particles.splice(i, 1); i--; }
     }
     // Level progression: if no enemies remain, progress to next level (or finish game on final level)
-    if (enemies.length === 0) {
-      if (currentLevel < levels.length - 1) loadLevel(currentLevel + 1);
-      else gameOver = true;
+    if (enemies.length === 0 && currentLevel < levels.length - 1) {
+      loadLevel(currentLevel + 1);
     }
     // Update damage flash timer
     if (damageFlashTimer > 0) damageFlashTimer = Math.max(damageFlashTimer - dt, 0);
@@ -444,6 +425,10 @@
     let roosterCount = 0, ghostCount = 0;
     for (const enemy of enemies) { enemy.isGhost ? ghostCount++ : roosterCount++; }
     overlay.textContent = `Level: ${currentLevel+1} | Roosters: ${roosterCount} | Ghosts: ${ghostCount} | HP: ${player.health} | Weapon: ${player.weapon} | Time: ${elapsedTime}s | Score: ${score}`;
+    // Game over condition: if player dies or final level is cleared
+    if (player.health <= 0 || (currentLevel === levels.length - 1 && enemies.length === 0)) {
+      gameOver = true;
+    }
   }
 
   // Rendering
@@ -504,8 +489,9 @@
       const spriteHeight = Math.abs(Math.floor(h/transformY));
       spriteList.push({ type: 'enemy', char: enemy.isGhost ? "👻" : "🐓", x: spriteX, height: spriteHeight, depth: transformY });
     }
-    // Weapon pickups
+    // Weapon pickups (only if in line-of-sight)
     for (const pu of pickups) {
+      if (!lineOfSight(player.x, player.y, pu.x, pu.y)) continue;
       const px = pu.x - posX, py = pu.y - posY;
       const transformX = invDet * (dirY * px - dirX * py);
       const transformY = invDet * (-planeY * px + planeX * py);
@@ -556,7 +542,7 @@
         ctx.fillRect(spr.x - spr.height/2, halfH - spr.yOffset - spr.height/2, spr.height, spr.height);
       }
     }
-    // Damage flash: if player was hit, flash a red overlay
+    // Damage flash overlay
     if (damageFlashTimer > 0) {
       ctx.fillStyle = "rgba(255,0,0,0.4)";
       ctx.fillRect(0, 0, w, h);
@@ -612,7 +598,7 @@
     joystickKnob.style.transform = 'translate(-50%, -50%)';
   });
 
-  // Shoot button & keyboard input
+  // Shoot button & keyboard
   shootBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); shoot(); });
   window.addEventListener('keydown', (e) => {
     keys[e.key] = true;
@@ -628,10 +614,10 @@
     if (!gameOver) {
       update(dt);
       render();
-      if (gameOver) { finalScreen.style.display = "flex"; return; }
+      if (gameOver) { showFinalScreen(); return; }
       requestAnimationFrame(gameLoop);
     } else {
-      finalScreen.style.display = "flex";
+      showFinalScreen();
     }
   }
 
