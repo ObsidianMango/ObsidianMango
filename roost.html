@@ -386,8 +386,18 @@
       proj.x += proj.dx * dt;
       proj.y += proj.dy * dt;
       proj.rotation += proj.rotationSpeed * dt;
-      if (isWall(proj.x, proj.y)) { projectiles.splice(i, 1); i--; continue; }
-      if (proj.x < 0 || proj.y < 0 || proj.x >= levelData[0].length || proj.y >= levelData.length) { projectiles.splice(i,1); i--; continue; }
+      if (isWall(proj.x, proj.y)) {
+        createExplosion(proj.x, proj.y);
+        projectiles.splice(i, 1);
+        i--;
+        continue;
+      }
+      if (proj.x < 0 || proj.y < 0 || proj.x >= levelData[0].length || proj.y >= levelData.length) {
+        projectiles.splice(i,1);
+        i--;
+        continue;
+      }
+      // Check collision with enemies
       for (let j = 0; j < enemies.length; j++) {
         const enemy = enemies[j];
         if (Math.hypot(enemy.x - proj.x, enemy.y - proj.y) < 0.5) {
@@ -395,7 +405,8 @@
             enemy.health--;
             if (enemy.health <= 0) { createGhostExplosion(enemy.x, enemy.y); score += 300; enemies.splice(j, 1); j--; }
           } else { createExplosion(enemy.x, enemy.y); score += 100; enemies.splice(j, 1); j--; }
-          projectiles.splice(i, 1); i--;
+          projectiles.splice(i, 1);
+          i--;
           break;
         }
       }
@@ -409,14 +420,17 @@
       p.life -= dt;
       if (p.life <= 0) { particles.splice(i, 1); i--; }
     }
-    // Update HUD using a single elapsedTime variable.
+    // Level progression: if no enemies and no pickups, auto-load next level if available
+    if (enemies.length === 0 && pickups.length === 0 && currentLevel < levels.length - 1) {
+      loadLevel(currentLevel + 1);
+    }
+    // Update HUD
     const elapsedTime = Math.floor((performance.now() - gameStartTime) / 1000);
     let roosterCount = 0, ghostCount = 0;
     for (const enemy of enemies) { enemy.isGhost ? ghostCount++ : roosterCount++; }
     overlay.textContent = `Level: ${currentLevel+1} | Roosters: ${roosterCount} | Ghosts: ${ghostCount} | HP: ${player.health} | Weapon: ${player.weapon} | Time: ${elapsedTime}s | Score: ${score}`;
-    
     // Game over conditions: if player dies or last level is cleared
-    if (player.health <= 0 || (currentLevel === levels.length - 1 && enemies.length === 0)) {
+    if (player.health <= 0 || (currentLevel === levels.length - 1 && enemies.length === 0 && pickups.length === 0)) {
       gameOver = true;
     }
   }
@@ -462,7 +476,7 @@
       ctx.fillStyle = (side === 1) ? wallColorDark : wallColor;
       ctx.fillRect(x, drawStart, 1, drawEnd - drawStart + 1);
     }
-    // Sprite projection
+    // Sprite projection: enemies, pickups, projectiles, particles
     const spriteList = [];
     const invDet = 1.0 / (planeX * dirY - dirX * planeY);
     const halfW = w / 2, halfH = h / 2;
@@ -486,7 +500,7 @@
       const transformY = invDet * (-planeY * px + planeX * py);
       if (transformY <= 0) continue;
       const spriteX = halfW * (1 + transformX/transformY);
-      const spriteHeight = Math.abs(Math.floor((h/transformY) * 0.3));
+      const spriteHeight = Math.abs(Math.floor((h/transformY)*0.3));
       const emoji = pu.type === "rock" ? "🪨" : "🗡️";
       spriteList.push({ type: 'pickup', char: emoji, x: spriteX, height: spriteHeight, depth: transformY });
     }
@@ -545,7 +559,7 @@
     const dx = e.clientX - joystickCenterX;
     const dy = e.clientY - joystickCenterY;
     const dist = Math.sqrt(dx*dx+dy*dy);
-    let normX = dx/dist, normY = dy/dist;
+    let normX = dist ? dx/dist : 0, normY = dist ? dy/dist : 0;
     if (dist > joystickRadius) { normX = dx/dist; normY = dy/dist; }
     if (dist < 5) { normX = 0; normY = 0; }
     moveForward = -normY;
@@ -557,7 +571,7 @@
     const dx = e.clientX - joystickCenterX;
     const dy = e.clientY - joystickCenterY;
     const dist = Math.sqrt(dx*dx+dy*dy);
-    let normX = dx/dist, normY = dy/dist;
+    let normX = dist ? dx/dist : 0, normY = dist ? dy/dist : 0;
     if (dist > joystickRadius) { normX = dx/dist; normY = dy/dist; }
     if (dist < 5) { normX = 0; normY = 0; }
     moveForward = -normY;
