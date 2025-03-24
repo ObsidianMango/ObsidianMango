@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Rooster Rampage FPS - Mobile Edition</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #222; }
+    canvas { display: block; }
+    /* Virtual Joystick styles */
+    #joystickContainer {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 120px;
+      height: 120px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 50%;
+      touch-action: none;
+    }
+    #joystickHandle {
+      position: absolute;
+      left: 40px;
+      top: 40px;
+      width: 40px;
+      height: 40px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 50%;
+      touch-action: none;
+    }
+    /* Shoot Button styles */
+    #shootButton {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 0, 0, 0.7);
+      border-radius: 50%;
+      text-align: center;
+      line-height: 80px;
+      font-size: 24px;
+      user-select: none;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="joystickContainer">
+    <div id="joystickHandle"></div>
+  </div>
+  <div id="shootButton">Shoot</div>
+  <script>
+    (function() {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      // Generate a multi-room map (grid of rooms) with doors between them.
+      function generateMap() {
+        const gridWidth = 5, gridHeight = 5;
+        const roomWidth = 5, roomHeight = 5;
+        const totalWidth = gridWidth * roomWidth + gridWidth + 1;
+        const totalHeight = gridHeight * roomHeight + gridHeight + 1;
+        let map = [];
+        for (let y = 0; y < totalHeight; y++) {
+          let row = [];
+          for (let x = 0; x < totalWidth; x++) {
+            row.push(' ');
+          }
+          map.push(row);
+        }
+        // Outer walls.
+        for (let x = 0; x < totalWidth; x++) {
+          map[0][x] = '1';
+          map[totalHeight - 1][x] = '1';
+        }
+        for (let y = 0; y < totalHeight; y++) {
+          map[y][0] = '1';
+          map[y][totalWidth - 1] = '1';
+        }
+        // Vertical room walls.
+        for (let i = 0; i <= gridWidth; i++) {
+          let wallX = i * (roomWidth + 1);
+          for (let y = 0; y < totalHeight; y++) {
+            map[y][wallX] = '1';
+          }
+        }
+        // Horizontal room walls.
+        for (let j = 0; j <= gridHeight; j++) {
+          let wallY = j * (roomHeight + 1);
+          for (let x = 0; x < totalWidth; x++) {
+            map[wallY][x] = '1';
+          }
+        }
+        // Doors in vertical walls.
+        for (let i = 1; i < gridWidth; i++) {
+          let wallX = i * (roomWidth + 1);
+          for (let j = 0; j < gridHeight; j++) {
+            let doorY = j * (roomHeight + 1) + Math.floor(roomHeight / 2) + 1;
+            map[doorY][wallX] = ' ';
+          }
+        }
+        // Doors in horizontal walls.
+        for (let j = 1; j < gridHeight; j++) {
+          let wallY = j * (roomHeight + 1);
+          for (let i = 0; i < gridWidth; i++) {
+            let doorX = i * (roomWidth + 1) + Math.floor(roomWidth / 2) + 1;
+            map[wallY][doorX] = ' ';
+          }
+        }
+        return map.map(row => row.join(''));
+      }
+      const map = generateMap();
+
+      // Player starting position.
+      const player = {
+        x: 3,
+        y: 3,
+        angle: 0,
+        fov: Math.PI / 3
+      };
+
+      let level = 1;
+      let enemies = [];
+      let projectiles = [];
+      let particles = [];
+
+      // Spawn roosters (enemies).
+      function spawnEnemies() {
+        enemies = [];
+        const numEnemies = 3 + (level - 1) * 3;
+        let spawned = 0;
+        while (spawned < numEnemies) {
+          let ex = Math.random() * map[0].length;
+          let ey = Math.random() * map.length;
+          if (!isWall(ex, ey) && Math.hypot(ex - player.x, ey - player.y) > 3) {
+            enemies.push({
+              x: ex,
+              y: ey,
+              dx: (Math.random() - 0.5) * 2,
+              dy: (Math.random() - 0.5) * 2
+            });
+            spawned++;
+          }
+        }
+      }
+      spawnEnemies();
+
+      // Keyboard input.
+      const keys = {};
+      window.addEventListener('keydown', e => {
+        keys[e.key] = true;
+        if (e.key === " ") shoot();
+      });
+      window.addEventListener('keyup', e => keys[e.key] = false);
+
+      // Virtual joystick.
+      const joystickContainer = document.getElementById('joystickContainer');
+      const joystickHandle = document.getElementById('joystickHandle');
+      const joystick = {
+        active: false,
+        value: { x: 0, y: 0 },
+        center: { x: 0, y: 0 },
+        radius: 50
+      };
+      function updateJoystickCenter() {
+        const rect = joystickContainer.getBoundingClientRect();
+        joystick.center.x = rect.left + rect.width / 2;
+        joystick.center.y = rect.top + rect.height / 2;
+      }
+      updateJoystickCenter();
+      window.addEventListener('resize', updateJoystickCenter);
+      joystickContainer.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        joystick.active = true;
+        handleJoystick(e.touches[0]);
+      });
+      joystickContainer.addEventListener('touchmove', function(e) {
+        e.preventDefault();
+        handleJoystick(e.touches[0]);
+      });
+      joystickContainer.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        joystick.active = false;
+        joystick.value = { x: 0, y: 0 };
+        joystickHandle.style.transform = `translate(0px, 0px)`;
+      });
+      function handleJoystick(touch) {
+        const dx = touch.clientX - joystick.center.x;
+        const dy = touch.clientY - joystick.center.y;
+        const dist = Math.hypot(dx, dy);
+        let clampedX = dx, clampedY = dy;
+        if (dist > joystick.radius) {
+          const angle = Math.atan2(dy, dx);
+          clampedX = Math.cos(angle) * joystick.radius;
+          clampedY = Math.sin(angle) * joystick.radius;
+        }
+        joystick.value = { x: clampedX, y: clampedY };
+        joystickHandle.style.transform = `translate(${clampedX}px, ${clampedY}px)`;
+      }
+
+      // Shoot button.
+      const shootButton = document.getElementById('shootButton');
+      shootButton.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        shoot();
+      });
+      shootButton.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        shoot();
+      });
+
+      // Check wall collisions using the map.
+      function isWall(x, y) {
+        const mapX = Math.floor(x);
+        const mapY = Math.floor(y);
+        if (mapY < 0 || mapY >= map.length || mapX < 0 || mapX >= map[0].length) return true;
+        return map[mapY][mapX] !== ' ';
+      }
+
+      // Check direct line of sight between two points.
+      function lineOfSight(x1, y1, x2, y2) {
+        const dx = x2 - x1, dy = y2 - y1;
+        const distance = Math.hypot(dx, dy);
+        const steps = Math.floor(distance / 0.1);
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const testX = x1 + dx * t;
+          const testY = y1 + dy * t;
+          if (isWall(testX, testY)) return false;
+        }
+        return true;
+      }
+
+      // Fire a projectile (chicken wing).
+      function shoot() {
+        projectiles.push({
+          x: player.x,
+          y: player.y,
+          angle: player.angle,
+          speed: 8,
+          rotation: 0
+        });
+      }
+
+      // Create explosion particles.
+      function spawnExplosion(x, y) {
+        const count = 20;
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 3;
+          particles.push({
+            x: x,
+            y: y,
+            dx: Math.cos(angle) * speed,
+            dy: Math.sin(angle) * speed,
+            life: 0.5 + Math.random() * 0.5
+          });
+        }
+      }
+
+      // Update game logic.
+      function update(dt) {
+        const moveSpeed = 3 * dt;
+        const rotSpeed = 2 * dt;
+        // Keyboard movement.
+        if (keys['w'] || keys['ArrowUp']) {
+          const nx = player.x + Math.cos(player.angle) * moveSpeed;
+          const ny = player.y + Math.sin(player.angle) * moveSpeed;
+          if (!isWall(nx, player.y)) player.x = nx;
+          if (!isWall(player.x, ny)) player.y = ny;
+        }
+        if (keys['s'] || keys['ArrowDown']) {
+          const nx = player.x - Math.cos(player.angle) * moveSpeed;
+          const ny = player.y - Math.sin(player.angle) * moveSpeed;
+          if (!isWall(nx, player.y)) player.x = nx;
+          if (!isWall(player.x, ny)) player.y = ny;
+        }
+        if (keys['a'] || keys['ArrowLeft']) player.angle -= rotSpeed;
+        if (keys['d'] || keys['ArrowRight']) player.angle += rotSpeed;
+
+        // Joystick movement.
+        if (joystick.active) {
+          const mag = Math.hypot(joystick.value.x, joystick.value.y);
+          if (mag > 10) {
+            const moveAngle = Math.atan2(joystick.value.y, joystick.value.x);
+            const moveAmount = (mag / joystick.radius) * moveSpeed;
+            let nx = player.x + Math.cos(moveAngle) * moveAmount;
+            let ny = player.y + Math.sin(moveAngle) * moveAmount;
+            if (!isWall(nx, player.y)) player.x = nx;
+            if (!isWall(player.x, ny)) player.y = ny;
+            player.angle = moveAngle;
+          }
+        }
+
+        // Update roosters' movement.
+        enemies.forEach(enemy => {
+          enemy.x += enemy.dx * dt;
+          enemy.y += enemy.dy * dt;
+          if (isWall(enemy.x, enemy.y)) {
+            enemy.dx = -enemy.dx;
+            enemy.dy = -enemy.dy;
+            enemy.x += enemy.dx * dt;
+            enemy.y += enemy.dy * dt;
+          }
+        });
+
+        // Update projectiles.
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+          const p = projectiles[i];
+          p.x += Math.cos(p.angle) * p.speed * dt;
+          p.y += Math.sin(p.angle) * p.speed * dt;
+          p.rotation += dt * (Math.PI * 2); // Spin projectile.
+          if (isWall(p.x, p.y)) {
+            projectiles.splice(i, 1);
+            continue;
+          }
+          for (let j = enemies.length - 1; j >= 0; j--) {
+            const enemy = enemies[j];
+            if (Math.hypot(p.x - enemy.x, p.y - enemy.y) < 0.5) {
+              spawnExplosion(enemy.x, enemy.y);
+              enemies.splice(j, 1);
+              projectiles.splice(i, 1);
+              break;
+            }
+          }
+        }
+
+        // Update explosion particles.
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const part = particles[i];
+          part.x += part.dx * dt;
+          part.y += part.dy * dt;
+          part.life -= dt;
+          if (part.life <= 0) {
+            particles.splice(i, 1);
+          }
+        }
+
+        // Level progression.
+        if (enemies.length === 0) {
+          level++;
+          spawnEnemies();
+        }
+      }
+
+      // Project a world coordinate into screen space.
+      function projectSprite(worldX, worldY) {
+        const dx = worldX - player.x;
+        const dy = worldY - player.y;
+        const distance = Math.hypot(dx, dy);
+        let angle = Math.atan2(dy, dx) - player.angle;
+        while (angle < -Math.PI) angle += 2 * Math.PI;
+        while (angle > Math.PI) angle -= 2 * Math.PI;
+        const inFov = Math.abs(angle) < player.fov / 2;
+        const spriteScreenX = (angle / (player.fov / 2)) * (canvas.width / 2) + canvas.width / 2;
+        const spriteHeight = canvas.height / distance;
+        return { inFov, spriteScreenX, spriteHeight, distance };
+      }
+
+      // Render the 3D view and HUD.
+      function render() {
+        // Draw ceiling and floor.
+        ctx.fillStyle = '#888';
+        ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
+        ctx.fillStyle = '#444';
+        ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
+
+        // Raycasting loop for walls.
+        for (let x = 0; x < canvas.width; x++) {
+          const cameraX = 2 * x / canvas.width - 1;
+          const rayAngle = player.angle + cameraX * (player.fov / 2);
+          let distance = 0, hit = false;
+          const stepSize = 0.01;
+          while (!hit && distance < 20) {
+            const testX = player.x + Math.cos(rayAngle) * distance;
+            const testY = player.y + Math.sin(rayAngle) * distance;
+            if (isWall(testX, testY)) {
+              hit = true;
+            } else {
+              distance += stepSize;
+            }
+          }
+          distance = distance * Math.cos(rayAngle - player.angle);
+          const wallHeight = Math.min(canvas.height, canvas.height / distance);
+          const shade = Math.floor(255 / (1 + distance * distance * 0.1));
+          ctx.fillStyle = 'rgb(' + shade + ',' + shade + ',' + shade + ')';
+          ctx.fillRect(x, canvas.height / 2 - wallHeight / 2, 1, wallHeight);
+        }
+
+        // Render roosters (only if line of sight).
+        enemies.forEach(enemy => {
+          if (!lineOfSight(player.x, player.y, enemy.x, enemy.y)) return;
+          const { inFov, spriteScreenX, spriteHeight } = projectSprite(enemy.x, enemy.y);
+          if (inFov) {
+            ctx.font = spriteHeight + "px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("🐓", spriteScreenX, canvas.height / 2 + spriteHeight / 2);
+          }
+        });
+
+        // Render projectiles (spinning chicken wings).
+        projectiles.forEach(proj => {
+          const { inFov, spriteScreenX, spriteHeight } = projectSprite(proj.x, proj.y);
+          if (inFov) {
+            ctx.save();
+            ctx.translate(spriteScreenX, canvas.height / 2 + spriteHeight / 2);
+            ctx.rotate(proj.rotation);
+            ctx.font = spriteHeight + "px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("🍗", 0, 0);
+            ctx.restore();
+          }
+        });
+
+        // Render explosion particles as tiny pixels.
+        particles.forEach(part => {
+          const { inFov, spriteScreenX, spriteHeight } = projectSprite(part.x, part.y);
+          if (inFov) {
+            const size = 2;
+            ctx.fillStyle = "#ff0";
+            ctx.fillRect(spriteScreenX, canvas.height / 2 + spriteHeight / 2, size, size);
+          }
+        });
+
+        // Draw player's weapon (upside down chicken wing) at the bottom center.
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height - 10);
+        ctx.rotate(Math.PI);
+        ctx.font = "64px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText("🍗", 0, 0);
+        ctx.restore();
+
+        // Draw HUD with rooster counter and level.
+        ctx.font = "24px sans-serif";
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "left";
+        ctx.fillText("Roosters left: " + enemies.length, 10, 30);
+        ctx.fillText("Level: " + level, 10, 60);
+      }
+
+      let lastTime = 0;
+      function gameLoop(timestamp) {
+        const dt = (timestamp - lastTime) / 1000;
+        lastTime = timestamp;
+        update(dt);
+        render();
+        requestAnimationFrame(gameLoop);
+      }
+      requestAnimationFrame(gameLoop);
+    })();
+  </script>
+</body>
+</html>
