@@ -97,7 +97,7 @@
       border-radius: 50%;
       transform: translate(-50%, -50%);
     }
-    /* Shoot button shows current weapon */
+    /* Shoot button displays current weapon */
     #shootBtn {
       position: absolute;
       bottom: 5%;
@@ -153,9 +153,10 @@
     (() => {
       // Declare lastTime once.
       let lastTime = performance.now();
-      // We'll use a flag to track if the interact button is held (for gradual door opening)
-      let interactHeld = false;
-
+      // For door interaction: when the door button is pressed, we mark the door for opening.
+      // In this version, once a door is marked (doorStates entry created), updateDoors will gradually open it.
+      // (No need to hold the button continuously.)
+      
       // Canvas & context setup
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
@@ -193,10 +194,9 @@
       let damageFlashTimer = 0;
 
       // --- Door Animation Settings ---
-      // We'll NOT preinitialize doorStates on level load.
       let doorStates = {}; // key: "x,y", value: progress (0 to 1) for doors being opened
-      const doorSpeed = 0.5; // Increase to open faster, decrease to slow door opening
-      const doorMaxOffset = 50; // Maximum upward offset in pixels when door is fully open
+      const doorSpeed = 0.5; // how fast the door opens
+      const doorMaxOffset = 50; // maximum upward offset in pixels when door is fully open
 
       // Level definitions (using characters: '#' wall, 'd' door, 'P' player, 'R' rooster, 'G' ghost, 'K' rock, 'D' dagger)
       const levels = [
@@ -211,11 +211,11 @@
         ],
         [
           "###############",
-          "#.....d..D...#",
+          "#P...R...D...#",
           "#.....#.......#",
-          "#.....#...R..#",
-          "#P....#.......#",
-          "#.....d.G....#",
+          "#..G..#...R..#",
+          "#.....#.......#",
+          "#...R...G....#",
           "###############"
         ]
       ];
@@ -243,7 +243,7 @@
       // Keyboard input
       const keys = {};
 
-      // Utility: Line-of-sight check (applied to enemies, pickups, and now projectiles)
+      // Utility: Line-of-sight check (applied to enemies, pickups, and projectiles)
       function lineOfSight(x1, y1, x2, y2) {
         const dx = x2 - x1, dy = y2 - y1;
         const dist = Math.hypot(dx, dy);
@@ -256,14 +256,14 @@
         return true;
       }
 
-      // Level loading – note: doors are not pre-initialized in doorStates.
+      // Level loading – doors are left closed (cell value 2) until the player interacts.
       function loadLevel(index) {
         currentLevel = index;
         enemies = [];
         projectiles = [];
         particles = [];
         pickups = [];
-        doorStates = {};
+        doorStates = {};  // reset door states
         gameStartTime = performance.now();
         gameOver = false;
         player.health = 10;
@@ -280,7 +280,7 @@
               rowArr.push(1);
             } else if (ch === "d") {
               rowArr.push(2); // closed door
-              // DO NOT initialize doorStates here; we'll do that on interact.
+              // Do not open automatically; doorStates will be created when interact() is called.
             } else if (ch === "P") {
               player.x = x + 0.5;
               player.y = y + 0.5;
@@ -314,9 +314,8 @@
         return (levelData[my][mx] === 1 || levelData[my][mx] === 2);
       }
 
-      // Update door animations ONLY if the interact button is held.
+      // Update door animations – now once a door is marked for opening, it will open gradually.
       function updateDoors(dt) {
-        if (!interactHeld) return;
         for (const key in doorStates) {
           doorStates[key] += dt * doorSpeed;
           if (doorStates[key] >= 1) {
@@ -362,14 +361,13 @@
         projectiles.push({ x: player.x, y: player.y, dx: dirX * speed, dy: dirY * speed, rotation: 0, rotationSpeed: Math.PI * 2, weapon: player.weapon });
       }
 
-      // Enemy shooting (for both non-ghosts and ghosts, using different cooldowns)
+      // Enemy shooting (for both non-ghosts and ghosts; ghosts shoot slower)
       function enemyShoot(enemy) {
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const dist = Math.hypot(dx, dy);
         const dirX = dx / dist;
         const dirY = dy / dist;
-        // For ghosts, use slower projectile speed
         const speed = enemy.isGhost ? 2.0 : 3.0;
         projectiles.push({ x: enemy.x, y: enemy.y, dx: dirX * speed, dy: dirY * speed, rotation: 0, rotationSpeed: enemy.isGhost ? Math.PI : Math.PI * 2, weapon: "💥" });
       }
@@ -383,7 +381,8 @@
         shootBtn.textContent = player.weapon;
       }
 
-      // Interact: Only trigger door opening when player interacts.
+      // Interact: When the player interacts and is targeting a door cell (value 2),
+      // add that door to doorStates if it isn’t already.
       function interact() {
         const interactDist = 1.0;
         const doorX = player.x + Math.sin(player.angle) * interactDist;
@@ -416,25 +415,15 @@
       }
       playAgainBtn.addEventListener("click", restartGame);
 
-      // For pointer-based interact button, set interactHeld flag.
+      // For pointer-based interact button, simply call interact() on pointerdown.
       interactBtn.addEventListener('pointerdown', (e) => { 
         e.preventDefault(); 
-        interactHeld = true;
         interact();
       });
-      interactBtn.addEventListener('pointerup', (e) => { 
-        e.preventDefault();
-        interactHeld = false;
-      });
 
-      // For keyboard, simulate a brief hold when 'e' is pressed.
+      // For keyboard, use 'e' to interact.
       window.addEventListener('keydown', (e) => {
-        if (e.key === "e") {
-          e.preventDefault();
-          interactHeld = true;
-          interact();
-          setTimeout(() => { interactHeld = false; }, 500);
-        }
+        if (e.key === "e") { e.preventDefault(); interact(); }
       });
 
       // Joystick event handling
@@ -486,7 +475,6 @@
         joystickKnob.style.transform = 'translate(-50%, -50%)';
       });
 
-      // Shoot button & keyboard input
       shootBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); shoot(); });
       window.addEventListener('keydown', (e) => {
         keys[e.key] = true;
@@ -494,18 +482,16 @@
       });
       window.addEventListener('keyup', (e) => { keys[e.key] = false; });
       
-      // Swap button & keyboard support
       swapBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); swapWeapon(); });
       window.addEventListener('keydown', (e) => {
         if (e.key === "q") { e.preventDefault(); swapWeapon(); }
       });
 
-      // Main game loop – level only progresses when all enemies are killed.
+      // Main game loop – level only advances when all enemies are killed.
       function gameLoop(time) {
         const dt = Math.min((time - lastTime) / 1000, 0.1);
         lastTime = time;
         if (!gameOver) {
-          // Process movement input
           let kbMove = 0, kbTurn = 0;
           if (keys['w'] || keys['ArrowUp']) kbMove += 1;
           if (keys['s'] || keys['ArrowDown']) kbMove -= 1;
@@ -524,6 +510,7 @@
             if (!isWall(newX, player.y)) player.x = newX;
             if (!isWall(player.x, newY)) player.y = newY;
           }
+          
           // Process pickups
           for (let i = 0; i < pickups.length; i++) {
             const pu = pickups[i];
@@ -537,11 +524,11 @@
               i--;
             }
           }
+          
           // Process enemies and enemy shooting
           for (let i = 0; i < enemies.length; i++) {
             const enemy = enemies[i];
             if (enemy.isGhost) {
-              // Ghosts now shoot every 1 second
               if (enemy.shootCooldown === undefined) enemy.shootCooldown = 1.0;
               enemy.shootCooldown -= dt;
               if (enemy.shootCooldown <= 0) {
@@ -554,7 +541,6 @@
               enemy.dx = (dx / dist) * chaseSpeed;
               enemy.dy = (dy / dist) * chaseSpeed;
             } else {
-              // Non-ghost enemies shoot every 3 seconds
               if (enemy.shootCooldown === undefined) enemy.shootCooldown = 3.0;
               enemy.shootCooldown -= dt;
               if (enemy.shootCooldown <= 0) {
@@ -574,7 +560,8 @@
               if (player.health <= 0) gameOver = true;
             }
           }
-          // Process projectiles – only render if in line-of-sight
+          
+          // Process projectiles
           for (let i = 0; i < projectiles.length; i++) {
             const proj = projectiles[i];
             proj.x += proj.dx * dt;
@@ -600,11 +587,7 @@
               i--;
               continue;
             }
-            if (!lineOfSight(player.x, player.y, proj.x, proj.y)) {
-              // Do not render projectile if not in line-of-sight
-              continue;
-            }
-            // For player projectiles, check collision with enemies
+            if (!lineOfSight(player.x, player.y, proj.x, proj.y)) continue;
             if (proj.weapon !== "💥") {
               for (let j = 0; j < enemies.length; j++) {
                 const enemy = enemies[j];
@@ -620,6 +603,7 @@
               }
             }
           }
+          
           // Process explosion particles
           for (let i = 0; i < particles.length; i++) {
             const p = particles[i];
@@ -629,9 +613,11 @@
             p.life -= dt;
             if (p.life <= 0) { particles.splice(i, 1); i--; }
           }
-          // Update door animations ONLY when interactHeld is true.
+          
+          // Update door animations (doors will now open gradually once marked by interact())
           updateDoors(dt);
-          // Level progression: progress only when all enemies are killed.
+          
+          // Level progression: Only progress when all enemies are killed.
           if (enemies.length === 0) {
             if (currentLevel < levels.length - 1) loadLevel(currentLevel + 1);
             else gameOver = true;
@@ -651,7 +637,7 @@
         }
       }
 
-      // Render function for drawing the scene (includes door offset if door is being opened)
+      // Render function for drawing the scene (includes door offset for marked doors)
       function renderScene() {
         const w = canvas.width, h = canvas.height;
         ctx.fillStyle = ceilingColor;
@@ -689,7 +675,6 @@
           if (drawStart < 0) drawStart = 0;
           let drawEnd = Math.floor(lineHeight/2 + h/2);
           if (drawEnd >= h) drawEnd = h - 1;
-          // If the hit cell is a door (value 2) and is being opened, apply door offset.
           if (levelData[mapY][mapX] === 2) {
             const doorKey = `${mapX},${mapY}`;
             const progress = doorStates[doorKey] || 0;
@@ -728,7 +713,6 @@
           spriteList.push({ type: 'pickup', char: emoji, x: spriteX, height: spriteHeight, depth: transformY });
         }
         for (const proj of projectiles) {
-          // Only show projectile if in line-of-sight
           if (!lineOfSight(player.x, player.y, proj.x, proj.y)) continue;
           const px = proj.x - posX, py = proj.y - posY;
           const transformX = invDet * (dirY * px - dirX * py);
@@ -831,29 +815,15 @@
       window.addEventListener('keyup', (e) => { keys[e.key] = false; });
       
       swapBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); swapWeapon(); });
-      // For keyboard, use 'q' to swap.
       window.addEventListener('keydown', (e) => {
         if (e.key === "q") { e.preventDefault(); swapWeapon(); }
       });
 
-      // For interact: pointer-based sets interactHeld flag; keyboard 'e' simulates a 0.5s hold.
+      // For door interaction, we use the interact button and the "e" key.
       window.addEventListener('keydown', (e) => {
-        if (e.key === "e") {
-          e.preventDefault();
-          interactHeld = true;
-          interact();
-          setTimeout(() => { interactHeld = false; }, 500);
-        }
+        if (e.key === "e") { e.preventDefault(); interact(); }
       });
-      interactBtn.addEventListener('pointerdown', (e) => { 
-        e.preventDefault(); 
-        interactHeld = true;
-        interact();
-      });
-      interactBtn.addEventListener('pointerup', (e) => { 
-        e.preventDefault();
-        interactHeld = false;
-      });
+      interactBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); interact(); });
 
       // Main game loop – level advances only when all enemies are killed.
       function gameLoop(time) {
@@ -977,9 +947,9 @@
             p.life -= dt;
             if (p.life <= 0) { particles.splice(i, 1); i--; }
           }
-          // Update door animations only when interactHeld is true
+          // Update door animations (once a door is marked via interact(), it opens gradually regardless of further interaction)
           updateDoors(dt);
-          // Only progress level when all enemies are killed
+          // Level progression: Only progress when all enemies are killed.
           if (enemies.length === 0) {
             if (currentLevel < levels.length - 1) loadLevel(currentLevel + 1);
             else gameOver = true;
@@ -999,7 +969,7 @@
         }
       }
 
-      // Render function for drawing the scene (with door offset for doors being opened)
+      // Render function for drawing the scene (with door offset for marked doors)
       function renderScene() {
         const w = canvas.width, h = canvas.height;
         ctx.fillStyle = ceilingColor;
@@ -1120,7 +1090,7 @@
         }
       }
 
-      // Event listeners for joystick, buttons, and keyboard
+      // Event listeners for joystick, buttons, and keyboard:
       joystick.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         joystickActive = true;
@@ -1180,6 +1150,12 @@
       window.addEventListener('keydown', (e) => {
         if (e.key === "q") { e.preventDefault(); swapWeapon(); }
       });
+
+      // For door interaction, use the interact button or the "e" key.
+      window.addEventListener('keydown', (e) => {
+        if (e.key === "e") { e.preventDefault(); interact(); }
+      });
+      interactBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); interact(); });
 
       // Start the game loop
       loadLevel(0);
