@@ -115,7 +115,7 @@
       touch-action: none;
       z-index: 2;
     }
-    /* Swap & Interact buttons on right side (stacked above shoot button) */
+    /* Swap & Interact buttons on right side */
     #swapBtn, #interactBtn {
       position: absolute;
       right: 5%;
@@ -132,6 +132,7 @@
       touch-action: none;
       z-index: 2;
     }
+    /* Stack them above the shoot button */
     #swapBtn { bottom: 30%; }
     #interactBtn { bottom: 15%; }
   </style>
@@ -151,7 +152,7 @@
   <div id="interactBtn">🚪</div>
   <script>
     (() => {
-      // Declare lastTime only once in the outer scope.
+      // Declare lastTime only once.
       let lastTime = performance.now();
 
       // Canvas & context setup
@@ -190,6 +191,9 @@
       let gameOver = false;
       let damageFlashTimer = 0;
 
+      // New door color (for closed doors)
+      const doorColor = "#8B4513";  // SaddleBrown
+
       // Level definitions (using characters: '#' wall, 'd' door, 'P' player, 'R' rooster, 'G' ghost, 'K' rock, 'D' dagger)
       const levels = [
         [
@@ -203,17 +207,17 @@
         ],
         [
           "###############",
-          "#P...R...D...#",
+          "#P...RD..R...#",
           "#.....#.......#",
-          "#.....#...R..#",
+          "#..R..#...R..#",
           "#.....#.......#",
-          "#...R...G....#",
+          "#...R.D.G....#",
           "###############"
         ]
       ];
 
       // Colors & settings
-      const ceilingColor = "#005588";
+      const ceilingColor = "#005588"; 
       const floorColor = "#444444";
       const wallColor = "#c0c0c0";
       const wallColorDark = "#888888";
@@ -295,7 +299,7 @@
         }
       }
 
-      // isWall: cells with 1 (wall) or 2 (closed door) block movement
+      // isWall: cells with 1 (wall) or 2 (closed door) block movement.
       function isWall(x, y) {
         const mx = Math.floor(x), my = Math.floor(y);
         if (my < 0 || my >= levelData.length || mx < 0 || mx >= levelData[0].length)
@@ -345,7 +349,7 @@
         shootBtn.textContent = player.weapon;
       }
 
-      // Interact: toggle door in front of the player.
+      // Interact: toggle door in front.
       function interact() {
         const interactDist = 1.0;
         const doorX = player.x + Math.sin(player.angle) * interactDist;
@@ -432,7 +436,7 @@
         if (e.key === " ") { e.preventDefault(); shoot(); }
       });
       window.addEventListener('keyup', (e) => { keys[e.key] = false; });
-      
+
       // Swap & Interact buttons & keyboard support
       swapBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); swapWeapon(); });
       interactBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); interact(); });
@@ -447,294 +451,6 @@
         lastTime = time;
         if (!gameOver) {
           // Process keyboard input for movement
-          let kbMove = 0, kbTurn = 0;
-          if (keys['w'] || keys['ArrowUp']) kbMove += 1;
-          if (keys['s'] || keys['ArrowDown']) kbMove -= 1;
-          if (keys['a'] || keys['ArrowLeft']) kbTurn -= 1;
-          if (keys['d'] || keys['ArrowRight']) kbTurn += 1;
-          const effectiveMove = (joystickActive ? moveForward : 0) + kbMove;
-          const effectiveTurn = (joystickActive ? turnDirection : 0) + kbTurn;
-          
-          player.angle += effectiveTurn * turnSpeed * dt;
-          if (player.angle < 0) player.angle += Math.PI * 2;
-          if (player.angle >= Math.PI * 2) player.angle -= Math.PI * 2;
-          if (effectiveMove !== 0) {
-            const step = effectiveMove * moveSpeed * dt;
-            const newX = player.x + Math.sin(player.angle) * step;
-            const newY = player.y - Math.cos(player.angle) * step;
-            if (!isWall(newX, player.y)) player.x = newX;
-            if (!isWall(player.x, newY)) player.y = newY;
-          }
-          for (let i = 0; i < pickups.length; i++) {
-            const pu = pickups[i];
-            if (Math.hypot(player.x - pu.x, player.y - pu.y) < 0.5) {
-              if (!inventory.includes(pu.type === "rock" ? "🪨" : "🗡️"))
-                inventory.push(pu.type === "rock" ? "🪨" : "🗡️");
-              player.weapon = pu.type === "rock" ? "🪨" : "🗡️";
-              shootBtn.textContent = player.weapon;
-              score += 50;
-              pickups.splice(i, 1);
-              i--;
-            }
-          }
-          for (let i = 0; i < enemies.length; i++) {
-            const enemy = enemies[i];
-            if (enemy.isGhost) {
-              const dx = player.x - enemy.x, dy = player.y - enemy.y;
-              const dist = Math.hypot(dx, dy);
-              const chaseSpeed = 2.5;
-              enemy.dx = (dx / dist) * chaseSpeed;
-              enemy.dy = (dy / dist) * chaseSpeed;
-            }
-            let newX = enemy.x + enemy.dx * dt;
-            let newY = enemy.y + enemy.dy * dt;
-            if (!isWall(newX, enemy.y)) enemy.x = newX; else enemy.dx = -enemy.dx;
-            if (!isWall(enemy.x, newY)) enemy.y = newY; else enemy.dy = -enemy.dy;
-            if (enemy.isGhost && Math.hypot(player.x - enemy.x, player.y - enemy.y) < 0.5) {
-              player.health--;
-              damageFlashTimer = 0.2;
-              enemy.x -= enemy.dx * dt * 2;
-              enemy.y -= enemy.dy * dt * 2;
-              if (player.health <= 0) gameOver = true;
-            }
-          }
-          for (let i = 0; i < projectiles.length; i++) {
-            const proj = projectiles[i];
-            proj.x += proj.dx * dt;
-            proj.y += proj.dy * dt;
-            proj.rotation += proj.rotationSpeed * dt;
-            if (isWall(proj.x, proj.y)) {
-              createExplosion(proj.x, proj.y);
-              projectiles.splice(i, 1);
-              i--;
-              continue;
-            }
-            if (proj.x < 0 || proj.y < 0 || proj.x >= levelData[0].length || proj.y >= levelData.length) {
-              projectiles.splice(i, 1);
-              i--;
-              continue;
-            }
-            for (let j = 0; j < enemies.length; j++) {
-              const enemy = enemies[j];
-              if (Math.hypot(enemy.x - proj.x, enemy.y - proj.y) < 0.5) {
-                if (enemy.isGhost) {
-                  enemy.health--;
-                  if (enemy.health <= 0) { createGhostExplosion(enemy.x, enemy.y); score += 300; enemies.splice(j, 1); j--; }
-                } else { createExplosion(enemy.x, enemy.y); score += 100; enemies.splice(j, 1); j--; }
-                projectiles.splice(i, 1);
-                i--;
-                break;
-              }
-            }
-          }
-          for (let i = 0; i < particles.length; i++) {
-            const p = particles[i];
-            p.x += p.vx * dt;
-            p.y += p.vy * dt;
-            p.z += p.vz * dt;
-            p.life -= dt;
-            if (p.life <= 0) { particles.splice(i, 1); i--; }
-          }
-          if (enemies.length === 0) {
-            if (currentLevel < levels.length - 1) loadLevel(currentLevel + 1);
-            else gameOver = true;
-          }
-          if (damageFlashTimer > 0) damageFlashTimer = Math.max(damageFlashTimer - dt, 0);
-          const elapsedTime = Math.floor((performance.now() - gameStartTime) / 1000);
-          let roosterCount = 0, ghostCount = 0;
-          for (const enemy of enemies) { enemy.isGhost ? ghostCount++ : roosterCount++; }
-          overlay.textContent = `Level: ${currentLevel+1} | Roosters: ${roosterCount} | Ghosts: ${ghostCount} | HP: ${player.health} | Weapon: ${player.weapon} | Time: ${elapsedTime}s | Score: ${score}`;
-          shootBtn.textContent = player.weapon;
-          if (player.health <= 0) gameOver = true;
-          renderScene();
-          if (gameOver) { showFinalScreen(); return; }
-          requestAnimationFrame(gameLoop);
-        } else {
-          showFinalScreen();
-        }
-      }
-
-      // Single render function (renamed to renderScene to avoid duplicate declaration)
-      function renderScene() {
-        const w = canvas.width, h = canvas.height;
-        ctx.fillStyle = ceilingColor;
-        ctx.fillRect(0, 0, w, h/2);
-        ctx.fillStyle = floorColor;
-        ctx.fillRect(0, h/2, w, h/2);
-        const posX = player.x, posY = player.y;
-        const dirX = Math.sin(player.angle), dirY = -Math.cos(player.angle);
-        const fov = 1.0472;
-        const planeLen = Math.tan(fov/2);
-        const planeX = -dirY * planeLen, planeY = dirX * planeLen;
-        for (let x = 0; x < w; x++) {
-          const cameraX = 2 * x / w - 1;
-          const rayDirX = dirX + planeX * cameraX;
-          const rayDirY = dirY + planeY * cameraX;
-          let mapX = Math.floor(posX), mapY = Math.floor(posY);
-          let sideDistX, sideDistY;
-          const deltaDistX = (rayDirX === 0) ? Infinity : Math.abs(1 / rayDirX);
-          const deltaDistY = (rayDirY === 0) ? Infinity : Math.abs(1 / rayDirY);
-          let stepX, stepY, hit = 0, side = 0;
-          if (rayDirX < 0) { stepX = -1; sideDistX = (posX - mapX) * deltaDistX; }
-          else { stepX = 1; sideDistX = (mapX + 1 - posX) * deltaDistX; }
-          if (rayDirY < 0) { stepY = -1; sideDistY = (posY - mapY) * deltaDistY; }
-          else { stepY = 1; sideDistY = (mapY + 1 - posY) * deltaDistY; }
-          while (hit === 0) {
-            if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
-            else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
-            if (mapX < 0 || mapX >= levelData[0].length || mapY < 0 || mapY >= levelData.length) { hit = 1; break; }
-            if (levelData[mapY][mapX] === 1 || levelData[mapY][mapX] === 2) hit = 1;
-          }
-          let perpWallDist = (side === 0) ? sideDistX - deltaDistX : sideDistY - deltaDistY;
-          if (perpWallDist < 0.01) perpWallDist = 0.01;
-          const lineHeight = Math.floor(h / perpWallDist);
-          let drawStart = Math.floor(-lineHeight / 2 + h / 2);
-          if (drawStart < 0) drawStart = 0;
-          let drawEnd = Math.floor(lineHeight / 2 + h / 2);
-          if (drawEnd >= h) drawEnd = h - 1;
-          ctx.fillStyle = (side === 1) ? wallColorDark : wallColor;
-          ctx.fillRect(x, drawStart, 1, drawEnd - drawStart + 1);
-        }
-        const spriteList = [];
-        const invDet = 1.0 / (planeX * dirY - dirX * planeY);
-        const halfW = w / 2, halfH = h / 2;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        for (const enemy of enemies) {
-          if (!lineOfSight(player.x, player.y, enemy.x, enemy.y)) continue;
-          const ex = enemy.x - posX, ey = enemy.y - posY;
-          const transformX = invDet * (dirY * ex - dirX * ey);
-          const transformY = invDet * (-planeY * ex + planeX * ey);
-          if (transformY <= 0) continue;
-          const spriteX = halfW * (1 + transformX / transformY);
-          const spriteHeight = Math.abs(Math.floor(h / transformY));
-          spriteList.push({ type: 'enemy', char: enemy.isGhost ? "👻" : "🐓", x: spriteX, height: spriteHeight, depth: transformY });
-        }
-        for (const pu of pickups) {
-          if (!lineOfSight(player.x, player.y, pu.x, pu.y)) continue;
-          const px = pu.x - posX, py = pu.y - posY;
-          const transformX = invDet * (dirY * px - dirX * py);
-          const transformY = invDet * (-planeY * px + planeX * py);
-          if (transformY <= 0) continue;
-          const spriteX = halfW * (1 + transformX / transformY);
-          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.3));
-          const emoji = pu.type === "rock" ? "🪨" : "🗡️";
-          spriteList.push({ type: 'pickup', char: emoji, x: spriteX, height: spriteHeight, depth: transformY });
-        }
-        for (const proj of projectiles) {
-          const px = proj.x - posX, py = proj.y - posY;
-          const transformX = invDet * (dirY * px - dirX * py);
-          const transformY = invDet * (-planeY * px + planeX * py);
-          if (transformY <= 0) continue;
-          const spriteX = halfW * (1 + transformX / transformY);
-          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.3));
-          spriteList.push({ type: 'projectile', char: proj.weapon, x: spriteX, height: spriteHeight < 1 ? 1 : spriteHeight, depth: transformY, rotation: proj.rotation });
-        }
-        for (const p of particles) {
-          const fx = p.x - posX, fy = p.y - posY;
-          const transformX = invDet * (dirY * fx - dirX * fy);
-          const transformY = invDet * (-planeY * fx + planeX * fy);
-          if (transformY <= 0) continue;
-          const spriteX = halfW * (1 + transformX / transformY);
-          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.1));
-          const yOffset = p.z * 50;
-          spriteList.push({ type: 'particle', x: spriteX, height: spriteHeight < 1 ? 1 : spriteHeight, depth: transformY, alpha: p.life, color: p.color, yOffset: yOffset });
-        }
-        spriteList.sort((a, b) => b.depth - a.depth);
-        for (const spr of spriteList) {
-          if (spr.x < -spr.height || spr.x > canvas.width + spr.height) continue;
-          if (spr.type === 'projectile') {
-            ctx.save();
-            ctx.translate(spr.x, halfH);
-            ctx.rotate(spr.rotation);
-            ctx.font = spr.height + "px sans-serif";
-            ctx.fillStyle = "#fff";
-            ctx.fillText(spr.char, 0, 0);
-            ctx.restore();
-          } else if (spr.type === 'enemy' || spr.type === 'pickup') {
-            ctx.font = spr.height + "px sans-serif";
-            ctx.fillStyle = "#fff";
-            ctx.fillText(spr.char, spr.x, halfH);
-          } else if (spr.type === 'particle') {
-            ctx.fillStyle = "rgba(" + spr.color + "," + spr.alpha.toFixed(2) + ")";
-            ctx.fillRect(spr.x - spr.height/2, halfH - spr.yOffset - spr.height/2, spr.height, spr.height);
-          }
-        }
-        if (damageFlashTimer > 0) {
-          ctx.fillStyle = "rgba(255,0,0,0.4)";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-      }
-
-      // Event listeners for joystick, buttons, and keyboard:
-      joystick.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        joystickActive = true;
-        joystickPointerId = e.pointerId;
-        const rect = joystick.getBoundingClientRect();
-        joystickCenterX = rect.left + rect.width / 2;
-        joystickCenterY = rect.top + rect.height / 2;
-        joystick.setPointerCapture(joystickPointerId);
-        const dx = e.clientX - joystickCenterX;
-        const dy = e.clientY - joystickCenterY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        let normX = dist ? dx / dist : 0, normY = dist ? dy / dist : 0;
-        if (dist > joystickRadius) { normX = dx / dist; normY = dy / dist; }
-        if (dist < 5) { normX = 0; normY = 0; }
-        moveForward = -normY;
-        turnDirection = normX;
-        joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
-      });
-      joystick.addEventListener('pointermove', (e) => {
-        if (!joystickActive || e.pointerId !== joystickPointerId) return;
-        const dx = e.clientX - joystickCenterX;
-        const dy = e.clientY - joystickCenterY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        let normX = dist ? dx / dist : 0, normY = dist ? dy / dist : 0;
-        if (dist > joystickRadius) { normX = dx / dist; normY = dy / dist; }
-        if (dist < 5) { normX = 0; normY = 0; }
-        moveForward = -normY;
-        turnDirection = normX;
-        joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
-      });
-      joystick.addEventListener('pointerup', (e) => {
-        if (e.pointerId !== joystickPointerId) return;
-        joystick.releasePointerCapture(joystickPointerId);
-        joystickActive = false;
-        joystickPointerId = null;
-        moveForward = 0;
-        turnDirection = 0;
-        joystickKnob.style.transform = 'translate(-50%, -50%)';
-      });
-      joystick.addEventListener('pointercancel', (e) => {
-        if (e.pointerId !== joystickPointerId) return;
-        joystickActive = false;
-        joystickPointerId = null;
-        moveForward = 0;
-        turnDirection = 0;
-        joystickKnob.style.transform = 'translate(-50%, -50%)';
-      });
-
-      shootBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); shoot(); });
-      window.addEventListener('keydown', (e) => {
-        keys[e.key] = true;
-        if (e.key === " ") { e.preventDefault(); shoot(); }
-      });
-      window.addEventListener('keyup', (e) => { keys[e.key] = false; });
-      
-      swapBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); swapWeapon(); });
-      interactBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); interact(); });
-      window.addEventListener('keydown', (e) => {
-        if (e.key === "q") { e.preventDefault(); swapWeapon(); }
-        if (e.key === "e") { e.preventDefault(); interact(); }
-      });
-
-      // Main game loop
-      function gameLoop(time) {
-        const dt = Math.min((time - lastTime) / 1000, 0.1);
-        lastTime = time;
-        if (!gameOver) {
-          // Process movement input from keyboard and joystick
           let kbMove = 0, kbTurn = 0;
           if (keys['w'] || keys['ArrowUp']) kbMove += 1;
           if (keys['s'] || keys['ArrowDown']) kbMove -= 1;
@@ -876,11 +592,17 @@
           let perpWallDist = (side === 0) ? sideDistX - deltaDistX : sideDistY - deltaDistY;
           if (perpWallDist < 0.01) perpWallDist = 0.01;
           const lineHeight = Math.floor(h / perpWallDist);
-          let drawStart = Math.floor(-lineHeight / 2 + h / 2);
+          let drawStart = Math.floor(-lineHeight/2 + h/2);
           if (drawStart < 0) drawStart = 0;
-          let drawEnd = Math.floor(lineHeight / 2 + h / 2);
+          let drawEnd = Math.floor(lineHeight/2 + h/2);
           if (drawEnd >= h) drawEnd = h - 1;
-          ctx.fillStyle = (side === 1) ? wallColorDark : wallColor;
+          // Choose color: if the hit cell is a door (value 2) use doorColor.
+          const cellType = levelData[mapY][mapX];
+          if (cellType === 2) {
+            ctx.fillStyle = doorColor;
+          } else {
+            ctx.fillStyle = (side === 1) ? wallColorDark : wallColor;
+          }
           ctx.fillRect(x, drawStart, 1, drawEnd - drawStart + 1);
         }
         const spriteList = [];
@@ -954,7 +676,7 @@
         }
       }
 
-      // Event listeners for joystick
+      // Event listeners for joystick, buttons, and keyboard
       joystick.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         joystickActive = true;
@@ -1003,7 +725,302 @@
         joystickKnob.style.transform = 'translate(-50%, -50%)';
       });
 
-      // Shoot button & keyboard
+      // Shoot button & keyboard input
+      shootBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); shoot(); });
+      window.addEventListener('keydown', (e) => {
+        keys[e.key] = true;
+        if (e.key === " ") { e.preventDefault(); shoot(); }
+      });
+      window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+      
+      // Swap & Interact buttons & keyboard support
+      swapBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); swapWeapon(); });
+      interactBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); interact(); });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === "q") { e.preventDefault(); swapWeapon(); }
+        if (e.key === "e") { e.preventDefault(); interact(); }
+      });
+
+      // Main game loop
+      function gameLoop(time) {
+        const dt = Math.min((time - lastTime) / 1000, 0.1);
+        lastTime = time;
+        if (!gameOver) {
+          let kbMove = 0, kbTurn = 0;
+          if (keys['w'] || keys['ArrowUp']) kbMove += 1;
+          if (keys['s'] || keys['ArrowDown']) kbMove -= 1;
+          if (keys['a'] || keys['ArrowLeft']) kbTurn -= 1;
+          if (keys['d'] || keys['ArrowRight']) kbTurn += 1;
+          const effectiveMove = (joystickActive ? moveForward : 0) + kbMove;
+          const effectiveTurn = (joystickActive ? turnDirection : 0) + kbTurn;
+          
+          player.angle += effectiveTurn * turnSpeed * dt;
+          if (player.angle < 0) player.angle += Math.PI * 2;
+          if (player.angle >= Math.PI * 2) player.angle -= Math.PI * 2;
+          if (effectiveMove !== 0) {
+            const step = effectiveMove * moveSpeed * dt;
+            const newX = player.x + Math.sin(player.angle) * step;
+            const newY = player.y - Math.cos(player.angle) * step;
+            if (!isWall(newX, player.y)) player.x = newX;
+            if (!isWall(player.x, newY)) player.y = newY;
+          }
+          for (let i = 0; i < pickups.length; i++) {
+            const pu = pickups[i];
+            if (Math.hypot(player.x - pu.x, player.y - pu.y) < 0.5) {
+              if (!inventory.includes(pu.type === "rock" ? "🪨" : "🗡️"))
+                inventory.push(pu.type === "rock" ? "🪨" : "🗡️");
+              player.weapon = pu.type === "rock" ? "🪨" : "🗡️";
+              shootBtn.textContent = player.weapon;
+              score += 50;
+              pickups.splice(i, 1);
+              i--;
+            }
+          }
+          for (let i = 0; i < enemies.length; i++) {
+            const enemy = enemies[i];
+            if (enemy.isGhost) {
+              const dx = player.x - enemy.x, dy = player.y - enemy.y;
+              const dist = Math.hypot(dx, dy);
+              const chaseSpeed = 2.5;
+              enemy.dx = (dx / dist) * chaseSpeed;
+              enemy.dy = (dy / dist) * chaseSpeed;
+            }
+            let newX = enemy.x + enemy.dx * dt;
+            let newY = enemy.y + enemy.dy * dt;
+            if (!isWall(newX, enemy.y)) enemy.x = newX; else enemy.dx = -enemy.dx;
+            if (!isWall(enemy.x, newY)) enemy.y = newY; else enemy.dy = -enemy.dy;
+            if (enemy.isGhost && Math.hypot(player.x - enemy.x, player.y - enemy.y) < 0.5) {
+              player.health--;
+              damageFlashTimer = 0.2;
+              enemy.x -= enemy.dx * dt * 2;
+              enemy.y -= enemy.dy * dt * 2;
+              if (player.health <= 0) gameOver = true;
+            }
+          }
+          for (let i = 0; i < projectiles.length; i++) {
+            const proj = projectiles[i];
+            proj.x += proj.dx * dt;
+            proj.y += proj.dy * dt;
+            proj.rotation += proj.rotationSpeed * dt;
+            if (isWall(proj.x, proj.y)) {
+              createExplosion(proj.x, proj.y);
+              projectiles.splice(i, 1);
+              i--;
+              continue;
+            }
+            if (proj.x < 0 || proj.y < 0 || proj.x >= levelData[0].length || proj.y >= levelData.length) {
+              projectiles.splice(i, 1);
+              i--;
+              continue;
+            }
+            for (let j = 0; j < enemies.length; j++) {
+              const enemy = enemies[j];
+              if (Math.hypot(enemy.x - proj.x, enemy.y - proj.y) < 0.5) {
+                if (enemy.isGhost) {
+                  enemy.health--;
+                  if (enemy.health <= 0) { createGhostExplosion(enemy.x, enemy.y); score += 300; enemies.splice(j, 1); j--; }
+                } else { createExplosion(enemy.x, enemy.y); score += 100; enemies.splice(j, 1); j--; }
+                projectiles.splice(i, 1);
+                i--;
+                break;
+              }
+            }
+          }
+          for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.z += p.vz * dt;
+            p.life -= dt;
+            if (p.life <= 0) { particles.splice(i, 1); i--; }
+          }
+          if (enemies.length === 0) {
+            if (currentLevel < levels.length - 1) loadLevel(currentLevel + 1);
+            else gameOver = true;
+          }
+          if (damageFlashTimer > 0) damageFlashTimer = Math.max(damageFlashTimer - dt, 0);
+          const elapsedTime = Math.floor((performance.now() - gameStartTime) / 1000);
+          let roosterCount = 0, ghostCount = 0;
+          for (const enemy of enemies) { enemy.isGhost ? ghostCount++ : roosterCount++; }
+          overlay.textContent = `Level: ${currentLevel+1} | Roosters: ${roosterCount} | Ghosts: ${ghostCount} | HP: ${player.health} | Weapon: ${player.weapon} | Time: ${elapsedTime}s | Score: ${score}`;
+          shootBtn.textContent = player.weapon;
+          if (player.health <= 0) gameOver = true;
+          renderScene();
+          if (gameOver) { showFinalScreen(); return; }
+          requestAnimationFrame(gameLoop);
+        } else {
+          showFinalScreen();
+        }
+      }
+
+      // Single render function for drawing the scene
+      function renderScene() {
+        const w = canvas.width, h = canvas.height;
+        ctx.fillStyle = ceilingColor;
+        ctx.fillRect(0, 0, w, h/2);
+        ctx.fillStyle = floorColor;
+        ctx.fillRect(0, h/2, w, h/2);
+        const posX = player.x, posY = player.y;
+        const dirX = Math.sin(player.angle), dirY = -Math.cos(player.angle);
+        const fov = 1.0472;
+        const planeLen = Math.tan(fov/2);
+        const planeX = -dirY * planeLen, planeY = dirX * planeLen;
+        for (let x = 0; x < w; x++) {
+          const cameraX = 2 * x / w - 1;
+          const rayDirX = dirX + planeX * cameraX;
+          const rayDirY = dirY + planeY * cameraX;
+          let mapX = Math.floor(posX), mapY = Math.floor(posY);
+          let sideDistX, sideDistY;
+          const deltaDistX = (rayDirX === 0) ? Infinity : Math.abs(1 / rayDirX);
+          const deltaDistY = (rayDirY === 0) ? Infinity : Math.abs(1 / rayDirY);
+          let stepX, stepY, hit = 0, side = 0;
+          if (rayDirX < 0) { stepX = -1; sideDistX = (posX - mapX) * deltaDistX; }
+          else { stepX = 1; sideDistX = (mapX + 1 - posX) * deltaDistX; }
+          if (rayDirY < 0) { stepY = -1; sideDistY = (posY - mapY) * deltaDistY; }
+          else { stepY = 1; sideDistY = (mapY + 1 - posY) * deltaDistY; }
+          while (hit === 0) {
+            if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
+            else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
+            if (mapX < 0 || mapX >= levelData[0].length || mapY < 0 || mapY >= levelData.length) { hit = 1; break; }
+            if (levelData[mapY][mapX] === 1 || levelData[mapY][mapX] === 2) hit = 1;
+          }
+          let perpWallDist = (side === 0) ? sideDistX - deltaDistX : sideDistY - deltaDistY;
+          if (perpWallDist < 0.01) perpWallDist = 0.01;
+          const lineHeight = Math.floor(h / perpWallDist);
+          let drawStart = Math.floor(-lineHeight / 2 + h / 2);
+          if (drawStart < 0) drawStart = 0;
+          let drawEnd = Math.floor(lineHeight / 2 + h / 2);
+          if (drawEnd >= h) drawEnd = h - 1;
+          // Use doorColor if the cell is a closed door (value 2)
+          const cellType = levelData[mapY][mapX];
+          if (cellType === 2) {
+            ctx.fillStyle = doorColor;
+          } else {
+            ctx.fillStyle = (side === 1) ? wallColorDark : wallColor;
+          }
+          ctx.fillRect(x, drawStart, 1, drawEnd - drawStart + 1);
+        }
+        const spriteList = [];
+        const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+        const halfW = w / 2, halfH = h / 2;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (const enemy of enemies) {
+          if (!lineOfSight(player.x, player.y, enemy.x, enemy.y)) continue;
+          const ex = enemy.x - posX, ey = enemy.y - posY;
+          const transformX = invDet * (dirY * ex - dirX * ey);
+          const transformY = invDet * (-planeY * ex + planeX * ey);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor(h / transformY));
+          spriteList.push({ type: 'enemy', char: enemy.isGhost ? "👻" : "🐓", x: spriteX, height: spriteHeight, depth: transformY });
+        }
+        for (const pu of pickups) {
+          if (!lineOfSight(player.x, player.y, pu.x, pu.y)) continue;
+          const px = pu.x - posX, py = pu.y - posY;
+          const transformX = invDet * (dirY * px - dirX * py);
+          const transformY = invDet * (-planeY * px + planeX * py);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.3));
+          const emoji = pu.type === "rock" ? "🪨" : "🗡️";
+          spriteList.push({ type: 'pickup', char: emoji, x: spriteX, height: spriteHeight, depth: transformY });
+        }
+        for (const proj of projectiles) {
+          const px = proj.x - posX, py = proj.y - posY;
+          const transformX = invDet * (dirY * px - dirX * py);
+          const transformY = invDet * (-planeY * px + planeX * py);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.3));
+          spriteList.push({ type: 'projectile', char: proj.weapon, x: spriteX, height: spriteHeight < 1 ? 1 : spriteHeight, depth: transformY, rotation: proj.rotation });
+        }
+        for (const p of particles) {
+          const fx = p.x - posX, fy = p.y - posY;
+          const transformX = invDet * (dirY * fx - dirX * fy);
+          const transformY = invDet * (-planeY * fx + planeX * fy);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.1));
+          const yOffset = p.z * 50;
+          spriteList.push({ type: 'particle', x: spriteX, height: spriteHeight < 1 ? 1 : spriteHeight, depth: transformY, alpha: p.life, color: p.color, yOffset: yOffset });
+        }
+        spriteList.sort((a, b) => b.depth - a.depth);
+        for (const spr of spriteList) {
+          if (spr.x < -spr.height || spr.x > canvas.width + spr.height) continue;
+          if (spr.type === 'projectile') {
+            ctx.save();
+            ctx.translate(spr.x, halfH);
+            ctx.rotate(spr.rotation);
+            ctx.font = spr.height + "px sans-serif";
+            ctx.fillStyle = "#fff";
+            ctx.fillText(spr.char, 0, 0);
+            ctx.restore();
+          } else if (spr.type === 'enemy' || spr.type === 'pickup') {
+            ctx.font = spr.height + "px sans-serif";
+            ctx.fillStyle = "#fff";
+            ctx.fillText(spr.char, spr.x, halfH);
+          } else if (spr.type === 'particle') {
+            ctx.fillStyle = "rgba(" + spr.color + "," + spr.alpha.toFixed(2) + ")";
+            ctx.fillRect(spr.x - spr.height/2, halfH - spr.yOffset - spr.height/2, spr.height, spr.height);
+          }
+        }
+        if (damageFlashTimer > 0) {
+          ctx.fillStyle = "rgba(255,0,0,0.4)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      // Event listeners for joystick, buttons, and keyboard
+      joystick.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        joystickActive = true;
+        joystickPointerId = e.pointerId;
+        const rect = joystick.getBoundingClientRect();
+        joystickCenterX = rect.left + rect.width / 2;
+        joystickCenterY = rect.top + rect.height / 2;
+        joystick.setPointerCapture(joystickPointerId);
+        const dx = e.clientX - joystickCenterX;
+        const dy = e.clientY - joystickCenterY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let normX = dist ? dx / dist : 0, normY = dist ? dy / dist : 0;
+        if (dist > joystickRadius) { normX = dx / dist; normY = dy / dist; }
+        if (dist < 5) { normX = 0; normY = 0; }
+        moveForward = -normY;
+        turnDirection = normX;
+        joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
+      });
+      joystick.addEventListener('pointermove', (e) => {
+        if (!joystickActive || e.pointerId !== joystickPointerId) return;
+        const dx = e.clientX - joystickCenterX;
+        const dy = e.clientY - joystickCenterY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let normX = dist ? dx / dist : 0, normY = dist ? dy / dist : 0;
+        if (dist > joystickRadius) { normX = dx / dist; normY = dy / dist; }
+        if (dist < 5) { normX = 0; normY = 0; }
+        moveForward = -normY;
+        turnDirection = normX;
+        joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
+      });
+      joystick.addEventListener('pointerup', (e) => {
+        if (e.pointerId !== joystickPointerId) return;
+        joystick.releasePointerCapture(joystickPointerId);
+        joystickActive = false;
+        joystickPointerId = null;
+        moveForward = 0;
+        turnDirection = 0;
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
+      });
+      joystick.addEventListener('pointercancel', (e) => {
+        if (e.pointerId !== joystickPointerId) return;
+        joystickActive = false;
+        joystickPointerId = null;
+        moveForward = 0;
+        turnDirection = 0;
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
+      });
+
+      // Shoot button & keyboard input
       shootBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); shoot(); });
       window.addEventListener('keydown', (e) => {
         keys[e.key] = true;
