@@ -3,23 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <title>Interactive ASCII Map Builder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
       background: #222;
       color: #eee;
       font-family: monospace;
       padding: 20px;
+      margin: 0;
     }
     .container {
       max-width: 900px;
       margin: auto;
+      padding: 10px;
+    }
+    input, button {
+      padding: 8px;
+      margin: 5px;
+      font-size: 1.2em;
     }
     button {
-      padding: 5px;
-      margin: 5px;
-      width: 40px;
-      height: 40px;
-      font-size: 1.2em;
+      width: 50px;
+      height: 50px;
       cursor: pointer;
     }
     button.selected {
@@ -30,13 +35,14 @@
       margin-top: 15px;
     }
     td {
-      width: 25px;
-      height: 25px;
+      width: 30px;
+      height: 30px;
       text-align: center;
       vertical-align: middle;
       border: 1px solid #555;
       cursor: pointer;
       user-select: none;
+      font-size: 1.2em;
     }
     td.outer {
       background-color: #444;
@@ -51,25 +57,39 @@
       height: 200px;
       margin-top: 15px;
       font-family: monospace;
+      font-size: 1.1em;
     }
-    #palette, #controls {
+    #palette, #controls, #gridSize {
       margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    #palette button, #controls button {
+      flex: 1 0 auto;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Interactive ASCII Map Builder</h1>
-    <p>Grid is fixed at 16×20 (rows×columns) with an uneditable outer wall (<code>#</code>).</p>
+    <div id="gridSize">
+      <label for="rowsInput">Rows:</label>
+      <input type="number" id="rowsInput" value="16" min="5">
+      <label for="colsInput">Columns:</label>
+      <input type="number" id="colsInput" value="20" min="5">
+      <button id="generateGridBtn">Generate Grid</button>
+    </div>
     <div id="palette">
       <strong>Palette:</strong>
       <button data-char="P" title="Player" id="btnPlayer">🧍</button>
       <button data-char="G" title="Ghost" id="btnGhost">👻</button>
       <button data-char="R" title="Rooster" id="btnRooster">🐓</button>
       <button data-char="D" title="Dagger" id="btnDagger">🗡️</button>
-      <button data-char="r" title="Rock" id="btnRock">🪨</button>
+      <button data-char="K" title="Rock" id="btnRock">🪨</button>
       <button data-char="H" title="Health" id="btnHealth">❤️</button>
       <button data-char="d" title="Door" id="btnDoor">🚪</button>
+      <button data-char="E" title="Exit" id="btnExit">🪜</button>
       <button data-char="." title="Blank" id="btnBlank">·</button>
     </div>
     <div id="controls">
@@ -85,13 +105,13 @@
   </div>
   
   <script>
-    const DEFAULT_ROWS = 16;
-    const DEFAULT_COLS = 20;
+    const DEFAULT_ROWS = parseInt(document.getElementById("rowsInput").value, 10);
+    const DEFAULT_COLS = parseInt(document.getElementById("colsInput").value, 10);
     
     let currentElement = "P"; // default selection from palette
     let grid = [];
-    const numRows = DEFAULT_ROWS;
-    const numCols = DEFAULT_COLS;
+    let numRows = DEFAULT_ROWS;
+    let numCols = DEFAULT_COLS;
     
     // Undo/Redo stacks; each entry can be a single change object or an array for grouped changes
     const undoStack = [];
@@ -139,7 +159,7 @@
         const change = undoStack.pop();
         // Handle grouped change arrays or single changes
         if (Array.isArray(change)) {
-          change.forEach(({r, c, oldVal, newVal}) => {
+          change.forEach(({r, c, oldVal}) => {
             grid[r][c] = oldVal;
             const cellKey = `${r}-${c}`;
             if (cellElements[cellKey]) {
@@ -147,7 +167,7 @@
             }
           });
         } else {
-          const {r, c, oldVal, newVal} = change;
+          const {r, c, oldVal} = change;
           grid[r][c] = oldVal;
           const cellKey = `${r}-${c}`;
           if (cellElements[cellKey]) {
@@ -163,7 +183,7 @@
       if (redoStack.length > 0) {
         const change = redoStack.pop();
         if (Array.isArray(change)) {
-          change.forEach(({r, c, oldVal, newVal}) => {
+          change.forEach(({r, c, newVal}) => {
             grid[r][c] = newVal;
             const cellKey = `${r}-${c}`;
             if (cellElements[cellKey]) {
@@ -171,7 +191,7 @@
             }
           });
         } else {
-          const {r, c, oldVal, newVal} = change;
+          const {r, c, newVal} = change;
           grid[r][c] = newVal;
           const cellKey = `${r}-${c}`;
           if (cellElements[cellKey]) {
@@ -197,6 +217,9 @@
     
     // --- Grid Generation ---
     function generateGrid() {
+      numRows = parseInt(document.getElementById("rowsInput").value, 10);
+      numCols = parseInt(document.getElementById("colsInput").value, 10);
+      
       // Create grid data: outer border is always "#", inner cells default to "."
       grid = [];
       for (let r = 0; r < numRows; r++) {
