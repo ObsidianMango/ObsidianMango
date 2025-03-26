@@ -30,15 +30,15 @@
       justify-content: center;
       gap: 10px;
     }
-    input, button {
+    select, button {
       padding: 8px;
       margin: 5px;
       font-size: 1.2em;
       border: none;
       border-radius: 4px;
     }
-    input {
-      width: 80px;
+    select {
+      width: 200px;
       text-align: center;
     }
     button {
@@ -95,10 +95,12 @@
   <div class="container">
     <h1>Interactive ASCII Map Builder</h1>
     <div id="gridSize">
-      <label for="rowsInput">Rows:</label>
-      <input type="number" id="rowsInput" value="16" min="5">
-      <label for="colsInput">Columns:</label>
-      <input type="number" id="colsInput" value="20" min="5">
+      <label for="sizeSelect">Select Grid Size:</label>
+      <select id="sizeSelect">
+        <option value="20,16">Small (20×16)</option>
+        <option value="30,24">Medium (30×24)</option>
+        <option value="40,32">Large (40×32)</option>
+      </select>
       <button id="generateGridBtn" title="Generate New Grid">Generate Grid</button>
     </div>
     <div id="palette">
@@ -128,10 +130,10 @@
   <script>
     let currentElement = "P"; // default selection from palette
     let grid = [];
-    let numRows = parseInt(document.getElementById("rowsInput").value, 10);
-    let numCols = parseInt(document.getElementById("colsInput").value, 10);
+    let numRows = 16;
+    let numCols = 20;
     
-    // Undo/Redo stacks; each entry can be a single change or an array of changes
+    // Undo/Redo stacks; each entry can be a single change or an array of changes.
     const undoStack = [];
     const redoStack = [];
     // To store cell <td> elements by key "r-c"
@@ -146,13 +148,11 @@
     // --- Palette Buttons Setup ---
     document.querySelectorAll("#palette button").forEach(btn => {
       btn.addEventListener("click", function() {
-        // Turn off line mode when selecting a new element.
         lineMode = false;
         document.getElementById("lineModeBtn").classList.remove("selected");
         lineStart = null;
         
         currentElement = this.getAttribute("data-char");
-        // Highlight selection: remove selected from all, then mark this one.
         document.querySelectorAll("#palette button").forEach(b => b.classList.remove("selected"));
         document.querySelectorAll("#controls button").forEach(b => b.classList.remove("selected"));
         this.classList.add("selected");
@@ -233,9 +233,11 @@
     
     // --- Grid Generation ---
     function generateGrid() {
-      // Update grid size from inputs.
-      numRows = parseInt(document.getElementById("rowsInput").value, 10);
-      numCols = parseInt(document.getElementById("colsInput").value, 10);
+      // Get selected grid size from dropdown.
+      const sizeValue = document.getElementById("sizeSelect").value;
+      const [cols, rows] = sizeValue.split(",").map(Number);
+      numCols = cols;
+      numRows = rows;
       
       // Create new grid data: outer border always "#" and inner cells default to "."
       grid = [];
@@ -259,7 +261,7 @@
       updateMapOutput();
     }
     
-    // Render the grid as an HTML table and save cell references.
+    // Render the grid as an HTML table and store cell references.
     function renderGrid() {
       gridContainer.innerHTML = "";
       const table = document.createElement("table");
@@ -270,7 +272,7 @@
           td.innerText = grid[r][c];
           const key = `${r}-${c}`;
           cellElements[key] = td;
-          // Outer cells are not editable.
+          // Outer cells are uneditable.
           if (r === 0 || r === numRows - 1 || c === 0 || c === numCols - 1) {
             td.classList.add("outer");
           } else {
@@ -289,24 +291,20 @@
     function handleCellClick(r, c, cellElem) {
       if (lineMode) {
         if (!lineStart) {
-          // Set start cell for line.
           lineStart = { r, c };
           cellElem.classList.add("highlight");
         } else {
-          // Remove highlight from start.
           const startKey = `${lineStart.r}-${lineStart.c}`;
           if (cellElements[startKey]) {
             cellElements[startKey].classList.remove("highlight");
           }
           if (lineStart.r === r && lineStart.c === c) {
-            // Double-tap: place a single wall.
             const oldVal = grid[r][c];
             grid[r][c] = "#";
             cellElem.innerText = "#";
             undoStack.push({ r, c, oldVal, newVal: "#" });
             redoStack.length = 0;
           } else if (lineStart.r === r) {
-            // Horizontal line.
             let changes = [];
             const startC = Math.min(lineStart.c, c);
             const endC = Math.max(lineStart.c, c);
@@ -326,7 +324,6 @@
               redoStack.length = 0;
             }
           } else if (lineStart.c === c) {
-            // Vertical line.
             let changes = [];
             const startR = Math.min(lineStart.r, r);
             const endR = Math.max(lineStart.r, r);
@@ -351,7 +348,6 @@
           lineStart = null;
         }
       } else {
-        // Normal placement.
         const oldVal = grid[r][c];
         const newVal = currentElement;
         if (oldVal !== newVal) {
@@ -373,7 +369,10 @@
       mapOutput.value = output;
     }
     
-    // Generate the default grid on page load.
+    // Bind Generate Grid button.
+    document.getElementById("generateGridBtn").addEventListener("click", generateGrid);
+    
+    // Generate default grid on page load.
     generateGrid();
   </script>
 </body>
