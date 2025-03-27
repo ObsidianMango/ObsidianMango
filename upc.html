@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UPC Scanner with Timeout Finalization</title>
+  <title>UPC Scanner with Immediate Confidence Stop</title>
   <!-- Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
@@ -31,16 +31,13 @@
     /* Interactive area fills container */
     #interactive.viewport {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
     }
     /* Red scan line overlay for guidance */
     #red-line {
       position: absolute;
-      top: 50%;
-      left: 0;
+      top: 50%; left: 0;
       width: 100%;
       border-top: 2px solid red;
       pointer-events: none;
@@ -58,20 +55,25 @@
     .btn-custom { margin-top: 15px; margin-right: 5px; }
     /* Flash overlay for detection feedback */
     #flash-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: white; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 1000;
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: white; opacity: 0;
+      pointer-events: none; transition: opacity 0.3s;
+      z-index: 1000;
     }
     /* On-page logging panel (fixed to about 3 lines high) */
     #log {
-      position: fixed; bottom: 0; width: 100%; height: 3em; overflow-y: auto;
-      background: #333; color: #fff; font-size: 12px; padding: 5px; z-index: 2000;
+      position: fixed; bottom: 0;
+      width: 100%; height: 3em; overflow-y: auto;
+      background: #333; color: #fff; font-size: 12px;
+      padding: 5px; z-index: 2000;
     }
   </style>
 </head>
 <body>
   <div id="flash-overlay"></div>
   <div class="container text-center">
-    <h1>UPC Scanner with Timeout Finalization</h1>
+    <h1>UPC Scanner with Immediate Confidence Stop</h1>
     <div id="video-container">
       <div id="interactive" class="viewport"></div>
       <div id="red-line"></div>
@@ -79,8 +81,10 @@
     <div id="result">Scanning...</div>
     <div id="status">Please hold your barcode steady.</div>
     <div class="progress">
-      <div id="confidence-bar" class="progress-bar" role="progressbar" style="width: 0%;" 
-           aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0% Confidence</div>
+      <div id="confidence-bar" class="progress-bar" role="progressbar"
+           style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+           0% Confidence
+      </div>
     </div>
     <div class="controls">
       <!-- Toggle scanning button -->
@@ -95,34 +99,18 @@
   <script>
     let scannedUPC = null;
     let scanningActive = true;
-    let detectionBuffer = []; // sliding window of detections
-    const windowSize = 5;      // keep the last 5 detections
-    const countThreshold = 3;  // finalize if mode appears 3 times
-    const detectionTimeout = 3000; // 3 seconds timeout
-    let detectionStartTime = null; // record when scanning started
+    let lastStableCode = "";
+    let stableCount = 0;
+    const stableThreshold = 3; // Number of consecutive identical (normalized) detections required
+    const autoStopConfidenceThreshold = 90; // Immediate stop if computed confidence is 90% or above
+    let lastDetectionTime = 0; // For debouncing
 
-    // Normalize a detected code (e.g., trim whitespace)
+    // Normalize the detected code (extract only digits)
     function normalizeCode(code) {
-      return code.trim();
+      return code.replace(/\D/g, '');
     }
 
-    // Compute the mode (most frequent value) in an array
-    function computeMode(arr) {
-      const counts = {};
-      let maxCount = 0;
-      let mode = null;
-      arr.forEach(function(code) {
-        code = normalizeCode(code);
-        counts[code] = (counts[code] || 0) + 1;
-        if (counts[code] > maxCount) {
-          maxCount = counts[code];
-          mode = code;
-        }
-      });
-      return { mode, count: maxCount };
-    }
-
-    // Produce a brief beep
+    // Produce a brief beep using the Web Audio API
     function beep() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -137,17 +125,18 @@
       }
     }
 
-    // Flash the screen briefly
+    // Flash the screen briefly for feedback
     function flashScreen() {
       const flashOverlay = document.getElementById('flash-overlay');
       flashOverlay.style.opacity = "0.8";
       setTimeout(() => { flashOverlay.style.opacity = "0"; }, 100);
     }
 
-    // Start scanning: reset buffer, record start time, update UI, and start Quagga
+    // Start scanning: reset variables and update UI
     function startScanning() {
-      detectionBuffer = [];
-      detectionStartTime = Date.now();
+      lastStableCode = "";
+      stableCount = 0;
+      scannedUPC = null;
       document.getElementById('result').textContent = "Scanning...";
       document.getElementById('status').textContent = "Please hold your barcode steady.";
       document.getElementById('copy-button').disabled = true;
@@ -157,7 +146,7 @@
       Quagga.start();
     }
 
-    // Stop scanning and lock in the code
+    // Stop scanning and finalize the code
     function stopScanning(finalCode) {
       Quagga.stop();
       scanningActive = false;
@@ -198,34 +187,47 @@
           }
           console.log("Quagga initialized successfully");
           Quagga.start();
-          detectionStartTime = Date.now();
+          lastDetectionTime = Date.now();
         });
         
-        // Visual feedback for each frame
+        // Visual feedback on each processed frame
         Quagga.onProcessed(function(result) {
           console.log("onProcessed:", result);
           const drawingCtx = Quagga.canvas.ctx.overlay,
                 drawingCanvas = Quagga.canvas.dom.overlay;
           if (result) {
-            drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+            drawingCtx.clearRect(0, 0,
+              parseInt(drawingCanvas.getAttribute("width")),
+              parseInt(drawingCanvas.getAttribute("height")));
             if (result.boxes) {
               result.boxes.filter(box => box !== result.box).forEach(box => {
-                Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, drawingCtx, { color: "green", lineWidth: 2 });
+                Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, drawingCtx,
+                  { color: "green", lineWidth: 2 });
               });
             }
             if (result.box) {
-              Quagga.ImageDebug.drawPath(result.box, { x: 0, y: 1 }, drawingCtx, { color: "#00F", lineWidth: 2 });
+              Quagga.ImageDebug.drawPath(result.box, { x: 0, y: 1 }, drawingCtx,
+                { color: "#00F", lineWidth: 2 });
             }
             if (result.codeResult && result.codeResult.code) {
-              Quagga.ImageDebug.drawPath(result.line, { x: 'x', y: 'y' }, drawingCtx, { color: 'red', lineWidth: 3 });
+              Quagga.ImageDebug.drawPath(result.line, { x: 'x', y: 'y' },
+                drawingCtx, { color: 'red', lineWidth: 3 });
             }
           }
         });
         
-        // On detection, add normalized code to buffer and check for stability or timeout.
+        // Process detected barcodes
         Quagga.onDetected(function(result) {
-          let code = normalizeCode(result.codeResult.code);
-          console.log("Detected code:", code);
+          let now = Date.now();
+          // Debounce: only process every 300 ms
+          if (now - lastDetectionTime < 300) {
+            return;
+          }
+          lastDetectionTime = now;
+          
+          let rawCode = result.codeResult.code;
+          let normalizedCode = normalizeCode(rawCode);
+          console.log("Raw code:", rawCode, "Normalized:", normalizedCode);
           
           // Update confidence bar for reference
           const decodedCodes = result.codeResult.decodedCodes;
@@ -244,25 +246,26 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          if (scanningActive) {
-            detectionBuffer.push(code);
-            if (detectionBuffer.length > windowSize) {
-              detectionBuffer.shift();
-            }
-            const { mode, count } = computeMode(detectionBuffer);
-            console.log("Buffer mode:", mode, "count:", count, "buffer length:", detectionBuffer.length);
-            document.getElementById('result').textContent = "Current mode: " + mode + " (" + count + "/" + detectionBuffer.length + ")";
-            
-            // Check if mode meets threshold in buffer
-            if (detectionBuffer.length >= windowSize && count >= countThreshold) {
-              console.log("Stable detection achieved. Finalizing code:", mode);
-              stopScanning(mode);
-            }
-            // Alternatively, if more than detectionTimeout has passed, finalize with current mode.
-            else if (Date.now() - detectionStartTime > detectionTimeout) {
-              console.log("Timeout reached. Finalizing code with current mode:", mode);
-              stopScanning(mode);
-            }
+          // If confidence is high enough, immediately finalize
+          if (confidence >= autoStopConfidenceThreshold) {
+            console.log("High confidence (" + confidence + "%) reached. Finalizing code:", normalizedCode);
+            stopScanning(normalizedCode);
+            return;
+          }
+          
+          // Otherwise, use consecutive stability
+          if (normalizedCode === lastStableCode) {
+            stableCount++;
+          } else {
+            lastStableCode = normalizedCode;
+            stableCount = 1;
+          }
+          console.log("Stable count for", normalizedCode, "=", stableCount);
+          document.getElementById('result').textContent = "Current UPC: " + normalizedCode +
+            " (stable count: " + stableCount + ")";
+          if (stableCount >= stableThreshold) {
+            console.log("Stable detection achieved. Finalizing code:", normalizedCode);
+            stopScanning(normalizedCode);
           }
         });
       } else {
@@ -272,14 +275,14 @@
       // Toggle scanning manually
       document.getElementById('toggle-scan-button').addEventListener('click', function() {
         if (scanningActive) {
-          stopScanning(computeMode(detectionBuffer).mode);
+          stopScanning(lastStableCode);
         } else {
           startScanning();
         }
       });
     });
     
-    // Copy finalized UPC to clipboard
+    // Copy the finalized UPC to clipboard
     document.getElementById('copy-button').addEventListener('click', function() {
       if (scannedUPC) {
         navigator.clipboard.writeText(scannedUPC).then(() => {
@@ -288,7 +291,7 @@
       }
     });
     
-    // Open Google Images search for finalized UPC
+    // Open a Google Images search for the finalized UPC
     document.getElementById('image-button').addEventListener('click', function() {
       if (scannedUPC) {
         window.open("https://www.google.com/search?tbm=isch&q=" + scannedUPC, '_blank');
