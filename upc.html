@@ -84,12 +84,12 @@
       transition: opacity 0.3s;
       z-index: 1000;
     }
-    /* On-page logging panel */
+    /* On-page logging panel (fixed to about 3 lines high) */
     #log {
       position: fixed;
       bottom: 0;
       width: 100%;
-      max-height: 150px;
+      height: 3em;
       overflow-y: auto;
       background: #333;
       color: #fff;
@@ -126,9 +126,9 @@
   <script>
     let scannedUPC = null;
     let scanningActive = true;
-    let lastStableCode = null;
+    let lastStableCode = "";
     let stableCount = 0;
-    const stableThreshold = 3; // Change this number to require more consecutive detections
+    const stableThreshold = 2; // Lower threshold: if same code is detected 2 times in a row, finalize
 
     // Produce a brief beep using the Web Audio API
     function beep() {
@@ -156,7 +156,7 @@
 
     // Start scanning: reset variables, update UI, and start Quagga
     function startScanning() {
-      lastStableCode = null;
+      lastStableCode = "";
       stableCount = 0;
       scannedUPC = null;
       document.getElementById('result').textContent = "Scanning...";
@@ -174,7 +174,7 @@
       scanningActive = false;
       scannedUPC = lastStableCode;
       document.getElementById('result').textContent = "Detected UPC: " + scannedUPC;
-      document.getElementById('status').textContent = "Barcode locked in (" + stableCount + " consecutive detections).";
+      document.getElementById('status').textContent = "Barcode locked in (stable count: " + stableCount + ").";
       document.getElementById('copy-button').disabled = false;
       document.getElementById('image-button').disabled = false;
       document.getElementById('toggle-scan-button').textContent = "Start Scanning";
@@ -212,7 +212,7 @@
           Quagga.start();
         });
         
-        // Process each frame for debugging and visual feedback
+        // Process each frame for visual feedback
         Quagga.onProcessed(function(result) {
           console.log("onProcessed:", result);
           const drawingCtx = Quagga.canvas.ctx.overlay,
@@ -238,7 +238,7 @@
           const code = result.codeResult.code;
           console.log("Detected code:", code);
           
-          // Update the confidence bar for reference
+          // Update confidence bar for reference
           const decodedCodes = result.codeResult.decodedCodes;
           let sumError = 0, cnt = 0;
           decodedCodes.forEach(function(dc) {
@@ -255,7 +255,7 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // If scanning is active, check if this code is the same as the last one.
+          // If scanning is active, check for consecutive stability.
           if (scanningActive) {
             if (code === lastStableCode) {
               stableCount++;
@@ -264,11 +264,10 @@
               stableCount = 1;
             }
             console.log("Stable count for", code, "=", stableCount);
-            // Update the result display with current code and stable count.
             document.getElementById('result').textContent = "Current UPC: " + code + " (stable count: " + stableCount + ")";
-            // If the same code has been detected consecutively enough times, stop scanning.
+            // If the same code is detected consecutively enough times, finalize it.
             if (stableCount >= stableThreshold) {
-              console.log("Stable detection achieved. Auto-stopping scanning with code:", code);
+              console.log("Stable detection achieved. Finalizing code:", code);
               stopScanning();
             }
           }
@@ -306,7 +305,7 @@
     });
   </script>
   
-  <!-- On-page logging panel for mobile debugging -->
+  <!-- On-page logging panel (3 lines high) for mobile debugging -->
   <div id="log"></div>
   <script>
     (function() {
@@ -316,7 +315,7 @@
         oldLog.apply(console, args);
         const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
         logDiv.innerHTML += `<div>${message}</div>`;
-        // Auto-scroll to always show the latest log entry.
+        // Auto-scroll to always show the latest log entry
         logDiv.scrollTop = logDiv.scrollHeight;
       };
     })();
