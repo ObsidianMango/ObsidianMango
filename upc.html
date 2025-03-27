@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stable UPC Scanner Debug</title>
+  <title>UPC Scanner with Toggle & Mode Selection</title>
   <!-- Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
@@ -102,7 +102,7 @@
 <body>
   <div id="flash-overlay"></div>
   <div class="container text-center">
-    <h1>Stable UPC Scanner Debug</h1>
+    <h1>UPC Scanner with Toggle & Mode Selection</h1>
     <div id="video-container">
       <div id="interactive" class="viewport"></div>
       <div id="red-line"></div>
@@ -114,6 +114,8 @@
            aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0% Confidence</div>
     </div>
     <div class="controls">
+      <!-- Toggle scanning button -->
+      <button id="toggle-scan-button" class="btn btn-warning btn-custom">Stop Scanning</button>
       <button id="copy-button" class="btn btn-secondary btn-custom" disabled>Copy UPC</button>
       <button id="image-button" class="btn btn-primary btn-custom" disabled>Image Search</button>
     </div>
@@ -123,12 +125,24 @@
   <script src="https://unpkg.com/quagga/dist/quagga.min.js"></script>
   <script>
     let scannedUPC = null;
-    // Variables for stability-based detection
-    let lastDetectedCode = "";
-    let detectionCount = 0;
-    // How many consecutive detections to accept (e.g., 3)
-    const detectionCountThreshold = 3;
-    
+    let scanningActive = true;
+    let detectionBuffer = []; // stores all detected codes
+
+    // Function to compute the mode (most frequent value) in an array
+    function computeMode(arr) {
+      const counts = {};
+      let maxCount = 0;
+      let mode = null;
+      arr.forEach(function(code) {
+        counts[code] = (counts[code] || 0) + 1;
+        if (counts[code] > maxCount) {
+          maxCount = counts[code];
+          mode = code;
+        }
+      });
+      return { mode, count: maxCount };
+    }
+
     // Produce a brief beep using the Web Audio API
     function beep() {
       try {
@@ -143,7 +157,7 @@
         console.log("Beep not supported:", e);
       }
     }
-    
+
     // Function to briefly flash the screen
     function flashScreen() {
       const flashOverlay = document.getElementById('flash-overlay');
@@ -152,7 +166,36 @@
         flashOverlay.style.opacity = "0";
       }, 100);
     }
-    
+
+    // Start Quagga scanning
+    function startScanning() {
+      detectionBuffer = [];
+      document.getElementById('result').textContent = "Scanning...";
+      document.getElementById('status').textContent = "Please hold your barcode steady.";
+      document.getElementById('copy-button').disabled = true;
+      document.getElementById('image-button').disabled = true;
+      document.getElementById('toggle-scan-button').textContent = "Stop Scanning";
+      scanningActive = true;
+      Quagga.start();
+    }
+
+    // Stop scanning and compute the mode from detectionBuffer
+    function stopScanning() {
+      Quagga.stop();
+      scanningActive = false;
+      const { mode, count } = computeMode(detectionBuffer);
+      if (mode) {
+        scannedUPC = mode;
+        document.getElementById('result').textContent = "Detected UPC: " + mode;
+        document.getElementById('status').textContent = "Barcode locked in (" + count + " detections).";
+        document.getElementById('copy-button').disabled = false;
+        document.getElementById('image-button').disabled = false;
+      } else {
+        document.getElementById('result').textContent = "No stable barcode detected.";
+      }
+      document.getElementById('toggle-scan-button').textContent = "Start Scanning";
+    }
+
     document.addEventListener("DOMContentLoaded", function() {
       if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
         Quagga.init({
@@ -167,7 +210,7 @@
             }
           },
           decoder: {
-            // Adding additional readers for more reliability
+            // Additional readers to improve reliability
             readers: ["upc_reader", "ean_reader", "upc_e_reader", "code_128_reader"]
           },
           locate: true,
@@ -183,7 +226,7 @@
           Quagga.start();
         });
         
-        // Log detailed information on every processed frame for debugging
+        // Log detailed information on every processed frame (for debugging)
         Quagga.onProcessed(function(result) {
           console.log("onProcessed:", result);
           const drawingCtx = Quagga.canvas.ctx.overlay,
@@ -204,13 +247,11 @@
           }
         });
         
-        // Process detected barcodes
+        // Process detected barcodes and store them in the detectionBuffer
         Quagga.onDetected(function(result) {
-          console.log("onDetected result:", result);
           const code = result.codeResult.code;
           console.log("Detected code:", code);
-          
-          // Update progress bar with computed confidence (for reference)
+          // Update confidence bar (for reference)
           const decodedCodes = result.codeResult.decodedCodes;
           let sumError = 0, count = 0;
           decodedCodes.forEach(function(dc) {
@@ -227,31 +268,23 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // Use a stability approach: count consecutive detections of the same code
-          if (code === lastDetectedCode) {
-            detectionCount++;
-          } else {
-            lastDetectedCode = code;
-            detectionCount = 1;
-          }
-          console.log("Detection count for", code, "=", detectionCount);
-          
-          // If we have seen the same code enough times, update the UI
-          if (detectionCount >= detectionCountThreshold) {
-            scannedUPC = code;
-            document.getElementById('result').textContent = "Detected UPC: " + code;
-            flashScreen();
-            beep();
-            document.getElementById('status').textContent = "Barcode detected!";
-            document.getElementById('copy-button').disabled = false;
-            document.getElementById('image-button').disabled = false;
-          } else {
-            console.log("Not enough stable detections yet.");
+          // If scanning is active, save the detected code
+          if (scanningActive) {
+            detectionBuffer.push(code);
           }
         });
       } else {
         alert("getUserMedia is not supported on your browser!");
       }
+      
+      // Toggle scanning on/off when the button is clicked
+      document.getElementById('toggle-scan-button').addEventListener('click', function() {
+        if (scanningActive) {
+          stopScanning();
+        } else {
+          startScanning();
+        }
+      });
     });
     
     // Copy the scanned UPC to the clipboard when the Copy button is clicked
