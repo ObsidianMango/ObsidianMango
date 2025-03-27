@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Professional UPC Scanner</title>
+  <title>Enhanced UPC Scanner Debug</title>
   <!-- Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
@@ -38,7 +38,7 @@
       width: 100%;
       height: 100%;
     }
-    /* Red scan line overlay for visual guidance */
+    /* Red scan line overlay for guidance */
     #red-line {
       position: absolute;
       top: 50%;
@@ -89,7 +89,7 @@
 <body>
   <div id="flash-overlay"></div>
   <div class="container text-center">
-    <h1>Professional UPC Scanner</h1>
+    <h1>Enhanced UPC Scanner Debug</h1>
     <div id="video-container">
       <div id="interactive" class="viewport"></div>
       <div id="red-line"></div>
@@ -111,8 +111,8 @@
   <script>
     let scannedUPC = null;
     let lastResult = null;
-
-    // Produce a brief beep using the Web Audio API
+    
+    // Function to produce a brief beep using the Web Audio API
     function beep() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -126,8 +126,8 @@
         console.log("Beep not supported:", e);
       }
     }
-
-    // Flash the screen briefly when a scan occurs
+    
+    // Function to briefly flash the screen
     function flashScreen() {
       const flashOverlay = document.getElementById('flash-overlay');
       flashOverlay.style.opacity = "0.8";
@@ -135,10 +135,9 @@
         flashOverlay.style.opacity = "0";
       }, 100);
     }
-
+    
     document.addEventListener("DOMContentLoaded", function() {
       if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
-        // Initialize Quagga with fixed preview dimensions and additional readers
         Quagga.init({
           inputStream: {
             name: "Live",
@@ -151,10 +150,12 @@
             }
           },
           decoder: {
-            readers: ["upc_reader", "ean_reader", "code_128_reader"]
+            // Adding more readers to increase detection reliability
+            readers: ["upc_reader", "ean_reader", "upc_e_reader", "code_128_reader"]
           },
           locate: true,
-          numOfWorkers: 2
+          numOfWorkers: navigator.hardwareConcurrency || 4,
+          frequency: 10
         }, function(err) {
           if (err) {
             console.error("Quagga init error:", err);
@@ -164,14 +165,15 @@
           console.log("Quagga initialized successfully");
           Quagga.start();
         });
-
-        // Draw visual feedback (bounding boxes) on every processed frame
+        
+        // Log detailed information on every processed frame for debugging
         Quagga.onProcessed(function(result) {
+          console.log("onProcessed:", result);
           const drawingCtx = Quagga.canvas.ctx.overlay,
                 drawingCanvas = Quagga.canvas.dom.overlay;
           if (result) {
+            drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
             if (result.boxes) {
-              drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
               result.boxes.filter(box => box !== result.box).forEach(box => {
                 Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, drawingCtx, { color: "green", lineWidth: 2 });
               });
@@ -184,17 +186,18 @@
             }
           }
         });
-
-        // Process detected barcodes
+        
+        // When a barcode is detected, log the result and update the UI
         Quagga.onDetected(function(result) {
+          console.log("onDetected result:", result);
           const code = result.codeResult.code;
-          // Prevent duplicate detections in rapid succession
+          console.log("Detected code:", code);
           if (lastResult === code) return;
           lastResult = code;
           scannedUPC = code;
           document.getElementById('result').textContent = "Detected UPC: " + code;
           
-          // Calculate an approximate confidence based on error values (lower error = higher confidence)
+          // Compute approximate confidence using error values
           const decodedCodes = result.codeResult.decodedCodes;
           let sumError = 0, count = 0;
           decodedCodes.forEach(function(dc) {
@@ -210,7 +213,7 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // Provide immediate feedback that a barcode was detected
+          // Provide immediate feedback
           flashScreen();
           beep();
           document.getElementById('status').textContent = "Barcode detected!";
@@ -223,7 +226,7 @@
         alert("getUserMedia is not supported on your browser!");
       }
     });
-
+    
     // Copy the scanned UPC to the clipboard when the Copy button is clicked
     document.getElementById('copy-button').addEventListener('click', function() {
       if (scannedUPC) {
@@ -234,7 +237,7 @@
         });
       }
     });
-
+    
     // Open a Google Images search for the scanned UPC when the Image Search button is clicked
     document.getElementById('image-button').addEventListener('click', function() {
       if (scannedUPC) {
