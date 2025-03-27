@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Enhanced UPC Scanner Debug with Threshold</title>
+  <title>Stable UPC Scanner Debug</title>
   <!-- Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
@@ -102,7 +102,7 @@
 <body>
   <div id="flash-overlay"></div>
   <div class="container text-center">
-    <h1>Enhanced UPC Scanner Debug</h1>
+    <h1>Stable UPC Scanner Debug</h1>
     <div id="video-container">
       <div id="interactive" class="viewport"></div>
       <div id="red-line"></div>
@@ -123,8 +123,11 @@
   <script src="https://unpkg.com/quagga/dist/quagga.min.js"></script>
   <script>
     let scannedUPC = null;
-    // Define a threshold (0–100) for accepting a detected barcode.
-    const acceptedConfidence = 60;
+    // Variables for stability-based detection
+    let lastDetectedCode = "";
+    let detectionCount = 0;
+    // How many consecutive detections to accept (e.g., 3)
+    const detectionCountThreshold = 3;
     
     // Produce a brief beep using the Web Audio API
     function beep() {
@@ -207,7 +210,7 @@
           const code = result.codeResult.code;
           console.log("Detected code:", code);
           
-          // Calculate approximate confidence using error values
+          // Update progress bar with computed confidence (for reference)
           const decodedCodes = result.codeResult.decodedCodes;
           let sumError = 0, count = 0;
           decodedCodes.forEach(function(dc) {
@@ -224,8 +227,17 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // If the confidence is above the accepted threshold, update the UI
-          if(confidence >= acceptedConfidence) {
+          // Use a stability approach: count consecutive detections of the same code
+          if (code === lastDetectedCode) {
+            detectionCount++;
+          } else {
+            lastDetectedCode = code;
+            detectionCount = 1;
+          }
+          console.log("Detection count for", code, "=", detectionCount);
+          
+          // If we have seen the same code enough times, update the UI
+          if (detectionCount >= detectionCountThreshold) {
             scannedUPC = code;
             document.getElementById('result').textContent = "Detected UPC: " + code;
             flashScreen();
@@ -234,7 +246,7 @@
             document.getElementById('copy-button').disabled = false;
             document.getElementById('image-button').disabled = false;
           } else {
-            console.log("Confidence below threshold; ignoring result.");
+            console.log("Not enough stable detections yet.");
           }
         });
       } else {
