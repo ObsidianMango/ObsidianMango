@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UPC Scanner</title>
+  <title>Professional UPC Scanner</title>
   <!-- Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
@@ -20,7 +20,7 @@
     h1 {
       margin-bottom: 20px;
     }
-    /* Fixed camera preview area */
+    /* Fixed preview area */
     #video-container {
       width: 320px;
       height: 240px;
@@ -30,7 +30,7 @@
       position: relative;
       overflow: hidden;
     }
-    /* Make the interactive area fill the container */
+    /* Interactive area fills container */
     #interactive.viewport {
       position: absolute;
       top: 0;
@@ -48,18 +48,22 @@
       pointer-events: none;
     }
     #result {
-      font-size: 1.3em;
       margin-top: 15px;
+      font-size: 1.3em;
       word-wrap: break-word;
     }
-    /* Confidence meter styling */
+    #status {
+      margin-top: 10px;
+      font-size: 1em;
+    }
+    /* Confidence meter */
     .progress {
-      background-color: #444;
-      height: 20px;
       margin-top: 15px;
+      background: #444;
+      height: 20px;
     }
     .progress-bar {
-      background-color: #28a745;
+      background: #28a745;
       font-weight: bold;
     }
     /* Button styling */
@@ -67,38 +71,34 @@
       margin-top: 15px;
       margin-right: 5px;
     }
-    /* Flash overlay styling */
+    /* Flash overlay */
     #flash-overlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: white;
+      background: white;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.3s ease-out;
+      transition: opacity 0.3s;
       z-index: 1000;
-    }
-    .controls {
-      margin-top: 20px;
     }
   </style>
 </head>
 <body>
   <div id="flash-overlay"></div>
   <div class="container text-center">
-    <h1>UPC Scanner</h1>
+    <h1>Professional UPC Scanner</h1>
     <div id="video-container">
       <div id="interactive" class="viewport"></div>
       <div id="red-line"></div>
     </div>
     <div id="result">Scanning...</div>
+    <div id="status">Please hold your barcode steady.</div>
     <div class="progress">
       <div id="confidence-bar" class="progress-bar" role="progressbar" style="width: 0%;" 
-           aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-        0% Confidence
-      </div>
+           aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0% Confidence</div>
     </div>
     <div class="controls">
       <button id="copy-button" class="btn btn-secondary btn-custom" disabled>Copy UPC</button>
@@ -106,22 +106,36 @@
     </div>
   </div>
   
-  <!-- Include the QuaggaJS library -->
+  <!-- Include QuaggaJS from CDN -->
   <script src="https://unpkg.com/quagga/dist/quagga.min.js"></script>
   <script>
     let scannedUPC = null;
     let lastResult = null;
-    
+
+    // Produce a brief beep using the Web Audio API
+    function beep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = ctx.createOscillator();
+        oscillator.type = "sine";
+        oscillator.frequency.value = 1000;
+        oscillator.connect(ctx.destination);
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.1);
+      } catch(e) {
+        console.log("Beep not supported:", e);
+      }
+    }
+
     document.addEventListener("DOMContentLoaded", function() {
       if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
-        console.log("getUserMedia is supported");
+        // Initialize Quagga with fixed preview dimensions
         Quagga.init({
           inputStream: {
             name: "Live",
             type: "LiveStream",
             target: document.querySelector('#interactive'),
             constraints: {
-              // Force fixed dimensions to match our preview area
               width: { min: 320, max: 320 },
               height: { min: 240, max: 240 },
               facingMode: "environment"
@@ -137,21 +151,40 @@
             document.getElementById('result').textContent = "Error initializing scanner.";
             return;
           }
-          console.log("Quagga initialized successfully");
           Quagga.start();
         });
-        
+
+        // Use onProcessed to provide continuous visual feedback
+        Quagga.onProcessed(function(result) {
+          var drawingCtx = Quagga.canvas.ctx.overlay,
+              drawingCanvas = Quagga.canvas.dom.overlay;
+          if (result) {
+            if (result.boxes) {
+              drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+              result.boxes.filter(function(box) {
+                return box !== result.box;
+              }).forEach(function(box) {
+                Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
+              });
+            }
+            if (result.box) {
+              Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "#00F", lineWidth: 2});
+            }
+            if (result.codeResult && result.codeResult.code) {
+              Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, drawingCtx, {color: 'red', lineWidth: 3});
+            }
+          }
+        });
+
+        // onDetected provides feedback when a barcode is successfully scanned
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
-          console.log("Detected code:", code);
-          
-          // Prevent duplicate results firing too quickly.
           if (lastResult === code) return;
           lastResult = code;
           scannedUPC = code;
           document.getElementById('result').textContent = "Detected UPC: " + code;
           
-          // Compute an approximate confidence using error values (lower error means higher confidence).
+          // Calculate approximate confidence based on error values
           const decodedCodes = result.codeResult.decodedCodes;
           let sumError = 0, count = 0;
           decodedCodes.forEach(function(dc) {
@@ -161,15 +194,18 @@
             }
           });
           const avgError = count ? sumError / count : 0;
-          const confidence = Math.round(Math.max(0, Math.min(100, (1 - avgError/0.5) * 100)));
+          const confidence = Math.round(Math.max(0, Math.min(100, (1 - avgError / 0.5) * 100)));
           const bar = document.getElementById('confidence-bar');
           bar.style.width = confidence + "%";
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
+          // Provide immediate user feedback: flash screen and beep
           flashScreen();
+          beep();
+          document.getElementById('status').textContent = "Barcode detected!";
           
-          // Enable buttons once a valid code is detected
+          // Enable buttons once a valid code is scanned
           document.getElementById('copy-button').disabled = false;
           document.getElementById('image-button').disabled = false;
         });
@@ -177,8 +213,8 @@
         alert("getUserMedia is not supported on your browser!");
       }
     });
-    
-    // Flash the screen briefly when a scan occurs
+
+    // Function to briefly flash the screen
     function flashScreen() {
       const flashOverlay = document.getElementById('flash-overlay');
       flashOverlay.style.opacity = "0.8";
@@ -186,19 +222,19 @@
         flashOverlay.style.opacity = "0";
       }, 100);
     }
-    
-    // Copy UPC code to clipboard when button is clicked
+
+    // Copy UPC to clipboard when button is clicked
     document.getElementById('copy-button').addEventListener('click', function() {
       if (scannedUPC) {
         navigator.clipboard.writeText(scannedUPC).then(() => {
           document.getElementById('result').textContent = "Copied UPC: " + scannedUPC;
         }).catch(err => {
-          console.error("Error copying text: ", err);
+          console.error("Error copying text:", err);
         });
       }
     });
-    
-    // Open a Google Images search for the scanned UPC code when button is clicked
+
+    // Open Google Images search for the scanned UPC when button is clicked
     document.getElementById('image-button').addEventListener('click', function() {
       if (scannedUPC) {
         window.open("https://www.google.com/search?tbm=isch&q=" + scannedUPC, '_blank');
