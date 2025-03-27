@@ -96,16 +96,17 @@
     let scannerActive = false;
     let videoStream = null;
     let lastValidScans = [];
-    let requiredMatches = 1; // Lowered for testing
-    const confidenceThreshold = 80; // Lowered threshold for easier locking
+    let requiredMatches = 3; // increased for stability
+    const confidenceThreshold = 90; // require at least 90% confidence before accepting
 
     async function startScanner() {
       if (scannerActive) return;
       scannerActive = true;
       lastValidScans = [];
-      updateConfidence(0);
-      document.getElementById("scanner-container").style.display = "block";
-      
+      updateConfidence(0); // Reset confidence bar
+
+      document.getElementById("scanner-container").style.display = "block"; // Show camera
+
       try {
         videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         document.getElementById("video").srcObject = videoStream;
@@ -114,16 +115,25 @@
         stopScanner();
         return;
       }
-      
+
       Quagga.init({
         inputStream: {
           name: "Live",
           type: "LiveStream",
           target: document.querySelector("#video"),
-          constraints: { width: 1280, height: 720, facingMode: "environment" }
+          constraints: {
+            width: 1280,
+            height: 720,
+            facingMode: "environment"
+          }
         },
-        locator: { patchSize: "medium", halfSample: true },
-        decoder: { readers: ["upc_reader", "upc_e_reader", "ean_reader"] },
+        locator: {
+          patchSize: "medium",
+          halfSample: true  // Enable half sampling for improved performance
+        },
+        decoder: {
+          readers: ["upc_reader", "upc_e_reader", "ean_reader"]
+        },
         locate: true,
         numOfWorkers: 4,
         frequency: 20,
@@ -134,43 +144,45 @@
           return;
         }
         Quagga.start();
-        Quagga.onDetected(onDetectedHandler);
       });
-    }
 
-    function onDetectedHandler(result) {
-      let code = result.codeResult.code;
-      // Calculate an approximate confidence value
-      let confidence = result.codeResult.decodedCodes.reduce((sum, d) => sum + (d.error || 0), 0) / result.codeResult.decodedCodes.length;
-      let normalizedConfidence = Math.max(0, Math.min(100, 100 - (confidence * 100)));
-      
-      console.log("Detected code:", code, "Confidence:", normalizedConfidence);
-      updateConfidence(normalizedConfidence);
-      
-      if (normalizedConfidence < confidenceThreshold) return;
-      if (!code || (code.length !== 12 && code.length !== 8)) return;
-      
-      lastValidScans.push(code);
-      if (lastValidScans.length > requiredMatches) {
-        lastValidScans.shift();
-      }
-      
-      if (lastValidScans.length === requiredMatches && lastValidScans.every(v => v === code)) {
-        document.getElementById("upc").value = code;
-        stopScanner();
-      }
+      Quagga.onDetected(function(result) {
+        let code = result.codeResult.code;
+        let confidence = result.codeResult.decodedCodes.reduce((sum, d) => sum + (d.error || 0), 0) / result.codeResult.decodedCodes.length;
+        let normalizedConfidence = Math.max(0, Math.min(100, 100 - (confidence * 100))); // Normalize to percentage
+
+        updateConfidence(normalizedConfidence); // Update the confidence meter
+
+        // Skip low-confidence detections
+        if (normalizedConfidence < confidenceThreshold) return;
+
+        // Validate barcode length (UPC-A = 12 digits, UPC-E = 8 digits)
+        if (!code || (code.length !== 12 && code.length !== 8)) return;
+
+        // Store last valid scan attempts
+        lastValidScans.push(code);
+        if (lastValidScans.length > requiredMatches) {
+          lastValidScans.shift(); // Keep only the last few
+        }
+
+        // Confirm scan after required consecutive identical reads
+        if (lastValidScans.length === requiredMatches && lastValidScans.every(v => v === code)) {
+          document.getElementById("upc").value = code;
+          stopScanner();
+        }
+      });
     }
 
     function stopScanner() {
       if (scannerActive) {
-        Quagga.offDetected(onDetectedHandler);
         Quagga.stop();
         scannerActive = false;
         if (videoStream) {
-          videoStream.getTracks().forEach(track => track.stop());
+          let tracks = videoStream.getTracks();
+          tracks.forEach(track => track.stop());
         }
-        document.getElementById("scanner-container").style.display = "none";
-        updateConfidence(0);
+        document.getElementById("scanner-container").style.display = "none"; // Hide camera
+        updateConfidence(0); // Reset confidence bar
       }
     }
 
@@ -190,8 +202,9 @@
       document.getElementById("confidence-bar").style.width = value + "%";
     }
 
+    // New function: Open a Google Images search for the scanned UPC.
     function openGoogleImageSearch() {
-      var upc = document.getElementById("upc").value;
+      let upc = document.getElementById("upc").value;
       if (upc) {
         window.open("https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(upc), "_blank");
       } else {
