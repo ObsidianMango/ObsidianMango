@@ -2,202 +2,201 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>UPC Scanner</title>
-  <script src="https://unpkg.com/quagga"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
+      background: #f5f5f5;
       text-align: center;
       margin: 0;
-      background-color: #222;
-      color: white;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 20px;
     }
     #scanner-container {
       position: relative;
       width: 100%;
-      max-width: 500px;
-      height: 300px;
-      margin: auto;
-      overflow: hidden;
-      background: black;
-      display: none;
+      max-width: 640px;
+      margin: 0 auto;
+      border: 2px solid #333;
+      background: #000;
     }
-    video {
+    #video-container {
       width: 100%;
-      height: 100%;
-      object-fit: cover;
+      height: auto;
     }
     #scan-line {
       position: absolute;
-      top: 50%;
       left: 0;
       width: 100%;
-      height: 3px;
+      height: 2px;
       background: red;
-      animation: scan-animation 1s infinite alternate;
+      animation: scan 3s linear infinite;
     }
-    @keyframes scan-animation {
-      from { opacity: 1; }
-      to { opacity: 0.3; }
+    @keyframes scan {
+      0% { top: 0; }
+      100% { top: 100%; }
+    }
+    #confidence-meter {
+      width: 100%;
+      height: 10px;
+      background: #eee;
+      margin-top: 5px;
     }
     #confidence-bar {
-      position: absolute;
-      top: 0;
-      left: 0;
       width: 0%;
-      height: 5px;
-      background: rgba(255, 0, 0, 0.8);
-      transition: width 0.1s ease-in-out;
+      height: 100%;
+      background: green;
     }
-    input {
-      width: 90%;
-      padding: 10px;
-      font-size: 18px;
-      text-align: center;
-      margin: 10px auto;
-      display: block;
-      color: black;
-      background: white;
-      border: none;
-    }
-    button {
+    #upc-result {
+      width: 80%;
       padding: 10px;
       font-size: 16px;
-      margin: 10px;
-      cursor: pointer;
-      background-color: #28a745;
-      color: white;
-      border: none;
-      border-radius: 5px;
+      margin: 10px auto;
+      display: block;
     }
-    button:active {
-      background-color: #218838;
+    .btn {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 5px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-
-  <h2>UPC Scanner</h2>
-
+  <h1>UPC Scanner</h1>
   <div id="scanner-container">
-    <div id="confidence-bar"></div>
-    <video id="video" autoplay playsinline></video>
+    <div id="video-container"></div>
     <div id="scan-line"></div>
   </div>
+  <div id="confidence-meter">
+    <div id="confidence-bar"></div>
+  </div>
+  <input type="text" id="upc-result" placeholder="Scanned UPC" readonly>
+  <div>
+    <button id="copy-button" class="btn">Copy UPC</button>
+    <button id="google-button" class="btn">Google Images</button>
+  </div>
 
-  <input type="text" id="upc" placeholder="UPC will appear here..." readonly>
-
-  <button onclick="startScanner()">Scan</button>
-  <button onclick="copyUPC()">Copy UPC</button>
-  <button onclick="openGoogleImageSearch()">Image Search</button>
-
+  <!-- Include Quagga.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <script>
-    let scannerActive = false;
-    let videoStream = null;
-    let lastValidScans = [];
-    const requiredMatches = 3; // Number of consecutive matching scans required for stability
-    const confidenceThreshold = 90; // Minimum confidence percentage to accept a scan
+    (function() {
+      // Configuration parameters
+      const detectionThreshold = 0.8; // Minimum confidence required
+      const consecutiveRequired = 3;  // Consecutive detections required to lock in UPC
+      let consecutiveCount = 0;
+      let lastDetectedCode = "";
+      let locked = false;
 
-    async function startScanner() {
-      if (scannerActive) return;
-      scannerActive = true;
-      lastValidScans = [];
-      updateConfidence(0);
-      document.getElementById("scanner-container").style.display = "block";
+      // Initialize the scanner using Quagga.js
+      function initScanner() {
+        Quagga.init({
+          inputStream: {
+            type: "LiveStream",
+            constraints: {
+              width: { min: 640 },
+              height: { min: 480 },
+              facingMode: "environment"
+            },
+            target: document.querySelector("#video-container")
+          },
+          decoder: {
+            // Support both UPC-A and UPC-E
+            readers: ["upc_reader", "upc_e_reader"]
+          },
+          locate: true
+        }, function(err) {
+          if (err) {
+            console.error(err);
+            return;
+          }
+          Quagga.start();
+        });
 
-      try {
-        videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        document.getElementById("video").srcObject = videoStream;
-      } catch (err) {
-        alert("Camera access denied or unavailable.");
-        stopScanner();
-        return;
+        // Use onProcessed for real-time visual feedback on confidence
+        Quagga.onProcessed(function(result) {
+          if (result && result.codeResult) {
+            let score = result.codeResult.score || 0;
+            updateConfidence(score);
+          } else {
+            updateConfidence(0);
+          }
+        });
+
+        // Handle barcode detections
+        Quagga.onDetected(handleDetection);
       }
 
-      Quagga.init({
-        inputStream: {
-          name: "Live",
-          type: "LiveStream",
-          target: document.querySelector("#video"),
-          constraints: { width: 1280, height: 720, facingMode: "environment" }
-        },
-        locator: { patchSize: "medium", halfSample: true },
-        decoder: { readers: ["upc_reader", "upc_e_reader", "ean_reader"] },
-        locate: true,
-        numOfWorkers: 4,
-        frequency: 20,
-      }, function(err) {
-        if (err) {
-          console.error(err);
-          stopScanner();
-          return;
-        }
-        Quagga.start();
-      });
+      // Handle detected barcodes with consecutive matching logic
+      function handleDetection(result) {
+        if (locked || !result.codeResult) return;
+        let code = result.codeResult.code;
+        let score = result.codeResult.score || 0;
 
-      Quagga.onDetected(onDetectedHandler);
-    }
-
-    function onDetectedHandler(result) {
-      let code = result.codeResult.code;
-      // Calculate an approximate confidence value:
-      let avgError = result.codeResult.decodedCodes.reduce((sum, d) => sum + (d.error || 0), 0) / result.codeResult.decodedCodes.length;
-      let normalizedConfidence = Math.max(0, Math.min(100, 100 - (avgError * 100)));
-      updateConfidence(normalizedConfidence);
-
-      if (normalizedConfidence < confidenceThreshold) return;
-      if (!code || (code.length !== 12 && code.length !== 8)) return;
-
-      lastValidScans.push(code);
-      if (lastValidScans.length > requiredMatches) {
-        lastValidScans.shift();
-      }
-
-      if (lastValidScans.length === requiredMatches && lastValidScans.every(v => v === code)) {
-        document.getElementById("upc").value = code;
-        stopScanner();
-      }
-    }
-
-    function stopScanner() {
-      if (scannerActive) {
-        Quagga.offDetected(onDetectedHandler);
-        Quagga.stop();
-        scannerActive = false;
-        if (videoStream) {
-          videoStream.getTracks().forEach(track => track.stop());
-        }
-        document.getElementById("scanner-container").style.display = "none";
-        updateConfidence(0);
-      }
-    }
-
-    async function copyUPC() {
-      let upcText = document.getElementById("upc").value;
-      if (upcText) {
-        try {
-          await navigator.clipboard.writeText(upcText);
-          alert("Copied: " + upcText);
-        } catch (err) {
-          console.error("Copy failed:", err);
+        if (score >= detectionThreshold) {
+          if (code === lastDetectedCode) {
+            consecutiveCount++;
+          } else {
+            consecutiveCount = 1;
+            lastDetectedCode = code;
+          }
+          if (consecutiveCount >= consecutiveRequired) {
+            lockUPC(code);
+          }
+        } else {
+          consecutiveCount = 0;
+          lastDetectedCode = "";
         }
       }
-    }
 
-    function updateConfidence(value) {
-      document.getElementById("confidence-bar").style.width = value + "%";
-    }
-
-    function openGoogleImageSearch() {
-      let upc = document.getElementById("upc").value;
-      if (upc) {
-        window.open("https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(upc), "_blank");
-      } else {
-        alert("No UPC scanned yet.");
+      // Update the confidence meter UI
+      function updateConfidence(score) {
+        let percentage = Math.min(100, Math.floor(score * 100));
+        document.getElementById("confidence-bar").style.width = percentage + "%";
       }
-    }
+
+      // Lock in the UPC code and display it in the input field
+      function lockUPC(code) {
+        locked = true;
+        document.getElementById("upc-result").value = code;
+        // Optionally, you can stop the scanner if desired:
+        // Quagga.stop();
+      }
+
+      // Copy the UPC to the clipboard
+      function copyUPC() {
+        let upc = document.getElementById("upc-result").value;
+        if (!upc) return;
+        navigator.clipboard.writeText(upc)
+          .then(() => alert("UPC copied to clipboard!"))
+          .catch(err => alert("Error copying UPC: " + err));
+      }
+
+      // Open a Google Images search for the UPC in a new tab
+      function googleSearchUPC() {
+        let upc = document.getElementById("upc-result").value;
+        if (!upc) return;
+        let url = "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(upc);
+        window.open(url, "_blank");
+      }
+
+      // Initialize event listeners for buttons
+      function initEvents() {
+        document.getElementById("copy-button").addEventListener("click", copyUPC);
+        document.getElementById("google-button").addEventListener("click", googleSearchUPC);
+      }
+
+      // Start the application
+      function startApp() {
+        initScanner();
+        initEvents();
+      }
+
+      // Kick off the app on page load
+      document.addEventListener("DOMContentLoaded", startApp);
+    })();
   </script>
-
 </body>
 </html>
