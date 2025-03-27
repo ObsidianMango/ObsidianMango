@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UPC Scanner with Auto-Detection (Lower Threshold)</title>
+  <title>UPC Scanner with Stable Consecutive Detection</title>
   <!-- Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
@@ -102,7 +102,7 @@
 <body>
   <div id="flash-overlay"></div>
   <div class="container text-center">
-    <h1>UPC Scanner with Auto-Detection</h1>
+    <h1>UPC Scanner with Stable Detection</h1>
     <div id="video-container">
       <div id="interactive" class="viewport"></div>
       <div id="red-line"></div>
@@ -126,22 +126,9 @@
   <script>
     let scannedUPC = null;
     let scanningActive = true;
-    let detectionBuffer = []; // stores recent detected codes
-
-    // Compute the mode (most frequent value) in an array
-    function computeMode(arr) {
-      const counts = {};
-      let maxCount = 0;
-      let mode = null;
-      arr.forEach(function(code) {
-        counts[code] = (counts[code] || 0) + 1;
-        if (counts[code] > maxCount) {
-          maxCount = counts[code];
-          mode = code;
-        }
-      });
-      return { mode, count: maxCount };
-    }
+    let lastStableCode = null;
+    let stableCount = 0;
+    const stableThreshold = 3; // Change this number to require more consecutive detections
 
     // Produce a brief beep using the Web Audio API
     function beep() {
@@ -158,7 +145,7 @@
       }
     }
 
-    // Flash the screen briefly
+    // Flash the screen briefly for feedback
     function flashScreen() {
       const flashOverlay = document.getElementById('flash-overlay');
       flashOverlay.style.opacity = "0.8";
@@ -167,9 +154,11 @@
       }, 100);
     }
 
-    // Start scanning: clear buffer, update UI, and start Quagga
+    // Start scanning: reset variables, update UI, and start Quagga
     function startScanning() {
-      detectionBuffer = [];
+      lastStableCode = null;
+      stableCount = 0;
+      scannedUPC = null;
       document.getElementById('result').textContent = "Scanning...";
       document.getElementById('status').textContent = "Please hold your barcode steady.";
       document.getElementById('copy-button').disabled = true;
@@ -179,21 +168,18 @@
       Quagga.start();
     }
 
-    // Stop scanning and compute the mode from the detection buffer
+    // Stop scanning, lock in the detected code, and update the UI
     function stopScanning() {
       Quagga.stop();
       scanningActive = false;
-      const { mode, count } = computeMode(detectionBuffer);
-      if (mode) {
-        scannedUPC = mode;
-        document.getElementById('result').textContent = "Detected UPC: " + mode;
-        document.getElementById('status').textContent = "Barcode locked in (" + count + " detections).";
-        document.getElementById('copy-button').disabled = false;
-        document.getElementById('image-button').disabled = false;
-      } else {
-        document.getElementById('result').textContent = "No stable barcode detected.";
-      }
+      scannedUPC = lastStableCode;
+      document.getElementById('result').textContent = "Detected UPC: " + scannedUPC;
+      document.getElementById('status').textContent = "Barcode locked in (" + stableCount + " consecutive detections).";
+      document.getElementById('copy-button').disabled = false;
+      document.getElementById('image-button').disabled = false;
       document.getElementById('toggle-scan-button').textContent = "Start Scanning";
+      flashScreen();
+      beep();
     }
 
     document.addEventListener("DOMContentLoaded", function() {
@@ -210,7 +196,7 @@
             }
           },
           decoder: {
-            // Use multiple readers for better reliability
+            // Use multiple readers for improved reliability
             readers: ["upc_reader", "ean_reader", "upc_e_reader", "code_128_reader"]
           },
           locate: true,
@@ -226,7 +212,7 @@
           Quagga.start();
         });
         
-        // Log detailed information on every processed frame (for debugging)
+        // Process each frame for debugging and visual feedback
         Quagga.onProcessed(function(result) {
           console.log("onProcessed:", result);
           const drawingCtx = Quagga.canvas.ctx.overlay,
@@ -247,12 +233,12 @@
           }
         });
         
-        // Process detected barcodes and add them to the buffer
+        // Process detected barcodes
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
           console.log("Detected code:", code);
           
-          // Update confidence bar for reference
+          // Update the confidence bar for reference
           const decodedCodes = result.codeResult.decodedCodes;
           let sumError = 0, cnt = 0;
           decodedCodes.forEach(function(dc) {
@@ -269,18 +255,20 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // If scanning is active, save the detected code in the buffer.
-          // Limit the buffer to the most recent 20 detections.
+          // If scanning is active, check if this code is the same as the last one.
           if (scanningActive) {
-            detectionBuffer.push(code);
-            if (detectionBuffer.length > 20) {
-              detectionBuffer.shift();
+            if (code === lastStableCode) {
+              stableCount++;
+            } else {
+              lastStableCode = code;
+              stableCount = 1;
             }
-            const { mode, count } = computeMode(detectionBuffer);
-            console.log("Buffer mode:", mode, "with count:", count, "buffer length:", detectionBuffer.length);
-            // If we have at least 5 detections and the mode appears at least 3 times, auto-stop scanning.
-            if (detectionBuffer.length >= 5 && count >= 3) {
-              console.log("Stable detection achieved. Auto-stopping scanning with mode:", mode);
+            console.log("Stable count for", code, "=", stableCount);
+            // Update the result display with current code and stable count.
+            document.getElementById('result').textContent = "Current UPC: " + code + " (stable count: " + stableCount + ")";
+            // If the same code has been detected consecutively enough times, stop scanning.
+            if (stableCount >= stableThreshold) {
+              console.log("Stable detection achieved. Auto-stopping scanning with code:", code);
               stopScanning();
             }
           }
@@ -289,7 +277,7 @@
         alert("getUserMedia is not supported on your browser!");
       }
       
-      // Toggle scanning on/off when the button is clicked
+      // Toggle scanning when the button is clicked.
       document.getElementById('toggle-scan-button').addEventListener('click', function() {
         if (scanningActive) {
           stopScanning();
@@ -299,7 +287,7 @@
       });
     });
     
-    // Copy the scanned UPC to the clipboard when the Copy button is clicked
+    // Copy the finalized UPC to the clipboard when the Copy button is clicked.
     document.getElementById('copy-button').addEventListener('click', function() {
       if (scannedUPC) {
         navigator.clipboard.writeText(scannedUPC).then(() => {
@@ -310,7 +298,7 @@
       }
     });
     
-    // Open a Google Images search for the scanned UPC when the Image Search button is clicked
+    // Open a Google Images search for the finalized UPC when the Image Search button is clicked.
     document.getElementById('image-button').addEventListener('click', function() {
       if (scannedUPC) {
         window.open("https://www.google.com/search?tbm=isch&q=" + scannedUPC, '_blank');
@@ -328,7 +316,7 @@
         oldLog.apply(console, args);
         const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
         logDiv.innerHTML += `<div>${message}</div>`;
-        // Auto-scroll to always show the latest log
+        // Auto-scroll to always show the latest log entry.
         logDiv.scrollTop = logDiv.scrollHeight;
       };
     })();
