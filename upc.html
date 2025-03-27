@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UPC Scanner with Stable Consecutive Detection</title>
+  <title>UPC Scanner with Sliding Window Auto-Detection</title>
   <!-- Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
@@ -102,7 +102,7 @@
 <body>
   <div id="flash-overlay"></div>
   <div class="container text-center">
-    <h1>UPC Scanner with Stable Detection</h1>
+    <h1>UPC Scanner with Auto-Detection</h1>
     <div id="video-container">
       <div id="interactive" class="viewport"></div>
       <div id="red-line"></div>
@@ -126,9 +126,24 @@
   <script>
     let scannedUPC = null;
     let scanningActive = true;
-    let lastStableCode = "";
-    let stableCount = 0;
-    const stableThreshold = 2; // Lower threshold: if same code is detected 2 times in a row, finalize
+    let detectionBuffer = []; // Sliding window of recent detected codes
+    const windowSize = 5;      // Number of recent detections to keep
+    const countThreshold = 3;  // Finalize if the mode appears at least 3 times
+
+    // Compute the mode (most frequent value) in an array
+    function computeMode(arr) {
+      const counts = {};
+      let maxCount = 0;
+      let mode = null;
+      arr.forEach(function(code) {
+        counts[code] = (counts[code] || 0) + 1;
+        if (counts[code] > maxCount) {
+          maxCount = counts[code];
+          mode = code;
+        }
+      });
+      return { mode, count: maxCount };
+    }
 
     // Produce a brief beep using the Web Audio API
     function beep() {
@@ -154,11 +169,9 @@
       }, 100);
     }
 
-    // Start scanning: reset variables, update UI, and start Quagga
+    // Start scanning: clear buffer, update UI, and start Quagga
     function startScanning() {
-      lastStableCode = "";
-      stableCount = 0;
-      scannedUPC = null;
+      detectionBuffer = [];
       document.getElementById('result').textContent = "Scanning...";
       document.getElementById('status').textContent = "Please hold your barcode steady.";
       document.getElementById('copy-button').disabled = true;
@@ -168,13 +181,13 @@
       Quagga.start();
     }
 
-    // Stop scanning, lock in the detected code, and update the UI
+    // Stop scanning and lock in the finalized code
     function stopScanning() {
       Quagga.stop();
       scanningActive = false;
-      scannedUPC = lastStableCode;
+      scannedUPC = computeMode(detectionBuffer).mode;
       document.getElementById('result').textContent = "Detected UPC: " + scannedUPC;
-      document.getElementById('status').textContent = "Barcode locked in (stable count: " + stableCount + ").";
+      document.getElementById('status').textContent = "Barcode locked in.";
       document.getElementById('copy-button').disabled = false;
       document.getElementById('image-button').disabled = false;
       document.getElementById('toggle-scan-button').textContent = "Start Scanning";
@@ -233,7 +246,7 @@
           }
         });
         
-        // Process detected barcodes
+        // Process detected barcodes and use a sliding window to finalize the code
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
           console.log("Detected code:", code);
@@ -255,19 +268,18 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // If scanning is active, check for consecutive stability.
+          // If scanning is active, add this code to the sliding window buffer
           if (scanningActive) {
-            if (code === lastStableCode) {
-              stableCount++;
-            } else {
-              lastStableCode = code;
-              stableCount = 1;
+            detectionBuffer.push(code);
+            if (detectionBuffer.length > windowSize) {
+              detectionBuffer.shift();
             }
-            console.log("Stable count for", code, "=", stableCount);
-            document.getElementById('result').textContent = "Current UPC: " + code + " (stable count: " + stableCount + ")";
-            // If the same code is detected consecutively enough times, finalize it.
-            if (stableCount >= stableThreshold) {
-              console.log("Stable detection achieved. Finalizing code:", code);
+            const { mode, count } = computeMode(detectionBuffer);
+            console.log("Buffer mode:", mode, "count:", count, "buffer length:", detectionBuffer.length);
+            document.getElementById('result').textContent = "Current mode: " + mode + " (" + count + "/" + detectionBuffer.length + ")";
+            // Finalize if the window is full and the mode appears at least countThreshold times
+            if (detectionBuffer.length >= windowSize && count >= countThreshold) {
+              console.log("Stable detection achieved. Finalizing code:", mode);
               stopScanning();
             }
           }
