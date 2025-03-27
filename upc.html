@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>UPC Scanner</title>
-  <!-- Bootstrap for basic styling -->
+  <!-- Bootstrap for basic responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
     body {
@@ -13,7 +13,6 @@
       font-family: sans-serif;
       margin: 0;
       padding: 0;
-      overflow-x: hidden;
     }
     .container {
       padding: 20px;
@@ -21,24 +20,30 @@
     h1 {
       margin-bottom: 20px;
     }
-    /* Video container defaults */
+    /* Container to lock preview to a 16:9 ratio */
     #video-container {
       position: relative;
       width: 100%;
       max-width: 640px;
       margin: auto;
       border: 2px solid #444;
-      overflow: hidden;
-      cursor: pointer;
-      transition: max-width 0.3s ease;
+      background: #000;
+      /* Modern browsers: enforce aspect ratio */
+      aspect-ratio: 16/9;
     }
-    /* When toggled, make camera area smaller */
-    #video-container.small {
-      max-width: 320px;
+    /* Fallback for browsers that don’t support aspect-ratio */
+    #video-container::before {
+      content: "";
+      display: block;
+      padding-top: 56.25%; /* 16:9 ratio */
     }
+    /* Make the interactive area fill the container */
     #interactive.viewport {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
-      height: auto;
+      height: 100%;
     }
     /* Red scan line overlay */
     #red-line {
@@ -51,7 +56,7 @@
     }
     #result {
       font-size: 1.3em;
-      margin-top: 10px;
+      margin-top: 15px;
       word-wrap: break-word;
     }
     /* Confidence meter styling */
@@ -69,7 +74,7 @@
       margin-top: 15px;
       margin-right: 5px;
     }
-    /* Flash overlay styles */
+    /* Flash overlay styling */
     #flash-overlay {
       position: fixed;
       top: 0;
@@ -82,25 +87,28 @@
       transition: opacity 0.3s ease-out;
       z-index: 1000;
     }
+    /* Ensure the control section stays visible */
+    .controls {
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
   <div id="flash-overlay"></div>
   <div class="container text-center">
     <h1>UPC Scanner</h1>
-    <p class="small mb-3">Tap the camera preview to toggle its size.</p>
     <div id="video-container">
       <div id="interactive" class="viewport"></div>
       <div id="red-line"></div>
     </div>
-    <div id="result" class="mt-3">Scanning...</div>
+    <div id="result">Scanning...</div>
     <div class="progress">
-      <div id="confidence-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+      <div id="confidence-bar" class="progress-bar" role="progressbar" style="width: 0%;" 
+           aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
         0% Confidence
       </div>
     </div>
-    <!-- New buttons: Copy and Image Search -->
-    <div class="mt-3">
+    <div class="controls">
       <button id="copy-button" class="btn btn-secondary btn-custom" disabled>Copy UPC</button>
       <button id="image-button" class="btn btn-primary btn-custom" disabled>Image Search</button>
     </div>
@@ -113,13 +121,6 @@
     let lastResult = null;
     
     document.addEventListener("DOMContentLoaded", function() {
-      // Toggle camera preview size on click.
-      const videoContainer = document.getElementById('video-container');
-      videoContainer.addEventListener('click', function() {
-        videoContainer.classList.toggle('small');
-      });
-      
-      // Check if camera access is supported
       if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
         console.log("getUserMedia is supported");
         Quagga.init({
@@ -130,7 +131,6 @@
             constraints: {
               width: { min: 640 },
               height: { min: 480 },
-              // Set an ideal aspect ratio (16:9)
               aspectRatio: { ideal: 1.7777777778 },
               facingMode: "environment"
             }
@@ -149,18 +149,17 @@
           Quagga.start();
         });
         
-        // Listen for barcode detection
+        // Listen for detected barcodes
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
           console.log("Detected code:", code);
           
-          // Avoid processing duplicate results too quickly
           if (lastResult === code) return;
           lastResult = code;
           scannedUPC = code;
           document.getElementById('result').textContent = "Detected UPC: " + code;
           
-          // Compute an approximate confidence based on error values.
+          // Calculate a rough confidence from decoded errors (lower error means higher confidence)
           const decodedCodes = result.codeResult.decodedCodes;
           let sumError = 0, count = 0;
           decodedCodes.forEach(function(dc) {
@@ -176,10 +175,9 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // Flash the screen to indicate a successful scan
           flashScreen();
           
-          // Enable buttons after successful detection
+          // Enable buttons once a valid code is detected
           document.getElementById('copy-button').disabled = false;
           document.getElementById('image-button').disabled = false;
         });
@@ -188,7 +186,7 @@
       }
     });
     
-    // Function for a quick flash effect
+    // Flash the screen briefly when a scan occurs
     function flashScreen() {
       const flashOverlay = document.getElementById('flash-overlay');
       flashOverlay.style.opacity = "0.8";
@@ -197,7 +195,7 @@
       }, 100);
     }
     
-    // Copy button: copy the UPC code to clipboard
+    // Copy UPC code to clipboard when button is clicked
     document.getElementById('copy-button').addEventListener('click', function() {
       if (scannedUPC) {
         navigator.clipboard.writeText(scannedUPC).then(() => {
@@ -208,7 +206,7 @@
       }
     });
     
-    // Image button: open a Google Images search for the UPC code
+    // Open a Google Images search for the scanned UPC code
     document.getElementById('image-button').addEventListener('click', function() {
       if (scannedUPC) {
         window.open("https://www.google.com/search?tbm=isch&q=" + scannedUPC, '_blank');
