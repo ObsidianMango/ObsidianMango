@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>UPC Scanner</title>
-  <!-- Using Bootstrap for simple responsive styling -->
+  <!-- Using Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
     body {
@@ -13,6 +13,7 @@
       font-family: sans-serif;
       margin: 0;
       padding: 0;
+      overflow-x: hidden;
     }
     .container {
       padding: 20px;
@@ -20,20 +21,19 @@
     h1 {
       margin-bottom: 20px;
     }
-    /* Video container setup */
     #video-container {
       position: relative;
       width: 100%;
       max-width: 640px;
       margin: auto;
       border: 2px solid #444;
+      overflow: hidden;
     }
-    /* QuaggaJS will render the live stream in this area */
     #interactive.viewport {
       width: 100%;
       height: auto;
     }
-    /* Red line overlay to indicate scanning */
+    /* Red scan line overlay */
     #red-line {
       position: absolute;
       top: 50%;
@@ -47,7 +47,6 @@
       margin-top: 10px;
       word-wrap: break-word;
     }
-    /* Confidence meter styling */
     .progress {
       background-color: #444;
       height: 20px;
@@ -57,41 +56,51 @@
       background-color: #28a745;
       font-weight: bold;
     }
-    /* Button styling */
     .btn-custom {
       margin-top: 15px;
+    }
+    /* Flash overlay styles */
+    #flash-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: white;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-out;
+      z-index: 1000;
     }
   </style>
 </head>
 <body>
+  <div id="flash-overlay"></div>
   <div class="container text-center">
     <h1>UPC Scanner</h1>
     <div id="video-container">
-      <!-- QuaggaJS will use this div to place the live stream preview -->
       <div id="interactive" class="viewport"></div>
-      <!-- Red scan line overlay -->
       <div id="red-line"></div>
     </div>
     <div id="result">Scanning...</div>
-    <!-- Confidence meter -->
     <div class="progress">
       <div id="confidence-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
         0% Confidence
       </div>
     </div>
-    <!-- Button to search Google Images using the detected UPC -->
     <button id="search-button" class="btn btn-primary btn-custom" disabled>Search Google Images</button>
   </div>
   
-  <!-- Include the open-source QuaggaJS library from a CDN -->
+  <!-- Include the QuaggaJS library -->
   <script src="https://unpkg.com/quagga/dist/quagga.min.js"></script>
   <script>
     let scannedUPC = null;
+    let lastResult = null;
     
     document.addEventListener("DOMContentLoaded", function() {
-      // Check for camera access
+      // Check if camera access is supported
       if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
-        // Initialize Quagga with settings for live video input and UPC/EAN scanning
+        console.log("getUserMedia is supported");
         Quagga.init({
           inputStream: {
             name: "Live",
@@ -100,7 +109,9 @@
             constraints: {
               width: { min: 640 },
               height: { min: 480 },
-              facingMode: "environment" // Use rear camera if available
+              // Set an ideal aspect ratio (16:9)
+              aspectRatio: { ideal: 1.7777777778 },
+              facingMode: "environment"
             }
           },
           decoder: {
@@ -109,20 +120,28 @@
           locate: true
         }, function(err) {
           if (err) {
-            console.error(err);
+            console.error("Quagga init error:", err);
+            document.getElementById('result').textContent = "Error initializing scanner.";
             return;
           }
+          console.log("Quagga initialized successfully");
           Quagga.start();
         });
         
-        // Listen for detected barcodes
+        // Barcode detection event
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
+          console.log("Detected code:", code);
+          
+          // Avoid processing duplicate results in rapid succession
+          if (lastResult === code) {
+            return;
+          }
+          lastResult = code;
           scannedUPC = code;
           document.getElementById('result').textContent = "Detected UPC: " + code;
           
-          // Calculate an approximate confidence based on decoded errors.
-          // (Lower error indicates higher confidence.)
+          // Calculate confidence using decoded errors (lower error = higher confidence)
           const decodedCodes = result.codeResult.decodedCodes;
           let sumError = 0, count = 0;
           decodedCodes.forEach(function(dc) {
@@ -132,16 +151,17 @@
             }
           });
           const avgError = count ? sumError / count : 0;
-          // Here we assume an error range [0, 0.5]. Adjust the scaling as needed.
           const confidence = Math.round(Math.max(0, Math.min(100, (1 - avgError/0.5) * 100)));
           
-          // Update the confidence meter (using Bootstrap progress bar)
           const bar = document.getElementById('confidence-bar');
           bar.style.width = confidence + "%";
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // Enable the search button once a code is detected
+          // Flash the screen on detection to indicate a scan event
+          flashScreen();
+          
+          // Enable the search button after a successful scan
           document.getElementById('search-button').disabled = false;
         });
       } else {
@@ -149,7 +169,16 @@
       }
     });
     
-    // When the search button is clicked, open a new tab with a Google Images search for the UPC code.
+    // Function to create a quick flash effect
+    function flashScreen() {
+      const flashOverlay = document.getElementById('flash-overlay');
+      flashOverlay.style.opacity = "0.8";
+      setTimeout(() => {
+        flashOverlay.style.opacity = "0";
+      }, 100); // Flash duration in milliseconds
+    }
+    
+    // Button to search Google Images with the detected UPC
     document.getElementById('search-button').addEventListener('click', function() {
       if (scannedUPC) {
         window.open("https://www.google.com/search?tbm=isch&q=" + scannedUPC, '_blank');
