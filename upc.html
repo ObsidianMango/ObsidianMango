@@ -38,7 +38,7 @@
       width: 100%;
       height: 100%;
     }
-    /* Red scan line overlay */
+    /* Red scan line overlay for visual guidance */
     #red-line {
       position: absolute;
       top: 50%;
@@ -56,7 +56,7 @@
       margin-top: 10px;
       font-size: 1em;
     }
-    /* Confidence meter */
+    /* Confidence meter styling */
     .progress {
       margin-top: 15px;
       background: #444;
@@ -71,7 +71,7 @@
       margin-top: 15px;
       margin-right: 5px;
     }
-    /* Flash overlay */
+    /* Flash overlay for detection feedback */
     #flash-overlay {
       position: fixed;
       top: 0;
@@ -122,14 +122,23 @@
         oscillator.connect(ctx.destination);
         oscillator.start();
         oscillator.stop(ctx.currentTime + 0.1);
-      } catch(e) {
+      } catch (e) {
         console.log("Beep not supported:", e);
       }
     }
 
+    // Flash the screen briefly when a scan occurs
+    function flashScreen() {
+      const flashOverlay = document.getElementById('flash-overlay');
+      flashOverlay.style.opacity = "0.8";
+      setTimeout(() => {
+        flashOverlay.style.opacity = "0";
+      }, 100);
+    }
+
     document.addEventListener("DOMContentLoaded", function() {
       if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
-        // Initialize Quagga with fixed preview dimensions
+        // Initialize Quagga with fixed preview dimensions and additional readers
         Quagga.init({
           inputStream: {
             name: "Live",
@@ -142,49 +151,50 @@
             }
           },
           decoder: {
-            readers: ["upc_reader", "ean_reader"]
+            readers: ["upc_reader", "ean_reader", "code_128_reader"]
           },
-          locate: true
+          locate: true,
+          numOfWorkers: 2
         }, function(err) {
           if (err) {
             console.error("Quagga init error:", err);
             document.getElementById('result').textContent = "Error initializing scanner.";
             return;
           }
+          console.log("Quagga initialized successfully");
           Quagga.start();
         });
 
-        // Use onProcessed to provide continuous visual feedback
+        // Draw visual feedback (bounding boxes) on every processed frame
         Quagga.onProcessed(function(result) {
-          var drawingCtx = Quagga.canvas.ctx.overlay,
-              drawingCanvas = Quagga.canvas.dom.overlay;
+          const drawingCtx = Quagga.canvas.ctx.overlay,
+                drawingCanvas = Quagga.canvas.dom.overlay;
           if (result) {
             if (result.boxes) {
               drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
-              result.boxes.filter(function(box) {
-                return box !== result.box;
-              }).forEach(function(box) {
-                Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
+              result.boxes.filter(box => box !== result.box).forEach(box => {
+                Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, drawingCtx, { color: "green", lineWidth: 2 });
               });
             }
             if (result.box) {
-              Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "#00F", lineWidth: 2});
+              Quagga.ImageDebug.drawPath(result.box, { x: 0, y: 1 }, drawingCtx, { color: "#00F", lineWidth: 2 });
             }
             if (result.codeResult && result.codeResult.code) {
-              Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, drawingCtx, {color: 'red', lineWidth: 3});
+              Quagga.ImageDebug.drawPath(result.line, { x: 'x', y: 'y' }, drawingCtx, { color: 'red', lineWidth: 3 });
             }
           }
         });
 
-        // onDetected provides feedback when a barcode is successfully scanned
+        // Process detected barcodes
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
+          // Prevent duplicate detections in rapid succession
           if (lastResult === code) return;
           lastResult = code;
           scannedUPC = code;
           document.getElementById('result').textContent = "Detected UPC: " + code;
           
-          // Calculate approximate confidence based on error values
+          // Calculate an approximate confidence based on error values (lower error = higher confidence)
           const decodedCodes = result.codeResult.decodedCodes;
           let sumError = 0, count = 0;
           decodedCodes.forEach(function(dc) {
@@ -200,12 +210,12 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // Provide immediate user feedback: flash screen and beep
+          // Provide immediate feedback that a barcode was detected
           flashScreen();
           beep();
           document.getElementById('status').textContent = "Barcode detected!";
           
-          // Enable buttons once a valid code is scanned
+          // Enable the Copy and Image Search buttons
           document.getElementById('copy-button').disabled = false;
           document.getElementById('image-button').disabled = false;
         });
@@ -214,16 +224,7 @@
       }
     });
 
-    // Function to briefly flash the screen
-    function flashScreen() {
-      const flashOverlay = document.getElementById('flash-overlay');
-      flashOverlay.style.opacity = "0.8";
-      setTimeout(() => {
-        flashOverlay.style.opacity = "0";
-      }, 100);
-    }
-
-    // Copy UPC to clipboard when button is clicked
+    // Copy the scanned UPC to the clipboard when the Copy button is clicked
     document.getElementById('copy-button').addEventListener('click', function() {
       if (scannedUPC) {
         navigator.clipboard.writeText(scannedUPC).then(() => {
@@ -234,7 +235,7 @@
       }
     });
 
-    // Open Google Images search for the scanned UPC when button is clicked
+    // Open a Google Images search for the scanned UPC when the Image Search button is clicked
     document.getElementById('image-button').addEventListener('click', function() {
       if (scannedUPC) {
         window.open("https://www.google.com/search?tbm=isch&q=" + scannedUPC, '_blank');
