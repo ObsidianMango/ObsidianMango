@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UPC Scanner with Toggle & Mode Selection</title>
+  <title>UPC Scanner with Auto-Detection (Lower Threshold)</title>
   <!-- Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
@@ -102,7 +102,7 @@
 <body>
   <div id="flash-overlay"></div>
   <div class="container text-center">
-    <h1>UPC Scanner with Toggle & Mode Selection</h1>
+    <h1>UPC Scanner with Auto-Detection</h1>
     <div id="video-container">
       <div id="interactive" class="viewport"></div>
       <div id="red-line"></div>
@@ -126,9 +126,9 @@
   <script>
     let scannedUPC = null;
     let scanningActive = true;
-    let detectionBuffer = []; // stores all detected codes
+    let detectionBuffer = []; // stores recent detected codes
 
-    // Function to compute the mode (most frequent value) in an array
+    // Compute the mode (most frequent value) in an array
     function computeMode(arr) {
       const counts = {};
       let maxCount = 0;
@@ -158,7 +158,7 @@
       }
     }
 
-    // Function to briefly flash the screen
+    // Flash the screen briefly
     function flashScreen() {
       const flashOverlay = document.getElementById('flash-overlay');
       flashOverlay.style.opacity = "0.8";
@@ -167,7 +167,7 @@
       }, 100);
     }
 
-    // Start Quagga scanning
+    // Start scanning: clear buffer, update UI, and start Quagga
     function startScanning() {
       detectionBuffer = [];
       document.getElementById('result').textContent = "Scanning...";
@@ -179,7 +179,7 @@
       Quagga.start();
     }
 
-    // Stop scanning and compute the mode from detectionBuffer
+    // Stop scanning and compute the mode from the detection buffer
     function stopScanning() {
       Quagga.stop();
       scanningActive = false;
@@ -210,7 +210,7 @@
             }
           },
           decoder: {
-            // Additional readers to improve reliability
+            // Use multiple readers for better reliability
             readers: ["upc_reader", "ean_reader", "upc_e_reader", "code_128_reader"]
           },
           locate: true,
@@ -247,20 +247,21 @@
           }
         });
         
-        // Process detected barcodes and store them in the detectionBuffer
+        // Process detected barcodes and add them to the buffer
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
           console.log("Detected code:", code);
-          // Update confidence bar (for reference)
+          
+          // Update confidence bar for reference
           const decodedCodes = result.codeResult.decodedCodes;
-          let sumError = 0, count = 0;
+          let sumError = 0, cnt = 0;
           decodedCodes.forEach(function(dc) {
             if (typeof dc.error !== "undefined") {
               sumError += dc.error;
-              count++;
+              cnt++;
             }
           });
-          const avgError = count ? sumError / count : 0;
+          const avgError = cnt ? sumError / cnt : 0;
           const confidence = Math.round(Math.max(0, Math.min(100, (1 - avgError / 0.5) * 100)));
           console.log("Calculated confidence:", confidence);
           const bar = document.getElementById('confidence-bar');
@@ -268,9 +269,20 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // If scanning is active, save the detected code
+          // If scanning is active, save the detected code in the buffer.
+          // Limit the buffer to the most recent 20 detections.
           if (scanningActive) {
             detectionBuffer.push(code);
+            if (detectionBuffer.length > 20) {
+              detectionBuffer.shift();
+            }
+            const { mode, count } = computeMode(detectionBuffer);
+            console.log("Buffer mode:", mode, "with count:", count, "buffer length:", detectionBuffer.length);
+            // If we have at least 5 detections and the mode appears at least 3 times, auto-stop scanning.
+            if (detectionBuffer.length >= 5 && count >= 3) {
+              console.log("Stable detection achieved. Auto-stopping scanning with mode:", mode);
+              stopScanning();
+            }
           }
         });
       } else {
