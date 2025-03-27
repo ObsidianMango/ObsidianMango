@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Enhanced UPC Scanner Debug with On-Page Logging</title>
+  <title>Enhanced UPC Scanner Debug with Threshold</title>
   <!-- Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
@@ -123,7 +123,8 @@
   <script src="https://unpkg.com/quagga/dist/quagga.min.js"></script>
   <script>
     let scannedUPC = null;
-    let lastResult = null;
+    // Define a threshold (0–100) for accepting a detected barcode.
+    const acceptedConfidence = 60;
     
     // Produce a brief beep using the Web Audio API
     function beep() {
@@ -205,10 +206,6 @@
           console.log("onDetected result:", result);
           const code = result.codeResult.code;
           console.log("Detected code:", code);
-          if (lastResult === code) return;
-          lastResult = code;
-          scannedUPC = code;
-          document.getElementById('result').textContent = "Detected UPC: " + code;
           
           // Calculate approximate confidence using error values
           const decodedCodes = result.codeResult.decodedCodes;
@@ -221,19 +218,24 @@
           });
           const avgError = count ? sumError / count : 0;
           const confidence = Math.round(Math.max(0, Math.min(100, (1 - avgError / 0.5) * 100)));
+          console.log("Calculated confidence:", confidence);
           const bar = document.getElementById('confidence-bar');
           bar.style.width = confidence + "%";
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // Provide immediate feedback
-          flashScreen();
-          beep();
-          document.getElementById('status').textContent = "Barcode detected!";
-          
-          // Enable the Copy and Image Search buttons
-          document.getElementById('copy-button').disabled = false;
-          document.getElementById('image-button').disabled = false;
+          // If the confidence is above the accepted threshold, update the UI
+          if(confidence >= acceptedConfidence) {
+            scannedUPC = code;
+            document.getElementById('result').textContent = "Detected UPC: " + code;
+            flashScreen();
+            beep();
+            document.getElementById('status').textContent = "Barcode detected!";
+            document.getElementById('copy-button').disabled = false;
+            document.getElementById('image-button').disabled = false;
+          } else {
+            console.log("Confidence below threshold; ignoring result.");
+          }
         });
       } else {
         alert("getUserMedia is not supported on your browser!");
@@ -267,10 +269,10 @@
       const oldLog = console.log;
       console.log = function(...args) {
         oldLog.apply(console, args);
-        const message = args.map(arg => {
-          return typeof arg === 'object' ? JSON.stringify(arg) : arg;
-        }).join(' ');
+        const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
         logDiv.innerHTML += `<div>${message}</div>`;
+        // Auto-scroll to always show the latest log
+        logDiv.scrollTop = logDiv.scrollHeight;
       };
     })();
   </script>
