@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UPC Scanner with Sliding Window Auto-Detection</title>
+  <title>UPC Scanner with Timeout Finalization</title>
   <!-- Bootstrap for responsive styling -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <style>
@@ -17,9 +17,7 @@
     .container {
       padding: 20px;
     }
-    h1 {
-      margin-bottom: 20px;
-    }
+    h1 { margin-bottom: 20px; }
     /* Fixed preview area */
     #video-container {
       width: 320px;
@@ -52,57 +50,28 @@
       font-size: 1.3em;
       word-wrap: break-word;
     }
-    #status {
-      margin-top: 10px;
-      font-size: 1em;
-    }
+    #status { margin-top: 10px; font-size: 1em; }
     /* Confidence meter styling */
-    .progress {
-      margin-top: 15px;
-      background: #444;
-      height: 20px;
-    }
-    .progress-bar {
-      background: #28a745;
-      font-weight: bold;
-    }
+    .progress { margin-top: 15px; background: #444; height: 20px; }
+    .progress-bar { background: #28a745; font-weight: bold; }
     /* Button styling */
-    .btn-custom {
-      margin-top: 15px;
-      margin-right: 5px;
-    }
+    .btn-custom { margin-top: 15px; margin-right: 5px; }
     /* Flash overlay for detection feedback */
     #flash-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: white;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s;
-      z-index: 1000;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: white; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 1000;
     }
     /* On-page logging panel (fixed to about 3 lines high) */
     #log {
-      position: fixed;
-      bottom: 0;
-      width: 100%;
-      height: 3em;
-      overflow-y: auto;
-      background: #333;
-      color: #fff;
-      font-size: 12px;
-      padding: 5px;
-      z-index: 2000;
+      position: fixed; bottom: 0; width: 100%; height: 3em; overflow-y: auto;
+      background: #333; color: #fff; font-size: 12px; padding: 5px; z-index: 2000;
     }
   </style>
 </head>
 <body>
   <div id="flash-overlay"></div>
   <div class="container text-center">
-    <h1>UPC Scanner with Auto-Detection</h1>
+    <h1>UPC Scanner with Timeout Finalization</h1>
     <div id="video-container">
       <div id="interactive" class="viewport"></div>
       <div id="red-line"></div>
@@ -126,9 +95,16 @@
   <script>
     let scannedUPC = null;
     let scanningActive = true;
-    let detectionBuffer = []; // Sliding window of recent detected codes
-    const windowSize = 5;      // Number of recent detections to keep
-    const countThreshold = 3;  // Finalize if the mode appears at least 3 times
+    let detectionBuffer = []; // sliding window of detections
+    const windowSize = 5;      // keep the last 5 detections
+    const countThreshold = 3;  // finalize if mode appears 3 times
+    const detectionTimeout = 3000; // 3 seconds timeout
+    let detectionStartTime = null; // record when scanning started
+
+    // Normalize a detected code (e.g., trim whitespace)
+    function normalizeCode(code) {
+      return code.trim();
+    }
 
     // Compute the mode (most frequent value) in an array
     function computeMode(arr) {
@@ -136,6 +112,7 @@
       let maxCount = 0;
       let mode = null;
       arr.forEach(function(code) {
+        code = normalizeCode(code);
         counts[code] = (counts[code] || 0) + 1;
         if (counts[code] > maxCount) {
           maxCount = counts[code];
@@ -145,7 +122,7 @@
       return { mode, count: maxCount };
     }
 
-    // Produce a brief beep using the Web Audio API
+    // Produce a brief beep
     function beep() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -160,18 +137,17 @@
       }
     }
 
-    // Flash the screen briefly for feedback
+    // Flash the screen briefly
     function flashScreen() {
       const flashOverlay = document.getElementById('flash-overlay');
       flashOverlay.style.opacity = "0.8";
-      setTimeout(() => {
-        flashOverlay.style.opacity = "0";
-      }, 100);
+      setTimeout(() => { flashOverlay.style.opacity = "0"; }, 100);
     }
 
-    // Start scanning: clear buffer, update UI, and start Quagga
+    // Start scanning: reset buffer, record start time, update UI, and start Quagga
     function startScanning() {
       detectionBuffer = [];
+      detectionStartTime = Date.now();
       document.getElementById('result').textContent = "Scanning...";
       document.getElementById('status').textContent = "Please hold your barcode steady.";
       document.getElementById('copy-button').disabled = true;
@@ -181,11 +157,11 @@
       Quagga.start();
     }
 
-    // Stop scanning and lock in the finalized code
-    function stopScanning() {
+    // Stop scanning and lock in the code
+    function stopScanning(finalCode) {
       Quagga.stop();
       scanningActive = false;
-      scannedUPC = computeMode(detectionBuffer).mode;
+      scannedUPC = finalCode;
       document.getElementById('result').textContent = "Detected UPC: " + scannedUPC;
       document.getElementById('status').textContent = "Barcode locked in.";
       document.getElementById('copy-button').disabled = false;
@@ -209,7 +185,6 @@
             }
           },
           decoder: {
-            // Use multiple readers for improved reliability
             readers: ["upc_reader", "ean_reader", "upc_e_reader", "code_128_reader"]
           },
           locate: true,
@@ -223,9 +198,10 @@
           }
           console.log("Quagga initialized successfully");
           Quagga.start();
+          detectionStartTime = Date.now();
         });
         
-        // Process each frame for visual feedback
+        // Visual feedback for each frame
         Quagga.onProcessed(function(result) {
           console.log("onProcessed:", result);
           const drawingCtx = Quagga.canvas.ctx.overlay,
@@ -246,9 +222,9 @@
           }
         });
         
-        // Process detected barcodes and use a sliding window to finalize the code
+        // On detection, add normalized code to buffer and check for stability or timeout.
         Quagga.onDetected(function(result) {
-          const code = result.codeResult.code;
+          let code = normalizeCode(result.codeResult.code);
           console.log("Detected code:", code);
           
           // Update confidence bar for reference
@@ -268,7 +244,6 @@
           bar.setAttribute("aria-valuenow", confidence);
           bar.textContent = confidence + "% Confidence";
           
-          // If scanning is active, add this code to the sliding window buffer
           if (scanningActive) {
             detectionBuffer.push(code);
             if (detectionBuffer.length > windowSize) {
@@ -277,10 +252,16 @@
             const { mode, count } = computeMode(detectionBuffer);
             console.log("Buffer mode:", mode, "count:", count, "buffer length:", detectionBuffer.length);
             document.getElementById('result').textContent = "Current mode: " + mode + " (" + count + "/" + detectionBuffer.length + ")";
-            // Finalize if the window is full and the mode appears at least countThreshold times
+            
+            // Check if mode meets threshold in buffer
             if (detectionBuffer.length >= windowSize && count >= countThreshold) {
               console.log("Stable detection achieved. Finalizing code:", mode);
-              stopScanning();
+              stopScanning(mode);
+            }
+            // Alternatively, if more than detectionTimeout has passed, finalize with current mode.
+            else if (Date.now() - detectionStartTime > detectionTimeout) {
+              console.log("Timeout reached. Finalizing code with current mode:", mode);
+              stopScanning(mode);
             }
           }
         });
@@ -288,28 +269,26 @@
         alert("getUserMedia is not supported on your browser!");
       }
       
-      // Toggle scanning when the button is clicked.
+      // Toggle scanning manually
       document.getElementById('toggle-scan-button').addEventListener('click', function() {
         if (scanningActive) {
-          stopScanning();
+          stopScanning(computeMode(detectionBuffer).mode);
         } else {
           startScanning();
         }
       });
     });
     
-    // Copy the finalized UPC to the clipboard when the Copy button is clicked.
+    // Copy finalized UPC to clipboard
     document.getElementById('copy-button').addEventListener('click', function() {
       if (scannedUPC) {
         navigator.clipboard.writeText(scannedUPC).then(() => {
           document.getElementById('result').textContent = "Copied UPC: " + scannedUPC;
-        }).catch(err => {
-          console.error("Error copying text:", err);
-        });
+        }).catch(err => { console.error("Error copying text:", err); });
       }
     });
     
-    // Open a Google Images search for the finalized UPC when the Image Search button is clicked.
+    // Open Google Images search for finalized UPC
     document.getElementById('image-button').addEventListener('click', function() {
       if (scannedUPC) {
         window.open("https://www.google.com/search?tbm=isch&q=" + scannedUPC, '_blank');
@@ -317,7 +296,7 @@
     });
   </script>
   
-  <!-- On-page logging panel (3 lines high) for mobile debugging -->
+  <!-- On-page logging panel (3 lines high) -->
   <div id="log"></div>
   <script>
     (function() {
@@ -327,7 +306,6 @@
         oldLog.apply(console, args);
         const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
         logDiv.innerHTML += `<div>${message}</div>`;
-        // Auto-scroll to always show the latest log entry
         logDiv.scrollTop = logDiv.scrollHeight;
       };
     })();
