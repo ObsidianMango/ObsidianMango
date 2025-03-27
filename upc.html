@@ -96,8 +96,8 @@
     let scannerActive = false;
     let videoStream = null;
     let lastValidScans = [];
-    let requiredMatches = 3; // Number of consecutive matching scans required
-    const confidenceThreshold = 90; // Minimum confidence required
+    let requiredMatches = 1; // Lowered for testing
+    const confidenceThreshold = 80; // Lowered threshold for easier locking
 
     async function startScanner() {
       if (scannerActive) return;
@@ -134,16 +134,17 @@
           return;
         }
         Quagga.start();
-        // Register the onDetected event handler once per scan session
         Quagga.onDetected(onDetectedHandler);
       });
     }
 
     function onDetectedHandler(result) {
       let code = result.codeResult.code;
+      // Calculate an approximate confidence value
       let confidence = result.codeResult.decodedCodes.reduce((sum, d) => sum + (d.error || 0), 0) / result.codeResult.decodedCodes.length;
       let normalizedConfidence = Math.max(0, Math.min(100, 100 - (confidence * 100)));
       
+      console.log("Detected code:", code, "Confidence:", normalizedConfidence);
       updateConfidence(normalizedConfidence);
       
       if (normalizedConfidence < confidenceThreshold) return;
@@ -162,7 +163,6 @@
 
     function stopScanner() {
       if (scannerActive) {
-        // Remove the event handler so it doesn't persist into future sessions
         Quagga.offDetected(onDetectedHandler);
         Quagga.stop();
         scannerActive = false;
