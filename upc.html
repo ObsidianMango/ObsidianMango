@@ -1,202 +1,203 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UPC Scanner</title>
-    <script src="https://unpkg.com/quagga"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin: 0;
-            background-color: #222;
-            color: white;
-        }
-        #scanner-container {
-            position: relative;
-            width: 100%;
-            max-width: 500px;
-            height: 300px;
-            margin: auto;
-            overflow: hidden;
-            background: black;
-            display: none;
-        }
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        #scan-line {
-            position: absolute;
-            top: 50%;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: red;
-            animation: scan-animation 1s infinite alternate;
-        }
-        @keyframes scan-animation {
-            from { opacity: 1; }
-            to { opacity: 0.3; }
-        }
-        #confidence-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 0%;
-            height: 5px;
-            background: rgba(255, 0, 0, 0.8);
-            transition: width 0.1s ease-in-out;
-        }
-        input {
-            width: 90%;
-            padding: 10px;
-            font-size: 18px;
-            text-align: center;
-            margin: 10px auto;
-            display: block;
-            color: black;
-            background: white;
-            border: none;
-        }
-        button {
-            padding: 10px;
-            font-size: 16px;
-            margin: 10px;
-            cursor: pointer;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 5px;
-        }
-        button:active {
-            background-color: #218838;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UPC Scanner</title>
+  <script src="https://unpkg.com/quagga"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      background-color: #222;
+      color: white;
+    }
+    #scanner-container {
+      position: relative;
+      width: 100%;
+      max-width: 500px;
+      height: 300px;
+      margin: auto;
+      overflow: hidden;
+      background: black;
+      display: none;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    #scan-line {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: red;
+      animation: scan-animation 1s infinite alternate;
+    }
+    @keyframes scan-animation {
+      from { opacity: 1; }
+      to { opacity: 0.3; }
+    }
+    #confidence-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0%;
+      height: 5px;
+      background: rgba(255, 0, 0, 0.8);
+      transition: width 0.1s ease-in-out;
+    }
+    input {
+      width: 90%;
+      padding: 10px;
+      font-size: 18px;
+      text-align: center;
+      margin: 10px auto;
+      display: block;
+      color: black;
+      background: white;
+      border: none;
+    }
+    button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 10px;
+      cursor: pointer;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+    button:active {
+      background-color: #218838;
+    }
+  </style>
 </head>
 <body>
 
-    <h2>UPC Scanner</h2>
+  <h2>UPC Scanner</h2>
 
-    <div id="scanner-container">
-        <div id="confidence-bar"></div>
-        <video id="video" autoplay playsinline></video>
-        <div id="scan-line"></div>
-    </div>
+  <div id="scanner-container">
+    <div id="confidence-bar"></div>
+    <video id="video" autoplay playsinline></video>
+    <div id="scan-line"></div>
+  </div>
 
-    <input type="text" id="upc" placeholder="UPC will appear here..." readonly>
+  <input type="text" id="upc" placeholder="UPC will appear here..." readonly>
 
-    <button onclick="startScanner()">Scan</button>
-    <button onclick="copyUPC()">Copy UPC</button>
+  <button onclick="startScanner()">Scan</button>
+  <button onclick="copyUPC()">Copy UPC</button>
+  <button onclick="openGoogleImageSearch()">Image Search</button>
 
-    <script>
-        let scannerActive = false;
-        let videoStream = null;
-        let lastValidScans = [];
-        let requiredMatches = 2;
+  <script>
+    let scannerActive = false;
+    let videoStream = null;
+    let lastValidScans = [];
+    const requiredMatches = 3; // Number of consecutive matching scans required for stability
+    const confidenceThreshold = 90; // Minimum confidence percentage to accept a scan
 
-        async function startScanner() {
-            if (scannerActive) return;
-            scannerActive = true;
-            lastValidScans = [];
-            updateConfidence(0); // Reset confidence bar
+    async function startScanner() {
+      if (scannerActive) return;
+      scannerActive = true;
+      lastValidScans = [];
+      updateConfidence(0);
+      document.getElementById("scanner-container").style.display = "block";
 
-            document.getElementById("scanner-container").style.display = "block"; // Show camera
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        document.getElementById("video").srcObject = videoStream;
+      } catch (err) {
+        alert("Camera access denied or unavailable.");
+        stopScanner();
+        return;
+      }
 
-            try {
-                videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                document.getElementById("video").srcObject = videoStream;
-            } catch (err) {
-                alert("Camera access denied or unavailable.");
-                stopScanner();
-                return;
-            }
-
-            Quagga.init({
-                inputStream: {
-                    name: "Live",
-                    type: "LiveStream",
-                    target: document.querySelector("#video"),
-                    constraints: {
-                        width: 1280,
-                        height: 720,
-                        facingMode: "environment"
-                    }
-                },
-                locator: {
-                    patchSize: "medium",
-                    halfSample: false
-                },
-                decoder: {
-                    readers: ["upc_reader", "upc_e_reader", "ean_reader"]
-                },
-                locate: true,
-                numOfWorkers: 4,
-                frequency: 20,
-            }, function(err) {
-                if (err) {
-                    console.error(err);
-                    stopScanner();
-                    return;
-                }
-                Quagga.start();
-            });
-
-            Quagga.onDetected(function(result) {
-                let code = result.codeResult.code;
-                let confidence = result.codeResult.decodedCodes.reduce((sum, d) => sum + (d.error || 0), 0) / result.codeResult.decodedCodes.length;
-                let normalizedConfidence = Math.max(0, Math.min(100, 100 - (confidence * 100))); // Normalize to percentage
-
-                updateConfidence(normalizedConfidence); // Update the confidence meter
-
-                // Validate barcode length (UPC-A = 12 digits, UPC-E = 8 digits)
-                if (!code || (code.length !== 12 && code.length !== 8)) return;
-
-                // Store last valid scan attempts
-                lastValidScans.push(code);
-                if (lastValidScans.length > requiredMatches) {
-                    lastValidScans.shift(); // Keep only the last few
-                }
-
-                // Ensure two consecutive identical reads before confirming scan
-                if (lastValidScans.length === requiredMatches && lastValidScans.every(v => v === code)) {
-                    document.getElementById("upc").value = code;
-                    stopScanner();
-                }
-            });
+      Quagga.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: document.querySelector("#video"),
+          constraints: { width: 1280, height: 720, facingMode: "environment" }
+        },
+        locator: { patchSize: "medium", halfSample: true },
+        decoder: { readers: ["upc_reader", "upc_e_reader", "ean_reader"] },
+        locate: true,
+        numOfWorkers: 4,
+        frequency: 20,
+      }, function(err) {
+        if (err) {
+          console.error(err);
+          stopScanner();
+          return;
         }
+        Quagga.start();
+      });
 
-        function stopScanner() {
-            if (scannerActive) {
-                Quagga.stop();
-                scannerActive = false;
-                if (videoStream) {
-                    let tracks = videoStream.getTracks();
-                    tracks.forEach(track => track.stop());
-                }
-                document.getElementById("scanner-container").style.display = "none"; // Hide camera
-                updateConfidence(0); // Reset confidence bar
-            }
-        }
+      Quagga.onDetected(onDetectedHandler);
+    }
 
-        async function copyUPC() {
-            let upcText = document.getElementById("upc").value;
-            if (upcText) {
-                try {
-                    await navigator.clipboard.writeText(upcText);
-                    alert("Copied: " + upcText);
-                } catch (err) {
-                    console.error("Copy failed: ", err);
-                }
-            }
-        }
+    function onDetectedHandler(result) {
+      let code = result.codeResult.code;
+      // Calculate an approximate confidence value:
+      let avgError = result.codeResult.decodedCodes.reduce((sum, d) => sum + (d.error || 0), 0) / result.codeResult.decodedCodes.length;
+      let normalizedConfidence = Math.max(0, Math.min(100, 100 - (avgError * 100)));
+      updateConfidence(normalizedConfidence);
 
-        function updateConfidence(value) {
-            document.getElementById("confidence-bar").style.width = value + "%";
+      if (normalizedConfidence < confidenceThreshold) return;
+      if (!code || (code.length !== 12 && code.length !== 8)) return;
+
+      lastValidScans.push(code);
+      if (lastValidScans.length > requiredMatches) {
+        lastValidScans.shift();
+      }
+
+      if (lastValidScans.length === requiredMatches && lastValidScans.every(v => v === code)) {
+        document.getElementById("upc").value = code;
+        stopScanner();
+      }
+    }
+
+    function stopScanner() {
+      if (scannerActive) {
+        Quagga.offDetected(onDetectedHandler);
+        Quagga.stop();
+        scannerActive = false;
+        if (videoStream) {
+          videoStream.getTracks().forEach(track => track.stop());
         }
-    </script>
+        document.getElementById("scanner-container").style.display = "none";
+        updateConfidence(0);
+      }
+    }
+
+    async function copyUPC() {
+      let upcText = document.getElementById("upc").value;
+      if (upcText) {
+        try {
+          await navigator.clipboard.writeText(upcText);
+          alert("Copied: " + upcText);
+        } catch (err) {
+          console.error("Copy failed:", err);
+        }
+      }
+    }
+
+    function updateConfidence(value) {
+      document.getElementById("confidence-bar").style.width = value + "%";
+    }
+
+    function openGoogleImageSearch() {
+      let upc = document.getElementById("upc").value;
+      if (upc) {
+        window.open("https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(upc), "_blank");
+      } else {
+        alert("No UPC scanned yet.");
+      }
+    }
+  </script>
 
 </body>
 </html>
