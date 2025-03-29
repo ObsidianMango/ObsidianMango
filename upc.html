@@ -1,314 +1,207 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UPC Scanner with Timeout Finalization</title>
-  <!-- Bootstrap for responsive styling -->
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Advanced UPC Scanner</title>
   <style>
     body {
-      background-color: #222;
-      color: #eee;
-      font-family: sans-serif;
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       margin: 0;
-      padding: 0;
-    }
-    .container {
       padding: 20px;
     }
-    h1 { margin-bottom: 20px; }
-    /* Fixed preview area */
-    #video-container {
-      width: 320px;
-      height: 240px;
-      margin: auto;
-      border: 2px solid #444;
-      background: #000;
-      position: relative;
-      overflow: hidden;
+    h1 {
+      margin-bottom: 20px;
     }
-    /* Interactive area fills container */
-    #interactive.viewport {
+    #scanner-container {
+      position: relative;
+      width: 300px;
+      height: 300px;
+      border: 2px solid #333;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+    }
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    /* Overlay for camera guide */
+    #overlay {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-    }
-    /* Red scan line overlay for guidance */
-    #red-line {
-      position: absolute;
-      top: 50%;
-      left: 0;
-      width: 100%;
-      border-top: 2px solid red;
       pointer-events: none;
     }
-    #result {
-      margin-top: 15px;
-      font-size: 1.3em;
-      word-wrap: break-word;
+    #guide {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      height: 30%;
+      border: 2px dashed #ff0000;
+      box-sizing: border-box;
     }
-    #status { margin-top: 10px; font-size: 1em; }
-    /* Confidence meter styling */
-    .progress { margin-top: 15px; background: #444; height: 20px; }
-    .progress-bar { background: #28a745; font-weight: bold; }
-    /* Button styling */
-    .btn-custom { margin-top: 15px; margin-right: 5px; }
-    /* Flash overlay for detection feedback */
-    #flash-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: white; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 1000;
+    #result-container {
+      margin-top: 20px;
+      text-align: center;
+      width: 300px;
     }
-    /* On-page logging panel (fixed to about 3 lines high) */
-    #log {
-      position: fixed; bottom: 0; width: 100%; height: 3em; overflow-y: auto;
-      background: #333; color: #fff; font-size: 12px; padding: 5px; z-index: 2000;
+    #result-container p {
+      font-size: 1.2em;
+      margin: 10px 0;
+    }
+    button {
+      margin: 5px;
+      padding: 10px 15px;
+      font-size: 1em;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background: #333;
+      color: #fff;
+      transition: background 0.2s ease;
+    }
+    button:hover {
+      background: #555;
     }
   </style>
 </head>
 <body>
-  <div id="flash-overlay"></div>
-  <div class="container text-center">
-    <h1>UPC Scanner with Timeout Finalization</h1>
-    <div id="video-container">
-      <div id="interactive" class="viewport"></div>
-      <div id="red-line"></div>
-    </div>
-    <div id="result">Scanning...</div>
-    <div id="status">Please hold your barcode steady.</div>
-    <div class="progress">
-      <div id="confidence-bar" class="progress-bar" role="progressbar" style="width: 0%;" 
-           aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0% Confidence</div>
-    </div>
-    <div class="controls">
-      <!-- Toggle scanning button -->
-      <button id="toggle-scan-button" class="btn btn-warning btn-custom">Stop Scanning</button>
-      <button id="copy-button" class="btn btn-secondary btn-custom" disabled>Copy UPC</button>
-      <button id="image-button" class="btn btn-primary btn-custom" disabled>Image Search</button>
+  <h1>UPC Scanner</h1>
+  <div id="scanner-container">
+    <video id="video" autoplay playsinline></video>
+    <div id="overlay">
+      <div id="guide"></div>
     </div>
   </div>
-  
-  <!-- Include QuaggaJS from CDN -->
-  <script src="https://unpkg.com/quagga/dist/quagga.min.js"></script>
+  <div id="result-container">
+    <p>Detected UPC: <span id="upc-value">None</span></p>
+    <button id="copy-btn">Copy UPC</button>
+    <button id="google-btn">Search on Google</button>
+  </div>
+
   <script>
-    let scannedUPC = null;
-    let scanningActive = true;
-    let detectionBuffer = []; // sliding window of detections
-    const windowSize = 5;      // keep the last 5 detections
-    const countThreshold = 3;  // finalize if mode appears 3 times
-    const detectionTimeout = 3000; // 3 seconds timeout
-    let detectionStartTime = null; // record when scanning started
+    document.addEventListener("DOMContentLoaded", () => {
+      const video = document.getElementById("video");
+      const upcValueElement = document.getElementById("upc-value");
+      const copyBtn = document.getElementById("copy-btn");
+      const googleBtn = document.getElementById("google-btn");
+      let currentUPC = "";
 
-    // Normalize a detected code (e.g., trim whitespace)
-    function normalizeCode(code) {
-      return code.trim();
-    }
-
-    // Compute the mode (most frequent value) in an array
-    function computeMode(arr) {
-      const counts = {};
-      let maxCount = 0;
-      let mode = null;
-      arr.forEach(function(code) {
-        code = normalizeCode(code);
-        counts[code] = (counts[code] || 0) + 1;
-        if (counts[code] > maxCount) {
-          maxCount = counts[code];
-          mode = code;
-        }
-      });
-      return { mode, count: maxCount };
-    }
-
-    // Produce a brief beep
-    function beep() {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = ctx.createOscillator();
-        oscillator.type = "sine";
-        oscillator.frequency.value = 1000;
-        oscillator.connect(ctx.destination);
-        oscillator.start();
-        oscillator.stop(ctx.currentTime + 0.1);
-      } catch (e) {
-        console.log("Beep not supported:", e);
+      // Check if the BarcodeDetector API is available
+      if (!("BarcodeDetector" in window)) {
+        alert("Barcode Detector is not supported by this browser.");
+        return;
       }
-    }
+      // Support UPC-A and UPC-E formats
+      const barcodeDetector = new BarcodeDetector({ formats: ["upc_a", "upc_e"] });
 
-    // Flash the screen briefly
-    function flashScreen() {
-      const flashOverlay = document.getElementById('flash-overlay');
-      flashOverlay.style.opacity = "0.8";
-      setTimeout(() => { flashOverlay.style.opacity = "0"; }, 100);
-    }
-
-    // Start scanning: reset buffer, record start time, update UI, and start Quagga
-    function startScanning() {
-      detectionBuffer = [];
-      detectionStartTime = Date.now();
-      document.getElementById('result').textContent = "Scanning...";
-      document.getElementById('status').textContent = "Please hold your barcode steady.";
-      document.getElementById('copy-button').disabled = true;
-      document.getElementById('image-button').disabled = true;
-      document.getElementById('toggle-scan-button').textContent = "Stop Scanning";
-      scanningActive = true;
-      Quagga.start();
-    }
-
-    // Stop scanning and lock in the code
-    function stopScanning(finalCode) {
-      Quagga.stop();
-      scanningActive = false;
-      scannedUPC = finalCode;
-      document.getElementById('result').textContent = "Detected UPC: " + scannedUPC;
-      document.getElementById('status').textContent = "Barcode locked in.";
-      document.getElementById('copy-button').disabled = false;
-      document.getElementById('image-button').disabled = false;
-      document.getElementById('toggle-scan-button').textContent = "Start Scanning";
-      flashScreen();
-      beep();
-    }
-
-    document.addEventListener("DOMContentLoaded", function() {
-      if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
-        Quagga.init({
-          inputStream: {
-            name: "Live",
-            type: "LiveStream",
-            target: document.querySelector('#interactive'),
-            constraints: {
-              width: { min: 320, max: 320 },
-              height: { min: 240, max: 240 },
-              facingMode: "environment"
-            }
-          },
-          decoder: {
-            readers: ["upc_reader", "ean_reader", "upc_e_reader", "code_128_reader"]
-          },
-          locate: true,
-          numOfWorkers: navigator.hardwareConcurrency || 4,
-          frequency: 10
-        }, function(err) {
-          if (err) {
-            console.error("Quagga init error:", err);
-            document.getElementById('result').textContent = "Error initializing scanner.";
-            return;
-          }
-          console.log("Quagga initialized successfully");
-          Quagga.start();
-          detectionStartTime = Date.now();
-        });
-        
-        // Visual feedback for each frame
-        Quagga.onProcessed(function(result) {
-          console.log("onProcessed:", result);
-          const drawingCtx = Quagga.canvas.ctx.overlay,
-                drawingCanvas = Quagga.canvas.dom.overlay;
-          if (result) {
-            drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
-            if (result.boxes) {
-              result.boxes.filter(box => box !== result.box).forEach(box => {
-                Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, drawingCtx, { color: "green", lineWidth: 2 });
-              });
-            }
-            if (result.box) {
-              Quagga.ImageDebug.drawPath(result.box, { x: 0, y: 1 }, drawingCtx, { color: "#00F", lineWidth: 2 });
-            }
-            if (result.codeResult && result.codeResult.code) {
-              Quagga.ImageDebug.drawPath(result.line, { x: 'x', y: 'y' }, drawingCtx, { color: 'red', lineWidth: 3 });
-            }
-          }
-        });
-        
-        // On detection, add normalized code to buffer and check for stability or timeout.
-        Quagga.onDetected(function(result) {
-          let code = normalizeCode(result.codeResult.code);
-          console.log("Detected code:", code);
-          
-          // Update confidence bar for reference
-          const decodedCodes = result.codeResult.decodedCodes;
-          let sumError = 0, cnt = 0;
-          decodedCodes.forEach(function(dc) {
-            if (typeof dc.error !== "undefined") {
-              sumError += dc.error;
-              cnt++;
-            }
+      // Initialize camera using rear-facing camera if available
+      async function initCamera() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } }
           });
-          const avgError = cnt ? sumError / cnt : 0;
-          const confidence = Math.round(Math.max(0, Math.min(100, (1 - avgError / 0.5) * 100)));
-          console.log("Calculated confidence:", confidence);
-          const bar = document.getElementById('confidence-bar');
-          bar.style.width = confidence + "%";
-          bar.setAttribute("aria-valuenow", confidence);
-          bar.textContent = confidence + "% Confidence";
-          
-          if (scanningActive) {
-            detectionBuffer.push(code);
-            if (detectionBuffer.length > windowSize) {
-              detectionBuffer.shift();
-            }
-            const { mode, count } = computeMode(detectionBuffer);
-            console.log("Buffer mode:", mode, "count:", count, "buffer length:", detectionBuffer.length);
-            document.getElementById('result').textContent = "Current mode: " + mode + " (" + count + "/" + detectionBuffer.length + ")";
-            
-            // Check if mode meets threshold in buffer
-            if (detectionBuffer.length >= windowSize && count >= countThreshold) {
-              console.log("Stable detection achieved. Finalizing code:", mode);
-              stopScanning(mode);
-            }
-            // Alternatively, if more than detectionTimeout has passed, finalize with current mode.
-            else if (Date.now() - detectionStartTime > detectionTimeout) {
-              console.log("Timeout reached. Finalizing code with current mode:", mode);
-              stopScanning(mode);
-            }
-          }
-        });
-      } else {
-        alert("getUserMedia is not supported on your browser!");
+          video.srcObject = stream;
+          video.onloadedmetadata = () => video.play();
+        } catch (error) {
+          console.error("Error accessing camera: ", error);
+          alert("Unable to access the camera. Please check your permissions.");
+        }
       }
-      
-      // Toggle scanning manually
-      document.getElementById('toggle-scan-button').addEventListener('click', function() {
-        if (scanningActive) {
-          stopScanning(computeMode(detectionBuffer).mode);
+      initCamera();
+
+      // Create an offscreen canvas to capture frames for scanning
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      function scanFrame() {
+        try {
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            // Set canvas to video dimensions
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // Define the region of interest (ROI) based on the overlay guide
+            const roiWidth = canvas.width * 0.8;
+            const roiHeight = canvas.height * 0.3;
+            const roiX = (canvas.width - roiWidth) / 2;
+            const roiY = (canvas.height - roiHeight) / 2;
+            // Extract the ROI from the frame
+            const imageData = ctx.getImageData(roiX, roiY, roiWidth, roiHeight);
+            const regionCanvas = document.createElement("canvas");
+            regionCanvas.width = roiWidth;
+            regionCanvas.height = roiHeight;
+            const regionCtx = regionCanvas.getContext("2d");
+            regionCtx.putImageData(imageData, 0, 0);
+            // Convert the region to a blob and detect barcodes
+            regionCanvas.toBlob((blob) => {
+              if (blob) {
+                createImageBitmap(blob)
+                  .then((bitmap) => {
+                    barcodeDetector.detect(bitmap)
+                      .then((barcodes) => {
+                        if (barcodes.length > 0) {
+                          // Use the first detected barcode
+                          const barcode = barcodes[0];
+                          if (barcode.rawValue !== currentUPC) {
+                            currentUPC = barcode.rawValue;
+                            upcValueElement.textContent = currentUPC;
+                            console.log("Detected UPC:", currentUPC);
+                          }
+                        }
+                      })
+                      .catch((err) => {
+                        console.error("Barcode detection error:", err);
+                      });
+                  })
+                  .catch((err) => {
+                    console.error("Error creating image bitmap:", err);
+                  });
+              }
+            }, "image/jpeg");
+          }
+        } catch (err) {
+          console.error("Error during scanning frame:", err);
+        }
+        // Continue scanning
+        requestAnimationFrame(scanFrame);
+      }
+      scanFrame();
+
+      // Button to copy UPC code to clipboard
+      copyBtn.addEventListener("click", () => {
+        if (currentUPC) {
+          navigator.clipboard.writeText(currentUPC)
+            .then(() => alert("UPC copied to clipboard!"))
+            .catch((err) => {
+              console.error("Error copying UPC:", err);
+              alert("Error copying UPC.");
+            });
         } else {
-          startScanning();
+          alert("No UPC detected yet.");
+        }
+      });
+
+      // Button to search the UPC code on Google
+      googleBtn.addEventListener("click", () => {
+        if (currentUPC) {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(currentUPC)}`;
+          window.open(searchUrl, "_blank");
+        } else {
+          alert("No UPC detected yet.");
         }
       });
     });
-    
-    // Copy finalized UPC to clipboard
-    document.getElementById('copy-button').addEventListener('click', function() {
-      if (scannedUPC) {
-        navigator.clipboard.writeText(scannedUPC).then(() => {
-          document.getElementById('result').textContent = "Copied UPC: " + scannedUPC;
-        }).catch(err => { console.error("Error copying text:", err); });
-      }
-    });
-    
-    // Open Google Images search for finalized UPC
-    document.getElementById('image-button').addEventListener('click', function() {
-      if (scannedUPC) {
-        window.open("https://www.google.com/search?tbm=isch&q=" + scannedUPC, '_blank');
-      }
-    });
-  </script>
-  
-  <!-- On-page logging panel (3 lines high) -->
-  <div id="log"></div>
-  <script>
-    (function() {
-      const logDiv = document.getElementById('log');
-      const oldLog = console.log;
-      console.log = function(...args) {
-        oldLog.apply(console, args);
-        const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ');
-        logDiv.innerHTML += `<div>${message}</div>`;
-        logDiv.scrollTop = logDiv.scrollHeight;
-      };
-    })();
   </script>
 </body>
 </html>
