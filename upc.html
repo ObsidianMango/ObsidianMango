@@ -1,270 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Advanced UPC Scanner</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Camera Test</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f7f7f7;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin: 0;
-      padding: 20px;
+    body { 
+      font-family: sans-serif; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      padding: 20px; 
+      background: #f0f0f0;
     }
-    h1 {
-      margin-bottom: 20px;
-    }
-    #scanner-container {
-      position: relative;
+    #video {
       width: 300px;
       height: 300px;
+      background: #000;
       border: 2px solid #333;
       border-radius: 8px;
-      overflow: hidden;
-      background: #000;
-      display: none; /* Hidden until scanner starts */
-    }
-    /* Style for the native video element (BarcodeDetector branch) */
-    #video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    /* Global style for any video element within the scanner container (e.g., inserted by QuaggaJS) */
-    #scanner-container video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    /* Overlay for camera guide */
-    #overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-    #guide {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 80%;
-      height: 30%;
-      border: 2px dashed #ff0000;
-      box-sizing: border-box;
-    }
-    #result-container {
-      margin-top: 20px;
-      text-align: center;
-      width: 300px;
-    }
-    #result-container p {
-      font-size: 1.2em;
-      margin: 10px 0;
     }
     button {
-      margin: 5px;
-      padding: 10px 15px;
+      margin: 20px;
+      padding: 10px 20px;
       font-size: 1em;
-      cursor: pointer;
-      border: none;
-      border-radius: 4px;
-      background: #333;
-      color: #fff;
-      transition: background 0.2s ease;
-    }
-    button:hover {
-      background: #555;
-    }
-    #start-btn {
-      margin-bottom: 20px;
     }
   </style>
-  <!-- Include QuaggaJS from CDN for fallback (primarily for iPhone support) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 </head>
 <body>
-  <h1>UPC Scanner</h1>
-  <button id="start-btn">Start Scanner</button>
-  <div id="scanner-container">
-    <!-- Native BarcodeDetector branch uses this video element -->
-    <video id="video" autoplay playsinline muted></video>
-    <div id="overlay">
-      <div id="guide"></div>
-    </div>
-  </div>
-  <div id="result-container">
-    <p>Detected UPC: <span id="upc-value">None</span></p>
-    <button id="copy-btn">Copy UPC</button>
-    <button id="google-btn">Search on Google</button>
-  </div>
-
+  <h1>Camera Test</h1>
+  <button id="start-btn">Start Camera</button>
+  <video id="video" autoplay playsinline muted></video>
   <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const startBtn = document.getElementById("start-btn");
-      const scannerContainer = document.getElementById("scanner-container");
-      const video = document.getElementById("video");
-      const upcValueElement = document.getElementById("upc-value");
-      const copyBtn = document.getElementById("copy-btn");
-      const googleBtn = document.getElementById("google-btn");
-      let currentUPC = "";
-
-      function updateUPC(newUPC) {
-        if (newUPC && newUPC !== currentUPC) {
-          currentUPC = newUPC;
-          upcValueElement.textContent = currentUPC;
-          console.log("Detected UPC:", currentUPC);
-        }
-      }
-
-      copyBtn.addEventListener("click", () => {
-        if (currentUPC) {
-          navigator.clipboard.writeText(currentUPC)
-            .then(() => alert("UPC copied to clipboard!"))
-            .catch((err) => {
-              console.error("Error copying UPC:", err);
-              alert("Error copying UPC.");
-            });
-        } else {
-          alert("No UPC detected yet.");
-        }
-      });
-
-      googleBtn.addEventListener("click", () => {
-        if (currentUPC) {
-          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(currentUPC)}`;
-          window.open(searchUrl, "_blank");
-        } else {
-          alert("No UPC detected yet.");
-        }
-      });
-
-      // Start the scanner upon user gesture
-      startBtn.addEventListener("click", () => {
-        startBtn.style.display = "none";
-        scannerContainer.style.display = "block";
-        startScanner();
-      });
-
-      function startScanner() {
-        // Use native BarcodeDetector if available
-        if ("BarcodeDetector" in window) {
-          console.log("Using native BarcodeDetector.");
-          const barcodeDetector = new BarcodeDetector({ formats: ["upc_a", "upc_e"] });
-          async function initCamera() {
-            try {
-              const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: "environment" } }
-              });
-              video.srcObject = stream;
-              video.onloadedmetadata = () => video.play();
-            } catch (error) {
-              console.error("Error accessing camera:", error);
-              alert("Unable to access the camera. Please check your permissions.");
-            }
-          }
-          initCamera();
-
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-
-          function scanFrame() {
-            try {
-              if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const roiWidth = canvas.width * 0.8;
-                const roiHeight = canvas.height * 0.3;
-                const roiX = (canvas.width - roiWidth) / 2;
-                const roiY = (canvas.height - roiHeight) / 2;
-                const imageData = ctx.getImageData(roiX, roiY, roiWidth, roiHeight);
-                const regionCanvas = document.createElement("canvas");
-                regionCanvas.width = roiWidth;
-                regionCanvas.height = roiHeight;
-                const regionCtx = regionCanvas.getContext("2d");
-                regionCtx.putImageData(imageData, 0, 0);
-                regionCanvas.toBlob((blob) => {
-                  if (blob) {
-                    createImageBitmap(blob)
-                      .then((bitmap) => {
-                        barcodeDetector.detect(bitmap)
-                          .then((barcodes) => {
-                            if (barcodes.length > 0) {
-                              updateUPC(barcodes[0].rawValue);
-                            }
-                          })
-                          .catch((err) => {
-                            console.error("Barcode detection error:", err);
-                          });
-                      })
-                      .catch((err) => {
-                        console.error("Error creating image bitmap:", err);
-                      });
-                  }
-                }, "image/jpeg");
-              }
-            } catch (err) {
-              console.error("Error during scanning frame:", err);
-            }
-            requestAnimationFrame(scanFrame);
-          }
-          scanFrame();
-
-        } else {
-          // Fallback using QuaggaJS for iOS Safari and others without BarcodeDetector
-          console.log("BarcodeDetector not available. Using QuaggaJS fallback.");
-          video.style.display = "none";
-
-          Quagga.init({
-            inputStream: {
-              type: "LiveStream",
-              target: document.querySelector("#scanner-container"),
-              constraints: {
-                width: { min: 300, ideal: 300 },
-                height: { min: 300, ideal: 300 },
-                facingMode: "environment"
-              },
-              // Region of interest (adjust as needed)
-              area: { top: "25%", right: "10%", left: "10%", bottom: "25%" }
-            },
-            decoder: {
-              readers: ["upc_reader", "upc_e_reader"]
-            }
-          }, function(err) {
-            if (err) {
-              console.error("Quagga initialization error:", err);
-              alert("Error initializing barcode scanner on your device.");
-              return;
-            }
-            console.log("Quagga initialized.");
-            Quagga.start();
-            // After starting Quagga, update its inserted video element attributes
-            setTimeout(() => {
-              const qsVideo = document.querySelector("#scanner-container video");
-              if (qsVideo) {
-                qsVideo.setAttribute("playsinline", "true");
-                qsVideo.setAttribute("muted", "true");
-                qsVideo.setAttribute("autoplay", "true");
-                console.log("Updated Quagga video element attributes for iOS.");
-              } else {
-                console.warn("Quagga video element not found.");
-              }
-            }, 500);
-          });
-
-          Quagga.onDetected(function(result) {
-            if (result && result.codeResult && result.codeResult.code) {
-              updateUPC(result.codeResult.code);
-            }
-          });
-        }
-      }
+    document.getElementById('start-btn').addEventListener('click', () => {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then((stream) => {
+          document.getElementById('video').srcObject = stream;
+        })
+        .catch((err) => {
+          console.error('Error accessing camera:', err);
+          alert('Error accessing camera: ' + err);
+        });
     });
   </script>
 </body>
