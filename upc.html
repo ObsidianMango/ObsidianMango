@@ -42,7 +42,7 @@
       border-radius: 8px;
       overflow: hidden;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      margin-bottom: 20px;
+      margin-bottom: 10px;
       position: relative;
     }
     #interactive {
@@ -73,7 +73,7 @@
       flex-wrap: wrap;
       justify-content: space-around;
       width: 100%;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
     }
     button {
       padding: 10px 15px;
@@ -89,6 +89,12 @@
     button:disabled {
       background-color: #aaa;
       cursor: not-allowed;
+    }
+    #upcDisplay {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      text-align: center;
     }
     footer {
       padding: 10px;
@@ -109,9 +115,10 @@
       <div class="guide"></div>
       <div id="result">Waiting for scan...</div>
     </div>
+    <div id="upcDisplay"></div>
     <div class="button-group">
       <button id="copyBtn" disabled>Copy UPC</button>
-      <button id="searchBtn" disabled>Google Search</button>
+      <button id="searchBtn" disabled>Google Image Search</button>
       <button id="toggleScanBtn">Stop Scan</button>
     </div>
   </main>
@@ -125,41 +132,51 @@
     let currentCode = "";
     let scanningActive = true;
 
-    document.addEventListener("DOMContentLoaded", function() {
-      if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
-        Quagga.init({
-          inputStream: {
-            name: "Live",
-            type: "LiveStream",
-            target: document.querySelector('#interactive'),
-            constraints: {
-              width: { min: 640 },
-              height: { min: 480 },
-              facingMode: "environment"
-            }
-          },
-          decoder: {
-            // Only scanning for 12/13-digit barcodes (UPC-A/EAN-13)
-            readers: ["ean_reader", "upc_reader"]
-          }
-        }, function(err) {
-          if (err) {
-            console.error(err);
-            alert("Error initializing camera: " + err);
-            return;
-          }
-          Quagga.start();
-        });
+    // Store configuration in a variable for reinitialization
+    const config = {
+      inputStream: {
+        name: "Live",
+        type: "LiveStream",
+        target: document.querySelector('#interactive'),
+        constraints: {
+          width: { min: 640 },
+          height: { min: 480 },
+          facingMode: "environment"
+        }
+      },
+      decoder: {
+        // Only scanning for 12/13-digit barcodes (UPC-A/EAN-13)
+        readers: ["ean_reader", "upc_reader"]
+      }
+    };
 
+    // Function to initialize the scanner
+    function initScanner() {
+      Quagga.init(config, function(err) {
+        if (err) {
+          console.error(err);
+          alert("Error initializing camera: " + err);
+          return;
+        }
+        Quagga.start();
+        // Attach event listener for detection each time we initialize
+        Quagga.offDetected(); // remove any existing listeners
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
           if (code !== currentCode) {
             currentCode = code;
             document.getElementById("result").innerText = "Scanned UPC: " + code;
+            document.getElementById("upcDisplay").innerText = "UPC: " + code;
             document.getElementById("copyBtn").disabled = false;
             document.getElementById("searchBtn").disabled = false;
           }
         });
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+      if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+        initScanner();
       } else {
         alert("getUserMedia is not supported on your browser.");
       }
@@ -176,8 +193,8 @@
 
       document.getElementById("searchBtn").addEventListener("click", function() {
         if (currentCode) {
-          // Open a new tab with a Google search for the UPC
-          const url = "https://www.google.com/search?q=" + encodeURIComponent(currentCode);
+          // Open a new tab with a Google Image search for the UPC
+          const url = "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(currentCode);
           window.open(url, '_blank');
         }
       });
@@ -189,11 +206,13 @@
           this.innerText = "Start Scan";
           document.getElementById("result").innerText = "Scan stopped. Press 'Start Scan' to scan again.";
         } else {
+          // Reinitialize the scanner
           currentCode = "";
           document.getElementById("result").innerText = "Waiting for scan...";
+          document.getElementById("upcDisplay").innerText = "";
           document.getElementById("copyBtn").disabled = true;
           document.getElementById("searchBtn").disabled = true;
-          Quagga.start();
+          initScanner();
           scanningActive = true;
           this.innerText = "Stop Scan";
         }
