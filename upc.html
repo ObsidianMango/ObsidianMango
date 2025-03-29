@@ -37,7 +37,7 @@
     .scanner-wrapper {
       width: 90%;
       max-width: 600px;
-      height: 300px; /* Fixed height for a more compact camera view */
+      height: 300px; /* Fixed height for a compact camera view */
       background-color: #fff;
       border-radius: 8px;
       overflow: hidden;
@@ -70,6 +70,7 @@
     }
     .button-group {
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-around;
       width: 100%;
       margin-bottom: 20px;
@@ -82,22 +83,12 @@
       font-size: 16px;
       border-radius: 4px;
       cursor: pointer;
-      flex: 1;
-      margin: 0 5px;
+      margin: 5px;
+      flex: 1 1 30%;
     }
     button:disabled {
       background-color: #aaa;
       cursor: not-allowed;
-    }
-    #imageResult {
-      width: 100%;
-      text-align: center;
-      margin-top: 20px;
-    }
-    #imageResult img {
-      max-width: 100%;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     footer {
       padding: 10px;
@@ -114,15 +105,15 @@
   <main>
     <div class="scanner-wrapper">
       <div id="interactive" class="viewport"></div>
-      <!-- Guide overlay to help position the barcode -->
+      <!-- Centered guide overlay -->
       <div class="guide"></div>
       <div id="result">Waiting for scan...</div>
     </div>
     <div class="button-group">
       <button id="copyBtn" disabled>Copy UPC</button>
-      <button id="searchBtn" disabled>Search Google Images</button>
+      <button id="searchBtn" disabled>Google Search</button>
+      <button id="toggleScanBtn">Stop Scan</button>
     </div>
-    <div id="imageResult"></div>
   </main>
   <footer>
     <p>Powered by QuaggaJS</p>
@@ -132,9 +123,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <script>
     let currentCode = "";
-    // Replace these with your actual Google Custom Search API key and Search Engine ID
-    const GOOGLE_API_KEY = 'YOUR_GOOGLE_API_KEY';
-    const SEARCH_ENGINE_ID = 'YOUR_SEARCH_ENGINE_ID';
+    let scanningActive = true;
 
     document.addEventListener("DOMContentLoaded", function() {
       if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
@@ -150,7 +139,8 @@
             }
           },
           decoder: {
-            readers: ["ean_reader", "upc_reader"] // Only longer barcodes
+            // Only scanning for 12/13-digit barcodes (UPC-A/EAN-13)
+            readers: ["ean_reader", "upc_reader"]
           }
         }, function(err) {
           if (err) {
@@ -168,8 +158,6 @@
             document.getElementById("result").innerText = "Scanned UPC: " + code;
             document.getElementById("copyBtn").disabled = false;
             document.getElementById("searchBtn").disabled = false;
-            // Clear previous image result when a new code is scanned
-            document.getElementById("imageResult").innerHTML = "";
           }
         });
       } else {
@@ -188,27 +176,26 @@
 
       document.getElementById("searchBtn").addEventListener("click", function() {
         if (currentCode) {
-          const query = encodeURIComponent(currentCode);
-          const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${query}&searchType=image&num=1`;
-          
-          fetch(url)
-            .then(response => response.json())
-            .then(data => {
-              if (data.items && data.items.length > 0) {
-                const imageUrl = data.items[0].link;
-                const img = document.createElement('img');
-                img.src = imageUrl;
-                img.alt = 'First image result for UPC ' + currentCode;
-                document.getElementById("imageResult").innerHTML = "";
-                document.getElementById("imageResult").appendChild(img);
-              } else {
-                document.getElementById("imageResult").innerText = 'No image results found.';
-              }
-            })
-            .catch(error => {
-              console.error(error);
-              document.getElementById("imageResult").innerText = 'Error fetching image.';
-            });
+          // Open a new tab with a Google search for the UPC
+          const url = "https://www.google.com/search?q=" + encodeURIComponent(currentCode);
+          window.open(url, '_blank');
+        }
+      });
+
+      document.getElementById("toggleScanBtn").addEventListener("click", function() {
+        if (scanningActive) {
+          Quagga.stop();
+          scanningActive = false;
+          this.innerText = "Start Scan";
+          document.getElementById("result").innerText = "Scan stopped. Press 'Start Scan' to scan again.";
+        } else {
+          currentCode = "";
+          document.getElementById("result").innerText = "Waiting for scan...";
+          document.getElementById("copyBtn").disabled = true;
+          document.getElementById("searchBtn").disabled = true;
+          Quagga.start();
+          scanningActive = true;
+          this.innerText = "Stop Scan";
         }
       });
     });
