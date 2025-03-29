@@ -27,7 +27,7 @@
       background: #000;
       display: none; /* hidden until scanner starts */
     }
-    /* For native BarcodeDetector, we use this video element */
+    /* Native video element for BarcodeDetector */
     #video {
       width: 100%;
       height: 100%;
@@ -86,7 +86,7 @@
   <h1>UPC Scanner</h1>
   <button id="start-btn">Start Scanner</button>
   <div id="scanner-container">
-    <!-- The native BarcodeDetector approach uses this video element -->
+    <!-- Native BarcodeDetector uses this video element -->
     <video id="video" autoplay playsinline muted></video>
     <div id="overlay">
       <div id="guide"></div>
@@ -149,7 +149,7 @@
       });
 
       function startScanner() {
-        // If BarcodeDetector API is available
+        // If BarcodeDetector API is available, use native branch
         if ("BarcodeDetector" in window) {
           const barcodeDetector = new BarcodeDetector({ formats: ["upc_a", "upc_e"] });
           
@@ -177,7 +177,7 @@
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                // Define region of interest based on overlay guide dimensions
+                // Define region of interest (ROI) based on overlay guide dimensions
                 const roiWidth = canvas.width * 0.8;
                 const roiHeight = canvas.height * 0.3;
                 const roiX = (canvas.width - roiWidth) / 2;
@@ -216,9 +216,9 @@
           scanFrame();
 
         } else {
-          // Fallback for browsers (like iOS Safari) that don't support BarcodeDetector
+          // Fallback for iOS Safari using QuaggaJS
           console.log("BarcodeDetector API not available. Using QuaggaJS fallback.");
-          // Hide the native video element as QuaggaJS creates its own
+          // Hide the native video element as QuaggaJS will create its own
           video.style.display = "none";
 
           Quagga.init({
@@ -230,7 +230,7 @@
                 height: 300,
                 facingMode: "environment"
               },
-              // Define region of interest (adjust percentages as needed)
+              // Define region of interest (adjust these percentages as needed)
               area: {
                 top: "25%",
                 right: "10%",
@@ -248,6 +248,16 @@
               return;
             }
             Quagga.start();
+            // After starting Quagga, wait briefly then add necessary attributes to the video element it creates.
+            setTimeout(() => {
+              const qsVideo = document.querySelector("#scanner-container video");
+              if (qsVideo) {
+                qsVideo.setAttribute("playsinline", "true");
+                qsVideo.setAttribute("muted", "true");
+                qsVideo.setAttribute("autoplay", "true");
+                console.log("Updated Quagga video element attributes for iOS.");
+              }
+            }, 500);
           });
 
           Quagga.onDetected(function(result) {
