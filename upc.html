@@ -68,6 +68,7 @@
       display: flex;
       justify-content: space-around;
       width: 100%;
+      margin-bottom: 20px;
     }
     button {
       padding: 10px 15px;
@@ -83,6 +84,16 @@
     button:disabled {
       background-color: #aaa;
       cursor: not-allowed;
+    }
+    #imageResult {
+      width: 100%;
+      text-align: center;
+      margin-top: 20px;
+    }
+    #imageResult img {
+      max-width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     footer {
       padding: 10px;
@@ -106,6 +117,7 @@
       <button id="copyBtn" disabled>Copy UPC</button>
       <button id="searchBtn" disabled>Search Google Images</button>
     </div>
+    <div id="imageResult"></div>
   </main>
   <footer>
     <p>Powered by QuaggaJS</p>
@@ -115,6 +127,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <script>
     let currentCode = "";
+    // Replace these with your actual Google Custom Search API key and Search Engine ID
+    const GOOGLE_API_KEY = 'YOUR_GOOGLE_API_KEY';
+    const SEARCH_ENGINE_ID = 'YOUR_SEARCH_ENGINE_ID';
 
     document.addEventListener("DOMContentLoaded", function() {
       if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
@@ -126,7 +141,7 @@
             constraints: {
               width: { min: 640 },
               height: { min: 480 },
-              facingMode: "environment" // Use the back camera
+              facingMode: "environment"
             }
           },
           decoder: {
@@ -148,6 +163,8 @@
             document.getElementById("result").innerText = "Scanned UPC: " + code;
             document.getElementById("copyBtn").disabled = false;
             document.getElementById("searchBtn").disabled = false;
+            // Clear previous image result when a new code is scanned
+            document.getElementById("imageResult").innerHTML = "";
           }
         });
       } else {
@@ -166,8 +183,28 @@
 
       document.getElementById("searchBtn").addEventListener("click", function() {
         if (currentCode) {
-          const url = "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(currentCode);
-          window.open(url, '_blank');
+          // Build URL for Google Custom Search API request
+          const query = encodeURIComponent(currentCode);
+          const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${query}&searchType=image&num=1`;
+          
+          fetch(url)
+            .then(response => response.json())
+            .then(data => {
+              if (data.items && data.items.length > 0) {
+                const imageUrl = data.items[0].link;
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = 'First image result for UPC ' + currentCode;
+                document.getElementById("imageResult").innerHTML = "";
+                document.getElementById("imageResult").appendChild(img);
+              } else {
+                document.getElementById("imageResult").innerText = 'No image results found.';
+              }
+            })
+            .catch(error => {
+              console.error(error);
+              document.getElementById("imageResult").innerText = 'Error fetching image.';
+            });
         }
       });
     });
