@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Paper Plane Ring Toss Game</title>
+  <style>
+    html, body { margin: 0; overflow: hidden; background: #aee; font-family: sans-serif; }
+    canvas { display: block; }
+    #winMessage {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 2em;
+      color: #fff;
+      background: rgba(0,0,0,0.6);
+      padding: 10px 20px;
+      border-radius: 10px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div id="winMessage">🎉 You Flew Through All Rings! 🎉</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
+<script>
+// Scene setup
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xaee);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Lighting
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(5,10,7);
+scene.add(light);
+
+// Paper airplane
+const airplane = new THREE.Group();
+const bodyGeom = new THREE.ConeGeometry(0.1, 1.2, 8);
+const bodyMat = new THREE.MeshStandardMaterial({color: 0xffffff});
+const body = new THREE.Mesh(bodyGeom, bodyMat);
+body.rotation.x = Math.PI / 2;
+airplane.add(body);
+
+const wingGeom = new THREE.BoxGeometry(1.2, 0.01, 0.3);
+const wing = new THREE.Mesh(wingGeom, bodyMat);
+wing.position.y = -0.2;
+airplane.add(wing);
+
+airplane.position.set(0, 1, 0);
+scene.add(airplane);
+camera.position.set(0, 1, 5);
+camera.lookAt(airplane.position);
+
+// Gravity & physics
+let velocity = new THREE.Vector3();
+let gravity = new THREE.Vector3(0, -0.005, 0);
+let isFlying = false;
+
+// Toss mechanic
+let startX = 0, startY = 0, mouseDown = false;
+const toss = (dx, dy) => {
+  velocity.set(dx * 0.002, -dy * 0.002 + 0.05, -0.1);
+  isFlying = true;
+};
+
+window.addEventListener('mousedown', e => {
+  mouseDown = true; startX = e.clientX; startY = e.clientY;
+});
+window.addEventListener('mouseup', e => {
+  if (mouseDown) toss(e.clientX - startX, e.clientY - startY);
+  mouseDown = false;
+});
+window.addEventListener('touchstart', e => {
+  mouseDown = true;
+  startX = e.touches[0].clientX;
+  startY = e.touches[0].clientY;
+}, {passive: true});
+window.addEventListener('touchend', e => {
+  if (!mouseDown) return;
+  const dx = e.changedTouches[0].clientX - startX;
+  const dy = e.changedTouches[0].clientY - startY;
+  toss(dx, dy);
+  mouseDown = false;
+}, {passive: true});
+
+// Rings
+const ringMaterial = new THREE.MeshStandardMaterial({color: 0xffcc00, transparent: true});
+const rings = [];
+
+function createRing(x, y, z) {
+  const ringGeom = new THREE.TorusGeometry(0.8, 0.05, 16, 100);
+  const ring = new THREE.Mesh(ringGeom, ringMaterial.clone());
+  ring.position.set(x, y, z);
+  scene.add(ring);
+  rings.push({mesh: ring, hit: false, poofProgress: 0});
+}
+createRing(0, 1.2, -5);
+createRing(-1.5, 1.5, -10);
+createRing(1.5, 1.8, -15);
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Animation
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (isFlying) {
+    velocity.add(gravity);
+    airplane.position.add(velocity);
+    airplane.rotation.z = velocity.x * 2;
+    airplane.rotation.x = -velocity.y * 4;
+
+    if (airplane.position.y < 0) {
+      isFlying = false;
+      velocity.set(0,0,0);
+      airplane.position.y = 0;
+    }
+  }
+
+  // Ring collision and poof
+  let allGone = true;
+  rings.forEach(ring => {
+    if (ring.hit) {
+      ring.poofProgress += 0.05;
+      ring.mesh.scale.setScalar(1 - ring.poofProgress);
+      ring.mesh.material.opacity = 1 - ring.poofProgress;
+      if (ring.poofProgress >= 1) scene.remove(ring.mesh);
+    } else {
+      const dist = airplane.position.distanceTo(ring.mesh.position);
+      if (dist < 0.8) {
+        ring.hit = true;
+      } else {
+        allGone = false;
+      }
+    }
+  });
+
+  // Win condition
+  if (allGone && document.getElementById('winMessage').style.display === 'none') {
+    document.getElementById('winMessage').style.display = 'block';
+  }
+
+  camera.lookAt(airplane.position);
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
