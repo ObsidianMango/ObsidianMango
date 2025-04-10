@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Smash Block Sweep</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+      background: linear-gradient(to top, #001f3f, #0074D9);
+    }
+    #gameCanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: #111;
+    }
+    #message {
+      position: absolute;
+      top: 20px;
+      width: 100%;
+      text-align: center;
+      font-size: 2em;
+      color: white;
+      animation: flash 2s ease-out;
+    }
+    @keyframes flash {
+      0% { opacity: 1; }
+      50% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="message">BLAST BOXES</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let mode = 'blast'; // or 'sweep'
+let cannonballs = [];
+let blocks = [];
+let sweeper = { x: 0, y: canvas.height - 100, width: 150, height: 40 };
+let colors = ['#FF4136', '#2ECC40', '#0074D9', '#FFDC00'];
+
+function initBlocks() {
+  blocks = [];
+  for (let i = 0; i < 6; i++) {
+    for (let j = 0; j < 4; j++) {
+      blocks.push({
+        x: 100 + i * 110,
+        y: 100 + j * 60,
+        w: 100,
+        h: 50,
+        color: colors[(i + j) % colors.length]
+      });
+    }
+  }
+}
+
+function drawBlocks() {
+  for (let block of blocks) {
+    ctx.fillStyle = block.color;
+    ctx.fillRect(block.x, block.y, block.w, block.h);
+  }
+}
+
+function drawCannonballs() {
+  ctx.fillStyle = 'white';
+  for (let ball of cannonballs) {
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, 10, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawSweeper() {
+  ctx.fillStyle = '#AAAAAA';
+  ctx.fillRect(sweeper.x, sweeper.y, sweeper.width, sweeper.height);
+}
+
+function update() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (mode === 'blast') {
+    drawBlocks();
+    drawCannonballs();
+
+    // move cannonballs
+    for (let ball of cannonballs) {
+      ball.y -= 10;
+    }
+
+    // check for hits
+    cannonballs = cannonballs.filter(ball => {
+      for (let i = 0; i < blocks.length; i++) {
+        let b = blocks[i];
+        if (ball.x > b.x && ball.x < b.x + b.w && ball.y > b.y && ball.y < b.y + b.h) {
+          blocks.splice(i, 1);
+          return false; // ball disappears
+        }
+      }
+      return ball.y > 0;
+    });
+
+    if (blocks.length === 0) {
+      mode = 'sweep';
+      document.getElementById('message').innerText = "IT'S SWEEPING TIME";
+      document.getElementById('message').style.animation = 'flash 2s ease-out';
+    }
+
+  } else if (mode === 'sweep') {
+    drawSweeper();
+    drawBlocks();
+    // auto clear blocks under sweeper
+    blocks = blocks.filter(block => {
+      return !(block.x < sweeper.x + sweeper.width &&
+               block.x + block.w > sweeper.x &&
+               block.y < sweeper.y + sweeper.height &&
+               block.y + block.h > sweeper.y);
+    });
+  }
+
+  requestAnimationFrame(update);
+}
+
+canvas.addEventListener('click', e => {
+  if (mode === 'blast') {
+    cannonballs.push({ x: e.clientX, y: canvas.height - 30 });
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (mode === 'sweep') {
+    sweeper.x = e.clientX - sweeper.width / 2;
+  }
+});
+
+initBlocks();
+update();
+</script>
+</body>
+</html>
