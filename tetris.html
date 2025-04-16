@@ -9,7 +9,8 @@
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
     html, body {
       margin: 0;
-      background: #111;
+      /* Background image set to tile repeating */
+      background: url('bgg.png') repeat, #111;
       color: #fff;
       font-family: 'Press Start 2P', monospace;
       display: flex;
@@ -37,14 +38,14 @@
         );
       border: 2px solid #fff;
       touch-action: manipulation;
-      margin-bottom: 20px; /* Added margin to prevent cut-off on mobile */
+      margin-bottom: 20px;
     }
     /* Game Title */
     #game-title {
-      font-size: 24px;
+      font-size: 36px;
       font-weight: bold;
       text-align: center;
-      margin: 20px 0 5px 0; /* extra space above title */
+      margin: 10px 0 5px 0;
       background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -75,7 +76,7 @@
       background-color: #0f0;
       transition: width 0.3s;
     }
-    /* Start Screen Overlay */
+    /* Start Screen Overlay including instructions */
     #start-screen {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -86,19 +87,64 @@
       align-items: center;
       justify-content: center;
       z-index: 10;
+      text-align: center;
     }
     #start-screen h1 {
-      font-size: 24px;
-      margin: 0;
+      font-size: 36px;
+      font-weight: bold;
+      text-align: center;
+      margin: 10px 0 5px 0;
+      background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
     #play-prompt {
       font-size: 12px;
       margin-top: 20px;
       animation: blink 1s infinite;
+      cursor: pointer;
+    }
+    /* Start Screen Instructions */
+    #start-instructions {
+      font-size: 14px;
+      margin-top: 10px;
+      line-height: 1.5;
     }
     @keyframes blink {
       0%, 100% { opacity: 1; }
       50% { opacity: 0; }
+    }
+    /* Big Keyboard Arrow Display (hidden by default) */
+    #arrow-display {
+      position: fixed;
+      bottom: 60px;  /* increased from 20px to 60px */
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 72px;
+      display: none;
+      pointer-events: none;
+      z-index: 5;
+      color: #fff;
+    }
+    /* Animation: slide the arrow from the center in its facing direction then fade out,
+       and add a shimmer effect */
+    #arrow-display.animate {
+      animation: slideFade 0.5s ease-out forwards, shimmer 1s linear infinite;
+    }
+    @keyframes slideFade {
+      from {
+        transform: translateX(-50%);
+        opacity: 1;
+      }
+      to {
+        /* The arrow's end transform is defined dynamically by --dx and --dy */
+        transform: translate(calc(-50% + var(--dx)), var(--dy));
+        opacity: 0;
+      }
+    }
+    @keyframes shimmer {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.5); }
     }
     /* Game Over Overlay */
     #game-over {
@@ -136,6 +182,11 @@
   <div id="start-screen">
     <h1>FOODTRIS</h1>
     <p id="play-prompt">Play Now</p>
+    <div id="start-instructions">
+      <p>Swipe up to rotate</p>
+      <p>Swipe left/right to move</p>
+      <p>Swipe down to drop</p>
+    </div>
   </div>
   <!-- Game Over Overlay -->
   <div id="game-over">
@@ -152,6 +203,8 @@
   </div>
   <!-- Game Board -->
   <canvas id="tetris" width="240" height="400"></canvas>
+  <!-- Hidden Keyboard Arrow Display -->
+  <div id="arrow-display"></div>
 
   <script>
     // ---------------------------------------------------
@@ -174,10 +227,10 @@
     let score = 0;
     let rowsCleared = 0;
     let level = 1;
-    let dropInterval = 800;  // Start speed (ms per drop)
+    let dropInterval = 800;
     let dropCounter = 0;
     let lastTime = 0;
-    let running = false; // Game loop flag
+    let running = false;
 
     // ---------------------------------------------------
     // Update DOM Display Functions
@@ -191,7 +244,7 @@
     }
 
     function updateRowMeter() {
-      const maxRows = 10; // Rows needed to level up
+      const maxRows = 10;
       const meter = document.getElementById("row-meter");
       const percentage = Math.min((rowsCleared / maxRows) * 100, 100);
       meter.style.width = percentage + "%";
@@ -205,7 +258,6 @@
       updateLevel();
       rowsCleared = 0;
       document.getElementById("row-meter").style.width = "0%";
-      // Increase speed by decreasing dropInterval, but not below a minimum.
       dropInterval = Math.max(100, dropInterval - 100);
     }
 
@@ -238,7 +290,6 @@
       });
     }
 
-    // New function: Highlight the lane beneath each column of the falling piece.
     function drawHighlight() {
       for (let x = 0; x < player.matrix[0].length; x++) {
         let colFilled = false;
@@ -305,12 +356,11 @@
       dropCounter = 0;
     }
 
-    // New function: Hard drop that instantly drops the piece to the bottom.
     function hardDrop() {
       while (!collide(arena, player)) {
         player.pos.y++;
       }
-      player.pos.y--; // One step back
+      player.pos.y--;
       merge(arena, player);
       playerReset();
       arenaSweep();
@@ -351,14 +401,11 @@
         for (let x = 0; x < arena[y].length; x++) {
           if (!arena[y][x]) continue outer;
         }
-        // This row is full, so clear it.
         const clearedRow = arena.splice(y, 1)[0];
         score += 100;
         updateScore();
         rowsCleared++;
         updateRowMeter();
-
-        // Pixel explosion effect for the cleared row
         for (let x = 0; x < clearedRow.length; x++) {
           const sparkle = document.createElement("div");
           sparkle.style.position = "absolute";
@@ -378,7 +425,6 @@
           sparkle.style.opacity = "0";
           setTimeout(() => sparkle.remove(), 1000);
         }
-        // Insert an empty row at the top to maintain arena size.
         arena.unshift(Array(arena[0].length).fill(""));
         y++;
       }
@@ -401,7 +447,6 @@
       player.pos.y = 0;
       player.pos.x = ((arena[0].length / 2) | 0) - ((player.matrix[0].length / 2) | 0);
       if (collide(arena, player)) {
-        // Game Over condition
         gameOver();
       }
     }
@@ -423,7 +468,7 @@
       const rect = gameOverEl.getBoundingClientRect();
       const containerWidth = rect.width;
       const containerHeight = rect.height;
-      const numFireworks = level; // One firework per level reached
+      const numFireworks = level;
       const pixelsPerFirework = Math.floor(score / level);
       for (let i = 0; i < numFireworks; i++) {
         const centerX = Math.random() * containerWidth;
@@ -438,8 +483,14 @@
           pixel.style.left = `${centerX}px`;
           pixel.style.top = `${centerY}px`;
           gameOverEl.appendChild(pixel);
-          const offsetX = (Math.random() - 0.5) * 200;
-          const offsetY = (Math.random() - 0.5) * 200;
+          
+          // Use polar coordinates for a natural explosion shape
+          const angle = Math.random() * Math.PI * 2;
+          const maxRadius = 200; // maximum explosion radius
+          const radius = Math.sqrt(Math.random()) * maxRadius;
+          const offsetX = Math.cos(angle) * radius;
+          const offsetY = Math.sin(angle) * radius;
+          
           const scaleFactor = Math.random() * 2 + 1;
           pixel.style.transition = "transform 1s ease-out, opacity 1s ease-out";
           void pixel.offsetHeight;
@@ -468,7 +519,6 @@
       updateScore();
       updateLevel();
       document.getElementById("row-meter").style.width = "0%";
-      // Clear arena: reset each cell to ""
       for (let y = 0; y < arena.length; y++) {
         for (let x = 0; x < arena[y].length; x++) {
           arena[y][x] = "";
@@ -497,38 +547,29 @@
     }
 
     // ---------------------------------------------------
-    // Touch Controls: Swipe Gestures
+    // Touch Controls: Expanded Swipe Area via Document
     // ---------------------------------------------------
     let touchStartX = 0, touchStartY = 0;
-    canvas.addEventListener('touchstart', function(e) {
+    document.addEventListener('touchstart', function(e) {
       const touch = e.touches[0];
       touchStartX = touch.clientX;
       touchStartY = touch.clientY;
     }, false);
 
-    canvas.addEventListener('touchend', function(e) {
+    document.addEventListener('touchend', function(e) {
       const touch = e.changedTouches[0];
       const dx = touch.clientX - touchStartX;
       const dy = touch.clientY - touchStartY;
       const absDx = Math.abs(dx);
       const absDy = Math.abs(dy);
-      const threshold = 30; // minimum swipe distance
+      const threshold = 30;
       if (absDx > absDy) {
         if (absDx > threshold) {
-          if (dx > 0) {
-            move(1);
-          } else {
-            move(-1);
-          }
+          dx > 0 ? move(1) : move(-1);
         }
       } else {
         if (absDy > threshold) {
-          if (dy > 0) {
-            // Down swipe: perform hard drop (auto drop)
-            hardDrop();
-          } else {
-            rotate();
-          }
+          dy > 0 ? hardDrop() : rotate();
         }
       }
     }, false);
@@ -536,20 +577,60 @@
     // ---------------------------------------------------
     // Controls & Game Start (Keyboard)
     // ---------------------------------------------------
-    document.addEventListener("keydown", e => {
-      if (e.key === "ArrowLeft")       move(-1);
-      else if (e.key === "ArrowRight") move(1);
-      else if (e.key === "ArrowDown")  hardDrop();
-      else if (e.key === "ArrowUp" || e.key === "w") rotate();
+    const arrowDisplay = document.getElementById('arrow-display');
+    // Listen for the animation end event to hide the arrow after a full cycle
+    arrowDisplay.addEventListener("animationend", () => {
+      arrowDisplay.style.display = "none";
     });
+
+    document.addEventListener("keydown", e => {
+      if (e.key === "ArrowLeft") {
+        move(-1);
+        arrowDisplay.textContent = "⬅︎";
+        arrowDisplay.style.display = "block";
+        arrowDisplay.style.setProperty("--dx", "-100px");
+        arrowDisplay.style.setProperty("--dy", "0px");
+        arrowDisplay.classList.remove('animate');
+        void arrowDisplay.offsetWidth;
+        arrowDisplay.classList.add('animate');
+      } else if (e.key === "ArrowRight") {
+        move(1);
+        arrowDisplay.textContent = "⮕";
+        arrowDisplay.style.display = "block";
+        arrowDisplay.style.setProperty("--dx", "100px");
+        arrowDisplay.style.setProperty("--dy", "0px");
+        arrowDisplay.classList.remove('animate');
+        void arrowDisplay.offsetWidth;
+        arrowDisplay.classList.add('animate');
+      } else if (e.key === "ArrowDown") {
+        hardDrop();
+        arrowDisplay.textContent = "⬇︎";
+        arrowDisplay.style.display = "block";
+        arrowDisplay.style.setProperty("--dx", "0px");
+        arrowDisplay.style.setProperty("--dy", "100px");
+        arrowDisplay.classList.remove('animate');
+        void arrowDisplay.offsetWidth;
+        arrowDisplay.classList.add('animate');
+      } else if (e.key === "ArrowUp" || e.key === "w") {
+        rotate();
+        arrowDisplay.textContent = "⬆︎";
+        arrowDisplay.style.display = "block";
+        arrowDisplay.style.setProperty("--dx", "0px");
+        arrowDisplay.style.setProperty("--dy", "-100px");
+        arrowDisplay.classList.remove('animate');
+        void arrowDisplay.offsetWidth;
+        arrowDisplay.classList.add('animate');
+      }
+    });
+    // Removed keyup listener to allow full animation to play
 
     function move(dir)   { playerMove(dir); }
     function rotate()    { playerRotate(); }
     function drop()      { hardDrop(); }
 
-    // Start Screen
-    document.getElementById('start-screen').addEventListener('click', function() {
-      this.style.display = 'none';
+    // Start Screen: Start the game on tapping "Play Now"
+    document.getElementById('play-prompt').addEventListener('click', function() {
+      document.getElementById('start-screen').style.display = 'none';
       running = true;
       playerReset();
       update();
