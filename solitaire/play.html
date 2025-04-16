@@ -195,103 +195,113 @@
     /* =====================================
        Card Class Definition
        ===================================== */
-    class Card {
-      constructor(suit, rank, faceUp = false) {
-        this.suit = suit;   // "H", "D", "C", or "S"
-        this.rank = rank;   // 1–13 (with 1 = Ace, 11 = J, 12 = Q, 13 = K)
-        this.faceUp = faceUp;
-        this.x = 0;
-        this.y = 0;
-      }
-      getColor() {
-        return (this.suit === "H" || this.suit === "D") ? "red" : "black";
-      }
-      draw(ctx) {
-        // Draw the card background (white with rounded corners and border)
-        ctx.fillStyle = "white";
-        drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
-        ctx.fill();
-        ctx.strokeStyle = "black";
-        ctx.lineWidth = 2;
-        drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
-        ctx.stroke();
+  class Card {
+    constructor(suit, rank, faceUp = false) {
+      this.suit = suit;
+      this.rank = rank;
+      this.faceUp = faceUp;
+      this.x = 0;
+      this.y = 0;
+    }
+    getColor() {
+      return (this.suit === "H" || this.suit === "D") ? "red" : "black";
+    }
+    draw(ctx) {
+      // Draw white card background + border, or card back if faceDown
+      ctx.fillStyle = "white";
+      drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+      ctx.fill();
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 2;
+      drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+      ctx.stroke();
 
-        if (!this.faceUp) {
-          // Face-down: draw the current card back image (clipped to rounded rect)
-          if (currentCardBack.complete) {
-            ctx.save();
-            drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
-            ctx.clip();
-            ctx.drawImage(currentCardBack, this.x, this.y, CARD_WIDTH, CARD_HEIGHT);
-            ctx.restore();
-            ctx.strokeStyle = "black";
-            ctx.lineWidth = 2;
-            drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
-            ctx.stroke();
-          } else {
-            ctx.fillStyle = "blue";
-            drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
-            ctx.fill();
-          }
-          return;
-        }
-
-        // Face-up: draw corner rank+suit text
-        let rankStr = (this.rank === 1 ? "A" :
-                      this.rank === 11 ? "J" :
-                      this.rank === 12 ? "Q" :
-                      this.rank === 13 ? "K" : this.rank);
-        let suitSymbol = (this.suit === "H" ? "♥" :
-                         this.suit === "D" ? "♦" :
-                         this.suit === "C" ? "♣" : "♠");
-        ctx.fillStyle = this.getColor();
-        ctx.font = "16px Arial";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "top";
-        ctx.fillText(rankStr + suitSymbol, this.x + 3, this.y + 3);
-        ctx.textAlign = "right";
-        ctx.textBaseline = "bottom";
-        ctx.fillText(rankStr + suitSymbol, this.x + CARD_WIDTH - 3, this.y + CARD_HEIGHT - 3);
-
-        // Center content:
-        if (this.rank === 1) {
-          // Ace: big suit icon in center
-          ctx.fillStyle = this.getColor();
-          ctx.font = "bold 60px Arial";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(suitSymbol, this.x + CARD_WIDTH/2, this.y + CARD_HEIGHT/2);
-        } else if (this.rank >= 2 && this.rank <= 10) {
-          // Number cards: draw pip layout based on preset positions
-          const layout = pipLayouts[this.rank];
-          if (layout) {
-            ctx.fillStyle = this.getColor();
-            ctx.font = "20px Arial";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            layout.forEach(pos => {
-              let px = this.x + (pos.x / 100) * CARD_WIDTH;
-              let py = this.y + (pos.y / 100) * CARD_HEIGHT;
-              ctx.fillText(suitSymbol, px, py);
-            });
-          }
+      if (!this.faceUp) {
+        // Draw card back image or placeholder
+        if (currentCardBack.complete) {
+          ctx.save();
+          drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+          ctx.clip();
+          ctx.drawImage(currentCardBack, this.x, this.y, CARD_WIDTH, CARD_HEIGHT);
+          ctx.restore();
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 2;
+          drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+          ctx.stroke();
         } else {
-          // Face cards (J, Q, K): draw one big letter in the center
-          ctx.fillStyle = this.getColor();
-          ctx.font = "bold 40px Arial";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          let letter = (this.rank === 11 ? "J" : this.rank === 12 ? "Q" : "K");
-          ctx.fillText(letter, this.x + CARD_WIDTH/2, this.y + CARD_HEIGHT/2);
+          ctx.fillStyle = "blue";
+          drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+          ctx.fill();
         }
-        ctx.textAlign = "start";
-        ctx.textBaseline = "alphabetic";
+        return;
       }
-      contains(px, py) {
-        return (px >= this.x && px <= this.x + CARD_WIDTH &&
-                py >= this.y && py <= this.y + CARD_HEIGHT);
+
+      // Face-up card details
+      const rankStr = (
+        this.rank === 1  ? "A" :
+        this.rank === 11 ? "J" :
+        this.rank === 12 ? "Q" :
+        this.rank === 13 ? "K" : this.rank
+      );
+      const suitSymbol = (
+        this.suit === "H" ? "♥" :
+        this.suit === "D" ? "♦" :
+        this.suit === "C" ? "♣" : "♠"
+      );
+
+      // TOP-LEFT corner: Rank on first line, suit on second line
+      ctx.fillStyle = this.getColor();
+      ctx.font = "16px Arial";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(rankStr, this.x + 5, this.y + 5);
+      ctx.fillText(suitSymbol, this.x + 5, this.y + 23);
+
+      // BOTTOM-RIGHT corner: Suit on first line, rank on second line
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(suitSymbol, this.x + CARD_WIDTH - 5, this.y + CARD_HEIGHT - 5 - 18);
+      ctx.fillText(rankStr, this.x + CARD_WIDTH - 5, this.y + CARD_HEIGHT - 5);
+
+      // Center graphics (pips, letter for face cards, etc.) same as before
+      if (this.rank === 1) {
+        ctx.fillStyle = this.getColor();
+        ctx.font = "bold 60px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(suitSymbol, this.x + CARD_WIDTH / 2, this.y + CARD_HEIGHT / 2);
+      } else if (this.rank >= 2 && this.rank <= 10) {
+        // number cards: pip layouts
+        ctx.fillStyle = this.getColor();
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const layout = pipLayouts[this.rank];
+        if (layout) {
+          layout.forEach(pos => {
+            const px = this.x + (pos.x / 100) * CARD_WIDTH;
+            const py = this.y + (pos.y / 100) * CARD_HEIGHT;
+            ctx.fillText(suitSymbol, px, py);
+          });
+        }
+      } else {
+        // J, Q, K
+        ctx.fillStyle = this.getColor();
+        ctx.font = "bold 40px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        let letter = (this.rank === 11 ? "J" : this.rank === 12 ? "Q" : "K");
+        ctx.fillText(letter, this.x + CARD_WIDTH / 2, this.y + CARD_HEIGHT / 2);
       }
     }
+
+    contains(px, py) {
+      return (
+        px >= this.x && px <= this.x + CARD_WIDTH &&
+        py >= this.y && py <= this.y + CARD_HEIGHT
+      );
+    }
+  }
 
     /* =====================================
        Layout Update & Responsive Canvas
