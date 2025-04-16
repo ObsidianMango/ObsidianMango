@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Klondike Solitaire – 3-Card Draw Variation</title>
+  <title>♠️Solitaire</title>
   <style>
     /* Basic body and font styles */
     body {
@@ -13,7 +13,7 @@
       color: white;
       font-family: Georgia, serif;
     }
-    /* Canvas: we use the tile image as background */
+    /* Canvas: we use the tile image as background, and disable touch actions */
     #gameCanvas {
       display: block;
       margin: 0 auto;
@@ -23,6 +23,7 @@
       max-width: 1000px;
       width: 100%;
       height: auto;
+      touch-action: none;
     }
     /* Control panel – minimal */
     #controls {
@@ -77,7 +78,7 @@
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="1000" height="700"></canvas>
+  <canvas id="gameCanvas"></canvas>
   <div id="controls">
     <button id="restartButton">Restart</button>
     <button id="themeButton">Change Theme</button>
@@ -122,50 +123,37 @@
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    // Card dimensions (bigger than before – 100x150)
+    // Set logical dimensions; actual size will be responsive.
+    const LOGICAL_WIDTH = 1000;
+    const LOGICAL_HEIGHT = 700;
+    canvas.width = LOGICAL_WIDTH;
+    canvas.height = LOGICAL_HEIGHT;
+
+    // Card dimensions (100x150) and layout constants.
     const CARD_WIDTH = 100;
     const CARD_HEIGHT = 150;
     const CORNER_RADIUS = 10;
     const TABLEAU_SPACING = 20; // Vertical offset in a tableau stack
+    let margin = 10;
+    let gapFixed = 10; // Used for spacing stock/waste/foundation
 
-    // Layout margins and gaps
-    const margin = 10;
-    const gapFixed = 10; // Used for spacing stock/waste/foundation
-
-    // ---- Compute Positions for Piles ----
-    // Stock and Waste positions (top-left area)
-    const STOCK_POS = { x: margin, y: margin };
-    const WASTE_POS = { x: STOCK_POS.x + CARD_WIDTH + gapFixed, y: margin };
-
-    // Foundation positions (4 piles, top-right area)
+    // Pile counts.
     const FOUNDATION_COUNT = 4;
-    let FOUNDATION_POSITIONS = [];
-    for (let i = 0; i < FOUNDATION_COUNT; i++) {
-      FOUNDATION_POSITIONS.push({
-        x: canvas.width - margin - (FOUNDATION_COUNT - i) * (CARD_WIDTH + gapFixed) + gapFixed,
-        y: margin
-      });
-    }
-
-    // Tableau positions (7 columns) – evenly spaced to fill the canvas width
     const TABLEAU_COUNT = 7;
-    const availableWidth = canvas.width - 2 * margin - (TABLEAU_COUNT * CARD_WIDTH);
-    const gapTableau = availableWidth / (TABLEAU_COUNT - 1);
-    let TABLEAU_POSITIONS = [];
-    for (let i = 0; i < TABLEAU_COUNT; i++) {
-      TABLEAU_POSITIONS.push({
-        x: margin + i * (CARD_WIDTH + gapTableau),
-        y: margin + CARD_HEIGHT + 50 // Positioned 50px below the stock/waste row
-      });
-    }
 
     // Data structures for piles
-    let stockPile = { cards: [], x: STOCK_POS.x, y: STOCK_POS.y };
-    let wastePile = { cards: [], x: WASTE_POS.x, y: WASTE_POS.y };
+    let stockPile = { cards: [], x: 0, y: 0 };
+    let wastePile = { cards: [], x: 0, y: 0 };
     let foundationPiles = [];
-    FOUNDATION_POSITIONS.forEach(pos => foundationPiles.push({ cards: [], x: pos.x, y: pos.y }));
     let tableauPiles = [];
-    TABLEAU_POSITIONS.forEach(pos => tableauPiles.push({ cards: [], x: pos.x, y: pos.y }));
+
+    // Initialize pile arrays (will get their positions updated in updateLayout())
+    for (let i = 0; i < FOUNDATION_COUNT; i++) {
+      foundationPiles.push({ cards: [], x: 0, y: 0 });
+    }
+    for (let i = 0; i < TABLEAU_COUNT; i++) {
+      tableauPiles.push({ cards: [], x: 0, y: 0 });
+    }
 
     // The deck array (will be filled with Card objects)
     let deck = [];
@@ -179,6 +167,7 @@
     let draggedCards = null;   // Array of cards being dragged
     let dragOrigin = null;     // Object: { type: "waste" | "tableau" | "foundation", index: ?, from: ? }
     let dragOffsetX = 0, dragOffsetY = 0;
+    let dragFrameRequested = false; // For throttling redraw during dragging
 
     // Card back themes: load img1.png to img10.png
     let cardThemes = [];
@@ -247,7 +236,7 @@
           return;
         }
 
-        // Face-up: draw corner rank+suit text (slightly larger)
+        // Face-up: draw corner rank+suit text
         let rankStr = (this.rank === 1 ? "A" :
                       this.rank === 11 ? "J" :
                       this.rank === 12 ? "Q" :
@@ -295,7 +284,6 @@
           let letter = (this.rank === 11 ? "J" : this.rank === 12 ? "Q" : "K");
           ctx.fillText(letter, this.x + CARD_WIDTH/2, this.y + CARD_HEIGHT/2);
         }
-        // Reset text alignment
         ctx.textAlign = "start";
         ctx.textBaseline = "alphabetic";
       }
@@ -304,6 +292,44 @@
                 py >= this.y && py <= this.y + CARD_HEIGHT);
       }
     }
+
+    /* =====================================
+       Layout Update & Responsive Canvas
+       ===================================== */
+    function updateLayout() {
+      // Update pile positions based on current canvas dimensions.
+      // Stock and Waste positions.
+      stockPile.x = margin;
+      stockPile.y = margin;
+      wastePile.x = stockPile.x + CARD_WIDTH + gapFixed;
+      wastePile.y = margin;
+
+      // Foundation positions (right-aligned).
+      for (let i = 0; i < FOUNDATION_COUNT; i++) {
+        let fp = foundationPiles[i];
+        fp.x = canvas.width - margin - (FOUNDATION_COUNT - i) * (CARD_WIDTH + gapFixed) + gapFixed;
+        fp.y = margin;
+      }
+
+      // Tableau positions: evenly spaced across the width.
+      let availableWidth = canvas.width - 2 * margin - TABLEAU_COUNT * CARD_WIDTH;
+      let gapTableau = TABLEAU_COUNT > 1 ? availableWidth / (TABLEAU_COUNT - 1) : 0;
+      for (let i = 0; i < TABLEAU_COUNT; i++) {
+        let tp = tableauPiles[i];
+        tp.x = margin + i * (CARD_WIDTH + gapTableau);
+        tp.y = margin + CARD_HEIGHT + 50;
+      }
+    }
+
+    function resizeCanvas() {
+      // Maintain the aspect ratio (1000:700 = 10:7).
+      let containerWidth = canvas.clientWidth;
+      canvas.width = containerWidth;
+      canvas.height = containerWidth * (LOGICAL_HEIGHT / LOGICAL_WIDTH);
+      updateLayout();
+      drawGame();
+    }
+    window.addEventListener("resize", resizeCanvas);
 
     /* =====================================
        Game Initialization & Deck Setup
@@ -319,7 +345,7 @@
 
     function initGame() {
       createDeck();
-      shuffle(deck); // Now using the defined shuffle() function
+      shuffle(deck);
 
       // Clear all piles
       stockPile.cards = [];
@@ -331,7 +357,7 @@
       for (let i = 0; i < TABLEAU_COUNT; i++) {
         for (let j = 0; j <= i; j++) {
           let c = deck.pop();
-          c.faceUp = (j === i); // only the top card face-up
+          c.faceUp = (j === i);
           tableauPiles[i].cards.push(c);
         }
       }
@@ -380,7 +406,6 @@
       for (let i = 0; i < foundationPiles.length; i++) {
         let fp = foundationPiles[i];
         if (validFoundationMove(card, fp.cards)) {
-          // Remove card from origin
           if (originType === "waste") {
             wastePile.cards.pop();
           } else if (originType === "tableau") {
@@ -414,7 +439,6 @@
       // --- STOCK PILE: 3-card draw with recycling ---
       if (mx >= stockPile.x && mx <= stockPile.x + CARD_WIDTH &&
           my >= stockPile.y && my <= stockPile.y + CARD_HEIGHT) {
-        // If there are any waste cards, append them to the bottom of stockPile.
         if (wastePile.cards.length > 0) {
           stockPile.cards = stockPile.cards.concat(wastePile.cards);
           wastePile.cards = [];
@@ -446,7 +470,7 @@
         }
       }
 
-      // --- FOUNDATION PILES: Allow dragging the top card ---
+      // --- FOUNDATION Piles: Allow dragging the top card ---
       for (let i = 0; i < foundationPiles.length; i++) {
         let fp = foundationPiles[i];
         if (fp.cards.length > 0) {
@@ -463,7 +487,7 @@
         }
       }
 
-      // --- TABLEAU PILES: Drag cards (a stack) from a tableau pile ---
+      // --- TABLEAU Piles: Drag cards (a stack) from a tableau pile ---
       for (let i = 0; i < tableauPiles.length; i++) {
         let pile = tableauPiles[i];
         for (let j = pile.cards.length - 1; j >= 0; j--) {
@@ -492,7 +516,13 @@
         draggedCards[k].x = mx - dragOffsetX;
         draggedCards[k].y = my - dragOffsetY + k * TABLEAU_SPACING;
       }
-      drawGame();
+      if (!dragFrameRequested) {
+        dragFrameRequested = true;
+        requestAnimationFrame(() => {
+          drawGame();
+          dragFrameRequested = false;
+        });
+      }
     });
 
     canvas.addEventListener("pointerup", (e) => {
@@ -508,10 +538,10 @@
         if (mx >= pile.x && mx <= pile.x + CARD_WIDTH) {
           if (pile.cards.length === 0) {
             if (draggedCards[0].rank === 13) {
-              for (let k = 0; k < draggedCards.length; k++) {
-                draggedCards[k].x = pile.x;
-                draggedCards[k].y = pile.y + k * TABLEAU_SPACING;
-              }
+              draggedCards.forEach((card, k) => {
+                card.x = pile.x;
+                card.y = pile.y + k * TABLEAU_SPACING;
+              });
               pile.cards = pile.cards.concat(draggedCards);
               dropped = true;
               score += 5;
@@ -523,10 +553,10 @@
                 target.rank === draggedCards[0].rank + 1 &&
                 target.getColor() !== draggedCards[0].getColor()) {
               let baseY = target.y;
-              for (let k = 0; k < draggedCards.length; k++) {
-                draggedCards[k].x = pile.x;
-                draggedCards[k].y = baseY + CARD_HEIGHT + k * TABLEAU_SPACING;
-              }
+              draggedCards.forEach((card, k) => {
+                card.x = pile.x;
+                card.y = baseY + CARD_HEIGHT + k * TABLEAU_SPACING;
+              });
               pile.cards = pile.cards.concat(draggedCards);
               dropped = true;
               score += 5;
@@ -578,7 +608,6 @@
           tableauPiles[dragOrigin.index].cards = tableauPiles[dragOrigin.index].cards.concat(draggedCards);
         }
       } else {
-        // If moving from tableau, flip new top card
         if (dragOrigin.type === "tableau") {
           let originPile = tableauPiles[dragOrigin.index];
           if (originPile.cards.length > 0) {
@@ -599,7 +628,6 @@
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
-      // Check waste top card
       if (wastePile.cards.length > 0) {
         let top = wastePile.cards[wastePile.cards.length - 1];
         if (top.contains(mx, my)) {
@@ -607,7 +635,6 @@
           return;
         }
       }
-      // Check tableau top cards
       for (let i = 0; i < tableauPiles.length; i++) {
         let pile = tableauPiles[i];
         if (pile.cards.length > 0) {
@@ -624,7 +651,6 @@
        Drawing the Game Board
        ===================================== */
     function drawGame() {
-      // Clear canvas (background is from CSS)
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Draw Stock Pile
@@ -652,16 +678,14 @@
       }
 
       // Draw Waste Pile (fanned)
-      for (let i = 0; i < wastePile.cards.length; i++) {
-        let c = wastePile.cards[i];
+      wastePile.cards.forEach((c, i) => {
         c.x = wastePile.x + i * 20;
         c.y = wastePile.y;
         c.draw(ctx);
-      }
+      });
 
       // Draw Foundation Piles
-      for (let i = 0; i < foundationPiles.length; i++) {
-        let fp = foundationPiles[i];
+      foundationPiles.forEach(fp => {
         if (fp.cards.length > 0) {
           let top = fp.cards[fp.cards.length - 1];
           top.x = fp.x;
@@ -673,24 +697,20 @@
           drawRoundedRect(ctx, fp.x, fp.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
           ctx.stroke();
         }
-      }
+      });
 
       // Draw Tableau Piles
-      for (let i = 0; i < tableauPiles.length; i++) {
-        let pile = tableauPiles[i];
-        for (let j = 0; j < pile.cards.length; j++) {
-          let c = pile.cards[j];
+      tableauPiles.forEach(pile => {
+        pile.cards.forEach((c, j) => {
           c.x = pile.x;
           c.y = pile.y + j * TABLEAU_SPACING;
           c.draw(ctx);
-        }
-      }
+        });
+      });
 
       // Draw Dragged Cards on Top
       if (draggedCards) {
-        for (let c of draggedCards) {
-          c.draw(ctx);
-        }
+        draggedCards.forEach(c => c.draw(ctx));
       }
     }
 
@@ -730,7 +750,9 @@
        Start the Game
        ===================================== */
     window.onload = () => {
+      updateLayout();
       initGame();
+      resizeCanvas(); // Ensure canvas is responsive on load.
     };
   </script>
 </body>
