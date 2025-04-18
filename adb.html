@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Live Decibel Meter</title>
+  <!-- Chart.js is an open-source library for rendering the meter -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #f4f4f4; color: #333; }
+    #meter { max-width: 600px; margin: 20px auto; }
+    #dbValue, #peakValue { font-size: 2em; margin: 10px; }
+    input { padding: 5px; width: 80px; }
+  </style>
+</head>
+<body>
+  <h1>Snap Decibel Meter</h1>
+  <label>
+    Background dB:<br>
+    <input id="bg" type="number" value="40">
+  </label>
+  <canvas id="meter" width="600" height="100"></canvas>
+  <div>Current Level: <span id="dbValue">--</span> dB</div>
+  <div>Peak Above BG: <span id="peakValue">--</span> dB</div>
+
+  <script>
+    (async () => {
+      // Request mic access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const data = new Float32Array(analyser.fftSize);
+      const ctx = document.getElementById('meter').getContext('2d');
+      const chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['dB'],
+          datasets: [{
+            label: 'Snap Level',
+            data: [0],
+            backgroundColor: 'rgba(54, 162, 235, 0.5)'
+          }]
+        },
+        options: {
+          animation: { duration: 0 },
+          scales: {
+            y: { min: 0, max: 100, title: { display: true, text: 'dB above BG' } }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      let peak = 0;
+      function update() {
+        analyser.getFloatTimeDomainData(data);
+        // RMS calculation
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+        let rms = Math.sqrt(sum / data.length);
+        // Convert to decibels (relative)
+        let db = 20 * Math.log10(rms);
+        if (isFinite(db)) {
+          const bg = parseFloat(document.getElementById('bg').value) || 0;
+          // Compute dB above background
+          const above = Math.max(0, db - bg);
+          peak = Math.max(peak, above);
+          document.getElementById('dbValue').textContent = above.toFixed(1);
+          document.getElementById('peakValue').textContent = peak.toFixed(1);
+          chart.data.datasets[0].data = [above];
+          chart.update();
+        }
+        requestAnimationFrame(update);
+      }
+      update();
+    })();
+  </script>
+</body>
+</html>
