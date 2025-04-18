@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Dark Decibel Meter</title>
+  <title>Dark Decibel Meter with Controls</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -16,15 +16,16 @@
     }
     #controls {
       margin: 20px;
+      display: flex;
+      gap: 10px;
     }
-    input {
+    button, input {
       background: #222;
       color: #eee;
       border: 1px solid #555;
       border-radius: 4px;
-      padding: 5px;
-      width: 60px;
-      text-align: center;
+      padding: 8px 12px;
+      font-size: 1em;
     }
     canvas {
       background: #1e1e1e;
@@ -48,28 +49,21 @@
       Background dB:
       <input id="bg" type="number" value="40">
     </label>
+    <button id="startBtn">Start</button>
+    <button id="stopBtn">Stop</button>
   </div>
   <canvas id="meter" width="600" height="200"></canvas>
   <div id="values">
-    <div>Current: <span id="dbValue">--</span> dB</div>
-    <div>Peak: <span id="peakValue">--</span> dB</div>
+    <div>Current: <span id="dbValue">--</span> dB</div>
+    <div>Peak: <span id="peakValue">--</span> dB</div>
   </div>
 
   <script>
-    (async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 2048;
+    let audioCtx, analyser, data, chart, peak = 0, animationId, stream;
 
-      const src = audioCtx.createMediaStreamSource(stream);
-      src.connect(analyser);
-
-      const data = new Float32Array(analyser.fftSize);
+    function initChart() {
       const ctx = document.getElementById('meter').getContext('2d');
-
-      // Chart with two datasets: bar for current, line for peak
-      const chart = new Chart(ctx, {
+      chart = new Chart(ctx, {
         data: {
           labels: ['dB'],
           datasets: [
@@ -95,55 +89,70 @@
         options: {
           animation: { duration: 0 },
           scales: {
-            x: {
-              grid: { display: false },
-              ticks: { color: '#aaa' }
-            },
+            x: { grid: { display: false }, ticks: { color: '#aaa' } },
             y: {
               min: 0, max: 100,
-              ticks: {
-                color: '#aaa',
-                stepSize: 10
-              },
-              grid: {
-                color: '#333'
-              },
-              title: {
-                display: true,
-                text: 'dB above BG',
-                color: '#ddd'
-              }
+              ticks: { color: '#aaa', stepSize: 10 },
+              grid: { color: '#333' },
+              title: { display: true, text: 'dB above BG', color: '#ddd' }
             }
           },
-          plugins: {
-            legend: { display: false }
-          }
+          plugins: { legend: { display: false } }
         }
       });
+    }
 
-      let peak = 0;
-      function updateMeter() {
-        analyser.getFloatTimeDomainData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) sum += data[i] ** 2;
-        let rms = Math.sqrt(sum / data.length);
-        let db = 20 * Math.log10(rms);
-        if (isFinite(db)) {
-          const bg = parseFloat(document.getElementById('bg').value) || 0;
-          const above = Math.max(0, db - bg);
-          peak = Math.max(peak, above);
-
-          document.getElementById('dbValue').textContent = above.toFixed(1);
-          document.getElementById('peakValue').textContent = peak.toFixed(1);
-
-          chart.data.datasets[0].data = [above];
-          chart.data.datasets[1].data = [peak];
-          chart.update();
-        }
-        requestAnimationFrame(updateMeter);
+    function updateMeter() {
+      analyser.getFloatTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i] ** 2;
+      let rms = Math.sqrt(sum / data.length);
+      let db = 20 * Math.log10(rms);
+      if (isFinite(db)) {
+        const bg = parseFloat(document.getElementById('bg').value) || 0;
+        const above = Math.max(0, db - bg);
+        peak = Math.max(peak, above);
+        document.getElementById('dbValue').textContent = above.toFixed(1);
+        document.getElementById('peakValue').textContent = peak.toFixed(1);
+        chart.data.datasets[0].data = [above];
+        chart.data.datasets[1].data = [peak];
+        chart.update();
       }
-      updateMeter();
-    })();
+      animationId = requestAnimationFrame(updateMeter);
+    }
+
+    function startMeter() {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(s => {
+          stream = s;
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 2048;
+          const src = audioCtx.createMediaStreamSource(stream);
+          src.connect(analyser);
+          data = new Float32Array(analyser.fftSize);
+          peak = 0;
+          updateMeter();
+          document.getElementById('startBtn').disabled = true;
+          document.getElementById('stopBtn').disabled = false;
+        })
+        .catch(err => console.error('Microphone error:', err));
+    }
+
+    function stopMeter() {
+      cancelAnimationFrame(animationId);
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (audioCtx) audioCtx.close();
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
+    }
+
+    window.onload = () => {
+      initChart();
+      document.getElementById('startBtn').addEventListener('click', startMeter);
+      document.getElementById('stopBtn').addEventListener('click', stopMeter);
+      document.getElementById('stopBtn').disabled = true;
+    };
   </script>
 </body>
 </html>
