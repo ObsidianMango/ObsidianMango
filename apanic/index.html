@@ -3,58 +3,60 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>4-7-8 Breathing</title>
+  <title>4‑7‑8 Breathing</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="manifest" href="manifest.json">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin:0; padding:0; box‑sizing:border-box; }
     html, body {
-      width: 100%; height: 100%;
-      background: #121212;
-      display: flex; align-items: center; justify-content: center; overflow: hidden;
-      font-family: sans-serif; position: relative;
+      width:100%; height:100%; overflow:hidden;
+      display:flex; align-items:center; justify-content:center;
+      background:#121212; font-family:sans-serif; position:relative;
     }
     #progress {
-      position: absolute; top: 0; left: 0;
-      width: 0%; height: 100%; z-index: 0;
+      position:absolute; top:0; left:0;
+      width:0%; height:100%; background:#4caf50;
+      z-index:0; transition:none;
     }
     #circle {
-      position: relative; z-index: 1;
-      width: 200px; height: 200px; border-radius: 50%;
-      background: #222; display: flex;
-      align-items: center; justify-content: center;
-      color: #fff; font-size: 4rem;
-      transition: transform 1s ease-in-out, background 0.5s;
+      position:relative; z-index:1;
+      width:200px; height:200px; border-radius:50%;
+      background:#222; display:flex;
+      align-items:center; justify-content:center;
+      color:#fff; font-size:4rem; cursor:pointer;
+      transition:background .5s, transform 1s ease-in-out;
     }
     #circle::before {
-      content: ''; position: absolute;
-      width: 250px; height: 250px; border-radius: 50%;
-      border: 2px dashed rgba(255,255,255,0.5);
-      transition: transform 1s ease-in-out;
+      content:''; position:absolute;
+      width:250px; height:250px; border-radius:50%;
+      border:2px dashed rgba(255,255,255,0.5);
+      transform:scale(1); opacity:1;
+      transition:transform 4s ease-in-out;
+    }
+    #circle.inhale::before  { transform:scale(0.6); }
+    #circle.exhale::before  { animation:flowOut 8s ease-out forwards; }
+    @keyframes flowOut {
+      from { transform:scale(1.4); opacity:1; }
+      to   { transform:scale(2.2); opacity:0; }
     }
     button {
-      position: absolute; bottom: 40px;
-      padding: 12px 24px; font-size: 1rem;
-      background: #333; color: #fff; border: none;
-      cursor: pointer; z-index: 1;
+      position:absolute; bottom:20px; padding:8px 16px;
+      background:#333; color:#fff; border:none; cursor:pointer;
+      font-size:1rem; z-index:1;
     }
-    button:hover { background: #555; }
-    #installBtn, #shareBtn { right: 20px; top: 20px; bottom: auto; }
-    #installBtn { display: none; }
-    #shareBtn { left: 20px; }
+    #installBtn { right:20px; display:none; }
+    #shareBtn   { left:20px; }
+    button:hover { background:#555; }
   </style>
 </head>
 <body>
   <div id="progress"></div>
   <div id="circle">Start</div>
-  <button id="startBtn">Start</button>
-  <button id="installBtn">Install App</button>
+  <button id="installBtn">Install</button>
   <button id="shareBtn">Share</button>
 
   <script>
-    // Service Worker & PWA install
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js');
-    }
+    // PWA install prompt
     let deferredPrompt;
     const installBtn = document.getElementById('installBtn');
     window.addEventListener('beforeinstallprompt', e => {
@@ -67,68 +69,53 @@
       deferredPrompt.prompt();
       deferredPrompt = null;
     });
-
-    // Emergency Share
-    const shareBtn = document.getElementById('shareBtn');
-    shareBtn.addEventListener('click', async () => {
-      const data = {
-        title: '4-7-8 Breathing',
-        text: 'Quick calm-down exercise',
-        url: window.location.href
-      };
-      if (navigator.share) {
-        await navigator.share(data);
-      } else {
-        await navigator.clipboard.writeText(window.location.href);
-        alert('Link copied to clipboard');
-      }
+    // service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+    // emergency share
+    document.getElementById('shareBtn').addEventListener('click', async () => {
+      const data = { title:'4‑7‑8 Breathing', text:'Quick calm‑down', url:location.href };
+      if (navigator.share) await navigator.share(data);
+      else { await navigator.clipboard.writeText(location.href); alert('Link copied'); }
     });
 
-    // Breathing App Logic
-    const startBtn = document.getElementById('startBtn');
     const circle = document.getElementById('circle');
-    const prog = document.getElementById('progress');
-    startBtn.addEventListener('click', startBreathing);
+    const prog   = document.getElementById('progress');
+    let running = false;
+
+    circle.addEventListener('click', () => {
+      if (!running) startBreathing();
+    });
 
     async function startBreathing() {
-      startBtn.style.display = 'none';
+      running = true;
       while (true) {
-        await phase(4, '#4caf50', 1.4, 'inhale', [200]);
-        await phase(7, '#b71c1c', 1.0, 'hold', [100]);
-        await phase(8, '#2196f3', 0.7, 'exhale', [200]);
+        await phase(4, '#4caf50','inhale', [200]);
+        await phase(7, '#b71c1c','hold'  , [100]);
+        await phase(8, '#2196f3','exhale', [200]);
       }
     }
 
-    async function phase(sec, color, scale, name, vibratePattern) {
+    async function phase(sec, color, mode, vib) {
+      // progress bar
       prog.style.background = color;
       prog.style.transition = `width ${sec}s linear`;
       prog.style.width = '0%';
-      requestAnimationFrame(() => prog.style.width = '100%');
-
+      requestAnimationFrame(()=> prog.style.width='100%');
+      // circle visuals
       circle.style.background = color;
-      circle.style.transform = `scale(${scale})`;
-      circle.classList.toggle('inhale', name === 'inhale');
-      circle.classList.toggle('exhale', name === 'exhale');
-
-      if (navigator.vibrate) navigator.vibrate(vibratePattern);
-
-      for (let i = sec; i > 0; i--) {
+      circle.className = mode;
+      if (mode!=='hold') circle.style.transform = mode==='inhale' ? 'scale(1.4)' : 'scale(1.4)';
+      else circle.style.transform = 'scale(1)';
+      // vibrate
+      if (navigator.vibrate) navigator.vibrate(vib);
+      // countdown
+      for (let i=sec;i>0;i--) {
         circle.textContent = i;
-        await wait(1000);
+        await new Promise(r=>setTimeout(r,1000));
       }
     }
-
-    function wait(ms) {
-      return new Promise(res => setTimeout(res, ms));
-    }
-
-    // Wind-effect transforms
-    const style = document.createElement('style');
-    style.textContent = `
-      #circle.inhale::before { transform: scale(0.6); }
-      #circle.exhale::before { transform: scale(1.4); }
-    `;
-    document.head.append(style);
   </script>
 </body>
 </html>
