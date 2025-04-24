@@ -2,72 +2,139 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>UTF-8 QR Generator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Dark-Themed Barcode Generator</title>
   <style>
-    body { font-family: Arial,sans-serif; background:#f5f5f5; display:flex; justify-content:center; padding:20px; }
-    .box { background:#fff; padding:20px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.1); width:100%; max-width:500px; }
-    textarea { width:100%; height:100px; box-sizing:border-box; font-size:16px; padding:10px; white-space: pre-wrap; }
-    .keys, .go { margin-top:10px; display:flex; justify-content:center; gap:10px; }
-    button {
-      padding:10px 20px; font-size:16px; border:1px solid #ccc; border-radius:4px;
-      background:#e0e0e0; cursor:pointer; transition:0.1s;
+    /* Dark background for page */
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #121212;
+      color: #eee;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
     }
-    button:active { background:#ccc; transform:translateY(2px); }
-    #qrcode { text-align:center; margin-top:20px; }
+    /* Dark container */
+    .container {
+      background: #1f1f1f;
+      padding: 20px;
+      max-width: 600px;
+      width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    /* Dark textarea */
+    textarea {
+      width: 100%;
+      height: 100px;
+      box-sizing: border-box;
+      resize: none;
+      font-size: 16px;
+      padding: 10px;
+      background: #2a2a2a;
+      color: #fff;
+      border: 1px solid #444;
+      border-radius: 4px;
+      white-space: pre-wrap;
+    }
+    /* Button rows */
+    .keys-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    /* Dark buttons */
+    .keys-row button,
+    .go-row button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #2a2a2a;
+      color: #eee;
+      border: 1px solid #555;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.1s, transform 0.1s;
+      min-width: 80px;
+    }
+    .keys-row button:active,
+    .go-row button:active {
+      background: #444;
+      transform: translateY(2px);
+    }
+    /* Barcode area */
+    .barcode-wrapper {
+      background: #fff;
+      padding: 20px;
+      border-radius: 4px;
+      margin-top: 20px;
+      text-align: center;
+    }
+    /* Hide default SVG styling */
+    #barcode { max-width: 100%; }
   </style>
 </head>
 <body>
-  <div class="box">
+  <div class="container">
     <textarea id="input" placeholder="Type or use the buttons…"></textarea>
-    <div class="keys">
+    <div class="keys-row">
       <button id="tab">Tab</button>
       <button id="enter">Enter</button>
-      <button id="up">↑</button>
-      <button id="left">←</button>
-      <button id="right">→</button>
-      <button id="down">↓ (Tab×2)</button>
-      <button id="nav">Enter ↓↓ Enter</button>
     </div>
-    <div class="go">
-      <button id="gen">Generate QR Code</button>
+    <div class="keys-row">
+      <button id="arrow-up">↑</button>
     </div>
-    <div id="qrcode"></div>
+    <div class="keys-row">
+      <button id="arrow-left">←</button>
+      <button id="arrow-right">→</button>
+    </div>
+    <div class="keys-row">
+      <button id="arrow-down">↓</button>
+    </div>
+    <div class="go-row keys-row">
+      <button id="generate">Generate Barcode</button>
+    </div>
+    <div class="barcode-wrapper">
+      <svg id="barcode"></svg>
+    </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
   <script>
     const ta = document.getElementById('input');
-    function ins(txt) {
+    function insertAtCursor(txt) {
       const s = ta.selectionStart, e = ta.selectionEnd;
       ta.value = ta.value.slice(0,s) + txt + ta.value.slice(e);
       ta.selectionStart = ta.selectionEnd = s + txt.length;
       ta.focus();
     }
 
-    document.getElementById('tab').onclick   = () => ins('\t');
-    document.getElementById('enter').onclick = () => ins('\r\n');
-    document.getElementById('up').onclick    = () => ins('↑');
-    document.getElementById('left').onclick  = () => ins('←');
-    document.getElementById('right').onclick = () => ins('→');
-    // arrow-down now inserts two tabs
-    document.getElementById('down').onclick  = () => ins('\t\t');
-    // macro: Enter, two downs (tabs), then Enter
-    document.getElementById('nav').onclick   = () => ins('\r\n\t\t\r\n');
+    document.getElementById('tab').onclick    = () => insertAtCursor('\t');
+    document.getElementById('enter').onclick  = () => insertAtCursor('\r\n');
+    document.getElementById('arrow-left').onclick  = () => insertAtCursor('←');
+    document.getElementById('arrow-right').onclick = () => insertAtCursor('→');
+    document.getElementById('arrow-up').onclick    = () => insertAtCursor('↑');
+    document.getElementById('arrow-down').onclick  = () => insertAtCursor('↓');
 
-    document.getElementById('gen').onclick = () => {
-      const txt = ta.value;
-      if (!txt) { alert('Enter something first!'); return; }
-      const container = document.getElementById('qrcode');
-      container.innerHTML = '';
+    document.getElementById('generate').onclick = () => {
+      const text = ta.value;
+      if (!text) {
+        alert('Please enter some text to encode.');
+        return;
+      }
       try {
-        const qr = qrcode(0,'H');
-        qr.addData(txt, 'Byte');
-        qr.make();
-        container.innerHTML = qr.createImgTag(6,0);
-      } catch(err) {
+        JsBarcode("#barcode", text, {
+          format: "CODE128",
+          lineColor: "#000",
+          width: 2,
+          height: 80,
+          displayValue: false,
+          margin: 10
+        });
+      } catch (err) {
         console.error(err);
-        alert('QR generation failed.');
+        alert('Barcode generation failed.');
       }
     };
   </script>
