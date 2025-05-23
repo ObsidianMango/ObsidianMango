@@ -11,8 +11,8 @@
       padding: 0;
       width: 100vw;
       height: 100vh;
-      overflow: hidden !important;
-      overscroll-behavior: none !important;
+      overflow: hidden;
+      overscroll-behavior: none;
       position: fixed;
       top: 0; left: 0;
     }
@@ -41,7 +41,7 @@
       align-items: center;
       background: #181e23;
       z-index: 1;
-      overflow: hidden !important;
+      overflow: hidden;
     }
     canvas {
       background: #252b33;
@@ -53,7 +53,7 @@
       height: 100vh !important;
       max-width: 100vw;
       max-height: 100vh;
-      touch-action: none !important;
+      touch-action: none;
       position: fixed;
       top: 0; left: 0;
     }
@@ -73,14 +73,47 @@
   <script>
     const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-    // LOCK SCROLL on mobile (for iOS and Android browsers)
+    // LOCK SCROLL on mobile and grab swipe anywhere (even outside canvas)
     if (isMobile) {
-      document.body.addEventListener('touchmove', function(e) {
+      let swipeStartX = null, swipeStartY = null, lastSwipeTime = 0;
+      let keys = window._swipeKeys = {}; // expose for main game loop
+
+      function handleSwipeStart(e) {
+        if (e.touches.length === 1) {
+          swipeStartX = e.touches[0].clientX;
+          swipeStartY = e.touches[0].clientY;
+        }
         e.preventDefault();
-      }, { passive: false });
-      document.body.addEventListener('touchstart', function(e) {
-        if (e.target === document.body) e.preventDefault();
-      }, { passive: false });
+      }
+      function handleSwipeMove(e) {
+        e.preventDefault();
+      }
+      function handleSwipeEnd(e) {
+        if (e.changedTouches.length === 1 && swipeStartX !== null && swipeStartY !== null) {
+          let dx = e.changedTouches[0].clientX - swipeStartX;
+          let dy = e.changedTouches[0].clientY - swipeStartY;
+          let absDx = Math.abs(dx), absDy = Math.abs(dy);
+          let now = Date.now();
+          if (now - lastSwipeTime > 100 && (absDx > 40 || absDy > 40)) {
+            if (absDx > absDy) {
+              if (dx > 0) keys['swipeRight'] = true;
+              else keys['swipeLeft'] = true;
+            } else {
+              if (dy > 0) keys['swipeDown'] = true;
+              else keys['swipeUp'] = true;
+            }
+            lastSwipeTime = now;
+          }
+          swipeStartX = null; swipeStartY = null;
+        }
+        e.preventDefault();
+      }
+      document.addEventListener('touchstart', handleSwipeStart, { passive: false });
+      document.addEventListener('touchmove', handleSwipeMove, { passive: false });
+      document.addEventListener('touchend', handleSwipeEnd, { passive: false });
+
+      // Prevent scroll even for body
+      document.body.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive: false});
     }
 
     const canvas = document.getElementById('gameCanvas');
@@ -139,46 +172,10 @@
     const dividerLength = 36, dividerGap = 36;
 
     // INPUT + SWIPE + KEYBOARD CONTROL
-    let keys = {};
+    let keys = isMobile ? window._swipeKeys : {};
     let touchStartX = 0, touchStartY = 0, lastSwipeTime = 0;
     let swipeLaneMoveReady = { left: true, right: true, up: true, down: true };
     let laneMoveReady = { left: true, right: true };
-
-    // ---- SWIPE CONTROLS (canvas only, mobile only) ----
-    if (isMobile) {
-      canvas.addEventListener('touchstart', function(e) {
-        if (e.touches.length === 1) {
-          touchStartX = e.touches[0].clientX;
-          touchStartY = e.touches[0].clientY;
-        }
-        e.preventDefault();
-      }, { passive: false });
-
-      canvas.addEventListener('touchmove', function(e) {
-        e.preventDefault();
-      }, { passive: false });
-
-      canvas.addEventListener('touchend', function(e) {
-        if (e.changedTouches.length === 1) {
-          let dx = e.changedTouches[0].clientX - touchStartX;
-          let dy = e.changedTouches[0].clientY - touchStartY;
-          let absDx = Math.abs(dx), absDy = Math.abs(dy);
-          let now = Date.now();
-          if (now - lastSwipeTime < 100) return;
-          lastSwipeTime = now;
-          if (absDx > 40 || absDy > 40) {
-            if (absDx > absDy) {
-              if (dx > 0 && swipeLaneMoveReady.right) { keys['swipeRight'] = true; swipeLaneMoveReady.right = false; }
-              else if (dx < 0 && swipeLaneMoveReady.left) { keys['swipeLeft'] = true; swipeLaneMoveReady.left = false; }
-            } else {
-              if (dy > 0 && swipeLaneMoveReady.down) { keys['swipeDown'] = true; swipeLaneMoveReady.down = false; }
-              else if (dy < 0 && swipeLaneMoveReady.up) { keys['swipeUp'] = true; swipeLaneMoveReady.up = false; }
-            }
-          }
-        }
-        e.preventDefault();
-      }, { passive: false });
-    }
 
     // ---- KEYBOARD CONTROLS (desktop only) ----
     if (!isMobile) {
