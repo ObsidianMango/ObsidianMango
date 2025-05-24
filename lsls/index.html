@@ -129,8 +129,6 @@
     // INPUT + SWIPE + KEYBOARD CONTROL
     let keys = {};
     let touchStartX = 0, touchStartY = 0, lastSwipeTime = 0;
-    let swipeLaneMoveReady = { left: true, right: true, up: true, down: true };
-    let laneMoveReady = { left: true, right: true };
 
     // SWIPE CONTROLS (mobile)
     if (isMobile) {
@@ -152,11 +150,11 @@
           if (absDx > 40 || absDy > 40) {
             e.preventDefault();
             if (absDx > absDy) {
-              if (dx > 0 && swipeLaneMoveReady.right) { keys['swipeRight'] = true; swipeLaneMoveReady.right = false; }
-              else if (dx < 0 && swipeLaneMoveReady.left) { keys['swipeLeft'] = true; swipeLaneMoveReady.left = false; }
+              if (dx > 0) { keys['swipeRight'] = true; }
+              else if (dx < 0) { keys['swipeLeft'] = true; }
             } else {
-              if (dy > 0 && swipeLaneMoveReady.down) { keys['swipeDown'] = true; swipeLaneMoveReady.down = false; }
-              else if (dy < 0 && swipeLaneMoveReady.up) { keys['swipeUp'] = true; swipeLaneMoveReady.up = false; }
+              if (dy > 0) { keys['swipeDown'] = true; }
+              else if (dy < 0) { keys['swipeUp'] = true; }
             }
           }
         }
@@ -285,67 +283,55 @@
     }
 
     function updatePlayer() {
+      // Slow dash speed
       let baseObsSpeed = 4;
       let movingObs = obstacles.filter(o => o.type === 0 || o.type === 1);
       if (movingObs.length) {
         baseObsSpeed = movingObs.reduce((sum, o) => sum + o.speed, 0) / movingObs.length;
       }
-      player.speed = baseObsSpeed * 0.75;
+      player.speed = baseObsSpeed * 0.5; // SLOWER DASH
 
+      // Keyboard (desktop)
       if (!isMobile) {
-        if ((keys['ArrowLeft'] || keys['a']) && laneMoveReady.left) {
+        if ((keys['ArrowLeft'] || keys['a'])) {
           if (currentLane > 0) setPlayerToLane(currentLane - 1);
-          laneMoveReady.left = false;
-        } else if (!(keys['ArrowLeft'] || keys['a'])) {
-          laneMoveReady.left = true;
+          keys['ArrowLeft'] = false; keys['a'] = false;
         }
-        if ((keys['ArrowRight'] || keys['d']) && laneMoveReady.right) {
+        if ((keys['ArrowRight'] || keys['d'])) {
           if (currentLane < laneCount - 1) setPlayerToLane(currentLane + 1);
-          laneMoveReady.right = false;
-        } else if (!(keys['ArrowRight'] || keys['d'])) {
-          laneMoveReady.right = true;
+          keys['ArrowRight'] = false; keys['d'] = false;
         }
       }
 
+      // Mobile swipe
       if (isMobile) {
-        if (keys['swipeLeft'] && swipeLaneMoveReady.left) {
+        if (keys['swipeLeft']) {
           if (currentLane > 0) setPlayerToLane(currentLane - 1);
-          swipeLaneMoveReady.left = false;
+          keys['swipeLeft'] = false;
         }
-        if (!keys['swipeLeft']) swipeLaneMoveReady.left = true;
-
-        if (keys['swipeRight'] && swipeLaneMoveReady.right) {
+        if (keys['swipeRight']) {
           if (currentLane < laneCount - 1) setPlayerToLane(currentLane + 1);
-          swipeLaneMoveReady.right = false;
+          keys['swipeRight'] = false;
         }
-        if (!keys['swipeRight']) swipeLaneMoveReady.right = true;
+        if (keys['swipeUp']) {
+          player.y -= Math.max(H / 8, player.height * 3) * 0.65; // Smoother, slower
+          keys['swipeUp'] = false;
+        }
+        if (keys['swipeDown']) {
+          player.y += Math.max(H / 8, player.height * 3) * 0.65;
+          keys['swipeDown'] = false;
+        }
       }
 
-      let upAmt = isMobile ? Math.max(H / 8, player.height * 3) : player.speed;
-      let downAmt = upAmt;
-
+      // Up/down on desktop
       if (!isMobile) {
         let moveY = 0;
         if (keys['ArrowUp'] || keys['w']) moveY = -1;
         if (keys['ArrowDown'] || keys['s']) moveY = 1;
         player.y += moveY * player.speed;
-      } else {
-        if (keys['swipeUp'] && swipeLaneMoveReady.up) {
-          player.y -= upAmt;
-          swipeLaneMoveReady.up = false;
-        }
-        if (!keys['swipeUp']) swipeLaneMoveReady.up = true;
-
-        if (keys['swipeDown'] && swipeLaneMoveReady.down) {
-          player.y += downAmt;
-          swipeLaneMoveReady.down = false;
-        }
-        if (!keys['swipeDown']) swipeLaneMoveReady.down = true;
       }
 
       player.y = Math.max(0, Math.min(player.y, H - player.height));
-      keys['swipeLeft'] = false; keys['swipeRight'] = false;
-      keys['swipeUp'] = false; keys['swipeDown'] = false;
     }
 
     function resetGameVars() {
@@ -357,7 +343,7 @@
       winFlashTime = 0;
       let rand = Math.random();
       if (rand < 0.7) {
-        distanceGoal = Math.floor(Math.random() * 4000) + 000;
+        distanceGoal = Math.floor(Math.random() * 4000) + 3000;
       } else {
         distanceGoal = Math.floor(Math.random() * 4000) + 9000;
       }
@@ -396,7 +382,6 @@
 
       if (winFlash) {
         drawOrderCompleteFlash();
-        // Wait for 1.25 seconds, then redirect
         if (performance.now() - winFlashTime > WIN_FLASH_DURATION) {
           window.location.href = "order.html";
           return;
@@ -442,7 +427,6 @@
           return;
         }
 
-        swipeLaneMoveReady.left = swipeLaneMoveReady.right = swipeLaneMoveReady.up = swipeLaneMoveReady.down = true;
         requestAnimationFrame(gameLoop);
       } else {
         drawGameOver();
