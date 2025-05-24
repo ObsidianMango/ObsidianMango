@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Driving Avoid Game</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=yes">
   <style>
     html, body {
       background: #181e23;
@@ -12,11 +12,8 @@
       width: 100vw;
       height: 100vh;
       overflow: hidden;
-      overscroll-behavior: none;
-      position: fixed;
-      top: 0; left: 0;
     }
-    #score, #lives {
+    #distance, #lives {
       font-family: monospace;
       font-size: 1.25rem;
       color: #fff;
@@ -41,7 +38,6 @@
       align-items: center;
       background: #181e23;
       z-index: 1;
-      overflow: hidden;
     }
     canvas {
       background: #252b33;
@@ -54,11 +50,9 @@
       max-width: 100vw;
       max-height: 100vh;
       touch-action: none;
-      position: fixed;
-      top: 0; left: 0;
     }
     @media (max-width: 650px) {
-      #score, #lives {
+      #distance, #lives {
         font-size: 1.1rem;
       }
     }
@@ -66,55 +60,12 @@
 </head>
 <body>
   <div id="lives">Lives: 3</div>
-  <div id="score">Score: 0</div>
+  <div id="distance">Distance: 0 / 0</div>
   <div id="gameContainer">
     <canvas id="gameCanvas"></canvas>
   </div>
   <script>
     const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-
-    // LOCK SCROLL on mobile and grab swipe anywhere (even outside canvas)
-    if (isMobile) {
-      let swipeStartX = null, swipeStartY = null, lastSwipeTime = 0;
-      let keys = window._swipeKeys = {}; // expose for main game loop
-
-      function handleSwipeStart(e) {
-        if (e.touches.length === 1) {
-          swipeStartX = e.touches[0].clientX;
-          swipeStartY = e.touches[0].clientY;
-        }
-        e.preventDefault();
-      }
-      function handleSwipeMove(e) {
-        e.preventDefault();
-      }
-      function handleSwipeEnd(e) {
-        if (e.changedTouches.length === 1 && swipeStartX !== null && swipeStartY !== null) {
-          let dx = e.changedTouches[0].clientX - swipeStartX;
-          let dy = e.changedTouches[0].clientY - swipeStartY;
-          let absDx = Math.abs(dx), absDy = Math.abs(dy);
-          let now = Date.now();
-          if (now - lastSwipeTime > 100 && (absDx > 40 || absDy > 40)) {
-            if (absDx > absDy) {
-              if (dx > 0) keys['swipeRight'] = true;
-              else keys['swipeLeft'] = true;
-            } else {
-              if (dy > 0) keys['swipeDown'] = true;
-              else keys['swipeUp'] = true;
-            }
-            lastSwipeTime = now;
-          }
-          swipeStartX = null; swipeStartY = null;
-        }
-        e.preventDefault();
-      }
-      document.addEventListener('touchstart', handleSwipeStart, { passive: false });
-      document.addEventListener('touchmove', handleSwipeMove, { passive: false });
-      document.addEventListener('touchend', handleSwipeEnd, { passive: false });
-
-      // Prevent scroll even for body
-      document.body.addEventListener('touchmove', function(e){ e.preventDefault(); }, {passive: false});
-    }
 
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
@@ -150,7 +101,7 @@
     const player = {
       x: 0, y: 0, width: 56, height: 90,
       img: playerImg,
-      speed: isMobile ? 36 : 9
+      speed: 4
     };
 
     // OBSTACLE PNGs
@@ -165,25 +116,60 @@
     let obstacles = [];
 
     // GAME STATE
-    let lives = 3, score = 0, gameOver = false, gameWin = false;
+    let lives = 3, distance = 0, gameOver = false;
+    let distanceGoal = 5000;
+    let winFlash = false;
+    let winFlashTime = 0;
+    const WIN_FLASH_DURATION = 1250; // ms
 
     // DIVIDER ANIMATION
     let roadDividerOffset = 0;
     const dividerLength = 36, dividerGap = 36;
 
     // INPUT + SWIPE + KEYBOARD CONTROL
-    let keys = isMobile ? window._swipeKeys : {};
+    let keys = {};
     let touchStartX = 0, touchStartY = 0, lastSwipeTime = 0;
     let swipeLaneMoveReady = { left: true, right: true, up: true, down: true };
     let laneMoveReady = { left: true, right: true };
 
-    // ---- KEYBOARD CONTROLS (desktop only) ----
+    // SWIPE CONTROLS (mobile)
+    if (isMobile) {
+      canvas.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 1) {
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+        }
+      }, { passive: false });
+
+      canvas.addEventListener('touchend', function(e) {
+        if (e.changedTouches.length === 1) {
+          let dx = e.changedTouches[0].clientX - touchStartX;
+          let dy = e.changedTouches[0].clientY - touchStartY;
+          let absDx = Math.abs(dx), absDy = Math.abs(dy);
+          let now = Date.now();
+          if (now - lastSwipeTime < 100) return;
+          lastSwipeTime = now;
+          if (absDx > 40 || absDy > 40) {
+            e.preventDefault();
+            if (absDx > absDy) {
+              if (dx > 0 && swipeLaneMoveReady.right) { keys['swipeRight'] = true; swipeLaneMoveReady.right = false; }
+              else if (dx < 0 && swipeLaneMoveReady.left) { keys['swipeLeft'] = true; swipeLaneMoveReady.left = false; }
+            } else {
+              if (dy > 0 && swipeLaneMoveReady.down) { keys['swipeDown'] = true; swipeLaneMoveReady.down = false; }
+              else if (dy < 0 && swipeLaneMoveReady.up) { keys['swipeUp'] = true; swipeLaneMoveReady.up = false; }
+            }
+          }
+        }
+      }, { passive: false });
+    }
+
+    // KEYBOARD CONTROLS (desktop)
     if (!isMobile) {
       document.addEventListener('keydown', e => keys[e.key] = true);
       document.addEventListener('keyup', e => keys[e.key] = false);
     }
 
-    // --- LANE RESTRICTED SPAWN ---
+    // LANE RESTRICTED SPAWN
     let spawnDelay = 64, spawnTick = 0;
     let bikeSpawnDelay = 120, bikeSpawnTick = 0;
     function spawnObstacle() {
@@ -242,19 +228,20 @@
       player.x = roadLeft + currentLane * laneWidth + laneWidth/2 - player.width/2;
     }
 
-    function drawPlayer() {
+    function drawPlayer(customY) {
+      const y = customY !== undefined ? customY : player.y;
       if (player.img && player.img.complete) {
-        ctx.drawImage(player.img, player.x, player.y, player.width, player.height);
+        ctx.drawImage(player.img, player.x, y, player.width, player.height);
       } else {
         ctx.fillStyle = "#bcc6cc";
-        ctx.fillRect(player.x, player.y, player.width, player.height);
+        ctx.fillRect(player.x, y, player.width, player.height);
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = 3;
-        ctx.strokeRect(player.x, player.y, player.width, player.height);
+        ctx.strokeRect(player.x, y, player.width, player.height);
         ctx.font = "bold 16px monospace";
         ctx.fillStyle = "#222";
         ctx.textAlign = "center";
-        ctx.fillText("VAN", player.x + player.width/2, player.y + player.height/2 + 6);
+        ctx.fillText("VAN", player.x + player.width/2, y + player.height/2 + 6);
       }
     }
 
@@ -298,8 +285,13 @@
     }
 
     function updatePlayer() {
-      // ---- LANE MOVEMENT ----
-      // Keyboard (desktop): one press = one lane move
+      let baseObsSpeed = 4;
+      let movingObs = obstacles.filter(o => o.type === 0 || o.type === 1);
+      if (movingObs.length) {
+        baseObsSpeed = movingObs.reduce((sum, o) => sum + o.speed, 0) / movingObs.length;
+      }
+      player.speed = baseObsSpeed * 0.75;
+
       if (!isMobile) {
         if ((keys['ArrowLeft'] || keys['a']) && laneMoveReady.left) {
           if (currentLane > 0) setPlayerToLane(currentLane - 1);
@@ -315,7 +307,6 @@
         }
       }
 
-      // Swipe (mobile): one swipe per move
       if (isMobile) {
         if (keys['swipeLeft'] && swipeLaneMoveReady.left) {
           if (currentLane > 0) setPlayerToLane(currentLane - 1);
@@ -330,9 +321,7 @@
         if (!keys['swipeRight']) swipeLaneMoveReady.right = true;
       }
 
-      // ---- UP/DOWN MOVEMENT ----
-      // Keyboard: normal speed, mobile: big chunk per swipe
-      let upAmt = isMobile ? Math.max(H / 16, player.height * 1.2) : player.speed;
+      let upAmt = isMobile ? Math.max(H / 8, player.height * 3) : player.speed;
       let downAmt = upAmt;
 
       if (!isMobile) {
@@ -355,7 +344,6 @@
       }
 
       player.y = Math.max(0, Math.min(player.y, H - player.height));
-      // Clear swipe keys after movement so you can swipe again
       keys['swipeLeft'] = false; keys['swipeRight'] = false;
       keys['swipeUp'] = false; keys['swipeDown'] = false;
     }
@@ -363,10 +351,19 @@
     function resetGameVars() {
       setPlayerToLane(1);
       player.y = H - player.height - 14;
-      score = 0; lives = 3; obstacles = [];
-      gameOver = false; gameWin = false;
+      lives = 3; obstacles = [];
+      gameOver = false;
+      winFlash = false;
+      winFlashTime = 0;
+      let rand = Math.random();
+      if (rand < 0.7) {
+        distanceGoal = Math.floor(Math.random() * 4000) + 000;
+      } else {
+        distanceGoal = Math.floor(Math.random() * 4000) + 9000;
+      }
+      distance = 0;
       document.getElementById('lives').textContent = 'Lives: ' + lives;
-      document.getElementById('score').textContent = 'Score: ' + score;
+      document.getElementById('distance').textContent = "Distance: " + distance + " / " + distanceGoal;
     }
 
     function drawGameOver() {
@@ -378,39 +375,41 @@
       ctx.fillText("You Failed!", W/2, H/2-20);
       ctx.font = "bold 22px monospace";
       ctx.fillStyle = "#fff";
-      ctx.fillText("Score: "+score, W/2, H/2+30);
+      ctx.fillText("Distance: "+distance, W/2, H/2+30);
       ctx.font = "bold 16px monospace";
       ctx.fillText("Tap or Press R to Retry", W/2, H/2+60);
     }
-    function drawGameWin() {
-      ctx.fillStyle = "rgba(0,0,0,0.75)";
-      ctx.fillRect(0,0,W,H);
-      ctx.font = "bold 36px monospace";
-      ctx.fillStyle = "#4dff67";
-      ctx.textAlign = "center";
-      ctx.fillText("Delivered!", W/2, H/2-20);
-      ctx.font = "bold 22px monospace";
+
+    function drawOrderCompleteFlash() {
       ctx.fillStyle = "#fff";
-      ctx.fillText("Score: "+score, W/2, H/2+30);
-      ctx.font = "bold 16px monospace";
-      ctx.fillText("Tap or Press R to Play Again", W/2, H/2+60);
+      ctx.globalAlpha = 1;
+      ctx.fillRect(0, 0, W, H);
+      ctx.font = "bold 60px monospace";
+      ctx.fillStyle = "#198144";
+      ctx.textAlign = "center";
+      ctx.fillText("ORDER COMPLETE!", W/2, H/2);
+      ctx.globalAlpha = 1;
     }
 
-    function checkGoal() {
-      if (player.y <= 8) {
-        gameWin = true;
-        return true;
-      }
-      return false;
-    }
-
-    function gameLoop() {
+    function gameLoop(ts) {
       ctx.clearRect(0, 0, W, H);
+
+      if (winFlash) {
+        drawOrderCompleteFlash();
+        // Wait for 1.25 seconds, then redirect
+        if (performance.now() - winFlashTime > WIN_FLASH_DURATION) {
+          window.location.href = "order.html";
+          return;
+        }
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+
       drawRoad();
-      drawPlayer();
       drawObstacles();
 
-      if (!gameOver && !gameWin) {
+      if (!gameOver) {
+        drawPlayer();
         updatePlayer();
         updateObstacles();
         roadDividerOffset -= 8;
@@ -431,28 +430,34 @@
         }
         spawnTick++; bikeSpawnTick++;
         if (spawnTick > spawnDelay) { spawnObstacle(); spawnTick = 0; }
-        if (checkGoal()) { gameWin = true; }
-        else { score++; }
-        document.getElementById('score').textContent = "Score: " + score;
-        // Clear swipe lock at end of frame
+        distance++;
+        document.getElementById('distance').textContent = "Distance: " + distance + " / " + distanceGoal;
+
+        // === FLASH ON WIN, THEN REDIRECT ===
+        if (distance >= distanceGoal && !winFlash) {
+          winFlash = true;
+          winFlashTime = performance.now();
+          drawOrderCompleteFlash();
+          requestAnimationFrame(gameLoop);
+          return;
+        }
+
         swipeLaneMoveReady.left = swipeLaneMoveReady.right = swipeLaneMoveReady.up = swipeLaneMoveReady.down = true;
         requestAnimationFrame(gameLoop);
-      } else if (gameOver) {
+      } else {
         drawGameOver();
-      } else if (gameWin) {
-        drawGameWin();
       }
     }
 
     function handleRestart(e) {
-      if (gameOver || gameWin) {
+      if (gameOver) {
         resetGameVars();
         gameLoop();
       }
     }
     canvas.addEventListener('touchstart', handleRestart);
     document.addEventListener('keydown', function(e) {
-      if ((gameOver || gameWin) && (e.key === 'r' || e.key === 'R')) {
+      if ((gameOver) && (e.key === 'r' || e.key === 'R')) {
         handleRestart();
       }
     });
