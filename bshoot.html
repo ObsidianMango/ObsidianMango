@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Basketball Flick Shot</title>
+  <style>
+    body { margin: 0; overflow: hidden; font-family: sans-serif; background: #111; }
+    canvas { display: block; }
+    #score {
+      position: absolute;
+      top: 20px;
+      width: 100%;
+      text-align: center;
+      font-size: 2em;
+      color: white;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Score: 0</div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
+  <script>
+    let scene = new THREE.Scene();
+    let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    let renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const scoreDisplay = document.getElementById("score");
+    let score = 0;
+
+    // Lighting
+    const light = new THREE.DirectionalLight(0xffffff, 1.5);
+    light.position.set(5, 10, 5);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0x404040));
+
+    // Ground
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 30),
+      new THREE.MeshPhongMaterial({ color: 0x222222 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    // Backboard
+    const backboard = new THREE.Mesh(
+      new THREE.BoxGeometry(3, 2, 0.1),
+      new THREE.MeshPhongMaterial({ color: 0xffffff })
+    );
+    backboard.position.set(0, 5, -12);
+    scene.add(backboard);
+
+    // Hoop Rim
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(0.7, 0.07, 8, 20),
+      new THREE.MeshPhongMaterial({ color: 0xff0000 })
+    );
+    rim.position.set(0, 4.2, -11.5);
+    rim.rotation.x = Math.PI / 2;
+    scene.add(rim);
+
+    // Ball
+    const ballGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+    const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xff8c00 });
+    const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+    scene.add(ball);
+
+    let velocity = new THREE.Vector3();
+    let isShot = false;
+    let touchStart = null;
+    let touchEnd = null;
+
+    function resetBall() {
+      ball.position.set(0, 1.5, 2);
+      velocity.set(0, 0, 0);
+      isShot = false;
+    }
+
+    function shootBall(force) {
+      if (isShot) return;
+      isShot = true;
+      velocity.copy(force);
+    }
+
+    function getFlickVector(start, end) {
+      const dx = (end.x - start.x) * 0.02;
+      const dy = (end.y - start.y) * 0.02;
+      return new THREE.Vector3(dx, dy + 0.15, -0.35);
+    }
+
+    function checkScore() {
+      const dz = Math.abs(ball.position.z + 11.5);
+      const dy = Math.abs(ball.position.y - 4.2);
+      const dx = Math.abs(ball.position.x);
+      if (dz < 0.4 && dy < 0.4 && dx < 0.6) {
+        score++;
+        scoreDisplay.textContent = "Score: " + score;
+        setTimeout(resetBall, 1000);
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (isShot) {
+        velocity.y -= 0.005; // gravity
+        ball.position.add(velocity);
+        checkScore();
+
+        if (ball.position.y < 0 || ball.position.z < -20) {
+          resetBall();
+        }
+      }
+      renderer.render(scene, camera);
+    }
+
+    // Input
+    window.addEventListener("mousedown", e => {
+      touchStart = { x: e.clientX, y: e.clientY };
+    });
+
+    window.addEventListener("mouseup", e => {
+      if (!touchStart) return;
+      touchEnd = { x: e.clientX, y: e.clientY };
+      shootBall(getFlickVector(touchStart, touchEnd));
+      touchStart = null;
+    });
+
+    window.addEventListener("touchstart", e => {
+      const t = e.touches[0];
+      touchStart = { x: t.clientX, y: t.clientY };
+    });
+
+    window.addEventListener("touchend", e => {
+      const t = e.changedTouches[0];
+      touchEnd = { x: t.clientX, y: t.clientY };
+      shootBall(getFlickVector(touchStart, touchEnd));
+      touchStart = null;
+    });
+
+    // Setup
+    camera.position.set(0, 2, 8);
+    camera.lookAt(0, 4, -11.5);
+    resetBall();
+    animate();
+  </script>
+</body>
+</html>
