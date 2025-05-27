@@ -2,14 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Pop-A-Shot Timed/Free with Juice (Stable)</title>
+  <title>Pop-A-Shot Basketball</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
     body { margin: 0; overflow: hidden; background: #191715; }
     canvas { display: block; }
     #retroUI {
-      position: absolute;
-      top: 10px; left: 0; width: 100vw; z-index: 10; text-align: center; pointer-events: none;
+      position: absolute; top: 10px; left: 0; width: 100vw; z-index: 10; text-align: center; pointer-events: none;
     }
     .panel {
       display: inline-block;
@@ -40,8 +39,7 @@
       text-align: center;
     }
     #metersUI {
-      position: absolute;
-      left: 0; top: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 5;
+      position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 5;
     }
     #powerBarCanvas {
       position: absolute;
@@ -80,16 +78,17 @@
       100% { transform: translateY(-54px) scale(0.95); opacity: 0;}
     }
     #modeOverlay {
-      position: absolute;
+      position: fixed;
       top: 0; left: 0;
       width: 100vw; height: 100vh;
       background: rgba(0,0,0,0.89);
-      z-index: 100;
+      z-index: 999;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       pointer-events: all;
+      transition: opacity 0.2s;
     }
     .modeBtn {
       font-family: 'Press Start 2P', monospace;
@@ -139,7 +138,7 @@
   </div>
   <div id="timerPanel">30.0</div>
   <div id="modeOverlay">
-    <div style="color:#fff; font-family:'Press Start 2P',monospace; font-size:1.5em; text-shadow:2px 2px 8px #000;">CHOOSE GAME MODE</div>
+    <div id="modeMsg" style="color:#fff; font-family:'Press Start 2P',monospace; font-size:1.5em; text-shadow:2px 2px 8px #000;">CHOOSE GAME MODE</div>
     <button class="modeBtn" id="timedBtn">TIMED: 30 SECONDS</button>
     <button class="modeBtn" id="freeBtn">FREE PLAY</button>
   </div>
@@ -152,12 +151,48 @@
     const powerCtx = powerCanvas.getContext("2d");
     const timerPanel = document.getElementById("timerPanel");
     const modeOverlay = document.getElementById("modeOverlay");
+    const modeMsg = document.getElementById("modeMsg");
     const timedBtn = document.getElementById("timedBtn");
     const freeBtn = document.getElementById("freeBtn");
 
-    // --- Game Mode & Timer ---
     let gameMode = "none";
     let timer = 30.0, timerRunning = false, timerID = null, gameStarted = false;
+    let score = 0, streak = 0;
+
+    function showModeOverlay(message) {
+      if (message) modeMsg.innerHTML = message;
+      else modeMsg.innerHTML = 'CHOOSE GAME MODE';
+      modeOverlay.style.opacity = '1';
+      modeOverlay.style.pointerEvents = 'all';
+      modeOverlay.style.display = 'flex';
+    }
+    function hideModeOverlay() {
+      modeOverlay.style.opacity = '0';
+      modeOverlay.style.pointerEvents = 'none';
+      setTimeout(()=>{ modeOverlay.style.display = 'none'; }, 250);
+    }
+
+    timedBtn.onclick = function() {
+      hideModeOverlay();
+      setTimeout(() => { startGame("timed"); }, 260);
+    };
+    freeBtn.onclick = function() {
+      hideModeOverlay();
+      setTimeout(() => { startGame("free"); }, 260);
+    };
+
+    function startGame(mode) {
+      gameMode = mode;
+      gameStarted = true;
+      score = 0;
+      streak = 0;
+      scoreDisplay.textContent = score;
+      streakDisplay.textContent = streak;
+      resetBall();
+      if (timerID) clearTimeout(timerID);
+      timerPanel.style.display = "none";
+      if (gameMode === "timed") startTimer();
+    }
 
     function startTimer() {
       timer = 30.0;
@@ -184,39 +219,6 @@
       gameStarted = false;
       showModeOverlay(`Time's Up!<br>SCORE: ${score}<br><br>Play again?`);
     }
-    function showModeOverlay(message = null) {
-      modeOverlay.style.display = "flex";
-      if (message) modeOverlay.children[0].innerHTML = message;
-      else modeOverlay.children[0].innerHTML = 'CHOOSE GAME MODE';
-    }
-    function hideModeOverlay() {
-      modeOverlay.style.display = "none";
-    }
-
-    timedBtn.onclick = function() {
-      hideModeOverlay();
-      setTimeout(() => { startGame("timed"); }, 100);
-    };
-    freeBtn.onclick = function() {
-      hideModeOverlay();
-      setTimeout(() => { startGame("free"); }, 100);
-    };
-
-    function startGame(mode) {
-      // Always reset game state
-      gameMode = mode;
-      gameStarted = true;
-      score = 0;
-      streak = 0;
-      scoreDisplay.textContent = score;
-      streakDisplay.textContent = streak;
-      resetBall();
-      if (timerID) clearTimeout(timerID);
-      timerPanel.style.display = "none";
-      if (gameMode === "timed") {
-        startTimer();
-      }
-    }
 
     // --- Three.js setup ---
     let scene = new THREE.Scene();
@@ -231,7 +233,7 @@
     scene.add(light);
     scene.add(new THREE.AmbientLight(0x6e7ab3, 0.52));
 
-    // --- Realistic Wood Court ---
+    // --- Court ---
     let courtGroup = new THREE.Group();
     for(let x=-7; x<=7; x++){
       for(let z=-10; z<=15; z+=2){
@@ -268,7 +270,7 @@
     courtGroup.add(centerCircle);
     scene.add(courtGroup);
 
-    // --- Knicks Crowd (random) ---
+    // --- Crowd ---
     function makeKnicksCrowd() {
       const group = new THREE.Group();
       let crowdColors = [0x006BB6, 0xF58426, 0xffffff];
@@ -292,7 +294,7 @@
     }
     scene.add(makeKnicksCrowd());
 
-    // --- More Realistic Post, Glass Backboard, Rim ---
+    // --- Hoop and Ball ---
     const post = new THREE.Mesh(
       new THREE.CylinderGeometry(0.11, 0.13, 8, 18),
       new THREE.MeshPhongMaterial({ color: 0xa7a7a7 })
@@ -300,7 +302,6 @@
     post.position.set(0, 2.12, -12.7);
     scene.add(post);
 
-    // Glass backboard
     const backboard = new THREE.Mesh(
       new THREE.BoxGeometry(3.1, 1.89, 0.13),
       new THREE.MeshPhongMaterial({
@@ -310,7 +311,6 @@
     backboard.position.set(0, 5, -12);
     scene.add(backboard);
 
-    // Rim
     const rim = new THREE.Mesh(
       new THREE.TorusGeometry(0.75, 0.08, 16, 32),
       new THREE.MeshPhongMaterial({ color: 0xF58426 })
@@ -319,7 +319,6 @@
     rim.rotation.x = Math.PI / 2;
     scene.add(rim);
 
-    // Net (realistic mesh: a white open cylinder just under rim)
     const netGeo = new THREE.CylinderGeometry(0.74, 0.55, 0.58, 16, 1, true);
     const netMat = new THREE.MeshPhongMaterial({
       color: 0xffffff, wireframe: true, opacity: 0.85, transparent: true
@@ -328,10 +327,8 @@
     net.position.set(0, 3.89, -11.5);
     scene.add(net);
 
-    // Rim collision plane
     const rimPlane = { z: -11.5, y: 4.18, r: 0.78 };
 
-    // --- Ball ---
     const ballGeometry = new THREE.SphereGeometry(0.31, 32, 32);
     const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xff9900 });
     const ball = new THREE.Mesh(ballGeometry, ballMaterial);
@@ -339,23 +336,13 @@
 
     // --- Game State ---
     let velocity = new THREE.Vector3();
-    let isShot = false;
-    let powerLevel = 0;
-    let score = 0, streak = 0;
-    let awaitingPower = false;
-    let scoredLastShot = false;
-    let fallingThrough = false;
-    let inNet = false;
-    let floorBounce = false;
-
-    // --- Power Meter ---
+    let isShot = false, powerLevel = 0, awaitingPower = false;
+    let scoredLastShot = false, fallingThrough = false, inNet = false, floorBounce = false;
     let sweetSpotMin = 0.57, sweetSpotMax = 0.76;
-    let powerAnim = 0.23, powerDir = 1;
-    let powerActive = false;
-
-    // --- Score Pop ---
+    let powerAnim = 0.23, powerDir = 1, powerActive = false;
     let scorePopSide = 1; // alternate left/right
 
+    // --- Score Pop ---
     function spawnScorePop(pts) {
       let div = document.createElement('div');
       div.className = 'score-pop';
@@ -459,7 +446,6 @@
       powerCtx.fillText("SWEET SPOT!", (smin+smax)/2, y+h-2);
     }
 
-    // --- Ball Reset ---
     function resetBall() {
       setTimeout(() => {
         ball.position.set(0, 1.5, 2);
@@ -474,7 +460,6 @@
       }, 730);
     }
 
-    // --- Main Shot Logic ---
     function takeShot(powerValue) {
       let swish = (powerValue >= sweetSpotMin && powerValue <= sweetSpotMax);
       let baseZ = -0.183 - 0.121*powerValue;
@@ -502,7 +487,6 @@
       }
     }
 
-    // --- Backboard Physics (easier and reliable) ---
     function checkBackboardCollision() {
       const bb = { z: -12, x1: -1.62, x2: 1.62, y1: 3.92, y2: 5.94 };
       if (velocity.z <= 0) return;
@@ -518,7 +502,6 @@
       }
     }
 
-    // --- Rim bounce ---
     function checkRimBounce() {
       if (
         Math.abs(ball.position.z - rimPlane.z) < 0.14 &&
@@ -532,12 +515,10 @@
       }
     }
 
-    // --- Animate Ball Dropping Through Net and Floor Bounce ---
     function updateBallPhysics() {
       velocity.y -= 0.008;
       ball.position.add(velocity);
 
-      // Detect ball falling through net after score
       if (scoredLastShot && !fallingThrough && ball.position.y < 3.7 && ball.position.z < -11.3 && ball.position.z > -11.7) {
         fallingThrough = true;
         inNet = true;
@@ -546,12 +527,10 @@
           -0.07 - Math.random()*0.02,
           -0.015 + (Math.random()-0.5)*0.012
         );
-        // --- PARTICLE BURST!
         spawnParticleBurst(0, 4.08, -11.5, 16 + 8*scoredLastShot,
           ["#fff048","#00ff75","#006BB6","#F58426","#fff","#e0e0e0"]);
         spawnScorePop(scoredLastShot);
       }
-      // After it falls through, hit ground and bounce
       if (fallingThrough && !floorBounce && ball.position.y <= 0.32) {
         velocity.y *= -0.47;
         velocity.x *= 0.77;
@@ -559,12 +538,10 @@
         floorBounce = true;
         ball.position.y = 0.32;
       }
-      // Let it bounce and roll, reset when almost still
       if (floorBounce && Math.abs(velocity.y) < 0.015 && ball.position.y <= 0.35) {
         velocity.set(0,0,0);
         setTimeout(resetBall, 500);
       }
-      // Out of bounds or miss
       if (ball.position.y < 0.11 || ball.position.z < -15) {
         streak = 0;
         streakDisplay.textContent = streak;
@@ -572,7 +549,6 @@
       }
     }
 
-    // --- Tap/Click Handling ---
     function tap() {
       if (!gameStarted) return;
       if (isShot) return;
@@ -590,7 +566,6 @@
     window.addEventListener("mousedown", tap);
     window.addEventListener("touchstart", function(e){ e.preventDefault(); tap(); }, {passive:false});
 
-    // --- Camera ---
     function setCamera() {
       if(window.innerHeight > window.innerWidth){
         camera.position.set(0, 2.1, 6.5);
@@ -602,7 +577,6 @@
     }
     setCamera();
 
-    // --- Responsive ---
     function resizeUI() {
       setTimeout(()=>{
         powerCanvas.width = Math.floor(window.innerWidth * 0.76);
@@ -618,7 +592,6 @@
       resizeUI();
     });
 
-    // --- Show/hide UI for shot ---
     function hideUI() {
       powerCanvas.style.opacity = "0";
       document.getElementById("retroUI").style.opacity = "0.7";
@@ -630,7 +603,6 @@
       document.getElementById("instructions").style.opacity = "1";
     }
 
-    // --- Animation Loop ---
     function animate() {
       requestAnimationFrame(animate);
       if (powerActive && awaitingPower && !isShot) {
@@ -651,10 +623,11 @@
       drawParticles();
     }
 
-    // --- Start game on mode select ---
+    // --- Overlay on first load ---
     showModeOverlay();
     resizeUI();
     animate();
+
   </script>
 </body>
 </html>
