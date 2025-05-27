@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Tap-Timing Basketball (Portrait Optimized)</title>
+  <title>Tap-Timing Basketball (Knicks & Wood Edition)</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
     body { margin: 0; overflow: hidden; background: #222227; }
@@ -116,24 +116,36 @@
     scene.add(light);
     scene.add(new THREE.AmbientLight(0x4c4c7a));
 
-    // --- Ground ---
-    let ground = new THREE.Mesh(
+    // --- Wood Court (Brown, shiny) ---
+    let woodCourt = new THREE.Mesh(
       new THREE.PlaneGeometry(36, 35),
-      new THREE.MeshPhongMaterial({ color: 0x32374a })
+      new THREE.MeshPhongMaterial({
+        color: 0xb97a57,
+        shininess: 58,
+        specular: 0xffffff,
+        reflectivity: 0.17
+      })
     );
-    ground.rotation.x = -Math.PI / 2;
-    scene.add(ground);
+    woodCourt.rotation.x = -Math.PI / 2;
+    woodCourt.position.y = 0.005; // Tiny bit above zero for no z-fighting
+    scene.add(woodCourt);
 
-    // --- HUGE CROWD ---
-    function makeBigCrowd() {
+    // --- Knicks Crowd (checkerboard of blue, orange, white) ---
+    function makeKnicksCrowd() {
       const group = new THREE.Group();
-      let crowdColors = [0xff4a4a, 0x48caff, 0x8dff48, 0xfde048, 0xffb348, 0x9e48ff, 0xff48c4];
+      // Knicks blue and orange, with some white
+      let crowdColors = [
+        0x006BB6, // Knicks Blue
+        0xF58426, // Knicks Orange
+        0xffffff, // White
+      ];
       let yStart = 4.5, z = -13.5, crowdRows = 7, perRow = 18, w = 0.86, h = 1.15, d = 0.22;
       for (let row = 0; row < crowdRows; row++) {
         for (let i = 0; i < perRow; i++) {
+          let checker = ((i + row) % 3);
           let box = new THREE.Mesh(
             new THREE.BoxGeometry(w, h, d),
-            new THREE.MeshPhongMaterial({ color: crowdColors[(i+row*2)%crowdColors.length] })
+            new THREE.MeshPhongMaterial({ color: crowdColors[checker] })
           );
           box.position.set(
             -7.7 + (i * 0.90) + ((row % 2) * 0.44),
@@ -145,7 +157,7 @@
       }
       return group;
     }
-    scene.add(makeBigCrowd());
+    scene.add(makeKnicksCrowd());
 
     // --- Hoop, Rim, Backboard ---
     const backboard = new THREE.Mesh(
@@ -257,15 +269,36 @@
 
     // --- Main Shot Logic ---
     function takeShot() {
-      // Map aimAngle (-max to +max) to left/right, and power (0.32-1)
       let maxAim = Math.PI/17; // much smaller angle for easier aiming
       let dirX = Math.sin(aimAngle) * 0.61;
-      let force = 0.11 + 0.23*powerLevel; // fine tuned for this court
+      let force = 0.11 + 0.23*powerLevel;
       velocity.set(dirX, force + 0.10, -0.17 - 0.10*powerLevel);
       isShot = true;
       aiming = false;
       powerMode = false;
       hideUI();
+    }
+
+    // --- Backboard Physics ---
+    function checkBackboardCollision() {
+      // Front face of the backboard is at z = -12, size x = 3.2, y = 2.0, center at (0, 5, -12)
+      const bb = { z: -12, x1: -1.6, x2: 1.6, y1: 4, y2: 6 };
+      // If moving forward, don't process
+      if (velocity.z <= 0) return;
+      // Did we just cross the backboard front face?
+      if (
+        ball.position.z < bb.z + 0.15 && // a little padding
+        ball.position.z > bb.z - 0.21 &&
+        ball.position.x > bb.x1 && ball.position.x < bb.x2 &&
+        ball.position.y > bb.y1 && ball.position.y < bb.y2
+      ) {
+        // Bounce off: reflect z velocity, dampen a bit, add a bit of random side spin
+        velocity.z *= -0.61;
+        velocity.x += (Math.random()-0.5)*0.055;
+        velocity.y *= 0.83;
+        // Push ball out so it doesn't get stuck
+        ball.position.z = bb.z + 0.17;
+      }
     }
 
     // --- Scoring ---
@@ -296,7 +329,7 @@
       // Aim UI (MUCH slower and smaller angle)
       if (aiming && !isShot) {
         let maxAim = Math.PI/17;
-        aimAnimAngle += 0.0082 * aimDir; // slower!
+        aimAnimAngle += 0.0082 * aimDir;
         if (aimAnimAngle > maxAim) { aimAnimAngle = maxAim; aimDir = -1; }
         if (aimAnimAngle < -maxAim) { aimAnimAngle = -maxAim; aimDir = 1; }
         drawAimArrow(aimAnimAngle);
@@ -305,7 +338,7 @@
       }
       // Power UI (MUCH slower)
       else if (powerMode && !isShot) {
-        powerAnim += 0.0083 * powerDir; // slower!
+        powerAnim += 0.0083 * powerDir;
         if (powerAnim > 1) { powerAnim = 1; powerDir = -1; }
         if (powerAnim < 0.24) { powerAnim = 0.24; powerDir = 1; }
         drawPowerBar(powerAnim);
@@ -323,10 +356,11 @@
         velocity.y -= 0.008;
         ball.position.add(velocity);
         checkScore();
+        checkBackboardCollision();
         // Rim "bounce"
         if (
           Math.abs(ball.position.z - rimPlane.z) < 0.10 &&
-          ball.position.y < rimPlane.y + 0.2 && 
+          ball.position.y < rimPlane.y + 0.2 &&
           Math.abs(ball.position.x) < rimPlane.r + 0.13 &&
           velocity.y < 0
         ) {
@@ -378,7 +412,6 @@
 
     // --- Camera ---
     function setCamera() {
-      // Camera is slightly lower and closer in portrait for a bigger hoop/crowd
       if(window.innerHeight > window.innerWidth){
         camera.position.set(0, 2.5, 6.4);
         camera.lookAt(0, 4.5, -11.5);
