@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Pop-A-Shot All-Star</title>
+  <title>Pop-A-Shot Timed/Free with Juice</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
     body { margin: 0; overflow: hidden; background: #191715; }
@@ -79,6 +79,51 @@
       90%  { transform: translateY(-36px) scale(0.96); opacity: 0.9;}
       100% { transform: translateY(-54px) scale(0.95); opacity: 0;}
     }
+    #modeOverlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.89);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: all;
+    }
+    .modeBtn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 1.15em;
+      color: #fff048;
+      border: 4px solid #00ff75;
+      background: #222;
+      padding: 20px 34px;
+      margin: 28px;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px #00ff75, 0 0 4px #fff048;
+      cursor: pointer;
+      transition: background 0.18s, color 0.18s;
+    }
+    .modeBtn:hover {
+      background: #006BB6;
+      color: #fff;
+    }
+    #timerPanel {
+      position: absolute;
+      top: 2.5vh;
+      right: 4vw;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 1.4em;
+      color: #fff;
+      background: #000c;
+      border: 4px solid #00ff75;
+      border-radius: 12px;
+      padding: 0.12em 0.9em;
+      box-shadow: 0 2px 10px #00ff75c2;
+      z-index: 12;
+      user-select: none;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -92,6 +137,12 @@
   <div id="metersUI">
     <canvas id="powerBarCanvas" width="340" height="54"></canvas>
   </div>
+  <div id="timerPanel">30.0</div>
+  <div id="modeOverlay">
+    <div style="color:#fff; font-family:'Press Start 2P',monospace; font-size:1.5em; text-shadow:2px 2px 8px #000;">CHOOSE GAME MODE</div>
+    <button class="modeBtn" id="timedBtn">TIMED: 30 SECONDS</button>
+    <button class="modeBtn" id="freeBtn">FREE PLAY</button>
+  </div>
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
   <script>
     // --- UI refs ---
@@ -99,6 +150,59 @@
     const streakDisplay = document.getElementById("streak");
     const powerCanvas = document.getElementById("powerBarCanvas");
     const powerCtx = powerCanvas.getContext("2d");
+    const timerPanel = document.getElementById("timerPanel");
+    const modeOverlay = document.getElementById("modeOverlay");
+    const timedBtn = document.getElementById("timedBtn");
+    const freeBtn = document.getElementById("freeBtn");
+
+    // --- Game Mode & Timer ---
+    let gameMode = "none";
+    let timer = 30.0, timerRunning = false, timerID = null;
+
+    function startTimer() {
+      timer = 30.0;
+      timerPanel.style.display = "block";
+      timerRunning = true;
+      updateTimer();
+    }
+    function updateTimer() {
+      if (!timerRunning) return;
+      timer -= 0.05;
+      if (timer < 0) timer = 0;
+      timerPanel.textContent = timer.toFixed(1);
+      if (timer > 0) {
+        timerID = setTimeout(updateTimer, 50);
+      } else {
+        timerPanel.textContent = "0.0";
+        timerRunning = false;
+        gameOver();
+      }
+    }
+    function gameOver() {
+      timerRunning = false;
+      timerPanel.style.display = "none";
+      showModeOverlay("Time's Up!<br>SCORE: " + score + "<br><br>Play again?");
+    }
+    function showModeOverlay(message = null) {
+      modeOverlay.style.display = "flex";
+      if (message) modeOverlay.children[0].innerHTML = message;
+      else modeOverlay.children[0].innerHTML = 'CHOOSE GAME MODE';
+    }
+    function hideModeOverlay() {
+      modeOverlay.style.display = "none";
+    }
+    timedBtn.onclick = function() {
+      hideModeOverlay();
+      gameMode = "timed";
+      startTimer();
+      resetGame();
+    };
+    freeBtn.onclick = function() {
+      hideModeOverlay();
+      gameMode = "free";
+      timerPanel.style.display = "none";
+      resetGame();
+    };
 
     // --- Three.js setup ---
     let scene = new THREE.Scene();
@@ -222,14 +326,14 @@
     // --- Game State ---
     let velocity = new THREE.Vector3();
     let isShot = false;
-    let powerMode = false;
-    let powerLevel = 0;      // 0-1
+    let powerLevel = 0;
     let score = 0, streak = 0;
     let awaitingPower = false;
     let scoredLastShot = false;
     let fallingThrough = false;
     let inNet = false;
     let floorBounce = false;
+    let gameStarted = false;
 
     // --- Power Meter ---
     let sweetSpotMin = 0.57, sweetSpotMax = 0.76;
@@ -244,7 +348,6 @@
       div.className = 'score-pop';
       div.textContent = pts > 1 ? '+2' : '+1';
       div.style.opacity = "1";
-      // Alternate position
       let baseY = window.innerHeight * 0.33;
       let left = scorePopSide > 0 ? '65vw' : '15vw';
       div.style.left = left;
@@ -257,6 +360,56 @@
       scorePopSide *= -1;
     }
 
+    // --- Particle Burst
+    let particles = [];
+    function spawnParticleBurst(x, y, z, n, colorSet) {
+      for (let i = 0; i < n; i++) {
+        let angle = Math.random()*2*Math.PI;
+        let speed = 0.11 + Math.random()*0.12;
+        let dx = Math.cos(angle)*speed;
+        let dz = Math.sin(angle)*speed;
+        let dy = 0.11 + Math.random()*0.12;
+        let color = colorSet[Math.floor(Math.random()*colorSet.length)];
+        particles.push({
+          x, y, z,
+          dx, dy, dz,
+          color,
+          t: 0,
+          life: 18 + Math.floor(Math.random()*14)
+        });
+      }
+    }
+    function drawParticles() {
+      let ctx = renderer.getContext();
+      for (let i = particles.length-1; i >= 0; i--) {
+        let p = particles[i];
+        let [sx, sy] = toScreenCoords(p.x, p.y, p.z);
+        ctx.save();
+        ctx.globalAlpha = 1 - p.t/p.life;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 9 - 5*p.t/p.life, 0, 2*Math.PI);
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = 13;
+        ctx.shadowColor = "#fff";
+        ctx.fill();
+        ctx.restore();
+        p.x += p.dx;
+        p.y += p.dy;
+        p.z += p.dz;
+        p.dy -= 0.008;
+        p.t++;
+        if (p.t > p.life) particles.splice(i, 1);
+      }
+    }
+    function toScreenCoords(x, y, z) {
+      let v = new THREE.Vector3(x, y, z);
+      v.project(camera);
+      return [
+        Math.round((v.x + 1)/2 * window.innerWidth),
+        Math.round((-v.y + 1)/2 * window.innerHeight)
+      ];
+    }
+
     function drawPowerBar(power) {
       powerCtx.clearRect(0,0,powerCanvas.width,powerCanvas.height);
       let w = powerCanvas.width-38, h = 22, x = 19, y = 24;
@@ -264,21 +417,18 @@
       powerCtx.strokeStyle = "#fff048";
       powerCtx.lineWidth = 6;
       powerCtx.strokeRect(x, y, w, h);
-      // SWEET SPOT
       let smin = x + w * sweetSpotMin;
       let smax = x + w * sweetSpotMax;
       powerCtx.fillStyle = "#ffe96b";
       powerCtx.globalAlpha = 0.67;
       powerCtx.fillRect(smin, y, smax-smin, h);
       powerCtx.globalAlpha = 1.0;
-      // Bar fill
       let grad = powerCtx.createLinearGradient(x, y, x+w, y+h);
       grad.addColorStop(0, "#00ff75");
       grad.addColorStop(0.5, "#fff048");
       grad.addColorStop(1, "#ff5858");
       powerCtx.fillStyle = grad;
       powerCtx.fillRect(x, y, w*power, h);
-      // Dot
       let px = x + w*power;
       powerCtx.beginPath();
       powerCtx.arc(px, y+h/2, 16, 0, 2*Math.PI);
@@ -291,7 +441,6 @@
       powerCtx.fillStyle = "#0036cc";
       powerCtx.textAlign = "center";
       powerCtx.fillText("POWER", powerCanvas.width/2, 20);
-      // SWEET SPOT label
       powerCtx.font = '11px "Press Start 2P", monospace';
       powerCtx.fillStyle = "#222";
       powerCtx.fillText("SWEET SPOT!", (smin+smax)/2, y+h-2);
@@ -303,7 +452,6 @@
         ball.position.set(0, 1.5, 2);
         velocity.set(0, 0, 0);
         isShot = false;
-        powerMode = false;
         awaitingPower = false;
         scoredLastShot = false;
         fallingThrough = false;
@@ -311,6 +459,12 @@
         floorBounce = false;
         showUI();
       }, 730);
+    }
+    function resetGame() {
+      score = 0; streak = 0;
+      scoreDisplay.textContent = score;
+      streakDisplay.textContent = streak;
+      resetBall();
     }
 
     // --- Main Shot Logic ---
@@ -320,21 +474,16 @@
       let baseY = 0.12 + 0.182*powerValue;
       velocity.set(0, baseY, baseZ);
       isShot = true;
-      powerMode = false;
       awaitingPower = false;
       hideUI();
-      // Scoring
       let pts = 1;
       if(swish){
         if(streak >= 2) pts = 2;
         streak++;
-        showFeedback(pts > 1 ? "DOUBLE! SWISH!" : "SWISH!", "#f6ff73");
       } else if (Math.abs(powerValue - (sweetSpotMin+sweetSpotMax)/2) < 0.14) {
         streak++;
-        showFeedback("IN!", "#fff");
       } else {
         streak = 0;
-        showFeedback("BRICK!", "#F58426");
       }
       if(streak > 0) {
         score += pts;
@@ -346,33 +495,34 @@
       }
     }
 
-    // --- Backboard Physics ---
+    // --- Backboard Physics (easier and reliable) ---
     function checkBackboardCollision() {
-      const bb = { z: -12, x1: -1.58, x2: 1.58, y1: 3.95, y2: 5.93 };
+      const bb = { z: -12, x1: -1.62, x2: 1.62, y1: 3.92, y2: 5.94 };
       if (velocity.z <= 0) return;
       if (
-        ball.position.z < bb.z + 0.15 &&
-        ball.position.z > bb.z - 0.21 &&
+        ball.position.z < bb.z + 0.17 &&
+        ball.position.z > bb.z - 0.22 &&
         ball.position.x > bb.x1 && ball.position.x < bb.x2 &&
         ball.position.y > bb.y1 && ball.position.y < bb.y2
       ) {
-        velocity.z *= -0.65;
-        velocity.y *= 0.83;
-        ball.position.z = bb.z + 0.15;
+        // Reliable bank shot bounce!
+        velocity.z *= -0.7;
+        velocity.y *= 0.93 + (Math.random()-0.5)*0.10;
+        ball.position.z = bb.z + 0.17;
       }
     }
 
     // --- Rim bounce ---
     function checkRimBounce() {
       if (
-        Math.abs(ball.position.z - rimPlane.z) < 0.12 &&
-        ball.position.y < rimPlane.y + 0.26 &&
-        Math.abs(ball.position.x) < rimPlane.r + 0.13 &&
+        Math.abs(ball.position.z - rimPlane.z) < 0.14 &&
+        ball.position.y < rimPlane.y + 0.29 &&
+        Math.abs(ball.position.x) < rimPlane.r + 0.16 &&
         velocity.y < 0
       ) {
-        velocity.y *= -0.45;
-        velocity.x *= 0.32;
-        velocity.z *= 0.74;
+        velocity.y *= -0.44 - Math.random()*0.07;
+        velocity.x *= 0.32 + Math.random()*0.13;
+        velocity.z *= 0.73 + Math.random()*0.14;
       }
     }
 
@@ -385,12 +535,15 @@
       if (scoredLastShot && !fallingThrough && ball.position.y < 3.7 && ball.position.z < -11.3 && ball.position.z > -11.7) {
         fallingThrough = true;
         inNet = true;
-        // Give it a little extra drop through the net
         velocity.set(
           (Math.random() - 0.5) * 0.01,
           -0.07 - Math.random()*0.02,
           -0.015 + (Math.random()-0.5)*0.012
         );
+        // --- PARTICLE BURST!
+        spawnParticleBurst(0, 4.08, -11.5, 16 + 8*scoredLastShot,
+          ["#fff048","#00ff75","#006BB6","#F58426","#fff","#e0e0e0"]);
+        spawnScorePop(scoredLastShot);
       }
       // After it falls through, hit ground and bounce
       if (fallingThrough && !floorBounce && ball.position.y <= 0.32) {
@@ -413,49 +566,9 @@
       }
     }
 
-    // --- Scoring Animation/Reset ---
-    function checkScore() {
-      // Score detection (ball passing downward through rim area)
-      if (
-        !scoredLastShot &&
-        ball.position.z < rimPlane.z + 0.12 && ball.position.z > rimPlane.z - 0.21 &&
-        ball.position.y < rimPlane.y + 0.39 && ball.position.y > rimPlane.y - 0.34 &&
-        Math.abs(ball.position.x) < rimPlane.r &&
-        velocity.y < 0
-      ) {
-        if(scoredLastShot){
-          spawnScorePop(scoredLastShot);
-        }
-      }
-    }
-
-    // --- Feedback text ---
-    let feedbackTimeout = null;
-    function showFeedback(txt, color="#fff") {
-      // Don't show "MISS" if it's a falling ball
-      if (txt==="MISS" && scoredLastShot) return;
-      let feedbackText = document.getElementById("feedbackText");
-      feedbackText.textContent = txt;
-      feedbackText.style.color = color;
-      feedbackText.style.opacity = 1;
-      clearTimeout(feedbackTimeout);
-      feedbackTimeout = setTimeout(()=>{feedbackText.style.opacity=0}, 1000);
-    }
-
-    // --- UI Show/Hide for clarity when shot is in air
-    function hideUI() {
-      powerCanvas.style.opacity = "0";
-      document.getElementById("retroUI").style.opacity = "0.7";
-      instructions.style.opacity = "0";
-    }
-    function showUI() {
-      powerCanvas.style.opacity = "1";
-      document.getElementById("retroUI").style.opacity = "1";
-      instructions.style.opacity = "1";
-    }
-
     // --- Tap/Click Handling ---
     function tap() {
+      if (!gameStarted) return;
       if (isShot) return;
       if (!awaitingPower) {
         awaitingPower = true;
@@ -499,6 +612,18 @@
       resizeUI();
     });
 
+    // --- Show/hide UI for shot ---
+    function hideUI() {
+      powerCanvas.style.opacity = "0";
+      document.getElementById("retroUI").style.opacity = "0.7";
+      document.getElementById("instructions").style.opacity = "0";
+    }
+    function showUI() {
+      powerCanvas.style.opacity = "1";
+      document.getElementById("retroUI").style.opacity = "1";
+      document.getElementById("instructions").style.opacity = "1";
+    }
+
     // --- Animation Loop ---
     function animate() {
       requestAnimationFrame(animate);
@@ -513,16 +638,38 @@
       }
       if (isShot) {
         updateBallPhysics();
-        checkScore();
         checkRimBounce();
         checkBackboardCollision();
       }
       renderer.render(scene, camera);
+      drawParticles();
     }
+
+    // --- Start game on mode select ---
+    function startGame() {
+      gameStarted = true;
+      resetGame();
+      if (gameMode === "timed") startTimer();
+    }
+
+    // --- Game mode overlay start ---
+    showModeOverlay();
+    setTimeout(()=>{modeOverlay.focus && modeOverlay.focus();},200);
+
+    // Tie game mode selection to starting
+    timedBtn.onclick = function() {
+      gameMode = "timed";
+      hideModeOverlay();
+      startGame();
+    };
+    freeBtn.onclick = function() {
+      gameMode = "free";
+      hideModeOverlay();
+      startGame();
+    };
 
     // --- Start game ---
     resizeUI();
-    resetBall();
     animate();
   </script>
 </body>
