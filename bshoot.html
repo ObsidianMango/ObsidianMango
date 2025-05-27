@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Pop-A-Shot Timed/Free with Juice</title>
+  <title>Pop-A-Shot Timed/Free with Juice (Stable)</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
     body { margin: 0; overflow: hidden; background: #191715; }
@@ -157,7 +157,7 @@
 
     // --- Game Mode & Timer ---
     let gameMode = "none";
-    let timer = 30.0, timerRunning = false, timerID = null;
+    let timer = 30.0, timerRunning = false, timerID = null, gameStarted = false;
 
     function startTimer() {
       timer = 30.0;
@@ -175,13 +175,14 @@
       } else {
         timerPanel.textContent = "0.0";
         timerRunning = false;
-        gameOver();
+        setTimeout(gameOver, 200);
       }
     }
     function gameOver() {
       timerRunning = false;
       timerPanel.style.display = "none";
-      showModeOverlay("Time's Up!<br>SCORE: " + score + "<br><br>Play again?");
+      gameStarted = false;
+      showModeOverlay(`Time's Up!<br>SCORE: ${score}<br><br>Play again?`);
     }
     function showModeOverlay(message = null) {
       modeOverlay.style.display = "flex";
@@ -191,18 +192,31 @@
     function hideModeOverlay() {
       modeOverlay.style.display = "none";
     }
+
     timedBtn.onclick = function() {
       hideModeOverlay();
-      gameMode = "timed";
-      startTimer();
-      resetGame();
+      setTimeout(() => { startGame("timed"); }, 100);
     };
     freeBtn.onclick = function() {
       hideModeOverlay();
-      gameMode = "free";
-      timerPanel.style.display = "none";
-      resetGame();
+      setTimeout(() => { startGame("free"); }, 100);
     };
+
+    function startGame(mode) {
+      // Always reset game state
+      gameMode = mode;
+      gameStarted = true;
+      score = 0;
+      streak = 0;
+      scoreDisplay.textContent = score;
+      streakDisplay.textContent = streak;
+      resetBall();
+      if (timerID) clearTimeout(timerID);
+      timerPanel.style.display = "none";
+      if (gameMode === "timed") {
+        startTimer();
+      }
+    }
 
     // --- Three.js setup ---
     let scene = new THREE.Scene();
@@ -333,7 +347,6 @@
     let fallingThrough = false;
     let inNet = false;
     let floorBounce = false;
-    let gameStarted = false;
 
     // --- Power Meter ---
     let sweetSpotMin = 0.57, sweetSpotMax = 0.76;
@@ -447,7 +460,7 @@
     }
 
     // --- Ball Reset ---
-    function resetBall(miss = false) {
+    function resetBall() {
       setTimeout(() => {
         ball.position.set(0, 1.5, 2);
         velocity.set(0, 0, 0);
@@ -459,12 +472,6 @@
         floorBounce = false;
         showUI();
       }, 730);
-    }
-    function resetGame() {
-      score = 0; streak = 0;
-      scoreDisplay.textContent = score;
-      streakDisplay.textContent = streak;
-      resetBall();
     }
 
     // --- Main Shot Logic ---
@@ -505,7 +512,6 @@
         ball.position.x > bb.x1 && ball.position.x < bb.x2 &&
         ball.position.y > bb.y1 && ball.position.y < bb.y2
       ) {
-        // Reliable bank shot bounce!
         velocity.z *= -0.7;
         velocity.y *= 0.93 + (Math.random()-0.5)*0.10;
         ball.position.z = bb.z + 0.17;
@@ -646,29 +652,7 @@
     }
 
     // --- Start game on mode select ---
-    function startGame() {
-      gameStarted = true;
-      resetGame();
-      if (gameMode === "timed") startTimer();
-    }
-
-    // --- Game mode overlay start ---
     showModeOverlay();
-    setTimeout(()=>{modeOverlay.focus && modeOverlay.focus();},200);
-
-    // Tie game mode selection to starting
-    timedBtn.onclick = function() {
-      gameMode = "timed";
-      hideModeOverlay();
-      startGame();
-    };
-    freeBtn.onclick = function() {
-      gameMode = "free";
-      hideModeOverlay();
-      startGame();
-    };
-
-    // --- Start game ---
     resizeUI();
     animate();
   </script>
