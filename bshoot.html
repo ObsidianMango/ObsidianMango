@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Pop-A-Shot Classic</title>
+  <title>Pop-A-Shot All-Star</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
     body { margin: 0; overflow: hidden; background: #191715; }
@@ -53,19 +53,31 @@
       background: transparent;
       pointer-events: none;
     }
-    #feedbackText {
+    .score-pop {
       position: absolute;
-      top: 64vh; left: 0; width: 100vw;
-      text-align: center;
       font-family: 'Press Start 2P', monospace;
-      font-size: 1.15em;
-      color: #fff;
-      text-shadow: 2px 2px 0 #000, 0 0 14px #006BB6;
-      opacity: 0;
+      font-size: 2.5em;
+      font-weight: bold;
+      color: #fff849;
+      text-shadow:
+        -3px -3px 8px #2d008a,  3px 3px 8px #F58426,
+        0 0 20px #fff, 0 0 6px #00ff75,
+        3px 0px 0px #191715, -3px 0px 0px #191715,
+        0px 3px 0px #191715, 0px -3px 0px #191715;
+      padding: 0.06em 0.25em;
+      border-radius: 10px;
+      border: 3px solid #fff;
       pointer-events: none;
-      z-index: 20;
-      transition: opacity 0.2s;
+      opacity: 0;
+      z-index: 99;
+      animation: popFade 1.15s forwards;
       user-select: none;
+    }
+    @keyframes popFade {
+      0%   { transform: translateY(25px) scale(1.1); opacity: 0.95;}
+      60%  { transform: translateY(-14px) scale(1.05); opacity: 1;}
+      90%  { transform: translateY(-36px) scale(0.96); opacity: 0.9;}
+      100% { transform: translateY(-54px) scale(0.95); opacity: 0;}
     }
   </style>
 </head>
@@ -80,7 +92,6 @@
   <div id="metersUI">
     <canvas id="powerBarCanvas" width="340" height="54"></canvas>
   </div>
-  <div id="feedbackText"></div>
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
   <script>
     // --- UI refs ---
@@ -88,8 +99,6 @@
     const streakDisplay = document.getElementById("streak");
     const powerCanvas = document.getElementById("powerBarCanvas");
     const powerCtx = powerCanvas.getContext("2d");
-    const feedbackText = document.getElementById("feedbackText");
-    const instructions = document.getElementById("instructions");
 
     // --- Three.js setup ---
     let scene = new THREE.Scene();
@@ -104,9 +113,8 @@
     scene.add(light);
     scene.add(new THREE.AmbientLight(0x6e7ab3, 0.52));
 
-    // --- More Realistic Wood Court ---
+    // --- Realistic Wood Court ---
     let courtGroup = new THREE.Group();
-    // Wood parquet texture (simulate with rectangles)
     for(let x=-7; x<=7; x++){
       for(let z=-10; z<=15; z+=2){
         let stripe = new THREE.Mesh(
@@ -120,14 +128,12 @@
         courtGroup.add(stripe);
       }
     }
-    // Key/paint area
     let key = new THREE.Mesh(
       new THREE.BoxGeometry(3.6, 0.01, 7),
       new THREE.MeshPhongMaterial({ color: 0xf6f2db })
     );
     key.position.set(0, 0.014, -8.5);
     courtGroup.add(key);
-    // Free throw circle
     let freeThrow = new THREE.Mesh(
       new THREE.TorusGeometry(1.7, 0.031, 12, 60),
       new THREE.MeshPhongMaterial({ color: 0xf6f2db })
@@ -135,7 +141,6 @@
     freeThrow.position.set(0, 0.016, -5.2);
     freeThrow.rotation.x = -Math.PI/2;
     courtGroup.add(freeThrow);
-    // Center circle
     let centerCircle = new THREE.Mesh(
       new THREE.TorusGeometry(2.2, 0.034, 12, 60),
       new THREE.MeshPhongMaterial({ color: 0xf6f2db })
@@ -221,16 +226,40 @@
     let powerLevel = 0;      // 0-1
     let score = 0, streak = 0;
     let awaitingPower = false;
+    let scoredLastShot = false;
+    let fallingThrough = false;
+    let inNet = false;
+    let floorBounce = false;
 
     // --- Power Meter ---
     let sweetSpotMin = 0.57, sweetSpotMax = 0.76;
     let powerAnim = 0.23, powerDir = 1;
     let powerActive = false;
 
+    // --- Score Pop ---
+    let scorePopSide = 1; // alternate left/right
+
+    function spawnScorePop(pts) {
+      let div = document.createElement('div');
+      div.className = 'score-pop';
+      div.textContent = pts > 1 ? '+2' : '+1';
+      div.style.opacity = "1";
+      // Alternate position
+      let baseY = window.innerHeight * 0.33;
+      let left = scorePopSide > 0 ? '65vw' : '15vw';
+      div.style.left = left;
+      div.style.top = baseY + 'px';
+      div.style.borderColor = pts > 1 ? "#00ff75" : "#fff";
+      div.style.color = pts > 1 ? "#00ffdc" : "#fff849";
+      document.body.appendChild(div);
+      setTimeout(()=>{div.style.opacity=0}, 800);
+      setTimeout(()=>{if(div.parentNode)div.parentNode.removeChild(div);}, 1300);
+      scorePopSide *= -1;
+    }
+
     function drawPowerBar(power) {
       powerCtx.clearRect(0,0,powerCanvas.width,powerCanvas.height);
       let w = powerCanvas.width-38, h = 22, x = 19, y = 24;
-      // Bar
       powerCtx.save();
       powerCtx.strokeStyle = "#fff048";
       powerCtx.lineWidth = 6;
@@ -276,8 +305,12 @@
         isShot = false;
         powerMode = false;
         awaitingPower = false;
+        scoredLastShot = false;
+        fallingThrough = false;
+        inNet = false;
+        floorBounce = false;
         showUI();
-      }, 630);
+      }, 730);
     }
 
     // --- Main Shot Logic ---
@@ -291,21 +324,26 @@
       awaitingPower = false;
       hideUI();
       // Scoring
+      let pts = 1;
       if(swish){
-        let pts = (streak >= 2 ? 2 : 1);
-        score += pts;
+        if(streak >= 2) pts = 2;
         streak++;
         showFeedback(pts > 1 ? "DOUBLE! SWISH!" : "SWISH!", "#f6ff73");
       } else if (Math.abs(powerValue - (sweetSpotMin+sweetSpotMax)/2) < 0.14) {
-        score++;
         streak++;
         showFeedback("IN!", "#fff");
       } else {
         streak = 0;
         showFeedback("BRICK!", "#F58426");
       }
-      scoreDisplay.textContent = score;
-      streakDisplay.textContent = streak;
+      if(streak > 0) {
+        score += pts;
+        scoreDisplay.textContent = score;
+        streakDisplay.textContent = streak;
+        scoredLastShot = pts;
+      } else {
+        scoredLastShot = 0;
+      }
     }
 
     // --- Backboard Physics ---
@@ -324,21 +362,6 @@
       }
     }
 
-    // --- Scoring Animation/Reset ---
-    function checkScore() {
-      if (
-        ball.position.z < rimPlane.z + 0.12 && ball.position.z > rimPlane.z - 0.21 &&
-        ball.position.y < rimPlane.y + 0.39 && ball.position.y > rimPlane.y - 0.34 &&
-        Math.abs(ball.position.x) < rimPlane.r &&
-        velocity.y < 0
-      ) {
-        velocity.y = -0.05 - Math.random() * 0.015;
-        velocity.z = 0;
-        setTimeout(resetBall, 590);
-        isShot = true;
-      }
-    }
-
     // --- Rim bounce ---
     function checkRimBounce() {
       if (
@@ -353,39 +376,65 @@
       }
     }
 
-    // --- Animation Loop ---
-    function animate() {
-      requestAnimationFrame(animate);
+    // --- Animate Ball Dropping Through Net and Floor Bounce ---
+    function updateBallPhysics() {
+      velocity.y -= 0.008;
+      ball.position.add(velocity);
 
-      if (powerActive && awaitingPower && !isShot) {
-        powerAnim += 0.0092 * powerDir;
-        if (powerAnim > 1) { powerAnim = 1; powerDir = -1; }
-        if (powerAnim < 0.18) { powerAnim = 0.18; powerDir = 1; }
-        drawPowerBar(powerAnim);
-        powerLevel = powerAnim;
-      } else {
-        powerCtx.clearRect(0,0,powerCanvas.width,powerCanvas.height);
+      // Detect ball falling through net after score
+      if (scoredLastShot && !fallingThrough && ball.position.y < 3.7 && ball.position.z < -11.3 && ball.position.z > -11.7) {
+        fallingThrough = true;
+        inNet = true;
+        // Give it a little extra drop through the net
+        velocity.set(
+          (Math.random() - 0.5) * 0.01,
+          -0.07 - Math.random()*0.02,
+          -0.015 + (Math.random()-0.5)*0.012
+        );
       }
+      // After it falls through, hit ground and bounce
+      if (fallingThrough && !floorBounce && ball.position.y <= 0.32) {
+        velocity.y *= -0.47;
+        velocity.x *= 0.77;
+        velocity.z *= 0.85;
+        floorBounce = true;
+        ball.position.y = 0.32;
+      }
+      // Let it bounce and roll, reset when almost still
+      if (floorBounce && Math.abs(velocity.y) < 0.015 && ball.position.y <= 0.35) {
+        velocity.set(0,0,0);
+        setTimeout(resetBall, 500);
+      }
+      // Out of bounds or miss
+      if (ball.position.y < 0.11 || ball.position.z < -15) {
+        streak = 0;
+        streakDisplay.textContent = streak;
+        resetBall(true);
+      }
+    }
 
-      // Ball physics
-      if (isShot) {
-        velocity.y -= 0.008;
-        ball.position.add(velocity);
-        checkScore();
-        checkRimBounce();
-        checkBackboardCollision();
-        if (ball.position.y < 0.14 || ball.position.z < -15) {
-          streak = 0;
-          streakDisplay.textContent = streak;
-          resetBall(true);
+    // --- Scoring Animation/Reset ---
+    function checkScore() {
+      // Score detection (ball passing downward through rim area)
+      if (
+        !scoredLastShot &&
+        ball.position.z < rimPlane.z + 0.12 && ball.position.z > rimPlane.z - 0.21 &&
+        ball.position.y < rimPlane.y + 0.39 && ball.position.y > rimPlane.y - 0.34 &&
+        Math.abs(ball.position.x) < rimPlane.r &&
+        velocity.y < 0
+      ) {
+        if(scoredLastShot){
+          spawnScorePop(scoredLastShot);
         }
       }
-      renderer.render(scene, camera);
     }
 
     // --- Feedback text ---
     let feedbackTimeout = null;
     function showFeedback(txt, color="#fff") {
+      // Don't show "MISS" if it's a falling ball
+      if (txt==="MISS" && scoredLastShot) return;
+      let feedbackText = document.getElementById("feedbackText");
       feedbackText.textContent = txt;
       feedbackText.style.color = color;
       feedbackText.style.opacity = 1;
@@ -449,6 +498,27 @@
       setCamera();
       resizeUI();
     });
+
+    // --- Animation Loop ---
+    function animate() {
+      requestAnimationFrame(animate);
+      if (powerActive && awaitingPower && !isShot) {
+        powerAnim += 0.0092 * powerDir;
+        if (powerAnim > 1) { powerAnim = 1; powerDir = -1; }
+        if (powerAnim < 0.18) { powerAnim = 0.18; powerDir = 1; }
+        drawPowerBar(powerAnim);
+        powerLevel = powerAnim;
+      } else {
+        powerCtx.clearRect(0,0,powerCanvas.width,powerCanvas.height);
+      }
+      if (isShot) {
+        updateBallPhysics();
+        checkScore();
+        checkRimBounce();
+        checkBackboardCollision();
+      }
+      renderer.render(scene, camera);
+    }
 
     // --- Start game ---
     resizeUI();
