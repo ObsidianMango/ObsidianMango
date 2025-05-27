@@ -2,40 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Basketball Flick Shot Retro</title>
+  <title>Tap-Timing Basketball</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
-    body { 
-      margin: 0; 
-      overflow: hidden; 
-      background: #232323; 
-    }
+    body { margin: 0; overflow: hidden; background: #25242b; }
+    canvas { display: block; }
     #retroUI {
       position: absolute;
-      top: 22px;
-      left: 0;
-      width: 100%;
-      z-index: 10;
-      text-align: center;
+      top: 18px; left: 0; width: 100%; z-index: 10; text-align: center;
       pointer-events: none;
     }
     .panel {
       display: inline-block;
-      padding: 18px 38px;
-      border: 4px solid #4fe34f;
-      border-radius: 12px;
+      padding: 16px 34px;
+      border: 4px solid #3fff66;
+      border-radius: 10px;
       background: #181e23;
-      color: #ffa335;
+      color: #ffd15c;
       font-family: 'Press Start 2P', monospace;
-      font-size: 1.25em;
-      margin: 0 6px;
-      box-shadow: 0 2px 10px #00f3;
-      text-shadow: 2px 2px 0 #000, 0 0 10px #f4ff70;
-      letter-spacing: 2px;
-      min-width: 230px;
-    }
-    .panel span {
-      color: #4fe34f;
+      font-size: 1.1em;
+      margin: 0 5px;
+      box-shadow: 0 2px 10px #2f8a;
+      text-shadow: 2px 2px 0 #000, 0 0 10px #fff82e;
+      min-width: 200px;
+      letter-spacing: 1.5px;
     }
     #instructions {
       color: #fff0b8;
@@ -49,44 +39,95 @@
       box-shadow: 0 2px 8px #7006;
       text-shadow: 1px 1px 0 #470c6a;
     }
-    canvas { display: block; }
+    #metersUI {
+      position: absolute;
+      left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5;
+    }
+    .meterPanel {
+      position: absolute; 
+      left: 50%; 
+      transform: translateX(-50%);
+      font-family: 'Press Start 2P', monospace;
+      color: #fff048;
+      text-shadow: 1px 1px 0 #000;
+    }
+    #aimArrowCanvas {
+      top: 60vh;
+      width: 260px; height: 68px;
+      margin-left: -130px;
+      z-index: 6;
+    }
+    #powerBarCanvas {
+      top: 68vh;
+      width: 260px; height: 38px;
+      margin-left: -130px;
+      z-index: 6;
+    }
   </style>
 </head>
 <body>
   <div id="retroUI">
     <div class="panel">SCORE: <span id="score">0</span></div>
     <div class="panel">STREAK: <span id="streak">0</span></div>
-    <div id="instructions">FLICK UP TO SHOOT &bull; SHORT OR LONG, BUT CONTROL YOUR POWER!</div>
+    <div id="instructions">1st TAP = AIM, 2nd TAP = POWER!<br/>Score with perfect timing.<br/>Home court crowd is watching...</div>
+  </div>
+  <!-- Aiming arrow and power bar UI -->
+  <div id="metersUI">
+    <canvas id="aimArrowCanvas" width="260" height="68" class="meterPanel"></canvas>
+    <canvas id="powerBarCanvas" width="260" height="38" class="meterPanel"></canvas>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
   <script>
-    // Scene Setup
+    // Retro fonts & UI
+    const scoreDisplay = document.getElementById("score");
+    const streakDisplay = document.getElementById("streak");
+
+    // --- Three.js Setup ---
     let scene = new THREE.Scene();
     let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     let renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Retro GUI
-    const scoreDisplay = document.getElementById("score");
-    const streakDisplay = document.getElementById("streak");
-    let score = 0, streak = 0;
-
     // Lighting
-    const light = new THREE.DirectionalLight(0xffffff, 1.8);
-    light.position.set(7, 11, 7);
+    const light = new THREE.DirectionalLight(0xffffff, 2);
+    light.position.set(5, 10, 6);
     scene.add(light);
     scene.add(new THREE.AmbientLight(0x404040));
 
     // Ground
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(30, 30),
+      new THREE.PlaneGeometry(32, 30),
       new THREE.MeshPhongMaterial({ color: 0x393e3c })
     );
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    // Backboard
+    // Static Crowd (simple colored rectangles behind backboard)
+    function makeCrowd() {
+      const group = new THREE.Group();
+      let y = 4.5, z = -13.5;
+      let crowdColors = [0xff4a4a, 0x48caff, 0x8dff48, 0xfde048, 0xffb348, 0x9e48ff, 0xff48c4];
+      let crowdRows = 3, perRow = 8, w = 0.9, h = 1.1, d = 0.2;
+      for (let row = 0; row < crowdRows; row++) {
+        for (let i = 0; i < perRow; i++) {
+          let box = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshPhongMaterial({ color: crowdColors[(i+row)%crowdColors.length] })
+          );
+          box.position.set(
+            -4 + (i * 1.1) + ((row % 2) * 0.5),
+            y + (row * 1.05),
+            z - (row * 0.7)
+          );
+          group.add(box);
+        }
+      }
+      return group;
+    }
+    scene.add(makeCrowd());
+
+    // Backboard & Rim
     const backboard = new THREE.Mesh(
       new THREE.BoxGeometry(3, 2, 0.13),
       new THREE.MeshPhongMaterial({ color: 0xffffff })
@@ -94,16 +135,15 @@
     backboard.position.set(0, 5, -12);
     scene.add(backboard);
 
-    // Rim
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(0.7, 0.08, 14, 32),
+      new THREE.TorusGeometry(0.7, 0.07, 14, 32),
       new THREE.MeshPhongMaterial({ color: 0xff4a3d })
     );
     rim.position.set(0, 4.18, -11.5);
     rim.rotation.x = Math.PI / 2;
     scene.add(rim);
 
-    // Rim "collision" plane (not visible)
+    // Rim collision (virtual)
     const rimPlane = { z: -11.5, y: 4.18, r: 0.65 };
 
     // Ball
@@ -112,48 +152,122 @@
     const ball = new THREE.Mesh(ballGeometry, ballMaterial);
     scene.add(ball);
 
+    // --- Game State ---
     let velocity = new THREE.Vector3();
     let isShot = false;
-    let touchStart = null;
-    let lastShotTime = 0;
+    let aiming = false;
+    let powerMode = false;
+    let aimAngle = 0;        // in radians
+    let powerLevel = 0;      // 0-1
+    let score = 0, streak = 0;
 
+    // --- Aim and Power Meter UI ---
+    const aimCanvas = document.getElementById("aimArrowCanvas");
+    const aimCtx = aimCanvas.getContext("2d");
+    const powerCanvas = document.getElementById("powerBarCanvas");
+    const powerCtx = powerCanvas.getContext("2d");
+
+    function drawAimArrow(angle) {
+      aimCtx.clearRect(0,0,aimCanvas.width,aimCanvas.height);
+      // Arrow base
+      let centerX = aimCanvas.width/2, centerY = aimCanvas.height-10;
+      let arrowLen = 52, arrowWidth = 16;
+      let tipX = centerX + arrowLen * Math.sin(angle);
+      let tipY = centerY - arrowLen * Math.cos(angle);
+      // Draw arrow
+      aimCtx.save();
+      aimCtx.strokeStyle = "#fff048";
+      aimCtx.lineWidth = 6;
+      aimCtx.shadowColor = "#3fff66";
+      aimCtx.shadowBlur = 8;
+      aimCtx.beginPath();
+      aimCtx.moveTo(centerX, centerY);
+      aimCtx.lineTo(tipX, tipY);
+      aimCtx.stroke();
+      aimCtx.restore();
+
+      // Draw base dot
+      aimCtx.beginPath();
+      aimCtx.arc(centerX, centerY, 10, 0, 2*Math.PI);
+      aimCtx.fillStyle = "#3fff66";
+      aimCtx.shadowBlur = 2;
+      aimCtx.fill();
+
+      // Draw tip
+      aimCtx.beginPath();
+      aimCtx.arc(tipX, tipY, 9, 0, 2*Math.PI);
+      aimCtx.fillStyle = "#ff5858";
+      aimCtx.fill();
+      // Label
+      aimCtx.font = '13px "Press Start 2P", monospace';
+      aimCtx.fillStyle = "#fff";
+      aimCtx.textAlign = "center";
+      aimCtx.fillText("AIM", centerX, 18);
+    }
+
+    function drawPowerBar(power) {
+      powerCtx.clearRect(0,0,powerCanvas.width,powerCanvas.height);
+      let w = powerCanvas.width-48, h = 14, x = 24, y = 17;
+      // Bar background
+      powerCtx.save();
+      powerCtx.strokeStyle = "#fff048";
+      powerCtx.lineWidth = 4;
+      powerCtx.strokeRect(x, y, w, h);
+      // Fill
+      let grad = powerCtx.createLinearGradient(x, y, x+w, y+h);
+      grad.addColorStop(0, "#3fff66");
+      grad.addColorStop(0.6, "#fff048");
+      grad.addColorStop(1, "#ff5858");
+      powerCtx.fillStyle = grad;
+      powerCtx.fillRect(x, y, w*power, h);
+      // Power dot
+      let px = x + w*power;
+      powerCtx.beginPath();
+      powerCtx.arc(px, y+h/2, 12, 0, 2*Math.PI);
+      powerCtx.fillStyle = "#fff048";
+      powerCtx.shadowBlur = 6;
+      powerCtx.shadowColor = "#3fff66";
+      powerCtx.fill();
+      powerCtx.restore();
+      // Label
+      powerCtx.font = '13px "Press Start 2P", monospace';
+      powerCtx.fillStyle = "#fff";
+      powerCtx.textAlign = "center";
+      powerCtx.fillText("POWER", powerCanvas.width/2, 13);
+    }
+
+    // --- Ball Reset ---
     function resetBall(miss = false) {
       setTimeout(() => {
         ball.position.set(0, 1.5, 2);
         velocity.set(0, 0, 0);
         isShot = false;
+        aiming = true;
+        powerMode = false;
+        aimAngle = 0;
         if (miss) streak = 0;
         streakDisplay.textContent = streak;
-      }, 500);
+      }, 520);
     }
 
-    function shootBall(force) {
-      if (isShot) return;
+    // --- Main Shot Logic ---
+    function takeShot() {
+      // Shot force: angle determines left/right, power sets strength
+      // Map aimAngle (-max to +max) to left/right, and power (0.3-1)
+      let maxAim = Math.PI/7.5;
+      let dirX = Math.sin(aimAngle) * 0.83;
+      let force = 0.10 + 0.25*powerLevel; // fine tuned for this court
+      velocity.set(dirX, force + 0.11, -0.19 - 0.13*powerLevel);
       isShot = true;
-      velocity.copy(force);
-      lastShotTime = Date.now();
+      aiming = false;
+      powerMode = false;
     }
 
-    // --- FLICK MECHANIC, TUNED FOR CONTROL ---
-    function getFlickVector(start, end) {
-      // Allow some left/right aim
-      const dx = (end.x - start.x) * 0.005;     // Sensitivity
-      let dy = (start.y - end.y) * 0.008;       // Flick up = shot (invert y)
-      if (dy < 0.09) dy = 0.09;                 // Minimum force to avoid "duds"
-      if (dy > 0.21) dy = 0.21;                 // Maximum vertical force
-      // More negative z = more forward velocity (basket is -z)
-      let dz = -0.13 - (dy - 0.09) * 0.85;      // Scale depth by flick
-      if (dz > -0.13) dz = -0.13;               // Prevent backward shots
-      if (dz < -0.32) dz = -0.32;               // Prevent over-launch
-      return new THREE.Vector3(dx, dy, dz);
-    }
-
-    // --- SCORING DETECTION ---
+    // --- Scoring Check ---
     function checkScore() {
-      // Check: ball must be going down, inside rim area, and not already scored this shot
       if (
-        ball.position.z < rimPlane.z + 0.1 && ball.position.z > rimPlane.z - 0.15 &&
-        ball.position.y < rimPlane.y + 0.35 && ball.position.y > rimPlane.y - 0.30 &&
+        ball.position.z < rimPlane.z + 0.10 && ball.position.z > rimPlane.z - 0.19 &&
+        ball.position.y < rimPlane.y + 0.35 && ball.position.y > rimPlane.y - 0.33 &&
         Math.abs(ball.position.x) < rimPlane.r &&
         velocity.y < 0
       ) {
@@ -161,82 +275,107 @@
         streak++;
         scoreDisplay.textContent = score;
         streakDisplay.textContent = streak;
-        // "Net" effect (ball drops down faster)
         velocity.y = -0.04 - Math.random() * 0.01;
         velocity.z = 0;
-        setTimeout(resetBall, 600);
-        isShot = true; // Prevent double count
+        setTimeout(resetBall, 650);
+        isShot = true;
       }
     }
 
-    // --- ANIMATION LOOP ---
+    // --- Animation Loop ---
+    let aimAnimAngle = 0, aimDir = 1;
+    let powerAnim = 0, powerDir = 1;
+
     function animate() {
       requestAnimationFrame(animate);
+
+      // Aiming mode
+      if (aiming && !isShot) {
+        // Animate left-right aim (oscillates -max to +max)
+        let maxAim = Math.PI/7.5;
+        aimAnimAngle += 0.027 * aimDir;
+        if (aimAnimAngle > maxAim) { aimAnimAngle = maxAim; aimDir = -1; }
+        if (aimAnimAngle < -maxAim) { aimAnimAngle = -maxAim; aimDir = 1; }
+        drawAimArrow(aimAnimAngle);
+        aimAngle = aimAnimAngle;
+        powerCtx.clearRect(0,0,powerCanvas.width,powerCanvas.height);
+      }
+      // Power select mode
+      else if (powerMode && !isShot) {
+        // Animate power bar (oscillates 0.18 to 1.0)
+        powerAnim += 0.018 * powerDir;
+        if (powerAnim > 1) { powerAnim = 1; powerDir = -1; }
+        if (powerAnim < 0.18) { powerAnim = 0.18; powerDir = 1; }
+        drawPowerBar(powerAnim);
+        powerLevel = powerAnim;
+        aimCtx.clearRect(0,0,aimCanvas.width,aimCanvas.height);
+      }
+      // Hide meters in flight
+      else {
+        aimCtx.clearRect(0,0,aimCanvas.width,aimCanvas.height);
+        powerCtx.clearRect(0,0,powerCanvas.width,powerCanvas.height);
+      }
+
+      // Ball motion and rim interaction
       if (isShot) {
-        // Simple gravity and motion
-        velocity.y -= 0.008; // Stronger gravity for snappier shots
+        velocity.y -= 0.008;
         ball.position.add(velocity);
-
         checkScore();
-
-        // Simulate basic "rim bounce"
+        // Rim "bounce"
         if (
-          Math.abs(ball.position.z - rimPlane.z) < 0.1 &&
+          Math.abs(ball.position.z - rimPlane.z) < 0.10 &&
           ball.position.y < rimPlane.y + 0.2 && 
-          Math.abs(ball.position.x) < rimPlane.r + 0.12 &&
+          Math.abs(ball.position.x) < rimPlane.r + 0.11 &&
           velocity.y < 0
         ) {
           velocity.y *= -0.45;
           velocity.x *= 0.45;
           velocity.z *= 0.7;
         }
-
-        // Missed shot, ball lands
-        if (ball.position.y < 0.2 || ball.position.z < -15) {
+        // Miss
+        if (ball.position.y < 0.22 || ball.position.z < -15) {
           resetBall(true);
         }
       }
       renderer.render(scene, camera);
     }
 
-    // --- INPUT HANDLING (TOUCH + MOUSE) ---
-    function pointerDown(x, y) {
-      if (isShot) return;
-      touchStart = { x, y, time: Date.now() };
+    // --- Tap/Click Handling ---
+    function tap() {
+      if (!aiming && !powerMode && !isShot) {
+        // Start aiming mode if not already started (first launch)
+        aiming = true;
+        aimAnimAngle = 0;
+        aimDir = 1;
+      } else if (aiming && !powerMode) {
+        // Lock aim, start power
+        aiming = false;
+        powerMode = true;
+        powerAnim = 0.3 + Math.random()*0.15;
+        powerDir = 1;
+      } else if (powerMode && !isShot) {
+        // Lock power, fire shot
+        powerMode = false;
+        takeShot();
+      }
     }
-    function pointerUp(x, y) {
-      if (!touchStart) return;
-      // Only register as a flick if mostly upward
-      let dy = touchStart.y - y;
-      if (dy < 18) { touchStart = null; return; } // Ignore tiny flicks
-      shootBall(getFlickVector(touchStart, { x, y }));
-      touchStart = null;
-    }
+    window.addEventListener("mousedown", tap);
+    window.addEventListener("touchstart", function(e){ e.preventDefault(); tap(); }, {passive:false});
 
-    window.addEventListener("mousedown", e => pointerDown(e.clientX, e.clientY));
-    window.addEventListener("mouseup",   e => pointerUp(e.clientX, e.clientY));
-    window.addEventListener("touchstart", e => {
-      const t = e.touches[0];
-      pointerDown(t.clientX, t.clientY);
-    });
-    window.addEventListener("touchend", e => {
-      const t = e.changedTouches[0];
-      pointerUp(t.clientX, t.clientY);
-    });
-
-    // Camera Setup
+    // Camera
     camera.position.set(0, 2, 8);
     camera.lookAt(0, 4.2, -11.5);
 
-    // Responsive Resize
+    // Responsive
     window.addEventListener('resize', ()=>{
       camera.aspect = window.innerWidth/window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // Start Game
+    // Start game
     resetBall();
+    aiming = true;
     animate();
   </script>
 </body>
