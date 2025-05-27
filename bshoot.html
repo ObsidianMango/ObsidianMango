@@ -341,6 +341,7 @@
       }, 730);
     }
 
+    // --- NEW: Only handle streak in takeShot; scoring after ball passes through rim ---
     function takeShot(powerValue) {
       let swish = (powerValue >= sweetSpotMin && powerValue <= sweetSpotMax);
       let baseZ = -0.183 - 0.121*powerValue;
@@ -349,23 +350,18 @@
       isShot = true;
       awaitingPower = false;
       hideUI();
-      let pts = 1;
+
+      // Only update streak here, not score!
       if(swish){
-        if(streak >= 2) pts = 2;
         streak++;
       } else if (Math.abs(powerValue - (sweetSpotMin+sweetSpotMax)/2) < 0.14) {
         streak++;
       } else {
         streak = 0;
       }
-      if(streak > 0) {
-        score += pts;
-        scoreDisplay.textContent = score;
-        streakDisplay.textContent = streak;
-        scoredLastShot = pts;
-      } else {
-        scoredLastShot = 0;
-      }
+      streakDisplay.textContent = streak;
+      // Mark if this shot is "eligible" to score
+      scoredLastShot = (swish || Math.abs(powerValue - (sweetSpotMin+sweetSpotMax)/2) < 0.14) ? 1 : 0;
     }
 
     function checkBackboardCollision() {
@@ -400,18 +396,23 @@
       velocity.y -= 0.008;
       ball.position.add(velocity);
 
-      // FASTER drop after score!
+      // Only now: when the ball physically falls through, add to score!
       if (scoredLastShot && !fallingThrough && ball.position.y < 3.7 && ball.position.z < -11.3 && ball.position.z > -11.7) {
         fallingThrough = true;
         inNet = true;
+
+        let pts = (streak >= 3) ? 2 : 1;
+        score += pts;
+        scoreDisplay.textContent = score;
+
         velocity.set(
           (Math.random() - 0.5) * 0.01,
-          -0.32 - Math.random()*0.08, // MUCH FASTER drop!
+          -0.32 - Math.random()*0.08,
           -0.015 + (Math.random()-0.5)*0.012
         );
-        spawnParticleBurst(0, 4.08, -11.5, 16 + 8*scoredLastShot,
+        spawnParticleBurst(0, 4.08, -11.5, 16 + 8*pts,
           ["#fff048","#00ff75","#006BB6","#F58426","#fff","#e0e0e0"]);
-        spawnScorePop(scoredLastShot);
+        spawnScorePop(pts);
       }
       if (fallingThrough && !floorBounce && ball.position.y <= 0.32) {
         velocity.y *= -0.47;
