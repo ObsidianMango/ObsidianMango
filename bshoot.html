@@ -2,146 +2,240 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Basketball Flick Shot</title>
+  <title>Basketball Flick Shot Retro</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
-    body { margin: 0; overflow: hidden; font-family: sans-serif; background: #111; }
-    canvas { display: block; }
-    #score {
-      position: absolute;
-      top: 20px;
-      width: 100%;
-      text-align: center;
-      font-size: 2em;
-      color: white;
-      z-index: 1;
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      background: #232323; 
     }
+    #retroUI {
+      position: absolute;
+      top: 22px;
+      left: 0;
+      width: 100%;
+      z-index: 10;
+      text-align: center;
+      pointer-events: none;
+    }
+    .panel {
+      display: inline-block;
+      padding: 18px 38px;
+      border: 4px solid #4fe34f;
+      border-radius: 12px;
+      background: #181e23;
+      color: #ffa335;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 1.25em;
+      margin: 0 6px;
+      box-shadow: 0 2px 10px #00f3;
+      text-shadow: 2px 2px 0 #000, 0 0 10px #f4ff70;
+      letter-spacing: 2px;
+      min-width: 230px;
+    }
+    .panel span {
+      color: #4fe34f;
+    }
+    #instructions {
+      color: #fff0b8;
+      background: #591d7e;
+      border: 3px solid #fff048;
+      margin-top: 12px;
+      border-radius: 7px;
+      font-size: 0.89em;
+      padding: 8px 18px 8px 18px;
+      display: inline-block;
+      box-shadow: 0 2px 8px #7006;
+      text-shadow: 1px 1px 0 #470c6a;
+    }
+    canvas { display: block; }
   </style>
 </head>
 <body>
-  <div id="score">Score: 0</div>
+  <div id="retroUI">
+    <div class="panel">SCORE: <span id="score">0</span></div>
+    <div class="panel">STREAK: <span id="streak">0</span></div>
+    <div id="instructions">FLICK UP TO SHOOT &bull; SHORT OR LONG, BUT CONTROL YOUR POWER!</div>
+  </div>
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
   <script>
+    // Scene Setup
     let scene = new THREE.Scene();
     let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     let renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
+    // Retro GUI
     const scoreDisplay = document.getElementById("score");
-    let score = 0;
+    const streakDisplay = document.getElementById("streak");
+    let score = 0, streak = 0;
 
     // Lighting
-    const light = new THREE.DirectionalLight(0xffffff, 1.5);
-    light.position.set(5, 10, 5);
+    const light = new THREE.DirectionalLight(0xffffff, 1.8);
+    light.position.set(7, 11, 7);
     scene.add(light);
     scene.add(new THREE.AmbientLight(0x404040));
 
     // Ground
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(30, 30),
-      new THREE.MeshPhongMaterial({ color: 0x222222 })
+      new THREE.MeshPhongMaterial({ color: 0x393e3c })
     );
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
     // Backboard
     const backboard = new THREE.Mesh(
-      new THREE.BoxGeometry(3, 2, 0.1),
+      new THREE.BoxGeometry(3, 2, 0.13),
       new THREE.MeshPhongMaterial({ color: 0xffffff })
     );
     backboard.position.set(0, 5, -12);
     scene.add(backboard);
 
-    // Hoop Rim
+    // Rim
     const rim = new THREE.Mesh(
-      new THREE.TorusGeometry(0.7, 0.07, 8, 20),
-      new THREE.MeshPhongMaterial({ color: 0xff0000 })
+      new THREE.TorusGeometry(0.7, 0.08, 14, 32),
+      new THREE.MeshPhongMaterial({ color: 0xff4a3d })
     );
-    rim.position.set(0, 4.2, -11.5);
+    rim.position.set(0, 4.18, -11.5);
     rim.rotation.x = Math.PI / 2;
     scene.add(rim);
 
+    // Rim "collision" plane (not visible)
+    const rimPlane = { z: -11.5, y: 4.18, r: 0.65 };
+
     // Ball
-    const ballGeometry = new THREE.SphereGeometry(0.3, 32, 32);
-    const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xff8c00 });
+    const ballGeometry = new THREE.SphereGeometry(0.31, 32, 32);
+    const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xff9900 });
     const ball = new THREE.Mesh(ballGeometry, ballMaterial);
     scene.add(ball);
 
     let velocity = new THREE.Vector3();
     let isShot = false;
     let touchStart = null;
-    let touchEnd = null;
+    let lastShotTime = 0;
 
-    function resetBall() {
-      ball.position.set(0, 1.5, 2);
-      velocity.set(0, 0, 0);
-      isShot = false;
+    function resetBall(miss = false) {
+      setTimeout(() => {
+        ball.position.set(0, 1.5, 2);
+        velocity.set(0, 0, 0);
+        isShot = false;
+        if (miss) streak = 0;
+        streakDisplay.textContent = streak;
+      }, 500);
     }
 
     function shootBall(force) {
       if (isShot) return;
       isShot = true;
       velocity.copy(force);
+      lastShotTime = Date.now();
     }
 
+    // --- FLICK MECHANIC, TUNED FOR CONTROL ---
     function getFlickVector(start, end) {
-      const dx = (end.x - start.x) * 0.02;
-      const dy = (end.y - start.y) * 0.02;
-      return new THREE.Vector3(dx, dy + 0.15, -0.35);
+      // Allow some left/right aim
+      const dx = (end.x - start.x) * 0.005;     // Sensitivity
+      let dy = (start.y - end.y) * 0.008;       // Flick up = shot (invert y)
+      if (dy < 0.09) dy = 0.09;                 // Minimum force to avoid "duds"
+      if (dy > 0.21) dy = 0.21;                 // Maximum vertical force
+      // More negative z = more forward velocity (basket is -z)
+      let dz = -0.13 - (dy - 0.09) * 0.85;      // Scale depth by flick
+      if (dz > -0.13) dz = -0.13;               // Prevent backward shots
+      if (dz < -0.32) dz = -0.32;               // Prevent over-launch
+      return new THREE.Vector3(dx, dy, dz);
     }
 
+    // --- SCORING DETECTION ---
     function checkScore() {
-      const dz = Math.abs(ball.position.z + 11.5);
-      const dy = Math.abs(ball.position.y - 4.2);
-      const dx = Math.abs(ball.position.x);
-      if (dz < 0.4 && dy < 0.4 && dx < 0.6) {
+      // Check: ball must be going down, inside rim area, and not already scored this shot
+      if (
+        ball.position.z < rimPlane.z + 0.1 && ball.position.z > rimPlane.z - 0.15 &&
+        ball.position.y < rimPlane.y + 0.35 && ball.position.y > rimPlane.y - 0.30 &&
+        Math.abs(ball.position.x) < rimPlane.r &&
+        velocity.y < 0
+      ) {
         score++;
-        scoreDisplay.textContent = "Score: " + score;
-        setTimeout(resetBall, 1000);
+        streak++;
+        scoreDisplay.textContent = score;
+        streakDisplay.textContent = streak;
+        // "Net" effect (ball drops down faster)
+        velocity.y = -0.04 - Math.random() * 0.01;
+        velocity.z = 0;
+        setTimeout(resetBall, 600);
+        isShot = true; // Prevent double count
       }
     }
 
+    // --- ANIMATION LOOP ---
     function animate() {
       requestAnimationFrame(animate);
       if (isShot) {
-        velocity.y -= 0.005; // gravity
+        // Simple gravity and motion
+        velocity.y -= 0.008; // Stronger gravity for snappier shots
         ball.position.add(velocity);
+
         checkScore();
 
-        if (ball.position.y < 0 || ball.position.z < -20) {
-          resetBall();
+        // Simulate basic "rim bounce"
+        if (
+          Math.abs(ball.position.z - rimPlane.z) < 0.1 &&
+          ball.position.y < rimPlane.y + 0.2 && 
+          Math.abs(ball.position.x) < rimPlane.r + 0.12 &&
+          velocity.y < 0
+        ) {
+          velocity.y *= -0.45;
+          velocity.x *= 0.45;
+          velocity.z *= 0.7;
+        }
+
+        // Missed shot, ball lands
+        if (ball.position.y < 0.2 || ball.position.z < -15) {
+          resetBall(true);
         }
       }
       renderer.render(scene, camera);
     }
 
-    // Input
-    window.addEventListener("mousedown", e => {
-      touchStart = { x: e.clientX, y: e.clientY };
-    });
-
-    window.addEventListener("mouseup", e => {
+    // --- INPUT HANDLING (TOUCH + MOUSE) ---
+    function pointerDown(x, y) {
+      if (isShot) return;
+      touchStart = { x, y, time: Date.now() };
+    }
+    function pointerUp(x, y) {
       if (!touchStart) return;
-      touchEnd = { x: e.clientX, y: e.clientY };
-      shootBall(getFlickVector(touchStart, touchEnd));
+      // Only register as a flick if mostly upward
+      let dy = touchStart.y - y;
+      if (dy < 18) { touchStart = null; return; } // Ignore tiny flicks
+      shootBall(getFlickVector(touchStart, { x, y }));
       touchStart = null;
-    });
+    }
 
+    window.addEventListener("mousedown", e => pointerDown(e.clientX, e.clientY));
+    window.addEventListener("mouseup",   e => pointerUp(e.clientX, e.clientY));
     window.addEventListener("touchstart", e => {
       const t = e.touches[0];
-      touchStart = { x: t.clientX, y: t.clientY };
+      pointerDown(t.clientX, t.clientY);
     });
-
     window.addEventListener("touchend", e => {
       const t = e.changedTouches[0];
-      touchEnd = { x: t.clientX, y: t.clientY };
-      shootBall(getFlickVector(touchStart, touchEnd));
-      touchStart = null;
+      pointerUp(t.clientX, t.clientY);
     });
 
-    // Setup
+    // Camera Setup
     camera.position.set(0, 2, 8);
-    camera.lookAt(0, 4, -11.5);
+    camera.lookAt(0, 4.2, -11.5);
+
+    // Responsive Resize
+    window.addEventListener('resize', ()=>{
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Start Game
     resetBall();
     animate();
   </script>
