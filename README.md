@@ -69,7 +69,7 @@ If you like nostalgia, pixel art, dark humor, and weirdly useful tools, you’re
 | **WordSearch**          | 🔍 [WSearch](https://obsidianmango.github.io/ObsidianMango/word.html)    | Find words in this word search for nuts.                |
 | **Balls**               | 🟠 [Balls](https://obsidianmango.github.io/ObsidianMango/neon1.html)      | Simple but weirdly addictive ball-bouncing game.         |
 | **Balls2:Catballs**     | 🐱 [Balls2](https://obsidianmango.github.io/ObsidianMango/neon2.html)     | Same as Balls, but with cats. It’s a sequel.             |
-| **G64Cheats**           | 👁️ [G64cu](https://obsidianmango.github.io/ObsidianMango/g64cu/goldeneye_cheats.html)| Goldeneye 64 cheats database.         |
+| **G64Cheats**           | 👁️ [G64cu](https://obsidianmango.github.io/ObsidianMango/g64cu/goldeneye_cheats.html)| Goldeneye 64 cheat unlock database.         |
 | **MCQ**                 | 🪤 [MCQ](https://obsidianmango.github.io/ObsidianMango/MCQ.html)          | Mouse cheese maze dont get caught by the cat!       |
 | **TASKMEISTER8000**     | ☑️ [TM8K](https://obsidianmango.github.io/ObsidianMango/tm5k.html)        | Advanced, gamified to-do app for underrachievers.          |
 | **StoryPromptGen**      | 🎭 [Story](https://obsidianmango.github.io/ObsidianMango/storyprompt.html)| Get random story prompts for instant creativity.          |
