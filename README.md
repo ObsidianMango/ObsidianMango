@@ -40,6 +40,7 @@
 | **App Name**         | **Links**                                                                 | 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | **TheApp**           | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html) |
+| **CryptoCritterz**           | 🍷 [CCritt](https://obsidianmango.github.io/ObsidianMango/ccritt/) |
 | **Soundboard**           | 💨 [Fart](https://obsidianmango.github.io/ObsidianMango/sounds/fart.html) |
 | **Ufo Sim**           | 🛸 [UFO](https://obsidianmango.github.io/ObsidianMango/ufo.html) |
 | **Been Franklin**           | 👁 [BeenFranklin](https://obsidianmango.github.io/ObsidianMango/beenf.html) |
