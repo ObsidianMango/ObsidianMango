@@ -28,8 +28,6 @@
   }
 </style>
 
-<img src="https://github.com/ObsidianMango/ObsidianMango/blob/main/wave.gif" alt="Obsidian Mango" width="100" align="right" />
-
 # 🍇 ObsidianMango Application Repository
 
 Welcome! I’m Mango (Steve, 6-slice, G Slice), and this is my pile of games, apps, and random experiments.  
