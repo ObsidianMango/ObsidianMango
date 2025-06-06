@@ -3,11 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#3e5875">
-<!-- Optional: Home screen icons -->
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-  <title>🧹 Cleaning Checklist</title>
+  <title>🧹 Cleaning Slideshow Checklist</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Impact:wght@700&display=swap');
     :root {
@@ -18,7 +14,6 @@
     body {
       background-image: url('YOUR-TILE.png');
       background-repeat: repeat;
-      /* background-size: auto; */
       font-family: Impact, 'Arial Black', Arial, sans-serif;
       margin: 0;
       padding: 0;
@@ -40,7 +35,6 @@
       min-height: 640px;
       transition: max-width 0.2s;
     }
-    /* Splash screen styles */
     #splash-screen {
       position: fixed;
       z-index: 99999;
@@ -72,13 +66,7 @@
       opacity: 0;
       pointer-events: none;
     }
-    .slide-count {
-      font-size: 1.01em;
-      font-weight: 700;
-      color: #7d8692;
-      margin-bottom: 1em;
-      letter-spacing: 0.06em;
-    }
+    .slide-count { font-size: 1.01em; font-weight: 700; color: #7d8692; margin-bottom: 1em; letter-spacing: 0.06em; }
     .slide-card {
       width: var(--card-width);
       height: var(--card-height);
@@ -445,6 +433,30 @@
       .slide-card, .grid-card { width: 99vw; min-width: 0; max-width: 99vw;}
       .slide-flashcard, .grid-flashcard { min-height: unset; height: var(--card-height);}
     }
+    /* Copy Report button */
+    .copy-report-btn {
+      background: #3e5875;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 1.13em;
+      font-family: Impact, 'Arial Black', Arial, sans-serif;
+      font-weight: 700;
+      padding: 0.8em 1.5em;
+      margin-top: 1.2em;
+      margin-bottom: 0.8em;
+      cursor: pointer;
+      transition: background 0.13s;
+      box-shadow: 0 1px 4px rgba(40,60,90,0.12);
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      display: block;
+      width: 100%;
+      max-width: 420px;
+    }
+    .copy-report-btn:active {
+      background: #22374d;
+    }
   </style>
   <script>
     const tasks = [
@@ -488,6 +500,10 @@
     let checked = Array(tasks.length).fill(false);
     let mode = "slide";
     let incompleteList = [];
+
+    // NEW: Step completion times
+    let completedSteps = Array(tasks.length).fill(null);
+    let sessionStartTime = null;
 
     function confettiBlast() {
       let canvas = document.getElementById('confetti-canvas');
@@ -572,6 +588,52 @@
       animate();
     }
 
+    function formatDateTime(date) {
+      if (!date) return "";
+      // Format: YYYY-MM-DD HH:mm:ss
+      return date.getFullYear() + "-" +
+        String(date.getMonth()+1).padStart(2, '0') + "-" +
+        String(date.getDate()).padStart(2, '0') + " " +
+        String(date.getHours()).padStart(2, '0') + ":" +
+        String(date.getMinutes()).padStart(2, '0') + ":" +
+        String(date.getSeconds()).padStart(2, '0');
+    }
+
+    function formatDuration(ms) {
+      let sec = Math.floor(ms / 1000);
+      let min = Math.floor(sec / 60);
+      sec = sec % 60;
+      let hr = Math.floor(min / 60);
+      min = min % 60;
+      let out = [];
+      if (hr) out.push(hr + "h");
+      if (min) out.push(min + "m");
+      out.push(sec + "s");
+      return out.join(" ");
+    }
+
+    function getReportText() {
+      let lines = [];
+      lines.push("CLEANING CHECKLIST REPORT");
+      lines.push("");
+      let started = sessionStartTime ? formatDateTime(sessionStartTime) : "";
+      let ended = completedSteps.filter(Boolean).length ? formatDateTime(completedSteps.slice().reverse().find(Boolean)) : "";
+      lines.push("Started: " + started);
+      lines.push("Finished: " + ended);
+      if (sessionStartTime && ended) {
+        let total = new Date(completedSteps.slice().reverse().find(Boolean)) - sessionStartTime;
+        lines.push("Total Duration: " + formatDuration(total));
+      }
+      lines.push("");
+      lines.push("Step Breakdown:");
+      tasks.forEach((t, i) => {
+        let status = checked[i] ? "✅" : "❌";
+        let time = completedSteps[i] ? formatDateTime(completedSteps[i]) : "--";
+        lines.push(`${status} [${time}] ${t.title.replace(/\n/g, ' / ')}`);
+      });
+      return lines.join("\n");
+    }
+
     function renderSlide() {
       const container = document.getElementById('slide-view');
       container.innerHTML = "";
@@ -627,6 +689,17 @@
       checkbox.checked = checked[current];
       checkbox.addEventListener('change', () => {
         checked[current] = checkbox.checked;
+        // Track when checked for first time
+        if (checkbox.checked && !completedSteps[current]) {
+          completedSteps[current] = new Date();
+          if (!sessionStartTime) sessionStartTime = completedSteps[current];
+        }
+        // Remove timestamp if unchecked
+        if (!checkbox.checked) {
+          completedSteps[current] = null;
+          // if no step is checked, clear sessionStartTime too
+          if (!completedSteps.some(Boolean)) sessionStartTime = null;
+        }
         if (checkbox.checked && current < tasks.length - 1) {
           current++;
           renderSlide();
@@ -661,6 +734,14 @@
       nextBtn.innerText = current === tasks.length - 1 ? 'Finish' : 'Next';
       nextBtn.onclick = () => {
         checked[current] = checkbox.checked;
+        if (checkbox.checked && !completedSteps[current]) {
+          completedSteps[current] = new Date();
+          if (!sessionStartTime) sessionStartTime = completedSteps[current];
+        }
+        if (!checkbox.checked) {
+          completedSteps[current] = null;
+          if (!completedSteps.some(Boolean)) sessionStartTime = null;
+        }
         if (current < tasks.length - 1) {
           current++;
           renderSlide();
@@ -680,12 +761,55 @@
               renderSlide();
             }, 2700);
           } else {
-            container.innerHTML = `<div style="padding:2em 1em; text-align:center;">
-              <h2 style="color:#33b05a; font-size:2em; margin-bottom:1em;">All Steps Complete!</h2>
-              <p style="font-size:1.2em; color:#465060; margin-bottom:2em;">You finished all tasks.</p>
-              <button onclick="current=0; checked=Array(tasks.length).fill(false); renderSlide();" style="background:#425a7b; color:#fff; border:none; font-size:1.06em; border-radius:8px; padding:0.8em 1.3em; cursor:pointer;">Restart</button>
+            // Show results, breakdown, and copy button
+            let first = sessionStartTime;
+            let last = completedSteps.slice().reverse().find(Boolean);
+            let duration = (first && last) ? (last - first) : 0;
+            let breakdown = tasks.map((t, i) => {
+              let status = checked[i] ? "✅" : "❌";
+              let dt = completedSteps[i] ? formatDateTime(completedSteps[i]) : "--";
+              return `<tr>
+                <td style="padding:0.3em 0.4em 0.3em 0; font-size:1em;">${status}</td>
+                <td style="padding:0.3em 0.4em; font-size:1em;">${dt}</td>
+                <td style="padding:0.3em 0.4em; font-size:1em;">${t.title.replace(/\n/g,"<br>")}</td>
+              </tr>`;
+            }).join("");
+            container.innerHTML = `<div style="padding:1.1em 0.5em 0.7em 0.5em; text-align:center;">
+              <h2 style="color:#33b05a; font-size:2em; margin-bottom:0.3em;">All Steps Complete!</h2>
+              <p style="font-size:1.2em; color:#465060; margin-bottom:1em;">You finished all tasks.</p>
+              <div style="font-size:1.15em; margin-bottom:0.7em; color:#223;">
+                <b>Total Time:</b> ${formatDuration(duration)}
+              </div>
+              <div style="max-height:270px;overflow:auto;margin-bottom:0.7em;">
+                <table style="width:100%;margin:auto;border-collapse:collapse;">
+                  <thead>
+                    <tr style="font-size:1.08em;">
+                      <th style="text-align:left; padding:0.32em 0.4em 0.32em 0;">Status</th>
+                      <th style="text-align:left; padding:0.32em 0.4em;">Date & Time</th>
+                      <th style="text-align:left; padding:0.32em 0.4em;">Task</th>
+                    </tr>
+                  </thead>
+                  <tbody>${breakdown}</tbody>
+                </table>
+              </div>
+              <button id="copy-report-btn" class="copy-report-btn">Copy Report</button>
+              <button onclick="current=0; checked=Array(tasks.length).fill(false); completedSteps=Array(tasks.length).fill(null); sessionStartTime=null; renderSlide();" style="background:#425a7b; color:#fff; border:none; font-size:1.06em; border-radius:8px; padding:0.8em 1.3em; cursor:pointer;">Restart</button>
+              <div id="copy-report-status" style="color:#3e5875;font-size:1.07em;margin-top:0.7em;height:1.5em;"></div>
             </div>`;
             confettiBlast();
+
+            // Copy Report Button Handler
+            setTimeout(() => {
+              document.getElementById('copy-report-btn').onclick = () => {
+                const text = getReportText();
+                navigator.clipboard.writeText(text).then(() => {
+                  document.getElementById('copy-report-status').textContent = "Copied!";
+                  setTimeout(()=>{document.getElementById('copy-report-status').textContent="";},1800);
+                }, () => {
+                  document.getElementById('copy-report-status').textContent = "Failed to copy!";
+                });
+              };
+            }, 20);
           }
         }
       };
@@ -700,7 +824,7 @@
 
       const toggleBtn = document.createElement('button');
       toggleBtn.className = 'toggle-list-btn';
-      toggleBtn.innerText = "Back to Checklist";
+      toggleBtn.innerText = "Back to Slideshow";
       toggleBtn.onclick = () => { mode = "slide"; renderSlide(); };
       container.appendChild(toggleBtn);
 
@@ -741,6 +865,15 @@
         cb.checked = checked[idx];
         cb.addEventListener('change', () => {
           checked[idx] = cb.checked;
+          // Track time
+          if (cb.checked && !completedSteps[idx]) {
+            completedSteps[idx] = new Date();
+            if (!sessionStartTime) sessionStartTime = completedSteps[idx];
+          }
+          if (!cb.checked) {
+            completedSteps[idx] = null;
+            if (!completedSteps.some(Boolean)) sessionStartTime = null;
+          }
           if (cb.checked && mode === "grid") {
             const next = tasks.findIndex((t,i) => !checked[i]);
             if (next !== -1) {
@@ -764,7 +897,6 @@
       container.appendChild(gridDiv);
     }
 
-    // SPLASH LOGIC
     window.addEventListener('DOMContentLoaded', () => {
       // Show splash
       const splash = document.getElementById('splash-screen');
@@ -773,7 +905,7 @@
         setTimeout(() => {
           splash.style.display = 'none';
         }, 500);
-      }, 2000); // splash visible for 1.3s
+      }, 1500); // splash visible for 1.3s
 
       if (mode === "slide") renderSlide();
       else renderGrid();
@@ -791,15 +923,5 @@
   <div class="slideshow-container">
     <div id="slide-view"></div>
   </div>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('sw.js').then(
-          reg => console.log('ServiceWorker registration successful:', reg),
-          err => console.warn('ServiceWorker registration failed:', err)
-        );
-      });
-    }
-  </script>
 </body>
 </html>
