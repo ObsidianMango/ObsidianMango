@@ -861,7 +861,7 @@
     { text: "The meaning of life is to find your gift. The purpose of life is to give it away.", source: "Pablo Picasso" },
     { text: "If you want to know what a man’s like, take a good look at how he treats his inferiors, not his equals.", source: "J.K. Rowling, Harry Potter" },
 ]
-                ];
+              ];
 
         function generateQuote() {
             const quoteDisplay = document.getElementById('quote-display');
@@ -893,9 +893,10 @@
         }
         document.getElementById('generate-quote').addEventListener('click', generateQuote);
 
-        // --- 3D Parallax Tilt for Desktop (Mouse) and Mobile (Gyro) ---
+        // --- 3D Parallax Tilt for Desktop (Mouse) and Mobile (Gyro, Calibrated) ---
         const quoteDisplay = document.getElementById('quote-display');
         let gyroActive = false;
+        let gyroHandler = null;
 
         function handleDesktopTilt() {
             quoteDisplay.addEventListener('mousemove', (e) => {
@@ -914,20 +915,37 @@
         }
 
         function handleMobileTilt() {
-            if (window.DeviceOrientationEvent) {
-                window.addEventListener('deviceorientation', function(event) {
-                    // event.beta: [-180,180], front-back, event.gamma: [-90,90], left-right
-                    // We'll clamp to sensible ranges for the effect.
-                    let rx = event.beta;
-                    let ry = event.gamma;
-                    rx = Math.max(-60, Math.min(60, rx));
-                    ry = Math.max(-60, Math.min(60, ry));
-                    rx = rx / 60 * 12;  // -12deg to 12deg
-                    ry = ry / 60 * 12;
-                    quoteDisplay.style.transform = `perspective(500px) rotateX(${-rx}deg) rotateY(${ry}deg)`;
-                }, true);
-                gyroActive = true;
-            }
+            let baseBeta = null;
+            let baseGamma = null;
+
+            gyroHandler = function(event) {
+                // Calibration
+                if (baseBeta === null || baseGamma === null) {
+                    baseBeta = event.beta;
+                    baseGamma = event.gamma;
+                }
+                // Calculate relative to baseline
+                let rx = event.beta - baseBeta;
+                let ry = event.gamma - baseGamma;
+
+                // Clamp to sensible limits
+                rx = Math.max(-60, Math.min(60, rx));
+                ry = Math.max(-60, Math.min(60, ry));
+
+                rx = rx / 60 * 12;  // -12deg to 12deg
+                ry = ry / 60 * 12;
+
+                quoteDisplay.style.transform = `perspective(500px) rotateX(${-rx}deg) rotateY(${ry}deg)`;
+            };
+
+            window.addEventListener('deviceorientation', gyroHandler, true);
+
+            // Allow double-tap recalibration
+            quoteDisplay.addEventListener('dblclick', function() {
+                baseBeta = null;
+                baseGamma = null;
+            });
+            gyroActive = true;
         }
 
         function isDesktop() {
