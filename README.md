@@ -40,6 +40,7 @@ If you like nostalgia, pixel art, dark humor, and weirdly useful tools, you’re
 | **App Name**            | **Links**                                                                 | **Description**                                         |
 |-------------------------|---------------------------------------------------------------------------|---------------------------------------------------------|
 | **TheApp**              | 🍷 [LSBS](https://obsidianmango.github.io/ObsidianMango/vinobrot.html)    | Real-world bottle shop wine pairing and inventory tool.  |
+| **Claw**              | 🎁 [CLAW](https://obsidianmango.github.io/ObsidianMango/claw.html)    | A basic claw machine concept.  |
 | **CryptoCritterz**      | 🐹 [CCritt](https://obsidianmango.github.io/ObsidianMango/ccritt/)        | Oversimplfied pet sim that watches crypto prices.      |
 | **Purcho**              | 🚚 [Order](https://obsidianmango.github.io/ObsidianMango/purcho/indexx.html)        | Ultimate Ordering Tool.       |
 | **Soundboard**          | 💨 [Fart](https://obsidianmango.github.io/ObsidianMango/sounds/fart.html) | The ultimate collection of fart sounds.     |
