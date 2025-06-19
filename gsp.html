@@ -2,287 +2,258 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Garden State Parkway 3D Runner (Babylon.js)</title>
+  <title>Garden State Parkway Runner (Babylon.js)</title>
   <style>
-    html, body { margin:0; padding:0; width:100vw; height:100vh; overflow:hidden; background:#1e2633;}
+    html,body { margin:0; padding:0; width:100vw; height:100vh; overflow:hidden; background:#98b4d4; }
     #renderCanvas { width:100vw; height:100vh; display:block; }
-    #mobile-instructions {
-      position:fixed; bottom:8px; left:0; width:100vw; text-align:center; color:#fff; font-size:1.1em; pointer-events:none;
-      font-family:sans-serif; text-shadow: 1px 1px 6px #000;
+    #msg {
+      position:fixed; bottom:0; left:0; width:100vw; color:#fff; text-align:center; font-size:1.2em;
+      font-family:sans-serif; text-shadow:0 0 7px #333;
+      z-index:2; pointer-events:none;
     }
   </style>
 </head>
 <body>
-  <canvas id="renderCanvas"></canvas>
-  <div id="mobile-instructions"></div>
-  <script src="https://cdn.babylonjs.com/babylon.js"></script>
-  <script>
-    // ======= INIT =======
-    const canvas = document.getElementById("renderCanvas");
-    const engine = new BABYLON.Engine(canvas, true);
+<canvas id="renderCanvas"></canvas>
+<div id="msg"></div>
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script>
+const canvas = document.getElementById('renderCanvas');
+const engine = new BABYLON.Engine(canvas, true, {preserveDrawingBuffer:true, stencil:true});
+const scene = new BABYLON.Scene(engine);
+scene.clearColor = new BABYLON.Color4(0.54,0.77,0.92,1); // sky
+scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+scene.fogDensity = 0.016;
+scene.fogColor = scene.clearColor;
 
-    let scene = new BABYLON.Scene(engine);
-    scene.clearColor = new BABYLON.Color3(0.53,0.81,0.92); // Sky blue
+const camera = new BABYLON.FollowCamera("FollowCam", new BABYLON.Vector3(0,4,-8), scene);
+camera.radius = 13; camera.heightOffset = 3.4; camera.rotationOffset = 0; camera.cameraAcceleration = 0.14; camera.maxCameraSpeed = 10;
+camera.attachControl(canvas, true);
+camera.lowerBetaLimit = 0.8; camera.upperBetaLimit = 1.2;
 
-    // Camera & Lighting
-    let camera = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0, 7, -14), scene);
-    camera.setTarget(new BABYLON.Vector3(0,1,10));
-    camera.attachControl(canvas, true);
+// Lights
+const light1 = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene);
+light1.intensity = 0.95;
 
-    let light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
-    light.intensity = 0.95;
+// Road
+const roadWidth = 9, laneCount = 3, laneWidth = roadWidth/laneCount;
+const roadMat = new BABYLON.StandardMaterial("roadMat", scene);
+roadMat.diffuseColor = new BABYLON.Color3(0.26,0.26,0.26);
 
-    // ===== ROAD, LANES, DASHES =====
-    const laneCount = 3, roadWidth = 9, laneWidth = roadWidth / laneCount, roadLength = 100;
-    let road = BABYLON.MeshBuilder.CreateBox("road", {width:roadWidth, depth:roadLength, height:0.12}, scene);
-    road.position.z = roadLength/2 - 15;
-    road.position.y = 0;
-    road.material = new BABYLON.StandardMaterial("roadmat", scene);
-    road.material.diffuseColor = new BABYLON.Color3(.21,.21,.21);
+const road = BABYLON.MeshBuilder.CreateBox("road", {width:roadWidth, height:0.1, depth:160}, scene);
+road.position = new BABYLON.Vector3(0,0,77);
+road.material = roadMat;
 
-    // Dash lines
-    for(let lane=-1; lane<=1; lane++){
-      for(let i=0;i<22;i++){
-        let dash = BABYLON.MeshBuilder.CreateBox("dash", {width:0.13, height:0.02, depth:1.4}, scene);
-        dash.position.set(lane*laneWidth,0.07,i*4-8);
-        dash.material = new BABYLON.StandardMaterial("dashmat",scene);
-        dash.material.diffuseColor = BABYLON.Color3.White();
-        dash.receiveShadows = true;
-      }
+// Lane Dashes
+for(let lane=-1; lane<=1; lane++) {
+  for(let i=0; i<30; i++) {
+    let dash = BABYLON.MeshBuilder.CreateBox("dash", {width:0.12, height:0.025, depth:1.04}, scene);
+    dash.position = new BABYLON.Vector3(lane*laneWidth,0.06,i*5-8);
+    let dashMat = new BABYLON.StandardMaterial("dashMat", scene);
+    dashMat.diffuseColor = new BABYLON.Color3(1,1,1);
+    dash.material = dashMat;
+  }
+}
+
+// Trees
+for(let i=0; i<34; i++) {
+  for(let side of [-1,1]) {
+    let trunk = BABYLON.MeshBuilder.CreateCylinder("trunk",{diameterTop:0.17,diameterBottom:0.22,height:2.7},scene);
+    trunk.position = new BABYLON.Vector3(side*(roadWidth/2+1.15+Math.random()*0.4),1.35,i*5-7+Math.random()*2);
+    let trunkMat = new BABYLON.StandardMaterial("trunkMat",scene);
+    trunkMat.diffuseColor = new BABYLON.Color3(0.49,0.36,0.19);
+    trunk.material = trunkMat;
+    // Foliage
+    let leaf = BABYLON.MeshBuilder.CreateSphere("leaf",{diameter:1.02+Math.random()*0.33,segments:5},scene);
+    leaf.position = new BABYLON.Vector3(trunk.position.x, trunk.position.y+1.23, trunk.position.z);
+    let leafMat = new BABYLON.StandardMaterial("leafMat",scene);
+    leafMat.diffuseColor = new BABYLON.Color3(0.17+Math.random()*0.05,0.51+Math.random()*0.18,0.18+Math.random()*0.1);
+    leaf.material = leafMat;
+  }
+}
+
+// Player Car
+const playerColors = [new BABYLON.Color3(0.98,0.89,0.26),new BABYLON.Color3(0.29,0.8,0.39),new BABYLON.Color3(0.7,0.18,0.23)];
+let playerLane = 1, laneTarget = 1, changingLane = false, laneLerp = 0;
+const player = BABYLON.MeshBuilder.CreateBox("player", {width:1.04, height:0.6, depth:2.1}, scene);
+player.position = new BABYLON.Vector3(0,0.33,2.7);
+const playerMat = new BABYLON.StandardMaterial("playerMat",scene);
+playerMat.diffuseColor = playerColors[0];
+player.material = playerMat;
+
+// Windshield
+let windshield = BABYLON.MeshBuilder.CreateBox("windshield",{width:0.97,height:0.21,depth:0.7},scene);
+windshield.position = new BABYLON.Vector3(0,0.68,0.45);
+windshield.parent = player;
+let windshieldMat = new BABYLON.StandardMaterial("wMat",scene);
+windshieldMat.diffuseColor = new BABYLON.Color3(0.72,0.97,1); windshieldMat.alpha=0.73;
+windshield.material = windshieldMat;
+
+camera.lockedTarget = player;
+
+// Traffic
+const trafficColors = [
+  new BABYLON.Color3(0.34,0.34,0.93), new BABYLON.Color3(1,0.35,0.23),
+  new BABYLON.Color3(0.25,0.95,0.38), new BABYLON.Color3(1,0.82,0.2), new BABYLON.Color3(0.9,0.87,1)
+];
+const laneSpeeds = [0.38,0.3,0.22];
+let playerZ = 2.7, speed = laneSpeeds[1], score = 0;
+let traffic = [];
+
+function createTrafficCar(lane, z) {
+  let car = BABYLON.MeshBuilder.CreateBox("car",{width:1.02,height:0.62,depth:2},scene);
+  car.position = new BABYLON.Vector3((lane-1)*laneWidth,0.33,z);
+  let cMat = new BABYLON.StandardMaterial("carMat",scene);
+  cMat.diffuseColor = trafficColors[Math.floor(Math.random()*trafficColors.length)];
+  car.material = cMat;
+  car.metadata = {lane,speed:laneSpeeds[lane],kind:'car'};
+  // Wheels
+  for(let dx of [-0.39,0.39]) {
+    for(let dz of [-0.72,0.72]) {
+      let w = BABYLON.MeshBuilder.CreateCylinder("w",{diameter:0.18,height:0.21},scene);
+      w.rotation.x = Math.PI/2;
+      w.position = new BABYLON.Vector3(dx,0.09,dz);
+      w.parent = car;
+      let wMat = new BABYLON.StandardMaterial("wMat",scene);
+      wMat.diffuseColor = new BABYLON.Color3(0.11,0.11,0.11);
+      w.material = wMat;
     }
+  }
+  traffic.push(car);
+  return car;
+}
 
-    // ===== TREES =====
-    function makeTree(x,z){
-      // Trunk
-      let trunk = BABYLON.MeshBuilder.CreateCylinder("trunk",{diameterTop:0.15, diameterBottom:0.23, height:2.2},scene);
-      trunk.position.set(x,1.1,z);
-      trunk.material = new BABYLON.StandardMaterial("trunkmat",scene);
-      trunk.material.diffuseColor = new BABYLON.Color3(0.48,0.35,0.20);
-      // Leaves
-      let leaves = BABYLON.MeshBuilder.CreateSphere("leaves",{diameter:0.75+Math.random()*0.3},scene);
-      leaves.position.set(x,2.1,z);
-      leaves.material = new BABYLON.StandardMaterial("leafmat",scene);
-      leaves.material.diffuseColor = new BABYLON.Color3(0.14+Math.random()*0.08,0.52+Math.random()*0.12,0.20+Math.random()*0.12);
+function spawnCluster(zOffset=67) {
+  let lanes = [0,1,2].sort(()=>Math.random()-0.5).slice(0,2+(Math.random()>0.7?1:0));
+  for(let ln of lanes) createTrafficCar(ln, player.position.z+zOffset+Math.random()*3.2);
+}
+for(let i=0;i<11;i++) spawnCluster(i*15+17);
+
+// Speeders and Cops
+let effects = [];
+function spawnSpeederAndCop() {
+  let lanes = [0,1,2], lane = lanes[Math.floor(Math.random()*3)];
+  // Speeder
+  let speeder = BABYLON.MeshBuilder.CreateBox("speeder",{width:0.88,height:0.47,depth:1.59},scene);
+  speeder.position = new BABYLON.Vector3((lane-1)*laneWidth,0.26,player.position.z+5);
+  let spMat = new BABYLON.StandardMaterial("spMat",scene);
+  spMat.diffuseColor = new BABYLON.Color3(0.13,0.22,0.95);
+  speeder.material = spMat;
+  speeder.metadata = {lane,speed:1.23,kind:'speeder',elapsed:0};
+  effects.push(speeder);
+  // Cop after delay
+  setTimeout(()=>{
+    let cop = BABYLON.MeshBuilder.CreateBox("cop",{width:1.01,height:0.59,depth:2.12},scene);
+    cop.position = new BABYLON.Vector3((lane-1)*laneWidth,0.32,player.position.z+3.3);
+    let copMat = new BABYLON.StandardMaterial("copMat",scene);
+    copMat.diffuseColor = new BABYLON.Color3(0.14,0.14,0.14);
+    cop.material = copMat;
+    // Roof lights
+    let lightbar = BABYLON.MeshBuilder.CreateBox("lightbar",{width:0.6,height:0.11,depth:0.3},scene);
+    lightbar.position = new BABYLON.Vector3(0,0.66,0.38);
+    lightbar.parent = cop;
+    let lbMat = new BABYLON.StandardMaterial("lbMat",scene);
+    lbMat.diffuseColor = new BABYLON.Color3(0.12,0.24,1);
+    lightbar.material = lbMat;
+    cop.metadata = {lane,speed:1.09,kind:'cop',flash:0,lightbar};
+    effects.push(cop);
+  },650);
+}
+let speederTimer = 2.6 + Math.random()*3.3;
+
+// Controls
+let msg = document.getElementById('msg');
+let isMobile = /Mobi|Android/i.test(navigator.userAgent);
+msg.textContent = isMobile ? "Swipe left/right to switch lanes!" : "Use ⬅️ / ➡️ arrows to switch lanes!";
+
+function goLeft()  { if (playerLane>0&&!changingLane) { laneTarget=--playerLane; changingLane=true; laneLerp=0; } }
+function goRight() { if (playerLane<2&&!changingLane) { laneTarget=++playerLane; changingLane=true; laneLerp=0; } }
+
+window.addEventListener('keydown',e=>{
+  if(e.code==='ArrowLeft') goLeft();
+  if(e.code==='ArrowRight') goRight();
+  if(e.key==='r' && crashed) location.reload();
+});
+
+let tStartX=0, dx=0, swiping=false, crashed=false;
+if(isMobile) {
+  canvas.addEventListener('touchstart',e=>{ if(e.touches.length===1){tStartX=e.touches[0].clientX;dx=0;swiping=true;}});
+  canvas.addEventListener('touchmove',e=>{ if(swiping){dx = e.touches[0].clientX-tStartX;}});
+  canvas.addEventListener('touchend',e=>{
+    if(swiping){
+      if(dx < -25) goLeft();
+      else if(dx > 25) goRight();
+      swiping=false; dx=0;
     }
-    for(let i=0;i<24;i++){
-      for(let side of [-1,1]){
-        makeTree(side*(roadWidth/2+0.9+Math.random()*0.6),i*4-10);
-      }
+  });
+}
+
+// Game loop
+scene.onBeforeRenderObservable.add(()=>{
+  if (crashed) return;
+
+  // Lane speeds
+  speed = laneSpeeds[playerLane];
+  playerZ += speed * engine.getDeltaTime()/66.5;
+  player.position.z = playerZ;
+
+  // Lane changing animation
+  if (changingLane) {
+    laneLerp += engine.getDeltaTime()/210;
+    player.position.x = BABYLON.Scalar.Lerp(player.position.x, (playerLane-1)*laneWidth, laneLerp*1.11);
+    if(Math.abs(player.position.x-(playerLane-1)*laneWidth)<0.035) {
+      player.position.x = (playerLane-1)*laneWidth;
+      changingLane=false;
     }
+  }
 
-    // ===== PLAYER CAR =====
-    function makeCarMesh(color=0xffdd44, scale=1){
-      let car = new BABYLON.TransformNode("car");
-      let body = BABYLON.MeshBuilder.CreateBox("carbody", {width:0.9*scale, height:0.46*scale, depth:1.55*scale}, scene);
-      body.material = new BABYLON.StandardMaterial("carmat",scene);
-      let rgb = [((color>>16)&255)/255, ((color>>8)&255)/255, (color&255)/255];
-      body.material.diffuseColor = new BABYLON.Color3(...rgb);
-      body.position.y = 0.28*scale;
-      body.parent = car;
-      // Windshield
-      let glass = BABYLON.MeshBuilder.CreateBox("glass",{width:0.83*scale, height:0.18*scale, depth:0.51*scale},scene);
-      glass.position.y = 0.46*scale;
-      glass.position.z = 0.18*scale;
-      glass.material = new BABYLON.StandardMaterial("glassmat",scene);
-      glass.material.diffuseColor = new BABYLON.Color3(0.70,0.88,1.0);
-      glass.material.alpha = 0.5;
-      glass.parent = car;
-      // Wheels
-      for(let dx of [-0.33,0.33]){
-        for(let dz of [-0.48,0.48]){
-          let wheel = BABYLON.MeshBuilder.CreateCylinder("wheel",{diameter:0.18*scale, height:0.12*scale},scene);
-          wheel.rotation.z = Math.PI/2;
-          wheel.position.set(dx,0.12*scale,dz);
-          wheel.material = new BABYLON.StandardMaterial("wheelmat",scene);
-          wheel.material.diffuseColor = new BABYLON.Color3(0.13,0.13,0.13);
-          wheel.parent = car;
-        }
-      }
-      return car;
+  // Move camera forward
+  camera.target = player;
+
+  // Traffic logic
+  for(let car of traffic) {
+    car.position.z -= speed * engine.getDeltaTime()/66.5;
+    if(car.position.z < player.position.z-12.5) { car.dispose(); car.metadata.dead=true; }
+    // Collision
+    if(!car.metadata.dead && Math.abs(car.position.z-player.position.z)<1.15 && Math.abs(car.position.x-player.position.x)<0.68) {
+      crashed = true;
+      msg.textContent = "💥 CRASHED! Tap or press R to restart. Score: " + Math.floor(player.position.z*2);
+      if(isMobile) canvas.addEventListener('touchend',()=>location.reload(),{once:true});
     }
+  }
+  // Prune old traffic, add new
+  while(traffic.length && (traffic[0].metadata.dead || traffic[0].position.z<player.position.z-12.5)) traffic.shift();
+  if(traffic.length<12) spawnCluster(38+Math.random()*18);
 
-    let playerCar = makeCarMesh(0xffdd44, 1.09);
-    playerCar.position = new BABYLON.Vector3(0,0.1,3);
-
-    let playerLane = 1, targetLane = 1, isLaneSwitching = false, switchProgress=0;
-    const laneXs = [-laneWidth, 0, laneWidth];
-
-    // ===== TRAFFIC =====
-    const carColors = [0x5555cc,0xee4444,0x43d343,0xd4b04f,0xffffff,0xbb87ee];
-    const laneSpeeds = [0.37,0.29,0.21]; // left=fast, right=slow
-    let traffic = [];
-
-    function spawnTrafficCar(lane,z){
-      let color = carColors[Math.floor(Math.random()*carColors.length)];
-      let mesh = makeCarMesh(color,0.98);
-      mesh.position.x = laneXs[lane];
-      mesh.position.y = 0.11;
-      mesh.position.z = z;
-      scene.addTransformNode(mesh);
-      mesh.metadata = {lane,speed:laneSpeeds[lane],kind:'car',mesh};
-      traffic.push(mesh);
+  // Animate speeders/cops
+  for(let i=effects.length-1;i>=0;i--) {
+    let obj = effects[i];
+    if(obj.metadata.kind==='speeder') {
+      obj.position.z += obj.metadata.speed;
+      obj.metadata.elapsed += engine.getDeltaTime()/1000;
+      if(obj.position.z > player.position.z+66) { obj.dispose(); effects.splice(i,1);}
+    } else if(obj.metadata.kind==='cop') {
+      obj.position.z += obj.metadata.speed;
+      // Roof light bar flash
+      if(obj.metadata.lightbar)
+        obj.metadata.lightbar.material.diffuseColor = Math.random()>0.52 ? new BABYLON.Color3(1,0.15,0.19): new BABYLON.Color3(0.12,0.24,1);
+      if(obj.position.z > player.position.z+66) { obj.dispose(); effects.splice(i,1);}
     }
-    function spawnTrafficCluster(zOffset=52){
-      let clusterLanes = [0,1,2].sort(()=>Math.random()-0.5).slice(0,2+(Math.random()>0.55?1:0));
-      for(let ln of clusterLanes){
-        spawnTrafficCar(ln, playerCar.position.z+zOffset+Math.random()*2.6);
-      }
-    }
-    for(let i=0;i<11;i++) spawnTrafficCluster(i*11+10);
+  }
+  // Speeders/cops spawner
+  speederTimer -= engine.getDeltaTime()/1000;
+  if(speederTimer<=0) {
+    spawnSpeederAndCop();
+    speederTimer = 3.2+Math.random()*6;
+  }
 
-    // ===== SPEEDER & COP =====
-    let effects = [];
-    function spawnSpeederAndCop(){
-      let lane = Math.floor(Math.random()*3);
-      // Speeder
-      let speeder = makeCarMesh(0x1e6ef8,0.9);
-      speeder.position.x = laneXs[lane];
-      speeder.position.z = playerCar.position.z+4;
-      scene.addTransformNode(speeder);
-      speeder.metadata = {lane, speed:1.19, kind:'speeder', elapsed:0};
-      effects.push(speeder);
+  // Score
+  score = Math.floor(player.position.z*2);
+  if(!crashed) msg.textContent = (isMobile ? "Swipe":"Use ⬅️/➡️") + " to switch lanes! | Score: " + score;
+});
 
-      // Cop, after a delay
-      setTimeout(()=>{
-        let cop = makeCarMesh(0x202020,0.97);
-        // Cop light
-        let lightBox = BABYLON.MeshBuilder.CreateBox("roof",{width:0.46,height:0.08,depth:0.18},scene);
-        lightBox.position.y=0.44; lightBox.position.z=0.21;
-        lightBox.material = new BABYLON.StandardMaterial("lightmat",scene);
-        lightBox.material.diffuseColor = new BABYLON.Color3(0.1,0.1,1.0);
-        lightBox.material.emissiveColor = new BABYLON.Color3(0.2,0.1,0.85);
-        lightBox.parent = cop;
-        cop.position.x = laneXs[lane];
-        cop.position.z = playerCar.position.z+2.8;
-        scene.addTransformNode(cop);
-        cop.metadata = {lane, speed:1.13, kind:'cop', flash:0, roof:lightBox};
-        effects.push(cop);
-      },700);
-    }
-    let speederTimer = 2.8+Math.random()*4;
-
-    // ===== CONTROLS (arrow/swipe) =====
-    let mobileInstructions = document.getElementById("mobile-instructions");
-    function goLeft(){
-      if(playerLane>0&&!isLaneSwitching){ targetLane=--playerLane; isLaneSwitching=true; switchProgress=0; }
-    }
-    function goRight(){
-      if(playerLane<2&&!isLaneSwitching){ targetLane=++playerLane; isLaneSwitching=true; switchProgress=0; }
-    }
-    window.addEventListener('keydown', e=>{
-      if(e.code==="ArrowLeft") goLeft();
-      if(e.code==="ArrowRight") goRight();
-    });
-    // Swipe
-    let tsX=0,dx=0,swiping=false;
-    if(/Mobi|Android|iPhone/i.test(navigator.userAgent)){
-      mobileInstructions.textContent = "Swipe left/right to switch lanes!";
-      canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){tsX=e.touches[0].clientX;dx=0;swiping=true;}});
-      canvas.addEventListener('touchmove',e=>{if(swiping){dx = e.touches[0].clientX-tsX;}});
-      canvas.addEventListener('touchend',e=>{
-        if(swiping){
-          if(dx<-24) goLeft();
-          else if(dx>24) goRight();
-          swiping=false; dx=0;
-        }
-      });
-    } else {
-      mobileInstructions.textContent = "Use ⬅️ / ➡️ arrows to switch lanes!";
-    }
-
-    // ===== MAIN GAME LOOP =====
-    let playerZ=3, speed=laneSpeeds[1], score=0, gameOver=false;
-    let lastTime = performance.now()/1000;
-    function gameLoop(){
-      let now = performance.now()/1000, dt = Math.min(0.07, now-lastTime); lastTime = now;
-      if(gameOver) return;
-
-      speed = laneSpeeds[playerLane];
-
-      // Lane switch anim
-      if(isLaneSwitching){
-        switchProgress+=dt*3.9;
-        let lerp = Math.min(1,switchProgress);
-        playerCar.position.x = playerCar.position.x+(laneXs[targetLane]-playerCar.position.x)*lerp;
-        if(Math.abs(playerCar.position.x-laneXs[targetLane])<0.04){
-          playerCar.position.x=laneXs[targetLane];
-          isLaneSwitching=false;
-        }
-      }
-
-      // Move forward
-      playerZ += speed*dt*6;
-      playerCar.position.z = playerZ;
-
-      // Move camera to chase player
-      camera.position.z = playerCar.position.z-12.5;
-      camera.position.y = 5.3 + Math.sin(now*0.49)*0.13;
-      camera.setTarget(new BABYLON.Vector3(playerCar.position.x,1.0,playerCar.position.z+10));
-
-      // Move traffic
-      for(let t of traffic){
-        t.position.z -= speed*dt*6;
-        if(t.position.z<playerCar.position.z-12){
-          t.metadata.dead = true;
-        }
-        // Collision
-        if(!t.metadata.dead && Math.abs(t.position.z-playerCar.position.z)<1.14 && Math.abs(t.position.x-playerCar.position.x)<0.75){
-          // CRASH
-          mobileInstructions.textContent="💥 CRASH! Tap or press R to restart.";
-          window.addEventListener('keydown',restartHandler,{once:true});
-          canvas.addEventListener('touchend',restartHandler,{once:true});
-          gameOver=true;
-          return;
-        }
-      }
-      // Remove old traffic, add new
-      while(traffic.length && (traffic[0].metadata.dead||traffic[0].position.z<playerCar.position.z-12)){
-        traffic[0].dispose();
-        traffic.shift();
-      }
-      if(traffic.length<10) spawnTrafficCluster(27+Math.random()*17);
-
-      // Animate effects (speeders/cops)
-      for(let i=effects.length-1;i>=0;i--){
-        let obj=effects[i];
-        if(obj.metadata.kind==='speeder'){
-          obj.position.z += obj.metadata.speed;
-          obj.metadata.elapsed += dt;
-          if(obj.position.z > playerCar.position.z+60){ obj.dispose(); effects.splice(i,1);}
-        } else if(obj.metadata.kind==='cop'){
-          obj.position.z += obj.metadata.speed;
-          // Flash lights
-          if(Math.random()>0.5){
-            obj.metadata.roof.material.diffuseColor = new BABYLON.Color3(1,0.06,0.1);
-            obj.metadata.roof.material.emissiveColor = new BABYLON.Color3(0.7,0.12,0.16);
-          } else {
-            obj.metadata.roof.material.diffuseColor = new BABYLON.Color3(0.1,0.1,1.0);
-            obj.metadata.roof.material.emissiveColor = new BABYLON.Color3(0.2,0.1,0.85);
-          }
-          if(obj.position.z > playerCar.position.z+60){ obj.dispose(); effects.splice(i,1);}
-        }
-      }
-      // Spawn speeders/cops
-      speederTimer -= dt;
-      if(speederTimer<=0){
-        spawnSpeederAndCop();
-        speederTimer = 4+Math.random()*6.2;
-      }
-
-      // Score
-      score = Math.floor(playerCar.position.z*2);
-      mobileInstructions.textContent = (gameOver ? "💥 CRASH! Tap or press R to restart." : (/Mobi|Android|iPhone/i.test(navigator.userAgent)?"Swipe left/right":"Use ⬅️ / ➡️ arrows")+" to switch lanes!") + `  |  Score: ${score}`;
-
-      engine.runRenderLoop(()=>{scene.render();});
-      requestAnimationFrame(gameLoop);
-    }
-    gameLoop();
-
-    function restartHandler(){ location.reload(); }
-    window.addEventListener('resize',()=>{
-      engine.resize();
-    });
-
-  </script>
+engine.runRenderLoop(()=>scene.render());
+window.addEventListener("resize",()=>engine.resize());
+</script>
 </body>
 </html>
