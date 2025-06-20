@@ -2,258 +2,313 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Garden State Parkway Runner (Babylon.js)</title>
+  <title>Garden State Parkway 3D Runner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    html,body { margin:0; padding:0; width:100vw; height:100vh; overflow:hidden; background:#98b4d4; }
-    #renderCanvas { width:100vw; height:100vh; display:block; }
-    #msg {
-      position:fixed; bottom:0; left:0; width:100vw; color:#fff; text-align:center; font-size:1.2em;
-      font-family:sans-serif; text-shadow:0 0 7px #333;
-      z-index:2; pointer-events:none;
-    }
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #222;}
+    #score { position:fixed;top:16px;left:16px;font-family:sans-serif;color:white;font-size:20px;z-index:2;background:rgba(0,0,0,0.5);padding:8px 20px;border-radius:8px;}
+    #instructions {position:fixed;bottom:24px;left:50%;transform:translateX(-50%);color:white;font-family:sans-serif;font-size:16px;z-index:2;background:rgba(0,0,0,0.7);padding:8px 16px;border-radius:8px;}
   </style>
 </head>
 <body>
-<canvas id="renderCanvas"></canvas>
-<div id="msg"></div>
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<div id="score"></div>
+<div id="instructions">⬅️⬆️➡️ Arrows or Swipe to change lanes</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
 <script>
-const canvas = document.getElementById('renderCanvas');
-const engine = new BABYLON.Engine(canvas, true, {preserveDrawingBuffer:true, stencil:true});
-const scene = new BABYLON.Scene(engine);
-scene.clearColor = new BABYLON.Color4(0.54,0.77,0.92,1); // sky
-scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
-scene.fogDensity = 0.016;
-scene.fogColor = scene.clearColor;
+// ========== CONFIG ========== //
+const LANE_X = [-4, 0, 4]; // x positions for 3 lanes (left, middle, right)
+const LANE_SPEEDS = [2.7, 2.2, 1.7]; // Parkway speeds, left>mid>right
+const CAR_COLORS = [0xff3333, 0x2222ff, 0x33ff33, 0xaaaaaa, 0xffe066];
+const SPEEDER_COLOR = 0xffff00;
+const COP_COLOR = 0x00ffff;
+const DASH_COLOR = 0xffffff;
+const DASH_LENGTH = 3.0;
+const DASH_SPACING = 7.5;
+const ROAD_WIDTH = 12;
+const ROAD_LEN = 200;
+const TREE_COLOR = 0x268205;
+const TREE_TRUNK = 0x6b4f1d;
+const TREE_COUNT = 30;
+const PLAYER_COLOR = 0x3333ff;
+const SKY_COLOR = 0x92b8f7;
+// ========== END CONFIG ========== //
 
-const camera = new BABYLON.FollowCamera("FollowCam", new BABYLON.Vector3(0,4,-8), scene);
-camera.radius = 13; camera.heightOffset = 3.4; camera.rotationOffset = 0; camera.cameraAcceleration = 0.14; camera.maxCameraSpeed = 10;
-camera.attachControl(canvas, true);
-camera.lowerBetaLimit = 0.8; camera.upperBetaLimit = 1.2;
+let scene, camera, renderer, clock;
+let road, dashLines = [];
+let traffic = [], trees = [];
+let playerCar, playerLane = 1, isMoving = false;
+let speeders = [], cops = [];
+let lastSpeederTime = 0;
+let playerZ = -60, score = 0;
 
-// Lights
-const light1 = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0,1,0), scene);
-light1.intensity = 0.95;
+function clamp(x, min, max) { return Math.max(min, Math.min(max, x)); }
 
-// Road
-const roadWidth = 9, laneCount = 3, laneWidth = roadWidth/laneCount;
-const roadMat = new BABYLON.StandardMaterial("roadMat", scene);
-roadMat.diffuseColor = new BABYLON.Color3(0.26,0.26,0.26);
+// --- Init 3D Scene ---
+scene = new THREE.Scene();
+scene.background = new THREE.Color(SKY_COLOR);
 
-const road = BABYLON.MeshBuilder.CreateBox("road", {width:roadWidth, height:0.1, depth:160}, scene);
-road.position = new BABYLON.Vector3(0,0,77);
-road.material = roadMat;
+camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 500);
+camera.position.set(0, 14, playerZ+28);
+camera.lookAt(0, 0, playerZ+50);
 
-// Lane Dashes
-for(let lane=-1; lane<=1; lane++) {
-  for(let i=0; i<30; i++) {
-    let dash = BABYLON.MeshBuilder.CreateBox("dash", {width:0.12, height:0.025, depth:1.04}, scene);
-    dash.position = new BABYLON.Vector3(lane*laneWidth,0.06,i*5-8);
-    let dashMat = new BABYLON.StandardMaterial("dashMat", scene);
-    dashMat.diffuseColor = new BABYLON.Color3(1,1,1);
-    dash.material = dashMat;
+renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// --- Horizon Plane & Sky Gradient ---
+const gradGeo = new THREE.PlaneGeometry(200, 60);
+const gradMat = new THREE.MeshBasicMaterial({color:0xb7eaff, side:THREE.DoubleSide});
+const gradPlane = new THREE.Mesh(gradGeo, gradMat);
+gradPlane.position.set(0,25,70);
+gradPlane.rotation.x = -Math.PI/2.3;
+scene.add(gradPlane);
+
+// --- Road ---
+const roadGeo = new THREE.BoxGeometry(ROAD_WIDTH, 0.4, ROAD_LEN);
+const roadMat = new THREE.MeshPhongMaterial({color:0x2a2a2a});
+road = new THREE.Mesh(roadGeo, roadMat);
+road.position.set(0,-0.2,playerZ+ROAD_LEN/2);
+scene.add(road);
+
+// --- Lane Dash Lines ---
+for (let l=0; l<2; ++l) {
+  let x = (LANE_X[l]+LANE_X[l+1])/2;
+  for (let i=0; i<ROAD_LEN/DASH_SPACING; ++i) {
+    let dashGeo = new THREE.BoxGeometry(0.2,0.05,DASH_LENGTH);
+    let dashMat = new THREE.MeshBasicMaterial({color:DASH_COLOR});
+    let dash = new THREE.Mesh(dashGeo, dashMat);
+    dash.position.set(x,0.01,playerZ+i*DASH_SPACING+2);
+    scene.add(dash);
+    dashLines.push(dash);
   }
 }
 
-// Trees
-for(let i=0; i<34; i++) {
-  for(let side of [-1,1]) {
-    let trunk = BABYLON.MeshBuilder.CreateCylinder("trunk",{diameterTop:0.17,diameterBottom:0.22,height:2.7},scene);
-    trunk.position = new BABYLON.Vector3(side*(roadWidth/2+1.15+Math.random()*0.4),1.35,i*5-7+Math.random()*2);
-    let trunkMat = new BABYLON.StandardMaterial("trunkMat",scene);
-    trunkMat.diffuseColor = new BABYLON.Color3(0.49,0.36,0.19);
-    trunk.material = trunkMat;
-    // Foliage
-    let leaf = BABYLON.MeshBuilder.CreateSphere("leaf",{diameter:1.02+Math.random()*0.33,segments:5},scene);
-    leaf.position = new BABYLON.Vector3(trunk.position.x, trunk.position.y+1.23, trunk.position.z);
-    let leafMat = new BABYLON.StandardMaterial("leafMat",scene);
-    leafMat.diffuseColor = new BABYLON.Color3(0.17+Math.random()*0.05,0.51+Math.random()*0.18,0.18+Math.random()*0.1);
-    leaf.material = leafMat;
-  }
+// --- Trees ---
+for (let i=0; i<TREE_COUNT; ++i) {
+  let x = ROAD_WIDTH/2 + 3 + (Math.random()-0.5)*2;
+  let z = playerZ + (i+3)*ROAD_LEN/TREE_COUNT + Math.random()*10;
+  // Trunk
+  let tGeo = new THREE.CylinderGeometry(0.22,0.22,1.5,8);
+  let tMat = new THREE.MeshPhongMaterial({color:TREE_TRUNK});
+  let trunk = new THREE.Mesh(tGeo, tMat);
+  trunk.position.set(x,0.75,z);
+  scene.add(trunk);
+  // Foliage
+  let fGeo = new THREE.SphereGeometry(1.2, 8, 6);
+  let fMat = new THREE.MeshPhongMaterial({color:TREE_COLOR});
+  let foliage = new THREE.Mesh(fGeo, fMat);
+  foliage.position.set(x,2,z);
+  scene.add(foliage);
+  trees.push([trunk,foliage]);
+  // Mirror on left
+  let t2 = trunk.clone(); t2.position.x *= -1;
+  let f2 = foliage.clone(); f2.position.x *= -1;
+  scene.add(t2); scene.add(f2);
+  trees.push([t2,f2]);
 }
 
-// Player Car
-const playerColors = [new BABYLON.Color3(0.98,0.89,0.26),new BABYLON.Color3(0.29,0.8,0.39),new BABYLON.Color3(0.7,0.18,0.23)];
-let playerLane = 1, laneTarget = 1, changingLane = false, laneLerp = 0;
-const player = BABYLON.MeshBuilder.CreateBox("player", {width:1.04, height:0.6, depth:2.1}, scene);
-player.position = new BABYLON.Vector3(0,0.33,2.7);
-const playerMat = new BABYLON.StandardMaterial("playerMat",scene);
-playerMat.diffuseColor = playerColors[0];
-player.material = playerMat;
+// --- Lighting ---
+let amb = new THREE.AmbientLight(0xffffff,0.7);
+scene.add(amb);
+let sun = new THREE.DirectionalLight(0xffffff,0.7);
+sun.position.set(0,30,40);
+scene.add(sun);
 
-// Windshield
-let windshield = BABYLON.MeshBuilder.CreateBox("windshield",{width:0.97,height:0.21,depth:0.7},scene);
-windshield.position = new BABYLON.Vector3(0,0.68,0.45);
-windshield.parent = player;
-let windshieldMat = new BABYLON.StandardMaterial("wMat",scene);
-windshieldMat.diffuseColor = new BABYLON.Color3(0.72,0.97,1); windshieldMat.alpha=0.73;
-windshield.material = windshieldMat;
-
-camera.lockedTarget = player;
-
-// Traffic
-const trafficColors = [
-  new BABYLON.Color3(0.34,0.34,0.93), new BABYLON.Color3(1,0.35,0.23),
-  new BABYLON.Color3(0.25,0.95,0.38), new BABYLON.Color3(1,0.82,0.2), new BABYLON.Color3(0.9,0.87,1)
-];
-const laneSpeeds = [0.38,0.3,0.22];
-let playerZ = 2.7, speed = laneSpeeds[1], score = 0;
-let traffic = [];
-
-function createTrafficCar(lane, z) {
-  let car = BABYLON.MeshBuilder.CreateBox("car",{width:1.02,height:0.62,depth:2},scene);
-  car.position = new BABYLON.Vector3((lane-1)*laneWidth,0.33,z);
-  let cMat = new BABYLON.StandardMaterial("carMat",scene);
-  cMat.diffuseColor = trafficColors[Math.floor(Math.random()*trafficColors.length)];
-  car.material = cMat;
-  car.metadata = {lane,speed:laneSpeeds[lane],kind:'car'};
+// --- Player Car ---
+function createCar(color) {
+  let group = new THREE.Group();
+  let base = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.6,2.7), new THREE.MeshPhongMaterial({color}));
+  base.position.y = 0.5;
+  group.add(base);
+  let roof = new THREE.Mesh(new THREE.BoxGeometry(1.3,0.7,1.3), new THREE.MeshPhongMaterial({color:0xeeeeee}));
+  roof.position.set(0,1,0.3);
+  group.add(roof);
   // Wheels
-  for(let dx of [-0.39,0.39]) {
-    for(let dz of [-0.72,0.72]) {
-      let w = BABYLON.MeshBuilder.CreateCylinder("w",{diameter:0.18,height:0.21},scene);
-      w.rotation.x = Math.PI/2;
-      w.position = new BABYLON.Vector3(dx,0.09,dz);
-      w.parent = car;
-      let wMat = new BABYLON.StandardMaterial("wMat",scene);
-      wMat.diffuseColor = new BABYLON.Color3(0.11,0.11,0.11);
-      w.material = wMat;
-    }
+  for (let w of [[0.7,0.1,1.05],[0.7,0.1,-1.05],[-0.7,0.1,1.05],[-0.7,0.1,-1.05]]) {
+    let wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.32,12), new THREE.MeshPhongMaterial({color:0x222222}));
+    wheel.position.set(w[0],w[1],w[2]);
+    wheel.rotation.z = Math.PI/2;
+    group.add(wheel);
   }
-  traffic.push(car);
-  return car;
+  return group;
+}
+playerCar = createCar(PLAYER_COLOR);
+playerCar.position.set(LANE_X[playerLane],0,playerZ+8);
+scene.add(playerCar);
+
+// --- Traffic Cars ---
+function spawnTrafficCar(lane, zpos, speed) {
+  let car = createCar(CAR_COLORS[Math.floor(Math.random()*CAR_COLORS.length)]);
+  car.position.set(LANE_X[lane], 0, zpos);
+  scene.add(car);
+  traffic.push({obj: car, lane, z: zpos, speed});
 }
 
-function spawnCluster(zOffset=67) {
-  let lanes = [0,1,2].sort(()=>Math.random()-0.5).slice(0,2+(Math.random()>0.7?1:0));
-  for(let ln of lanes) createTrafficCar(ln, player.position.z+zOffset+Math.random()*3.2);
+// --- Initial Traffic ---
+function resetTraffic() {
+  // Clear old
+  for (let t of traffic) scene.remove(t.obj);
+  traffic = [];
+  // Spawn clusters
+  for (let i=0;i<11;++i) {
+    let clusterZ = playerZ+28+i*15+Math.random()*8;
+    let openLane = Math.floor(Math.random()*3);
+    for (let l=0;l<3;++l) if (l!==openLane)
+      spawnTrafficCar(l, clusterZ+(Math.random()-0.5)*2, LANE_SPEEDS[l]);
+  }
 }
-for(let i=0;i<11;i++) spawnCluster(i*15+17);
+resetTraffic();
 
-// Speeders and Cops
-let effects = [];
+// --- Speeding Car + Cop Chase ---
 function spawnSpeederAndCop() {
-  let lanes = [0,1,2], lane = lanes[Math.floor(Math.random()*3)];
+  // Pick random lane
+  let spLane = Math.floor(Math.random()*3);
+  // Can't be player's lane or next to player for fairness
+  if (Math.abs(spLane - playerLane) < 1) spLane = (spLane+1)%3;
+  let spZ = playerZ+10+Math.random()*6;
   // Speeder
-  let speeder = BABYLON.MeshBuilder.CreateBox("speeder",{width:0.88,height:0.47,depth:1.59},scene);
-  speeder.position = new BABYLON.Vector3((lane-1)*laneWidth,0.26,player.position.z+5);
-  let spMat = new BABYLON.StandardMaterial("spMat",scene);
-  spMat.diffuseColor = new BABYLON.Color3(0.13,0.22,0.95);
-  speeder.material = spMat;
-  speeder.metadata = {lane,speed:1.23,kind:'speeder',elapsed:0};
-  effects.push(speeder);
-  // Cop after delay
-  setTimeout(()=>{
-    let cop = BABYLON.MeshBuilder.CreateBox("cop",{width:1.01,height:0.59,depth:2.12},scene);
-    cop.position = new BABYLON.Vector3((lane-1)*laneWidth,0.32,player.position.z+3.3);
-    let copMat = new BABYLON.StandardMaterial("copMat",scene);
-    copMat.diffuseColor = new BABYLON.Color3(0.14,0.14,0.14);
-    cop.material = copMat;
-    // Roof lights
-    let lightbar = BABYLON.MeshBuilder.CreateBox("lightbar",{width:0.6,height:0.11,depth:0.3},scene);
-    lightbar.position = new BABYLON.Vector3(0,0.66,0.38);
-    lightbar.parent = cop;
-    let lbMat = new BABYLON.StandardMaterial("lbMat",scene);
-    lbMat.diffuseColor = new BABYLON.Color3(0.12,0.24,1);
-    lightbar.material = lbMat;
-    cop.metadata = {lane,speed:1.09,kind:'cop',flash:0,lightbar};
-    effects.push(cop);
-  },650);
+  let speeder = createCar(SPEEDER_COLOR);
+  speeder.position.set(LANE_X[spLane],0,spZ);
+  scene.add(speeder);
+  // Cop
+  let cop = createCar(COP_COLOR);
+  cop.position.set(LANE_X[spLane],0,spZ-5);
+  scene.add(cop);
+  // Flashing lights on cop (basic)
+  cop.lights = [];
+  for (let i=0;i<2;i++) {
+    let light = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.18),
+      new THREE.MeshBasicMaterial({color: i===0?0xff3333:0x33aaff}));
+    light.position.set(i===0?0.45:-0.45,1.45,0.9);
+    cop.add(light);
+    cop.lights.push(light);
+  }
+  speeders.push({obj: speeder, lane: spLane, z: spZ, speed: LANE_SPEEDS[spLane]*2.2});
+  cops.push({obj: cop, lane: spLane, z: spZ-5, speed: LANE_SPEEDS[spLane]*2.1, time:0});
 }
-let speederTimer = 2.6 + Math.random()*3.3;
 
-// Controls
-let msg = document.getElementById('msg');
-let isMobile = /Mobi|Android/i.test(navigator.userAgent);
-msg.textContent = isMobile ? "Swipe left/right to switch lanes!" : "Use ⬅️ / ➡️ arrows to switch lanes!";
-
-function goLeft()  { if (playerLane>0&&!changingLane) { laneTarget=--playerLane; changingLane=true; laneLerp=0; } }
-function goRight() { if (playerLane<2&&!changingLane) { laneTarget=++playerLane; changingLane=true; laneLerp=0; } }
-
+// --- Controls ---
+function movePlayer(dir) {
+  if (isMoving) return;
+  let nextLane = clamp(playerLane+dir,0,2);
+  if (nextLane!==playerLane) {
+    isMoving = true;
+    let startX = playerCar.position.x;
+    let endX = LANE_X[nextLane];
+    let t = 0;
+    function animateMove() {
+      t += 0.14;
+      playerCar.position.x = startX + (endX-startX)*t;
+      if (t < 1) requestAnimationFrame(animateMove);
+      else {
+        playerLane = nextLane;
+        playerCar.position.x = LANE_X[playerLane];
+        isMoving = false;
+      }
+    }
+    animateMove();
+  }
+}
+// --- Keyboard ---
 window.addEventListener('keydown',e=>{
-  if(e.code==='ArrowLeft') goLeft();
-  if(e.code==='ArrowRight') goRight();
-  if(e.key==='r' && crashed) location.reload();
+  if (e.code==="ArrowLeft") movePlayer(-1);
+  else if (e.code==="ArrowRight") movePlayer(1);
 });
 
-let tStartX=0, dx=0, swiping=false, crashed=false;
-if(isMobile) {
-  canvas.addEventListener('touchstart',e=>{ if(e.touches.length===1){tStartX=e.touches[0].clientX;dx=0;swiping=true;}});
-  canvas.addEventListener('touchmove',e=>{ if(swiping){dx = e.touches[0].clientX-tStartX;}});
-  canvas.addEventListener('touchend',e=>{
-    if(swiping){
-      if(dx < -25) goLeft();
-      else if(dx > 25) goRight();
-      swiping=false; dx=0;
-    }
-  });
-}
+// --- Touch/Swipe ---
+let touchX = null;
+renderer.domElement.addEventListener('touchstart',e=>{
+  if (e.touches.length===1) touchX = e.touches[0].clientX;
+});
+renderer.domElement.addEventListener('touchend',e=>{
+  if (touchX!==null) {
+    let dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx)>28) movePlayer(dx>0?1:-1);
+    touchX = null;
+  }
+});
 
-// Game loop
-scene.onBeforeRenderObservable.add(()=>{
-  if (crashed) return;
+// --- Main Game Loop ---
+clock = new THREE.Clock();
 
-  // Lane speeds
-  speed = laneSpeeds[playerLane];
-  playerZ += speed * engine.getDeltaTime()/66.5;
-  player.position.z = playerZ;
-
-  // Lane changing animation
-  if (changingLane) {
-    laneLerp += engine.getDeltaTime()/210;
-    player.position.x = BABYLON.Scalar.Lerp(player.position.x, (playerLane-1)*laneWidth, laneLerp*1.11);
-    if(Math.abs(player.position.x-(playerLane-1)*laneWidth)<0.035) {
-      player.position.x = (playerLane-1)*laneWidth;
-      changingLane=false;
+function animate() {
+  let dt = clock.getDelta();
+  // --- Move Dash lines to simulate speed ---
+  for (let dash of dashLines) {
+    dash.position.z -= LANE_SPEEDS[playerLane]*dt*9;
+    if (dash.position.z < playerZ-2) dash.position.z += ROAD_LEN;
+  }
+  // --- Move Trees ---
+  for (let [tr,fl] of trees) {
+    tr.position.z -= LANE_SPEEDS[playerLane]*dt*8.6;
+    fl.position.z -= LANE_SPEEDS[playerLane]*dt*8.6;
+    if (tr.position.z < playerZ-12) {
+      tr.position.z = fl.position.z = playerZ+ROAD_LEN+15+Math.random()*18;
     }
   }
-
-  // Move camera forward
-  camera.target = player;
-
-  // Traffic logic
-  for(let car of traffic) {
-    car.position.z -= speed * engine.getDeltaTime()/66.5;
-    if(car.position.z < player.position.z-12.5) { car.dispose(); car.metadata.dead=true; }
+  // --- Move traffic, respawn if off screen ---
+  for (let t of traffic) {
+    t.obj.position.z -= LANE_SPEEDS[playerLane]*dt*8.6;
+    t.z = t.obj.position.z;
+    // Respawn
+    if (t.z < playerZ-16) {
+      t.obj.position.z = playerZ+ROAD_LEN+Math.random()*8;
+      t.z = t.obj.position.z;
+    }
     // Collision
-    if(!car.metadata.dead && Math.abs(car.position.z-player.position.z)<1.15 && Math.abs(car.position.x-player.position.x)<0.68) {
-      crashed = true;
-      msg.textContent = "💥 CRASHED! Tap or press R to restart. Score: " + Math.floor(player.position.z*2);
-      if(isMobile) canvas.addEventListener('touchend',()=>location.reload(),{once:true});
+    if (Math.abs(t.obj.position.z-playerCar.position.z)<2.0 && t.lane===playerLane &&
+        Math.abs(t.obj.position.x-playerCar.position.x)<1.3) {
+      score = 0;
+      resetTraffic();
+      break;
     }
   }
-  // Prune old traffic, add new
-  while(traffic.length && (traffic[0].metadata.dead || traffic[0].position.z<player.position.z-12.5)) traffic.shift();
-  if(traffic.length<12) spawnCluster(38+Math.random()*18);
-
-  // Animate speeders/cops
-  for(let i=effects.length-1;i>=0;i--) {
-    let obj = effects[i];
-    if(obj.metadata.kind==='speeder') {
-      obj.position.z += obj.metadata.speed;
-      obj.metadata.elapsed += engine.getDeltaTime()/1000;
-      if(obj.position.z > player.position.z+66) { obj.dispose(); effects.splice(i,1);}
-    } else if(obj.metadata.kind==='cop') {
-      obj.position.z += obj.metadata.speed;
-      // Roof light bar flash
-      if(obj.metadata.lightbar)
-        obj.metadata.lightbar.material.diffuseColor = Math.random()>0.52 ? new BABYLON.Color3(1,0.15,0.19): new BABYLON.Color3(0.12,0.24,1);
-      if(obj.position.z > player.position.z+66) { obj.dispose(); effects.splice(i,1);}
+  // --- Speeders ---
+  for (let i=speeders.length-1; i>=0; --i) {
+    let sp = speeders[i];
+    sp.obj.position.z += sp.speed*dt;
+    if (sp.obj.position.z > playerZ+ROAD_LEN+20) {
+      scene.remove(sp.obj);
+      speeders.splice(i,1);
     }
   }
-  // Speeders/cops spawner
-  speederTimer -= engine.getDeltaTime()/1000;
-  if(speederTimer<=0) {
+  // --- Cop cars ---
+  for (let i=cops.length-1; i>=0; --i) {
+    let cop = cops[i];
+    cop.obj.position.z += cop.speed*dt;
+    cop.time += dt;
+    // Flashing lights
+    if (Math.floor(cop.time*10)%2===0) cop.obj.lights[0].material.color.set(0xff3333);
+    else cop.obj.lights[0].material.color.set(0x555555);
+    if (Math.floor(cop.time*10)%2===1) cop.obj.lights[1].material.color.set(0x33aaff);
+    else cop.obj.lights[1].material.color.set(0x555555);
+    if (cop.obj.position.z > playerZ+ROAD_LEN+20) {
+      scene.remove(cop.obj);
+      cops.splice(i,1);
+    }
+  }
+  // --- Maybe spawn new speeder+cop ---
+  if (clock.elapsedTime - lastSpeederTime > 7+Math.random()*4) {
     spawnSpeederAndCop();
-    speederTimer = 3.2+Math.random()*6;
+    lastSpeederTime = clock.elapsedTime;
   }
+  // --- Camera follows ---
+  camera.position.x += (playerCar.position.x - camera.position.x)*0.12;
+  camera.position.z += ((playerCar.position.z+20) - camera.position.z)*0.05;
+  camera.lookAt(playerCar.position.x,0,playerCar.position.z+32);
+  // --- Score ---
+  score += LANE_SPEEDS[playerLane]*dt*2;
+  document.getElementById('score').innerHTML = "Miles: "+(score|0);
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+animate();
 
-  // Score
-  score = Math.floor(player.position.z*2);
-  if(!crashed) msg.textContent = (isMobile ? "Swipe":"Use ⬅️/➡️") + " to switch lanes! | Score: " + score;
+window.addEventListener('resize',()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
-engine.runRenderLoop(()=>scene.render());
-window.addEventListener("resize",()=>engine.resize());
 </script>
 </body>
 </html>
