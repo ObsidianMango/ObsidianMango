@@ -1,237 +1,213 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Bottle Dash GP</title>
+  <title>Bottle Dash GP - Babylon.js Edition</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <style>
-    html, body { margin:0; padding:0; overflow:hidden; background:#232946; }
-    #gameCanvas { position:fixed; top:0; left:0; width:100vw; height:100vh; display:block;}
-    #overlay { position:absolute; top:10px; left:10px; color:white; font-size:2em; font-family:sans-serif; z-index:1;}
+    html,body { margin:0; padding:0; overflow:hidden; background:#222; }
+    #gameCanvas { width:100vw; height:100vh; display:block;}
+    #hud { position:fixed;top:0;left:0;width:100%;color:#fff;font-size:2em;font-family:sans-serif;padding:10px;text-shadow:2px 2px #222;z-index:2;}
+    #hud span { font-weight:bold;}
+    #gameover {position:fixed;top:40%;left:0;width:100%;text-align:center;color:#ff4040;font-size:2.5em;display:none;z-index:9;}
+    button {font-size:1em;padding:12px 28px;margin-top:1em;}
   </style>
 </head>
 <body>
-  <div id="overlay">SCORE: <span id="score">0</span></div>
+  <div id="hud">Score: <span id="score">0</span></div>
+  <div id="gameover"></div>
   <canvas id="gameCanvas"></canvas>
-  <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.module.js';
-    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.156.1/examples/jsm/controls/OrbitControls.js';
-    import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/Oimo.js"></script>
+  <script>
+    // ------ Babylon.js scene setup ------
+    const canvas = document.getElementById("gameCanvas");
+    const engine = new BABYLON.Engine(canvas, true);
+    const scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color3(0.14, 0.16, 0.22);
 
-    // -- Settings --
-    const LANES = [-2, 0, 2];
+    // Camera
+    const camera = new BABYLON.FollowCamera("FollowCam", new BABYLON.Vector3(0,6,-10), scene);
+    camera.radius = 10;
+    camera.heightOffset = 5.5;
+    camera.rotationOffset = 0;
+    camera.cameraAcceleration = 0.12;
+    camera.maxCameraSpeed = 12;
+    camera.attachControl(canvas, true);
+
+    // Light
+    new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
+
+    // Physics
+    scene.enablePhysics(new BABYLON.Vector3(0, 0, 0), new BABYLON.OimoJSPlugin());
+
+    // ----- Lanes -----
+    const LANES = [-2,0,2];
     const LANE_SPEEDS = [1.3, 1.1, 1.0];
-    const BASE_SPEED = 0.18;
-    const PLAYER_Z = -6;
-    const CAR_COLORS = [0x38761d, 0x134f5c, 0x990000, 0xffc20e, 0xcccccc];
-    const BEER_COLOR = 0xffe599;
-    const COP_COLOR = 0x1e90ff;
-    const ROAD_COLOR = 0x383838;
-    const GAME_WIDTH = 8;
-    const GAME_HEIGHT = 30;
+    const BASE_SPEED = 0.23;
 
-    // -- Three.js scene setup --
-    const renderer = new THREE.WebGLRenderer({canvas:gameCanvas, antialias:true});
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x232946);
+    // Road
+    const road = BABYLON.MeshBuilder.CreateBox("road", {width:7.5, height:0.1, depth:44}, scene);
+    road.position.y = -0.11;
+    road.material = new BABYLON.StandardMaterial("roadmat", scene);
+    road.material.diffuseColor = new BABYLON.Color3(0.22,0.22,0.22);
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
-    camera.position.set(0,7,7);
-    camera.lookAt(0,0,0);
-
-    // Lights
-    const ambient = new THREE.AmbientLight(0xffffff, 0.8);
-    scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xffffff, 0.5);
-    dir.position.set(0,10,10);
-    scene.add(dir);
-
-    // -- Cannon-es physics world --
-    const world = new CANNON.World({ gravity: new CANNON.Vec3(0,0,0) });
-
-    // -- Road (visual only) --
-    const roadGeo = new THREE.BoxGeometry(GAME_WIDTH, 0.2, GAME_HEIGHT);
-    const roadMat = new THREE.MeshPhongMaterial({color:ROAD_COLOR});
-    const road = new THREE.Mesh(roadGeo, roadMat);
-    road.position.y = -0.6;
-    road.position.z = GAME_HEIGHT/2-4;
-    scene.add(road);
-
-    // Lane dash lines
-    for(let lane of [-1,1]) {
-      for(let i=0; i<15; ++i) {
-        const dash = new THREE.Mesh(
-          new THREE.BoxGeometry(0.1,0.05,1),
-          new THREE.MeshBasicMaterial({color:0xffffff})
-        );
-        dash.position.x = lane;
-        dash.position.y = -0.49;
-        dash.position.z = i*2-2;
-        scene.add(dash);
-      }
-    }
-    // -- Trees (low-poly cones) --
-    for(let s=-2; s<=2; s+=4){
-      for(let i=0;i<18;++i){
-        const tree = new THREE.Mesh(
-          new THREE.ConeGeometry(0.3,1,6),
-          new THREE.MeshLambertMaterial({color:0x16802c})
-        );
-        tree.position.x = s * 2.8 + (Math.random()-0.5)*0.3;
-        tree.position.y = 0.1;
-        tree.position.z = i*1.6-2 + Math.random()*1;
-        scene.add(tree);
+    // Lane dashes
+    for(let l of [-1,1]) {
+      for(let i=0;i<18;++i) {
+        const dash = BABYLON.MeshBuilder.CreateBox("dash", {width:0.13, height:0.02, depth:1.7}, scene);
+        dash.position.x = l;
+        dash.position.y = 0.05;
+        dash.position.z = i*2.4-18;
+        dash.material = new BABYLON.StandardMaterial("dashmat", scene);
+        dash.material.diffuseColor = BABYLON.Color3.White();
       }
     }
 
-    // -- Player Car (Box) --
-    const playerMat = new THREE.MeshPhongMaterial({color:0xff6f00});
-    const playerGeo = new THREE.BoxGeometry(0.6,0.3,1.2);
-    const playerMesh = new THREE.Mesh(playerGeo, playerMat);
-    scene.add(playerMesh);
+    // Trees
+    for(let side of [-3.5,3.5]){
+      for(let i=0;i<13;i++){
+        const tree = BABYLON.MeshBuilder.CreateCylinder("tree", {diameter:0.38,height:1.7,tessellation:6}, scene);
+        tree.position.x = side + (Math.random()-0.5)*0.7;
+        tree.position.y = 0.85;
+        tree.position.z = i*3.4-14+Math.random();
+        const green = new BABYLON.StandardMaterial("leaves", scene);
+        green.diffuseColor = new BABYLON.Color3(0.15+Math.random()*0.2,0.6,0.18);
+        tree.material = green;
+      }
+    }
 
-    // Cannon-es body for player
-    const playerBody = new CANNON.Body({ mass: 1 });
-    playerBody.addShape(new CANNON.Box(new CANNON.Vec3(0.3,0.15,0.6)));
-    playerBody.position.set(0,0.1,PLAYER_Z);
-    world.addBody(playerBody);
+    // ----- Player car -----
+    let playerLane = 1;
+    let playerZ = -10;
+    const player = BABYLON.MeshBuilder.CreateBox("player", {width:0.7, height:0.35, depth:1.3}, scene);
+    player.position.set(LANES[playerLane],0.21,playerZ);
+    const playerMat = new BABYLON.StandardMaterial("playermat", scene);
+    playerMat.diffuseColor = new BABYLON.Color3(1,0.53,0.01);
+    player.material = playerMat;
 
-    // -- Vehicles --
+    // Physics impostor (AABB only, simple)
+    player.physicsImpostor = new BABYLON.PhysicsImpostor(player, BABYLON.PhysicsImpostor.BoxImpostor, {mass:1,restitution:0.01}, scene);
+
+    camera.lockedTarget = player;
+
+    // ----- Obstacles & Traffic -----
     let vehicles = [];
-    function spawnVehicle(type, lane, z, speedTier){
-      let color = type === 'beer' ? BEER_COLOR : type === 'cop' ? COP_COLOR : CAR_COLORS[Math.floor(Math.random()*CAR_COLORS.length)];
-      let geo = type === 'beer' ? new THREE.BoxGeometry(0.8,0.5,2.0) : new THREE.BoxGeometry(0.6,0.3,1.2);
-      let mat = new THREE.MeshPhongMaterial({color});
-      let mesh = new THREE.Mesh(geo, mat);
-      mesh.position.x = LANES[lane];
-      mesh.position.y = type === 'beer' ? 0.19 : 0.16;
-      mesh.position.z = z;
-      scene.add(mesh);
-
-      let body = new CANNON.Body({ mass: 2 });
-      body.addShape(new CANNON.Box(new CANNON.Vec3(geo.parameters.width/2,geo.parameters.height/2,geo.parameters.depth/2)));
-      body.position.set(LANES[lane], 0.15, z);
-      world.addBody(body);
-
-      return {type, lane, mesh, body, speed: LANE_SPEEDS[lane]*BASE_SPEED* (type === 'cop'? 1.7 : type==='beer'? 0.7 : 1)};
+    let nextSpawnZ = 6;
+    function spawnVehicle(type, lane, z){
+      let mesh, mat;
+      if(type==="beer"){
+        mesh = BABYLON.MeshBuilder.CreateBox("beer", {width:0.85, height:0.48, depth:2.0}, scene);
+        mat = new BABYLON.StandardMaterial("beer", scene);
+        mat.diffuseColor = new BABYLON.Color3(0.97,0.86,0.4);
+      } else if(type==="cop"){
+        mesh = BABYLON.MeshBuilder.CreateBox("cop", {width:0.8, height:0.37, depth:1.45}, scene);
+        mat = new BABYLON.StandardMaterial("cop", scene);
+        mat.diffuseColor = new BABYLON.Color3(0.17,0.34,0.88);
+      } else {
+        mesh = BABYLON.MeshBuilder.CreateBox("car", {width:0.67, height:0.32, depth:1.17}, scene);
+        mat = new BABYLON.StandardMaterial("car", scene);
+        const c = Math.random();
+        mat.diffuseColor = new BABYLON.Color3(0.5+c*0.5,0.22+c*0.3,0.22+(1-c)*0.5);
+      }
+      mesh.material = mat;
+      mesh.position.set(LANES[lane], mesh.scaling.y/2 + 0.16, z);
+      mesh.physicsImpostor = new BABYLON.PhysicsImpostor(mesh, BABYLON.PhysicsImpostor.BoxImpostor, {mass:2}, scene);
+      return {type, lane, mesh, z, speed: LANE_SPEEDS[lane]*BASE_SPEED*(type==="cop"?1.65:type==="beer"?0.7:1)};
     }
 
-    // -- Controls --
-    let currentLane = 1;
-    function setLane(newLane){
-      currentLane = Math.max(0,Math.min(2,newLane));
-      playerBody.position.x = LANES[currentLane];
-      playerMesh.position.x = LANES[currentLane];
+    // Controls: Keyboard + swipe
+    function setLane(lane){
+      playerLane = Math.max(0, Math.min(2, lane));
+      player.position.x = LANES[playerLane];
     }
+    window.addEventListener('keydown', e => {
+      if(e.key==="ArrowLeft") setLane(playerLane-1);
+      if(e.key==="ArrowRight") setLane(playerLane+1);
+    });
 
-    // Touch/swipe
-    let startX = null;
-    window.addEventListener('pointerdown', e => { startX = e.clientX; });
-    window.addEventListener('pointerup', e => {
-      if(startX !== null){
-        let dx = e.clientX - startX;
+    // Touch/swipe for mobile
+    let touchX = null;
+    canvas.addEventListener("touchstart", e=>{touchX = e.touches[0].clientX;});
+    canvas.addEventListener("touchend", e=>{
+      if(touchX){
+        let dx = e.changedTouches[0].clientX - touchX;
         if(Math.abs(dx)>30){
-          if(dx>0) setLane(currentLane+1);
-          else setLane(currentLane-1);
+          if(dx>0) setLane(playerLane+1);
+          else setLane(playerLane-1);
         }
-        startX=null;
+        touchX = null;
       }
     });
-    // Keyboard
-    window.addEventListener('keydown', e=>{
-      if(e.key==='ArrowLeft') setLane(currentLane-1);
-      if(e.key==='ArrowRight') setLane(currentLane+1);
-    });
 
-    // -- Game Logic --
-    let score=0, running=true, nextSpawnZ=6;
+    // ------ Main Loop ------
+    let score=0, running=true, lastScoreZ = playerZ;
     function spawnCluster(){
-      // Each lane, maybe a car (weighted, random gaps)
-      let copHere = Math.random() < 0.18; // Random cop car in random lane
-      let copLane = Math.floor(Math.random()*3);
+      // Randomly fill lanes with cars, beer trucks, and sometimes a cop
+      let copHere = Math.random()<0.17, copLane = Math.floor(Math.random()*3);
       for(let l=0;l<3;l++){
         if(copHere && l===copLane){
-          vehicles.push(spawnVehicle('cop', l, nextSpawnZ, l));
-        } else if(Math.random()<0.28){
-          let type = Math.random()<0.17?'beer':'car';
-          vehicles.push(spawnVehicle(type, l, nextSpawnZ, l));
+          vehicles.push(spawnVehicle("cop",l,nextSpawnZ));
+        } else if(Math.random()<0.25){
+          vehicles.push(spawnVehicle(Math.random()<0.15?"beer":"car",l,nextSpawnZ));
         }
       }
-      nextSpawnZ += 2.8 + Math.random()*1.1;
+      nextSpawnZ += 3.1 + Math.random()*1.8;
     }
 
-    // -- Main Loop --
-    function animate(){
+    // ------ Game Loop ------
+    engine.runRenderLoop(()=>{
       if(!running) return;
-      requestAnimationFrame(animate);
-
-      // Spawn traffic
-      while(nextSpawnZ < playerBody.position.z + 24){
+      // Spawn new traffic as you move forward
+      while(nextSpawnZ < player.position.z + 22){
         spawnCluster();
       }
-
-      // Move traffic toward player
+      // Move all cars toward player
       for(let v of vehicles){
-        let tier = v.lane;
-        v.body.position.z -= v.speed;
-        v.mesh.position.copy(v.body.position);
+        v.mesh.position.z -= v.speed;
       }
-      // Remove passed cars
-      vehicles = vehicles.filter(v => {
-        if(v.body.position.z < PLAYER_Z-3){
-          scene.remove(v.mesh);
-          world.removeBody(v.body);
+      // Remove vehicles behind you
+      vehicles = vehicles.filter(v=>{
+        if(v.mesh.position.z < player.position.z-5){
+          v.mesh.dispose();
           return false;
         }
         return true;
       });
+      // Score: Add every time you pass some distance
+      if(player.position.z - lastScoreZ > 1.6){
+        score++;
+        lastScoreZ = player.position.z;
+        document.getElementById('score').textContent = score;
+      }
 
-      // Dash lines scroll
-      scene.children.forEach(obj=>{
-        if(obj.geometry && obj.geometry.parameters && obj.geometry.parameters.width===0.1){
-          obj.position.z -= BASE_SPEED;
-          if(obj.position.z < -2) obj.position.z += 30;
-        }
-      });
-
-      // Player update
-      playerMesh.position.copy(playerBody.position);
-
-      // Simple collision detection (AABB)
+      // Collision detection
       for(let v of vehicles){
-        if(Math.abs(playerBody.position.x - v.body.position.x)<0.6 &&
-           Math.abs(playerBody.position.z - v.body.position.z)<0.9){
+        if(Math.abs(player.position.x-v.mesh.position.x)<0.7 && Math.abs(player.position.z-v.mesh.position.z)<1.1){
           if(v.type==='beer'){
             score+=5;
-            document.getElementById('score').textContent=score;
-            // Remove beer truck
-            scene.remove(v.mesh);
-            world.removeBody(v.body);
-            v.body.position.z=-99;
+            document.getElementById('score').textContent = score;
+            v.mesh.dispose();
+            v.mesh.position.z = -999;
           } else {
-            running=false;
-            document.getElementById('overlay').innerHTML = `<span style="color:#ff5560;">CRASHED! Final Score: ${score}<br><button onclick="location.reload()">RESTART</button></span>`;
+            running = false;
+            player.material.diffuseColor = new BABYLON.Color3(1,0.1,0.1);
+            document.getElementById('gameover').style.display='block';
+            document.getElementById('gameover').innerHTML = `
+              🚨 <b>CRASHED!</b> 🚨<br>Final Score: ${score}<br>
+              <button onclick="location.reload()">Restart</button>
+            `;
           }
         }
       }
+      // Move player forward (always)
+      player.position.z += BASE_SPEED*1.08;
+      camera.target.z = player.position.z+3.2;
+      camera.position.z = player.position.z-8;
 
-      // Move camera forward
-      playerBody.position.z += BASE_SPEED*1.18;
-      camera.position.z = playerBody.position.z+7;
-      camera.lookAt(0,0,playerBody.position.z);
-
-      renderer.render(scene, camera);
-    }
-
-    // Init
-    setLane(1);
-    animate();
-    window.addEventListener('resize', ()=>{
-      renderer.setSize(window.innerWidth,window.innerHeight);
-      camera.aspect = window.innerWidth/window.innerHeight;
-      camera.updateProjectionMatrix();
+      scene.render();
     });
 
+    window.addEventListener('resize', ()=>engine.resize());
   </script>
 </body>
 </html>
