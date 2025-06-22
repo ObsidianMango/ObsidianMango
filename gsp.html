@@ -2,313 +2,236 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Garden State Parkway 3D Runner</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bottle Dash GP</title>
   <style>
-    html, body { margin: 0; padding: 0; overflow: hidden; background: #222;}
-    #score { position:fixed;top:16px;left:16px;font-family:sans-serif;color:white;font-size:20px;z-index:2;background:rgba(0,0,0,0.5);padding:8px 20px;border-radius:8px;}
-    #instructions {position:fixed;bottom:24px;left:50%;transform:translateX(-50%);color:white;font-family:sans-serif;font-size:16px;z-index:2;background:rgba(0,0,0,0.7);padding:8px 16px;border-radius:8px;}
+    html, body { margin:0; padding:0; overflow:hidden; background:#232946; }
+    #gameCanvas { position:fixed; top:0; left:0; width:100vw; height:100vh; display:block;}
+    #overlay { position:absolute; top:10px; left:10px; color:white; font-size:2em; font-family:sans-serif; z-index:1;}
   </style>
 </head>
 <body>
-<div id="score"></div>
-<div id="instructions">⬅️⬆️➡️ Arrows or Swipe to change lanes</div>
-<script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
-<script>
-// ========== CONFIG ========== //
-const LANE_X = [-4, 0, 4]; // x positions for 3 lanes (left, middle, right)
-const LANE_SPEEDS = [2.7, 2.2, 1.7]; // Parkway speeds, left>mid>right
-const CAR_COLORS = [0xff3333, 0x2222ff, 0x33ff33, 0xaaaaaa, 0xffe066];
-const SPEEDER_COLOR = 0xffff00;
-const COP_COLOR = 0x00ffff;
-const DASH_COLOR = 0xffffff;
-const DASH_LENGTH = 3.0;
-const DASH_SPACING = 7.5;
-const ROAD_WIDTH = 12;
-const ROAD_LEN = 200;
-const TREE_COLOR = 0x268205;
-const TREE_TRUNK = 0x6b4f1d;
-const TREE_COUNT = 30;
-const PLAYER_COLOR = 0x3333ff;
-const SKY_COLOR = 0x92b8f7;
-// ========== END CONFIG ========== //
+  <div id="overlay">SCORE: <span id="score">0</span></div>
+  <canvas id="gameCanvas"></canvas>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.module.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.156.1/examples/jsm/controls/OrbitControls.js';
+    import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
 
-let scene, camera, renderer, clock;
-let road, dashLines = [];
-let traffic = [], trees = [];
-let playerCar, playerLane = 1, isMoving = false;
-let speeders = [], cops = [];
-let lastSpeederTime = 0;
-let playerZ = -60, score = 0;
+    // -- Settings --
+    const LANES = [-2, 0, 2];
+    const LANE_SPEEDS = [1.3, 1.1, 1.0];
+    const BASE_SPEED = 0.18;
+    const PLAYER_Z = -6;
+    const CAR_COLORS = [0x38761d, 0x134f5c, 0x990000, 0xffc20e, 0xcccccc];
+    const BEER_COLOR = 0xffe599;
+    const COP_COLOR = 0x1e90ff;
+    const ROAD_COLOR = 0x383838;
+    const GAME_WIDTH = 8;
+    const GAME_HEIGHT = 30;
 
-function clamp(x, min, max) { return Math.max(min, Math.min(max, x)); }
+    // -- Three.js scene setup --
+    const renderer = new THREE.WebGLRenderer({canvas:gameCanvas, antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x232946);
 
-// --- Init 3D Scene ---
-scene = new THREE.Scene();
-scene.background = new THREE.Color(SKY_COLOR);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+    camera.position.set(0,7,7);
+    camera.lookAt(0,0,0);
 
-camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 500);
-camera.position.set(0, 14, playerZ+28);
-camera.lookAt(0, 0, playerZ+50);
+    // Lights
+    const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambient);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+    dir.position.set(0,10,10);
+    scene.add(dir);
 
-renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+    // -- Cannon-es physics world --
+    const world = new CANNON.World({ gravity: new CANNON.Vec3(0,0,0) });
 
-// --- Horizon Plane & Sky Gradient ---
-const gradGeo = new THREE.PlaneGeometry(200, 60);
-const gradMat = new THREE.MeshBasicMaterial({color:0xb7eaff, side:THREE.DoubleSide});
-const gradPlane = new THREE.Mesh(gradGeo, gradMat);
-gradPlane.position.set(0,25,70);
-gradPlane.rotation.x = -Math.PI/2.3;
-scene.add(gradPlane);
+    // -- Road (visual only) --
+    const roadGeo = new THREE.BoxGeometry(GAME_WIDTH, 0.2, GAME_HEIGHT);
+    const roadMat = new THREE.MeshPhongMaterial({color:ROAD_COLOR});
+    const road = new THREE.Mesh(roadGeo, roadMat);
+    road.position.y = -0.6;
+    road.position.z = GAME_HEIGHT/2-4;
+    scene.add(road);
 
-// --- Road ---
-const roadGeo = new THREE.BoxGeometry(ROAD_WIDTH, 0.4, ROAD_LEN);
-const roadMat = new THREE.MeshPhongMaterial({color:0x2a2a2a});
-road = new THREE.Mesh(roadGeo, roadMat);
-road.position.set(0,-0.2,playerZ+ROAD_LEN/2);
-scene.add(road);
-
-// --- Lane Dash Lines ---
-for (let l=0; l<2; ++l) {
-  let x = (LANE_X[l]+LANE_X[l+1])/2;
-  for (let i=0; i<ROAD_LEN/DASH_SPACING; ++i) {
-    let dashGeo = new THREE.BoxGeometry(0.2,0.05,DASH_LENGTH);
-    let dashMat = new THREE.MeshBasicMaterial({color:DASH_COLOR});
-    let dash = new THREE.Mesh(dashGeo, dashMat);
-    dash.position.set(x,0.01,playerZ+i*DASH_SPACING+2);
-    scene.add(dash);
-    dashLines.push(dash);
-  }
-}
-
-// --- Trees ---
-for (let i=0; i<TREE_COUNT; ++i) {
-  let x = ROAD_WIDTH/2 + 3 + (Math.random()-0.5)*2;
-  let z = playerZ + (i+3)*ROAD_LEN/TREE_COUNT + Math.random()*10;
-  // Trunk
-  let tGeo = new THREE.CylinderGeometry(0.22,0.22,1.5,8);
-  let tMat = new THREE.MeshPhongMaterial({color:TREE_TRUNK});
-  let trunk = new THREE.Mesh(tGeo, tMat);
-  trunk.position.set(x,0.75,z);
-  scene.add(trunk);
-  // Foliage
-  let fGeo = new THREE.SphereGeometry(1.2, 8, 6);
-  let fMat = new THREE.MeshPhongMaterial({color:TREE_COLOR});
-  let foliage = new THREE.Mesh(fGeo, fMat);
-  foliage.position.set(x,2,z);
-  scene.add(foliage);
-  trees.push([trunk,foliage]);
-  // Mirror on left
-  let t2 = trunk.clone(); t2.position.x *= -1;
-  let f2 = foliage.clone(); f2.position.x *= -1;
-  scene.add(t2); scene.add(f2);
-  trees.push([t2,f2]);
-}
-
-// --- Lighting ---
-let amb = new THREE.AmbientLight(0xffffff,0.7);
-scene.add(amb);
-let sun = new THREE.DirectionalLight(0xffffff,0.7);
-sun.position.set(0,30,40);
-scene.add(sun);
-
-// --- Player Car ---
-function createCar(color) {
-  let group = new THREE.Group();
-  let base = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.6,2.7), new THREE.MeshPhongMaterial({color}));
-  base.position.y = 0.5;
-  group.add(base);
-  let roof = new THREE.Mesh(new THREE.BoxGeometry(1.3,0.7,1.3), new THREE.MeshPhongMaterial({color:0xeeeeee}));
-  roof.position.set(0,1,0.3);
-  group.add(roof);
-  // Wheels
-  for (let w of [[0.7,0.1,1.05],[0.7,0.1,-1.05],[-0.7,0.1,1.05],[-0.7,0.1,-1.05]]) {
-    let wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.32,12), new THREE.MeshPhongMaterial({color:0x222222}));
-    wheel.position.set(w[0],w[1],w[2]);
-    wheel.rotation.z = Math.PI/2;
-    group.add(wheel);
-  }
-  return group;
-}
-playerCar = createCar(PLAYER_COLOR);
-playerCar.position.set(LANE_X[playerLane],0,playerZ+8);
-scene.add(playerCar);
-
-// --- Traffic Cars ---
-function spawnTrafficCar(lane, zpos, speed) {
-  let car = createCar(CAR_COLORS[Math.floor(Math.random()*CAR_COLORS.length)]);
-  car.position.set(LANE_X[lane], 0, zpos);
-  scene.add(car);
-  traffic.push({obj: car, lane, z: zpos, speed});
-}
-
-// --- Initial Traffic ---
-function resetTraffic() {
-  // Clear old
-  for (let t of traffic) scene.remove(t.obj);
-  traffic = [];
-  // Spawn clusters
-  for (let i=0;i<11;++i) {
-    let clusterZ = playerZ+28+i*15+Math.random()*8;
-    let openLane = Math.floor(Math.random()*3);
-    for (let l=0;l<3;++l) if (l!==openLane)
-      spawnTrafficCar(l, clusterZ+(Math.random()-0.5)*2, LANE_SPEEDS[l]);
-  }
-}
-resetTraffic();
-
-// --- Speeding Car + Cop Chase ---
-function spawnSpeederAndCop() {
-  // Pick random lane
-  let spLane = Math.floor(Math.random()*3);
-  // Can't be player's lane or next to player for fairness
-  if (Math.abs(spLane - playerLane) < 1) spLane = (spLane+1)%3;
-  let spZ = playerZ+10+Math.random()*6;
-  // Speeder
-  let speeder = createCar(SPEEDER_COLOR);
-  speeder.position.set(LANE_X[spLane],0,spZ);
-  scene.add(speeder);
-  // Cop
-  let cop = createCar(COP_COLOR);
-  cop.position.set(LANE_X[spLane],0,spZ-5);
-  scene.add(cop);
-  // Flashing lights on cop (basic)
-  cop.lights = [];
-  for (let i=0;i<2;i++) {
-    let light = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.18),
-      new THREE.MeshBasicMaterial({color: i===0?0xff3333:0x33aaff}));
-    light.position.set(i===0?0.45:-0.45,1.45,0.9);
-    cop.add(light);
-    cop.lights.push(light);
-  }
-  speeders.push({obj: speeder, lane: spLane, z: spZ, speed: LANE_SPEEDS[spLane]*2.2});
-  cops.push({obj: cop, lane: spLane, z: spZ-5, speed: LANE_SPEEDS[spLane]*2.1, time:0});
-}
-
-// --- Controls ---
-function movePlayer(dir) {
-  if (isMoving) return;
-  let nextLane = clamp(playerLane+dir,0,2);
-  if (nextLane!==playerLane) {
-    isMoving = true;
-    let startX = playerCar.position.x;
-    let endX = LANE_X[nextLane];
-    let t = 0;
-    function animateMove() {
-      t += 0.14;
-      playerCar.position.x = startX + (endX-startX)*t;
-      if (t < 1) requestAnimationFrame(animateMove);
-      else {
-        playerLane = nextLane;
-        playerCar.position.x = LANE_X[playerLane];
-        isMoving = false;
+    // Lane dash lines
+    for(let lane of [-1,1]) {
+      for(let i=0; i<15; ++i) {
+        const dash = new THREE.Mesh(
+          new THREE.BoxGeometry(0.1,0.05,1),
+          new THREE.MeshBasicMaterial({color:0xffffff})
+        );
+        dash.position.x = lane;
+        dash.position.y = -0.49;
+        dash.position.z = i*2-2;
+        scene.add(dash);
       }
     }
-    animateMove();
-  }
-}
-// --- Keyboard ---
-window.addEventListener('keydown',e=>{
-  if (e.code==="ArrowLeft") movePlayer(-1);
-  else if (e.code==="ArrowRight") movePlayer(1);
-});
+    // -- Trees (low-poly cones) --
+    for(let s=-2; s<=2; s+=4){
+      for(let i=0;i<18;++i){
+        const tree = new THREE.Mesh(
+          new THREE.ConeGeometry(0.3,1,6),
+          new THREE.MeshLambertMaterial({color:0x16802c})
+        );
+        tree.position.x = s * 2.8 + (Math.random()-0.5)*0.3;
+        tree.position.y = 0.1;
+        tree.position.z = i*1.6-2 + Math.random()*1;
+        scene.add(tree);
+      }
+    }
 
-// --- Touch/Swipe ---
-let touchX = null;
-renderer.domElement.addEventListener('touchstart',e=>{
-  if (e.touches.length===1) touchX = e.touches[0].clientX;
-});
-renderer.domElement.addEventListener('touchend',e=>{
-  if (touchX!==null) {
-    let dx = e.changedTouches[0].clientX - touchX;
-    if (Math.abs(dx)>28) movePlayer(dx>0?1:-1);
-    touchX = null;
-  }
-});
+    // -- Player Car (Box) --
+    const playerMat = new THREE.MeshPhongMaterial({color:0xff6f00});
+    const playerGeo = new THREE.BoxGeometry(0.6,0.3,1.2);
+    const playerMesh = new THREE.Mesh(playerGeo, playerMat);
+    scene.add(playerMesh);
 
-// --- Main Game Loop ---
-clock = new THREE.Clock();
+    // Cannon-es body for player
+    const playerBody = new CANNON.Body({ mass: 1 });
+    playerBody.addShape(new CANNON.Box(new CANNON.Vec3(0.3,0.15,0.6)));
+    playerBody.position.set(0,0.1,PLAYER_Z);
+    world.addBody(playerBody);
 
-function animate() {
-  let dt = clock.getDelta();
-  // --- Move Dash lines to simulate speed ---
-  for (let dash of dashLines) {
-    dash.position.z -= LANE_SPEEDS[playerLane]*dt*9;
-    if (dash.position.z < playerZ-2) dash.position.z += ROAD_LEN;
-  }
-  // --- Move Trees ---
-  for (let [tr,fl] of trees) {
-    tr.position.z -= LANE_SPEEDS[playerLane]*dt*8.6;
-    fl.position.z -= LANE_SPEEDS[playerLane]*dt*8.6;
-    if (tr.position.z < playerZ-12) {
-      tr.position.z = fl.position.z = playerZ+ROAD_LEN+15+Math.random()*18;
-    }
-  }
-  // --- Move traffic, respawn if off screen ---
-  for (let t of traffic) {
-    t.obj.position.z -= LANE_SPEEDS[playerLane]*dt*8.6;
-    t.z = t.obj.position.z;
-    // Respawn
-    if (t.z < playerZ-16) {
-      t.obj.position.z = playerZ+ROAD_LEN+Math.random()*8;
-      t.z = t.obj.position.z;
-    }
-    // Collision
-    if (Math.abs(t.obj.position.z-playerCar.position.z)<2.0 && t.lane===playerLane &&
-        Math.abs(t.obj.position.x-playerCar.position.x)<1.3) {
-      score = 0;
-      resetTraffic();
-      break;
-    }
-  }
-  // --- Speeders ---
-  for (let i=speeders.length-1; i>=0; --i) {
-    let sp = speeders[i];
-    sp.obj.position.z += sp.speed*dt;
-    if (sp.obj.position.z > playerZ+ROAD_LEN+20) {
-      scene.remove(sp.obj);
-      speeders.splice(i,1);
-    }
-  }
-  // --- Cop cars ---
-  for (let i=cops.length-1; i>=0; --i) {
-    let cop = cops[i];
-    cop.obj.position.z += cop.speed*dt;
-    cop.time += dt;
-    // Flashing lights
-    if (Math.floor(cop.time*10)%2===0) cop.obj.lights[0].material.color.set(0xff3333);
-    else cop.obj.lights[0].material.color.set(0x555555);
-    if (Math.floor(cop.time*10)%2===1) cop.obj.lights[1].material.color.set(0x33aaff);
-    else cop.obj.lights[1].material.color.set(0x555555);
-    if (cop.obj.position.z > playerZ+ROAD_LEN+20) {
-      scene.remove(cop.obj);
-      cops.splice(i,1);
-    }
-  }
-  // --- Maybe spawn new speeder+cop ---
-  if (clock.elapsedTime - lastSpeederTime > 7+Math.random()*4) {
-    spawnSpeederAndCop();
-    lastSpeederTime = clock.elapsedTime;
-  }
-  // --- Camera follows ---
-  camera.position.x += (playerCar.position.x - camera.position.x)*0.12;
-  camera.position.z += ((playerCar.position.z+20) - camera.position.z)*0.05;
-  camera.lookAt(playerCar.position.x,0,playerCar.position.z+32);
-  // --- Score ---
-  score += LANE_SPEEDS[playerLane]*dt*2;
-  document.getElementById('score').innerHTML = "Miles: "+(score|0);
-  renderer.render(scene, camera);
-  requestAnimationFrame(animate);
-}
-animate();
+    // -- Vehicles --
+    let vehicles = [];
+    function spawnVehicle(type, lane, z, speedTier){
+      let color = type === 'beer' ? BEER_COLOR : type === 'cop' ? COP_COLOR : CAR_COLORS[Math.floor(Math.random()*CAR_COLORS.length)];
+      let geo = type === 'beer' ? new THREE.BoxGeometry(0.8,0.5,2.0) : new THREE.BoxGeometry(0.6,0.3,1.2);
+      let mat = new THREE.MeshPhongMaterial({color});
+      let mesh = new THREE.Mesh(geo, mat);
+      mesh.position.x = LANES[lane];
+      mesh.position.y = type === 'beer' ? 0.19 : 0.16;
+      mesh.position.z = z;
+      scene.add(mesh);
 
-window.addEventListener('resize',()=>{
-  camera.aspect = window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-</script>
+      let body = new CANNON.Body({ mass: 2 });
+      body.addShape(new CANNON.Box(new CANNON.Vec3(geo.parameters.width/2,geo.parameters.height/2,geo.parameters.depth/2)));
+      body.position.set(LANES[lane], 0.15, z);
+      world.addBody(body);
+
+      return {type, lane, mesh, body, speed: LANE_SPEEDS[lane]*BASE_SPEED* (type === 'cop'? 1.7 : type==='beer'? 0.7 : 1)};
+    }
+
+    // -- Controls --
+    let currentLane = 1;
+    function setLane(newLane){
+      currentLane = Math.max(0,Math.min(2,newLane));
+      playerBody.position.x = LANES[currentLane];
+      playerMesh.position.x = LANES[currentLane];
+    }
+
+    // Touch/swipe
+    let startX = null;
+    window.addEventListener('pointerdown', e => { startX = e.clientX; });
+    window.addEventListener('pointerup', e => {
+      if(startX !== null){
+        let dx = e.clientX - startX;
+        if(Math.abs(dx)>30){
+          if(dx>0) setLane(currentLane+1);
+          else setLane(currentLane-1);
+        }
+        startX=null;
+      }
+    });
+    // Keyboard
+    window.addEventListener('keydown', e=>{
+      if(e.key==='ArrowLeft') setLane(currentLane-1);
+      if(e.key==='ArrowRight') setLane(currentLane+1);
+    });
+
+    // -- Game Logic --
+    let score=0, running=true, nextSpawnZ=6;
+    function spawnCluster(){
+      // Each lane, maybe a car (weighted, random gaps)
+      let copHere = Math.random() < 0.18; // Random cop car in random lane
+      let copLane = Math.floor(Math.random()*3);
+      for(let l=0;l<3;l++){
+        if(copHere && l===copLane){
+          vehicles.push(spawnVehicle('cop', l, nextSpawnZ, l));
+        } else if(Math.random()<0.28){
+          let type = Math.random()<0.17?'beer':'car';
+          vehicles.push(spawnVehicle(type, l, nextSpawnZ, l));
+        }
+      }
+      nextSpawnZ += 2.8 + Math.random()*1.1;
+    }
+
+    // -- Main Loop --
+    function animate(){
+      if(!running) return;
+      requestAnimationFrame(animate);
+
+      // Spawn traffic
+      while(nextSpawnZ < playerBody.position.z + 24){
+        spawnCluster();
+      }
+
+      // Move traffic toward player
+      for(let v of vehicles){
+        let tier = v.lane;
+        v.body.position.z -= v.speed;
+        v.mesh.position.copy(v.body.position);
+      }
+      // Remove passed cars
+      vehicles = vehicles.filter(v => {
+        if(v.body.position.z < PLAYER_Z-3){
+          scene.remove(v.mesh);
+          world.removeBody(v.body);
+          return false;
+        }
+        return true;
+      });
+
+      // Dash lines scroll
+      scene.children.forEach(obj=>{
+        if(obj.geometry && obj.geometry.parameters && obj.geometry.parameters.width===0.1){
+          obj.position.z -= BASE_SPEED;
+          if(obj.position.z < -2) obj.position.z += 30;
+        }
+      });
+
+      // Player update
+      playerMesh.position.copy(playerBody.position);
+
+      // Simple collision detection (AABB)
+      for(let v of vehicles){
+        if(Math.abs(playerBody.position.x - v.body.position.x)<0.6 &&
+           Math.abs(playerBody.position.z - v.body.position.z)<0.9){
+          if(v.type==='beer'){
+            score+=5;
+            document.getElementById('score').textContent=score;
+            // Remove beer truck
+            scene.remove(v.mesh);
+            world.removeBody(v.body);
+            v.body.position.z=-99;
+          } else {
+            running=false;
+            document.getElementById('overlay').innerHTML = `<span style="color:#ff5560;">CRASHED! Final Score: ${score}<br><button onclick="location.reload()">RESTART</button></span>`;
+          }
+        }
+      }
+
+      // Move camera forward
+      playerBody.position.z += BASE_SPEED*1.18;
+      camera.position.z = playerBody.position.z+7;
+      camera.lookAt(0,0,playerBody.position.z);
+
+      renderer.render(scene, camera);
+    }
+
+    // Init
+    setLane(1);
+    animate();
+    window.addEventListener('resize', ()=>{
+      renderer.setSize(window.innerWidth,window.innerHeight);
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+    });
+
+  </script>
 </body>
 </html>
