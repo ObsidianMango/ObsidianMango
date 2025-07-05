@@ -1,128 +1,134 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta charset="UTF-8" />
   <title>Pebble Flow</title>
   <style>
-    html,body{margin:0;padding:0;overflow:hidden;background:#dbe9f4;touch-action:none}
-    #gameCanvas{display:block;background:linear-gradient(120deg,#8fbc8f 0%,#556B2F 100%)}
-    #hud{position:absolute;top:0;left:0;color:#fff;font-family:sans-serif;padding:6px 12px;
-         pointer-events:none;text-shadow:0 0 3px #000}
-    #message{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-             font-size:4vmin;color:#fff;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;
-             transition:opacity .4s}
-    #message.show{opacity:1}
+    html,body{margin:0;padding:0;overflow:hidden;background:#222;}
+    #hud{position:absolute;top:10px;left:10px;color:#fff;font-family:sans-serif;font-size:14px}
+    canvas{display:block}
   </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
+<canvas id="game"></canvas>
 <div id="hud"></div>
-<div id="message"></div>
 
 <script>
-(() => {
-  const canvas = document.getElementById('gameCanvas');
-  const ctx     = canvas.getContext('2d');
-  let W, H;
-  function resize(){ W = canvas.width  = innerWidth;
-                     H = canvas.height = innerHeight; }
-  addEventListener('resize', resize); resize();
+/* ---------- basic canvas setup ---------- */
+const canvas = document.getElementById('game');
+const ctx     = canvas.getContext('2d');
+let W,H;
+function resize(){ W = canvas.width  = innerWidth; 
+                   H = canvas.height = innerHeight; }
+addEventListener('resize', resize); resize();
 
-  // ─── Entities ────────────────────────────────────────────────────────────────
-  class Pebble{
-    constructor(){ this.x=W/2; this.y=H*0.8; this.radius=15; this.mass=1; this.speed=2; }
-    update(input){
-      this.x += (input.right-input.left)*4;
-      this.x  = Math.max(this.radius, Math.min(W-this.radius, this.x));
-      this.speed += 0.005;               // downhill acceleration
-      this.radius = 15 + this.mass*2;    // grows with mass
-    }
-    draw(){
-      ctx.fillStyle='#555';
-      ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,2*Math.PI); ctx.fill();
-      ctx.lineWidth=2; ctx.strokeStyle='#333'; ctx.stroke();
-    }
+/* ---------- game constants ---------- */
+const GRAVITY      = 0.35;   // vertical acceleration
+const SLOPE_FORCE  = 0.55;   // horizontal “down-hill” pull
+const GROUND_Y     = H - 22; // flat ground strip
+const MAX_DEBRIS   = 30;     // how many loose stones to keep ahead
+const LANDSLIDE_AT = 25;     // pebble mass → win condition
+
+/* ---------- player (the pebble) ---------- */
+const pebble = {
+  x: 120, y: 80,           // position
+  vx: 0,   vy: 0,           // velocity
+  r: 10, mass: 1           // size & score
+};
+
+/* ---------- world junk to absorb ---------- */
+const debris = [];
+function spawnDebris(){
+  while(debris.length < MAX_DEBRIS){
+    const r = 4 + Math.random()*9;           // radius 4-13 px
+    debris.push({ x: W + Math.random()*W,    // spawn ahead
+                  y: Math.random()*(H-120),  // random height
+                  r, collected:false });
+  }
+}
+
+/* ---------- core update step ---------- */
+let distance = 0, landslide = false;
+function update(){
+  if(landslide) return;
+
+  // gravity + downhill acceleration
+  pebble.vx += SLOPE_FORCE;
+  pebble.vy += GRAVITY;
+
+  // integrate position
+  pebble.x += pebble.vx;
+  pebble.y += pebble.vy;
+  distance += pebble.vx * 0.016;
+
+  // bounce on “ground”
+  if(pebble.y + pebble.r > GROUND_Y){
+    pebble.y  = GROUND_Y - pebble.r;
+    pebble.vy = -pebble.vy * 0.35;           // lose some vertical speed
   }
 
-  class Gravel{
-    constructor(){ this.reset(); }
-    reset(){
-      this.x = Math.random()*W;
-      this.y = -20 - Math.random()*H;
-      this.radius = 6 + Math.random()*4;
-    }
-    update(speed){ this.y += speed; if(this.y-this.radius>H) this.reset(); }
-    draw(){
-      ctx.fillStyle='#777';
-      ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,2*Math.PI); ctx.fill();
-    }
-  }
+  // world scrolls opposite pebble motion
+  debris.forEach(d => d.x -= pebble.vx);
 
-  // ─── Input ───────────────────────────────────────────────────────────────────
-  const input={left:0,right:0};
-  addEventListener('keydown',e=>{
-    if(e.key==='ArrowLeft'||e.key==='a') input.left=1;
-    if(e.key==='ArrowRight'||e.key==='d') input.right=1;
+  // collisions → grow
+  debris.forEach(d => {
+    if(d.collected) return;
+    const dx = pebble.x - d.x, dy = pebble.y - d.y;
+    if(Math.hypot(dx,dy) < pebble.r + d.r){
+      d.collected = true;
+      pebble.mass += d.r/6;
+      pebble.r    += d.r*0.12;
+      pebble.vx   += 0.65;                    // momentum kick
+    }
   });
-  addEventListener('keyup',e=>{
-    if(e.key==='ArrowLeft'||e.key==='a') input.left=0;
-    if(e.key==='ArrowRight'||e.key==='d') input.right=0;
-  });
-  // mobile tilt
-  addEventListener('deviceorientation',e=>{
-    if(e.gamma!=null){
-      const t=e.gamma/45;
-      input.left  = t<-0.1?Math.abs(t):0;
-      input.right = t> 0.1? t         :0;
+
+  // win?
+  if(pebble.mass >= LANDSLIDE_AT){
+    landslide = true;
+    setTimeout(()=>alert('LANDSLIDE! You won. Reload to roll again.'),10);
+  }
+
+  spawnDebris();
+}
+
+/* ---------- render step ---------- */
+function draw(){
+  ctx.fillStyle = '#222';
+  ctx.fillRect(0,0,W,H);
+
+  // ground strip
+  ctx.fillStyle = '#444';
+  ctx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
+
+  // debris
+  ctx.fillStyle = '#666';
+  debris.forEach(d=>{
+    if(!d.collected){
+      ctx.beginPath();
+      ctx.arc(d.x,d.y,d.r,0,Math.PI*2);
+      ctx.fill();
     }
   });
 
-  // ─── Game state ──────────────────────────────────────────────────────────────
-  const pebble  = new Pebble();
-  const gravels = Array.from({length:30},()=>new Gravel());
-  const hud     = document.getElementById('hud');
-  const msg     = document.getElementById('message');
-  let landslide=false;
+  // pebble
+  ctx.fillStyle = '#c9c9c9';
+  ctx.beginPath();
+  ctx.arc(pebble.x,pebble.y,pebble.r,0,Math.PI*2);
+  ctx.fill();
 
-  function collide(){
-    for(const g of gravels){
-      const dx=g.x-pebble.x, dy=g.y-pebble.y;
-      if(Math.hypot(dx,dy) < g.radius+pebble.radius){
-        pebble.mass+=0.4; pebble.speed+=0.2; g.reset();
-      }
-    }
-  }
+  // HUD
+  hud.textContent =
+    `Mass: ${pebble.mass.toFixed(1)}  |  Momentum: ${pebble.vx.toFixed(1)}  |  Distance: ${distance|0}`;
+}
 
-  function update(){
-    pebble.update(input);
-    gravels.forEach(g=>g.update(pebble.speed));
-    collide();
-    if(!landslide && pebble.radius>=50){
-      landslide=true;
-      msg.textContent='💥  LANDSLIDE!  You unleashed the mountain!';
-      msg.classList.add('show');
-      setTimeout(()=>location.reload(),4000);
-    }
-  }
-
-  function draw(){
-    ctx.fillStyle='#325c39'; ctx.fillRect(0,0,W,H);
-    ctx.save(); ctx.translate(0,(Date.now()*0.06)%H);
-    ctx.fillStyle='rgba(0,0,0,0.1)';
-    for(let y=-30; y<H; y+=60) ctx.fillRect(0,y,W,30); // moving stripes
-    ctx.restore();
-    gravels.forEach(g=>g.draw());
-    pebble.draw();
-    hud.textContent = `Momentum: ${(pebble.mass*pebble.speed).toFixed(1)}   Size: ${pebble.radius.toFixed(1)}`;
-  }
-
-  (function loop(){
-    ctx.clearRect(0,0,W,H);
-    update(); draw();
-    requestAnimationFrame(loop);
-  })();
-})();
+/* ---------- main loop ---------- */
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+spawnDebris();
+loop();
 </script>
 </body>
 </html>
