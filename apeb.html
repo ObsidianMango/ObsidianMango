@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Pebble Flow</title>
+  <style>
+    html,body{margin:0;padding:0;overflow:hidden;background:#dbe9f4;touch-action:none}
+    #gameCanvas{display:block;background:linear-gradient(120deg,#8fbc8f 0%,#556B2F 100%)}
+    #hud{position:absolute;top:0;left:0;color:#fff;font-family:sans-serif;padding:6px 12px;
+         pointer-events:none;text-shadow:0 0 3px #000}
+    #message{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+             font-size:4vmin;color:#fff;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;
+             transition:opacity .4s}
+    #message.show{opacity:1}
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="hud"></div>
+<div id="message"></div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx     = canvas.getContext('2d');
+  let W, H;
+  function resize(){ W = canvas.width  = innerWidth;
+                     H = canvas.height = innerHeight; }
+  addEventListener('resize', resize); resize();
+
+  // ─── Entities ────────────────────────────────────────────────────────────────
+  class Pebble{
+    constructor(){ this.x=W/2; this.y=H*0.8; this.radius=15; this.mass=1; this.speed=2; }
+    update(input){
+      this.x += (input.right-input.left)*4;
+      this.x  = Math.max(this.radius, Math.min(W-this.radius, this.x));
+      this.speed += 0.005;               // downhill acceleration
+      this.radius = 15 + this.mass*2;    // grows with mass
+    }
+    draw(){
+      ctx.fillStyle='#555';
+      ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,2*Math.PI); ctx.fill();
+      ctx.lineWidth=2; ctx.strokeStyle='#333'; ctx.stroke();
+    }
+  }
+
+  class Gravel{
+    constructor(){ this.reset(); }
+    reset(){
+      this.x = Math.random()*W;
+      this.y = -20 - Math.random()*H;
+      this.radius = 6 + Math.random()*4;
+    }
+    update(speed){ this.y += speed; if(this.y-this.radius>H) this.reset(); }
+    draw(){
+      ctx.fillStyle='#777';
+      ctx.beginPath(); ctx.arc(this.x,this.y,this.radius,0,2*Math.PI); ctx.fill();
+    }
+  }
+
+  // ─── Input ───────────────────────────────────────────────────────────────────
+  const input={left:0,right:0};
+  addEventListener('keydown',e=>{
+    if(e.key==='ArrowLeft'||e.key==='a') input.left=1;
+    if(e.key==='ArrowRight'||e.key==='d') input.right=1;
+  });
+  addEventListener('keyup',e=>{
+    if(e.key==='ArrowLeft'||e.key==='a') input.left=0;
+    if(e.key==='ArrowRight'||e.key==='d') input.right=0;
+  });
+  // mobile tilt
+  addEventListener('deviceorientation',e=>{
+    if(e.gamma!=null){
+      const t=e.gamma/45;
+      input.left  = t<-0.1?Math.abs(t):0;
+      input.right = t> 0.1? t         :0;
+    }
+  });
+
+  // ─── Game state ──────────────────────────────────────────────────────────────
+  const pebble  = new Pebble();
+  const gravels = Array.from({length:30},()=>new Gravel());
+  const hud     = document.getElementById('hud');
+  const msg     = document.getElementById('message');
+  let landslide=false;
+
+  function collide(){
+    for(const g of gravels){
+      const dx=g.x-pebble.x, dy=g.y-pebble.y;
+      if(Math.hypot(dx,dy) < g.radius+pebble.radius){
+        pebble.mass+=0.4; pebble.speed+=0.2; g.reset();
+      }
+    }
+  }
+
+  function update(){
+    pebble.update(input);
+    gravels.forEach(g=>g.update(pebble.speed));
+    collide();
+    if(!landslide && pebble.radius>=50){
+      landslide=true;
+      msg.textContent='💥  LANDSLIDE!  You unleashed the mountain!';
+      msg.classList.add('show');
+      setTimeout(()=>location.reload(),4000);
+    }
+  }
+
+  function draw(){
+    ctx.fillStyle='#325c39'; ctx.fillRect(0,0,W,H);
+    ctx.save(); ctx.translate(0,(Date.now()*0.06)%H);
+    ctx.fillStyle='rgba(0,0,0,0.1)';
+    for(let y=-30; y<H; y+=60) ctx.fillRect(0,y,W,30); // moving stripes
+    ctx.restore();
+    gravels.forEach(g=>g.draw());
+    pebble.draw();
+    hud.textContent = `Momentum: ${(pebble.mass*pebble.speed).toFixed(1)}   Size: ${pebble.radius.toFixed(1)}`;
+  }
+
+  (function loop(){
+    ctx.clearRect(0,0,W,H);
+    update(); draw();
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>
