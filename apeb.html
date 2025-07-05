@@ -1,173 +1,404 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Pebble Flow 2.0</title>
-<style>
-html,body{margin:0;padding:0;overflow:hidden;touch-action:none}
-canvas{display:block}
-#hud{position:absolute;top:0;left:0;width:100%;font:700 14px/1 sans-serif;color:#fff;
-     text-shadow:0 0 4px #000;padding:6px;pointer-events:none;box-sizing:border-box}
-#splash{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-        font:900 6vmin/1.2 sans-serif;color:#fff;background:#000a;opacity:0;pointer-events:none;
-        transition:opacity .4s}
-#splash.show{opacity:1}
-</style>
+  <meta charset="UTF-8">
+  <title>Pebble Flow</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <style>
+    html,body {margin:0;padding:0;overflow:hidden;background:#b7e0e7;touch-action:none}
+    canvas {display:block;width:100vw;height:100vh;background:#a3d7e7;}
+    #hud {
+      position:fixed;top:0;left:0;width:100vw;z-index:5;
+      font:600 18px/1.2 system-ui,sans-serif;
+      color:#fff;text-shadow:0 0 4px #0009;letter-spacing:1px;
+      background:linear-gradient(#123b3b55 60%,transparent);
+      padding:6px 12px;pointer-events:none;box-sizing:border-box;
+      text-align:center;
+    }
+    #overlay {
+      position:fixed;inset:0;z-index:10;display:flex;
+      align-items:center;justify-content:center;
+      font:900 7vw/1.1 system-ui,sans-serif;
+      color:#fff;text-shadow:0 0 12px #000,0 2px 24px #085;
+      background:rgba(0,32,32,0.80);text-align:center;
+      opacity:0;pointer-events:none;transition:opacity .4s;
+      flex-direction:column;
+    }
+    #overlay.show {opacity:1;pointer-events:auto;}
+    #tip {font-size:4vw;font-weight:400;opacity:.8;margin-top:1vw;}
+  </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="game"></canvas>
 <div id="hud"></div>
-<div id="splash" class="show">Tap Left / Right to Start</div>
-
+<div id="overlay">
+  <div id="msg"></div>
+  <div id="tip"></div>
+</div>
 <script>
-/* ───────── Canvas Setup ───────── */
-const cvs=document.getElementById('c'),ctx=cvs.getContext('2d');
-let W=innerWidth,H=innerHeight;const DPR=window.devicePixelRatio||1;
-function size(){W=innerWidth;H=innerHeight;cvs.width=W*DPR;cvs.height=H*DPR;ctx.scale(DPR,DPR);}
-addEventListener('resize',size);size();
+const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function fit() {
+  DPR = window.devicePixelRatio || 1;
+  W = canvas.width = innerWidth * DPR;
+  H = canvas.height = innerHeight * DPR;
+  canvas.style.width = innerWidth + 'px';
+  canvas.style.height = innerHeight + 'px';
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(DPR,DPR);
+}
+addEventListener('resize',fit); fit();
 
-/* ───────── Input ───────── */
-const input={left:0,right:0,start:false};
-function setDir(x,val){x<W*0.5?input.left=val:input.right=val;}
-addEventListener('touchstart',e=>{input.start=true;[...e.touches].forEach(t=>setDir(t.clientX,1));});
-addEventListener('touchmove',e=>{input.left=input.right=0;[...e.touches].forEach(t=>setDir(t.clientX,1));});
-addEventListener('touchend',e=>{input.left=input.right=0;});
-addEventListener('mousedown',e=>{input.start=true;setDir(e.clientX,1);});
-addEventListener('mouseup',()=>input.left=input.right=0);
-addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')input.left=1;
-                                if(e.key==='ArrowRight'||e.key==='d')input.right=1;
-                                if(!started)input.start=true;});
-addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='a')input.left=0;
-                              if(e.key==='ArrowRight'||e.key==='d')input.right=0;});
+// Touch/Mouse Controls
+let touchLeft = false, touchRight = false;
+let pointerDown = false;
+canvas.addEventListener('touchstart',e=>{
+  for (let t of e.touches) {
+    if (t.clientX < innerWidth/2) touchLeft = true;
+    if (t.clientX >= innerWidth/2) touchRight = true;
+  }
+  pointerDown = true;
+  e.preventDefault();
+});
+canvas.addEventListener('touchend',e=>{
+  touchLeft = touchRight = pointerDown = false;
+  e.preventDefault();
+});
+canvas.addEventListener('mousedown',e=>{
+  pointerDown = true;
+  if (e.clientX < innerWidth/2) touchLeft = true;
+  else touchRight = true;
+});
+canvas.addEventListener('mouseup',()=>{
+  touchLeft = touchRight = pointerDown = false;
+});
+canvas.addEventListener('mousemove',e=>{
+  if(pointerDown){
+    if (e.clientX < innerWidth/2) { touchLeft = true; touchRight = false;}
+    else { touchRight = true; touchLeft = false;}
+  }
+});
 
-/* ───────── Utilities ───────── */
-const rand=(a,b)=>Math.random()*(b-a)+a;
+// Keyboard (for desktop)
+let keyLeft = false, keyRight = false;
+addEventListener('keydown',e=>{
+  if (e.key==='ArrowLeft' || e.key==='a') keyLeft = true;
+  if (e.key==='ArrowRight'|| e.key==='d') keyRight = true;
+});
+addEventListener('keyup',e=>{
+  if (e.key==='ArrowLeft' || e.key==='a') keyLeft = false;
+  if (e.key==='ArrowRight'|| e.key==='d') keyRight = false;
+});
 
-/* ───────── Game Objects ───────── */
+function isLeft(){ return touchLeft || keyLeft; }
+function isRight(){ return touchRight || keyRight; }
+
+// HUD and overlay
+const hud = document.getElementById('hud');
+const overlay = document.getElementById('overlay');
+const msg = document.getElementById('msg');
+const tip = document.getElementById('tip');
+
+// Parallax background layers
+function drawMountains(){
+  for(let l=0; l<3; l++){
+    ctx.save();
+    let base = H*0.5 + l*H*0.12;
+    ctx.beginPath();
+    ctx.moveTo(0,base);
+    let offset = (scrollY * (0.18+0.09*l)) % (W/2);
+    for(let x=0;x<=W;x+=W/6){
+      let peak = Math.sin((x+offset+120*l)/220)*38*l + base-22*l;
+      ctx.lineTo(x,peak);
+    }
+    ctx.lineTo(W,H); ctx.lineTo(0,H);
+    ctx.closePath();
+    ctx.globalAlpha = 0.28 + l*0.2;
+    ctx.fillStyle = ['#206c52','#155f4d','#204042'][l];
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// Game objects
 class Pebble{
-  constructor(){this.reset();}
-  reset(){this.x=W*0.5;this.y=H*0.8;this.mass=1;this.r=15;this.vy=2;this.score=0;this.trail=[];}
+  constructor(){
+    this.x = W/2; this.y = H*0.76;
+    this.r = 22; // radius
+    this.mass = 1.2;
+    this.speed = 2.5;
+    this.momentum = 0;
+    this.grow = 0;
+    this.trail = [];
+  }
   update(){
-    this.x+=4*(input.right-input.left);
-    this.x=Math.max(this.r,Math.min(W-this.r,this.x));
-    this.vy+=0.004;this.y+=0;                 // downhill simulated by environment scrolling
-    this.score+=this.vy*0.1;
-    this.trail.push({x:this.x,y:this.y,time:Date.now()});
-    while(this.trail.length&&Date.now()-this.trail[0].time>400)this.trail.shift();
-    this.r=16+this.mass*2.4;
+    // Control
+    let dx = (isRight()?1:0)-(isLeft()?1:0);
+    this.x += dx * 8 * Math.max(1,this.mass*0.45);
+    this.x = Math.max(this.r,Math.min(W/1.0-this.r,this.x));
+    // Grow with speed
+    this.speed += 0.002;
+    // Leave a trailing path
+    this.trail.push({x:this.x,y:this.y,r:this.r,time:Date.now()});
+    while(this.trail.length && Date.now()-this.trail[0].time>500) this.trail.shift();
+    // Grow animation
+    if(this.grow>0){ this.r+=1.2; this.mass+=0.32; this.grow--; }
+    this.momentum = this.mass * this.speed;
   }
   draw(){
-    // trail
-    for(const p of this.trail){
-      const t=(Date.now()-p.time)/400,alpha=1-t;
-      ctx.fillStyle=`rgba(85,85,85,${alpha*0.4})`;
-      ctx.beginPath();ctx.arc(p.x,p.y,this.r*(1+t*0.3),0,6.283);ctx.fill();
+    // Trail
+    for(const t of this.trail){
+      let p = (Date.now()-t.time)/500;
+      ctx.globalAlpha = 0.19*(1-p);
+      ctx.beginPath();
+      ctx.arc(t.x,t.y,t.r+4,0,7);
+      ctx.fillStyle = "#8ecad6";
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
-    // pebble shading
-    const grd=ctx.createRadialGradient(this.x-this.r*0.4,this.y-this.r*0.4,this.r*0.2,
-                                        this.x,this.y,this.r);
-    grd.addColorStop(0,'#aaa');grd.addColorStop(1,'#555');
-    ctx.fillStyle=grd;
-    ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,6.283);ctx.fill();
-    ctx.strokeStyle='#0008';ctx.lineWidth=2;ctx.stroke();
+    // Pebble main ball
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.r,0,7);
+    // cool gloss gradient
+    let g=ctx.createRadialGradient(this.x-this.r*0.5,this.y-this.r*0.7,this.r/5,this.x,this.y,this.r);
+    g.addColorStop(0,'#fff');
+    g.addColorStop(0.23,'#b7e5f7');
+    g.addColorStop(0.55,'#8a9dad');
+    g.addColorStop(0.95,'#484e51');
+    ctx.fillStyle=g;
+    ctx.fill();
+    // shine
+    ctx.globalAlpha=0.15;
+    ctx.beginPath();
+    ctx.arc(this.x-this.r*0.5,this.y-this.r*0.7,this.r*0.5,0,Math.PI*2);
+    ctx.fillStyle="#fff";
+    ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.restore();
+    ctx.lineWidth=2;
+    ctx.strokeStyle="#1a2329";
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,7); ctx.stroke();
+  }
+}
+class Gravel{
+  constructor(){
+    this.r = 10 + Math.random()*7;
+    this.x = this.r+Math.random()*(W-this.r*2);
+    this.y = -this.r-Math.random()*H*0.6;
+    this.hit = false;
+  }
+  update(){
+    this.y += game.pebble.speed + 1.1;
+    if(this.y-this.r>H){
+      this.reset();
+    }
+    // Collision
+    let dx = this.x-game.pebble.x, dy = this.y-game.pebble.y;
+    if(!this.hit && Math.hypot(dx,dy)<this.r+game.pebble.r){
+      this.hit = true;
+      game.pebble.grow = 5;
+      game.score += 8;
+      popParticles(this.x,this.y,this.r);
+      this.reset();
+    }
+  }
+  draw(){
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.r,0,7);
+    ctx.fillStyle="#d1c6b1";
+    ctx.shadowColor="#d1c6b1";
+    ctx.shadowBlur=5;
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle="#c9ac7caa";
+    ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,7); ctx.stroke();
+  }
+  reset(){
+    this.r = 10 + Math.random()*7;
+    this.x = this.r+Math.random()*(W-this.r*2);
+    this.y = -this.r-Math.random()*H*0.8;
+    this.hit = false;
   }
 }
 class Rock{
-  constructor(big=false){this.big=big;this.reset();}
-  reset(){
-    this.r=this.big?rand(25,40):rand(8,14);
-    this.x=rand(this.r,W-this.r);
-    this.y=rand(-H*1.5,-this.r);
-    this.hit=false;
+  constructor(){
+    this.r = 32+Math.random()*26;
+    this.x = this.r+Math.random()*(W-this.r*2);
+    this.y = -this.r-Math.random()*H*1.1;
+    this.hit = false;
   }
-  update(speed){this.y+=speed;if(this.y-this.r>H)this.reset();}
-  draw(){
-    ctx.fillStyle=this.big?'#4b3621':'#6e675f';
-    ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,6.283);ctx.fill();
-    ctx.strokeStyle='#0006';ctx.lineWidth=1.5;ctx.stroke();
-  }
-}
-class Particle{
-  constructor(x,y){this.x=x;this.y=y;this.vx=rand(-2,2);this.vy=rand(-2,2);this.life=600;}
-  update(dt){this.x+=this.vx;this.y+=this.vy;this.life-=dt;}
-  draw(){ctx.fillStyle=`rgba(200,200,200,${this.life/600})`;ctx.fillRect(this.x,this.y,2,2);}
-}
-
-/* ───────── Game State ───────── */
-const pebble=new Pebble();
-const smallRocks=Array.from({length:40},()=>new Rock(false));
-const bigRocks=Array.from({length:6},()=>new Rock(true));
-const particles=[];
-const hud=document.getElementById('hud');
-const splash=document.getElementById('splash');
-let started=false,gameOver=false,last=performance.now();
-
-/* ───────── Main Loop ───────── */
-function loop(now){
-  const dt=now-last;last=now;
-  ctx.clearRect(0,0,W,H);
-
-  // background gradient sky + parallax mountain layers
-  const sky=ctx.createLinearGradient(0,0,0,H);
-  sky.addColorStop(0,'#87ceeb');sky.addColorStop(1,'#bdd7e7');
-  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
-
-  ctx.fillStyle='#3e5d3e';ctx.beginPath();
-  ctx.moveTo(0,H*0.7);ctx.lineTo(W*0.25,H*0.5);ctx.lineTo(W*0.5,H*0.7);
-  ctx.lineTo(W*0.75,H*0.45);ctx.lineTo(W,H*0.6);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
-
-  if(started&&!gameOver){
-    // update entities
-    pebble.update();
-    [...smallRocks,...bigRocks].forEach(r=>r.update(pebble.vy));
-    particles.forEach(p=>p.update(dt));
-
-    // collisions
-    [...smallRocks,...bigRocks].forEach(r=>{
-      if(!r.hit){
-        const dx=r.x-pebble.x,dy=r.y-pebble.y;
-        if(Math.hypot(dx,dy)<r.r+pebble.r){
-          r.hit=true;
-          if(r.big){
-            gameOver=true;
-            splash.textContent='💥 CRASH! Tap to Restart';splash.classList.add('show');
-          }else{
-            pebble.mass+=0.6;pebble.vy+=0.15;
-            for(let i=0;i<20;i++)particles.push(new Particle(r.x,r.y));
-            r.reset();
-          }
-        }
-      }
-    });
-    particles.filter(p=>p.life>0);
-
-    // draw entities
-    [...smallRocks,...bigRocks].forEach(r=>r.draw());
-    particles.forEach(p=>p.draw());
-    pebble.draw();
-
-    // HUD
-    hud.innerHTML=`Momentum: ${(pebble.mass*pebble.vy).toFixed(1)} &nbsp; Size: ${pebble.r.toFixed(0)} &nbsp; Distance: ${pebble.score.toFixed(0)}`;
-
-    // win condition
-    if(pebble.r>=70&&!gameOver){
-      gameOver=true;
-      splash.textContent='🌊 LANDSLIDE! You Win! Tap to Restart';splash.classList.add('show');
+  update(){
+    this.y += game.pebble.speed + 0.7;
+    if(this.y-this.r>H){
+      this.reset();
+    }
+    // Collision
+    let dx = this.x-game.pebble.x, dy = this.y-game.pebble.y;
+    if(!this.hit && Math.hypot(dx,dy)<this.r+game.pebble.r){
+      this.hit = true;
+      popParticles(this.x,this.y,this.r*1.25, "#994c27");
+      gameOver("💥 Crashed!\nYou were buried under a boulder!\n\nTap to try again.");
     }
   }
+  draw(){
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(this.x,this.y,this.r,0,7);
+    let g=ctx.createLinearGradient(this.x-this.r*0.7,this.y-this.r*0.4,this.x+this.r*0.7,this.y+this.r*0.4);
+    g.addColorStop(0,"#925e34");
+    g.addColorStop(1,"#563119");
+    ctx.fillStyle=g;
+    ctx.shadowColor="#8d5e32"; ctx.shadowBlur=12;
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle="#221102";ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,7); ctx.stroke();
+  }
+  reset(){
+    this.r = 32+Math.random()*26;
+    this.x = this.r+Math.random()*(W-this.r*2);
+    this.y = -this.r-Math.random()*H*1.1;
+    this.hit = false;
+  }
+}
+let particles = [];
+function popParticles(x,y,r,col){
+  for(let i=0;i<10+r/9;i++){
+    particles.push({
+      x,y,
+      dx:Math.cos(i*0.6+Math.random()*2)*Math.random()*r*0.19,
+      dy:Math.sin(i*0.6+Math.random()*2)*Math.random()*r*0.18,
+      r:2+Math.random()*3,
+      alpha:0.86,
+      color:col||"#e9dcb9"
+    });
+  }
+}
 
+// Main game state
+let game = {};
+let scrollY = 0;
+
+function newGame(){
+  game = {
+    pebble:new Pebble(),
+    gravels:Array.from({length:9},()=>new Gravel()),
+    rocks:Array.from({length:4},()=>new Rock()),
+    score:0,
+    running:true,
+    win:false,
+    t0:Date.now()
+  };
+  scrollY = 0;
+  particles = [];
+  overlay.classList.remove('show');
+}
+function gameOver(text){
+  if(!game.running) return;
+  game.running = false;
+  msg.textContent = text;
+  tip.textContent = "Tap anywhere to restart";
+  overlay.classList.add('show');
+}
+function winGame(){
+  if(!game.running) return;
+  game.running = false;
+  game.win = true;
+  msg.innerHTML = "🌊<br>Landslide!<br>You Win!";
+  tip.textContent = "Tap anywhere to play again";
+  overlay.classList.add('show');
+}
+
+// Game loop
+function loop(){
+  ctx.clearRect(0,0,W,H);
+
+  // Scrolling bg
+  scrollY += game.pebble.speed;
+  drawMountains();
+
+  // Foreground mountain side (sidewalk effect)
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(0,H*0.78);
+  ctx.bezierCurveTo(W*0.2,H*0.82, W*0.8,H*0.86, W,H*0.77);
+  ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
+  ctx.fillStyle="#79765b";
+  ctx.globalAlpha=0.32;
+  ctx.shadowColor="#eee9"; ctx.shadowBlur=19;
+  ctx.fill();
+  ctx.restore();
+
+  if(game.running){
+    // Draw and update pebbles, gravels, rocks, particles
+    for(const g of game.gravels) g.update();
+    for(const r of game.rocks) r.update();
+    particles.forEach(p=>{
+      p.x+=p.dx; p.y+=p.dy;
+      p.dy+=0.16; p.alpha-=0.018;
+      if(p.alpha<0) p.alpha=0;
+    });
+    particles = particles.filter(p=>p.alpha>0.04);
+    for(const g of game.gravels) g.draw();
+    for(const r of game.rocks) r.draw();
+    particles.forEach(p=>{
+      ctx.globalAlpha = p.alpha;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,7);
+      ctx.fillStyle = p.color||"#fff";
+      ctx.fill();
+      ctx.globalAlpha=1;
+    });
+    game.pebble.update();
+    game.pebble.draw();
+
+    // Win condition: grow huge
+    if(game.pebble.r>=74){
+      winGame();
+    }
+
+    // Update score
+    game.score += Math.max(1,game.pebble.speed*0.3);
+    let momentum = Math.round(game.pebble.momentum*1.2);
+    let size = Math.round(game.pebble.r);
+    let dist = Math.round((Date.now()-game.t0)*game.pebble.speed/1100 + game.score*0.01);
+    hud.innerHTML = 
+      `Momentum: <b>${momentum}</b> &nbsp; | Size: <b>${size}</b> &nbsp; | Distance: <b>${dist}</b> 
+      <br><span style="font-size:15px;font-weight:400;opacity:.7">Goal: Collect gravel, avoid boulders, grow to become a landslide!</span>`;
+  } else {
+    // Just keep animating a few particles and bg for vibes
+    for(const r of game.rocks) r.draw();
+    for(const g of game.gravels) g.draw();
+    particles.forEach(p=>{
+      ctx.globalAlpha = p.alpha;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,7);
+      ctx.fillStyle = p.color||"#fff";
+      ctx.fill();
+      ctx.globalAlpha=1;
+    });
+    game.pebble.draw();
+  }
   requestAnimationFrame(loop);
 }
-requestAnimationFrame(loop);
 
-/* ───────── Game Start/Restart ───────── */
-function restart(){
-  started=true;gameOver=false;splash.classList.remove('show');
-  pebble.reset();[...smallRocks,...bigRocks].forEach(r=>r.reset());particles.length=0;last=performance.now();
+// Start/restart logic
+function tapAnywhere(e){
+  e.preventDefault();
+  newGame();
 }
-splash.addEventListener('click',restart);
-cvs.addEventListener('click',()=>{if(!started||gameOver)restart();});
+overlay.addEventListener('touchstart',tapAnywhere);
+overlay.addEventListener('mousedown',tapAnywhere);
+
+// Start splash
+msg.innerHTML = "PEBBLE FLOW<br><span style='font-size:5vw;font-weight:500'>Tap Left or Right to Move</span>";
+tip.textContent = "Avoid boulders, collect gravel, become a landslide!";
+overlay.classList.add('show');
+newGame();
+loop();
 </script>
 </body>
 </html>
