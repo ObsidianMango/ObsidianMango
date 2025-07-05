@@ -1,134 +1,173 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Pebble Flow</title>
-  <style>
-    html,body{margin:0;padding:0;overflow:hidden;background:#222;}
-    #hud{position:absolute;top:10px;left:10px;color:#fff;font-family:sans-serif;font-size:14px}
-    canvas{display:block}
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pebble Flow 2.0</title>
+<style>
+html,body{margin:0;padding:0;overflow:hidden;touch-action:none}
+canvas{display:block}
+#hud{position:absolute;top:0;left:0;width:100%;font:700 14px/1 sans-serif;color:#fff;
+     text-shadow:0 0 4px #000;padding:6px;pointer-events:none;box-sizing:border-box}
+#splash{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+        font:900 6vmin/1.2 sans-serif;color:#fff;background:#000a;opacity:0;pointer-events:none;
+        transition:opacity .4s}
+#splash.show{opacity:1}
+</style>
 </head>
 <body>
-<canvas id="game"></canvas>
+<canvas id="c"></canvas>
 <div id="hud"></div>
+<div id="splash" class="show">Tap Left / Right to Start</div>
 
 <script>
-/* ---------- basic canvas setup ---------- */
-const canvas = document.getElementById('game');
-const ctx     = canvas.getContext('2d');
-let W,H;
-function resize(){ W = canvas.width  = innerWidth; 
-                   H = canvas.height = innerHeight; }
-addEventListener('resize', resize); resize();
+/* ───────── Canvas Setup ───────── */
+const cvs=document.getElementById('c'),ctx=cvs.getContext('2d');
+let W=innerWidth,H=innerHeight;const DPR=window.devicePixelRatio||1;
+function size(){W=innerWidth;H=innerHeight;cvs.width=W*DPR;cvs.height=H*DPR;ctx.scale(DPR,DPR);}
+addEventListener('resize',size);size();
 
-/* ---------- game constants ---------- */
-const GRAVITY      = 0.35;   // vertical acceleration
-const SLOPE_FORCE  = 0.55;   // horizontal “down-hill” pull
-const GROUND_Y     = H - 22; // flat ground strip
-const MAX_DEBRIS   = 30;     // how many loose stones to keep ahead
-const LANDSLIDE_AT = 25;     // pebble mass → win condition
+/* ───────── Input ───────── */
+const input={left:0,right:0,start:false};
+function setDir(x,val){x<W*0.5?input.left=val:input.right=val;}
+addEventListener('touchstart',e=>{input.start=true;[...e.touches].forEach(t=>setDir(t.clientX,1));});
+addEventListener('touchmove',e=>{input.left=input.right=0;[...e.touches].forEach(t=>setDir(t.clientX,1));});
+addEventListener('touchend',e=>{input.left=input.right=0;});
+addEventListener('mousedown',e=>{input.start=true;setDir(e.clientX,1);});
+addEventListener('mouseup',()=>input.left=input.right=0);
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')input.left=1;
+                                if(e.key==='ArrowRight'||e.key==='d')input.right=1;
+                                if(!started)input.start=true;});
+addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='a')input.left=0;
+                              if(e.key==='ArrowRight'||e.key==='d')input.right=0;});
 
-/* ---------- player (the pebble) ---------- */
-const pebble = {
-  x: 120, y: 80,           // position
-  vx: 0,   vy: 0,           // velocity
-  r: 10, mass: 1           // size & score
-};
+/* ───────── Utilities ───────── */
+const rand=(a,b)=>Math.random()*(b-a)+a;
 
-/* ---------- world junk to absorb ---------- */
-const debris = [];
-function spawnDebris(){
-  while(debris.length < MAX_DEBRIS){
-    const r = 4 + Math.random()*9;           // radius 4-13 px
-    debris.push({ x: W + Math.random()*W,    // spawn ahead
-                  y: Math.random()*(H-120),  // random height
-                  r, collected:false });
+/* ───────── Game Objects ───────── */
+class Pebble{
+  constructor(){this.reset();}
+  reset(){this.x=W*0.5;this.y=H*0.8;this.mass=1;this.r=15;this.vy=2;this.score=0;this.trail=[];}
+  update(){
+    this.x+=4*(input.right-input.left);
+    this.x=Math.max(this.r,Math.min(W-this.r,this.x));
+    this.vy+=0.004;this.y+=0;                 // downhill simulated by environment scrolling
+    this.score+=this.vy*0.1;
+    this.trail.push({x:this.x,y:this.y,time:Date.now()});
+    while(this.trail.length&&Date.now()-this.trail[0].time>400)this.trail.shift();
+    this.r=16+this.mass*2.4;
   }
-}
-
-/* ---------- core update step ---------- */
-let distance = 0, landslide = false;
-function update(){
-  if(landslide) return;
-
-  // gravity + downhill acceleration
-  pebble.vx += SLOPE_FORCE;
-  pebble.vy += GRAVITY;
-
-  // integrate position
-  pebble.x += pebble.vx;
-  pebble.y += pebble.vy;
-  distance += pebble.vx * 0.016;
-
-  // bounce on “ground”
-  if(pebble.y + pebble.r > GROUND_Y){
-    pebble.y  = GROUND_Y - pebble.r;
-    pebble.vy = -pebble.vy * 0.35;           // lose some vertical speed
-  }
-
-  // world scrolls opposite pebble motion
-  debris.forEach(d => d.x -= pebble.vx);
-
-  // collisions → grow
-  debris.forEach(d => {
-    if(d.collected) return;
-    const dx = pebble.x - d.x, dy = pebble.y - d.y;
-    if(Math.hypot(dx,dy) < pebble.r + d.r){
-      d.collected = true;
-      pebble.mass += d.r/6;
-      pebble.r    += d.r*0.12;
-      pebble.vx   += 0.65;                    // momentum kick
+  draw(){
+    // trail
+    for(const p of this.trail){
+      const t=(Date.now()-p.time)/400,alpha=1-t;
+      ctx.fillStyle=`rgba(85,85,85,${alpha*0.4})`;
+      ctx.beginPath();ctx.arc(p.x,p.y,this.r*(1+t*0.3),0,6.283);ctx.fill();
     }
-  });
+    // pebble shading
+    const grd=ctx.createRadialGradient(this.x-this.r*0.4,this.y-this.r*0.4,this.r*0.2,
+                                        this.x,this.y,this.r);
+    grd.addColorStop(0,'#aaa');grd.addColorStop(1,'#555');
+    ctx.fillStyle=grd;
+    ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,6.283);ctx.fill();
+    ctx.strokeStyle='#0008';ctx.lineWidth=2;ctx.stroke();
+  }
+}
+class Rock{
+  constructor(big=false){this.big=big;this.reset();}
+  reset(){
+    this.r=this.big?rand(25,40):rand(8,14);
+    this.x=rand(this.r,W-this.r);
+    this.y=rand(-H*1.5,-this.r);
+    this.hit=false;
+  }
+  update(speed){this.y+=speed;if(this.y-this.r>H)this.reset();}
+  draw(){
+    ctx.fillStyle=this.big?'#4b3621':'#6e675f';
+    ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,6.283);ctx.fill();
+    ctx.strokeStyle='#0006';ctx.lineWidth=1.5;ctx.stroke();
+  }
+}
+class Particle{
+  constructor(x,y){this.x=x;this.y=y;this.vx=rand(-2,2);this.vy=rand(-2,2);this.life=600;}
+  update(dt){this.x+=this.vx;this.y+=this.vy;this.life-=dt;}
+  draw(){ctx.fillStyle=`rgba(200,200,200,${this.life/600})`;ctx.fillRect(this.x,this.y,2,2);}
+}
 
-  // win?
-  if(pebble.mass >= LANDSLIDE_AT){
-    landslide = true;
-    setTimeout(()=>alert('LANDSLIDE! You won. Reload to roll again.'),10);
+/* ───────── Game State ───────── */
+const pebble=new Pebble();
+const smallRocks=Array.from({length:40},()=>new Rock(false));
+const bigRocks=Array.from({length:6},()=>new Rock(true));
+const particles=[];
+const hud=document.getElementById('hud');
+const splash=document.getElementById('splash');
+let started=false,gameOver=false,last=performance.now();
+
+/* ───────── Main Loop ───────── */
+function loop(now){
+  const dt=now-last;last=now;
+  ctx.clearRect(0,0,W,H);
+
+  // background gradient sky + parallax mountain layers
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#87ceeb');sky.addColorStop(1,'#bdd7e7');
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle='#3e5d3e';ctx.beginPath();
+  ctx.moveTo(0,H*0.7);ctx.lineTo(W*0.25,H*0.5);ctx.lineTo(W*0.5,H*0.7);
+  ctx.lineTo(W*0.75,H*0.45);ctx.lineTo(W,H*0.6);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+
+  if(started&&!gameOver){
+    // update entities
+    pebble.update();
+    [...smallRocks,...bigRocks].forEach(r=>r.update(pebble.vy));
+    particles.forEach(p=>p.update(dt));
+
+    // collisions
+    [...smallRocks,...bigRocks].forEach(r=>{
+      if(!r.hit){
+        const dx=r.x-pebble.x,dy=r.y-pebble.y;
+        if(Math.hypot(dx,dy)<r.r+pebble.r){
+          r.hit=true;
+          if(r.big){
+            gameOver=true;
+            splash.textContent='💥 CRASH! Tap to Restart';splash.classList.add('show');
+          }else{
+            pebble.mass+=0.6;pebble.vy+=0.15;
+            for(let i=0;i<20;i++)particles.push(new Particle(r.x,r.y));
+            r.reset();
+          }
+        }
+      }
+    });
+    particles.filter(p=>p.life>0);
+
+    // draw entities
+    [...smallRocks,...bigRocks].forEach(r=>r.draw());
+    particles.forEach(p=>p.draw());
+    pebble.draw();
+
+    // HUD
+    hud.innerHTML=`Momentum: ${(pebble.mass*pebble.vy).toFixed(1)} &nbsp; Size: ${pebble.r.toFixed(0)} &nbsp; Distance: ${pebble.score.toFixed(0)}`;
+
+    // win condition
+    if(pebble.r>=70&&!gameOver){
+      gameOver=true;
+      splash.textContent='🌊 LANDSLIDE! You Win! Tap to Restart';splash.classList.add('show');
+    }
   }
 
-  spawnDebris();
-}
-
-/* ---------- render step ---------- */
-function draw(){
-  ctx.fillStyle = '#222';
-  ctx.fillRect(0,0,W,H);
-
-  // ground strip
-  ctx.fillStyle = '#444';
-  ctx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
-
-  // debris
-  ctx.fillStyle = '#666';
-  debris.forEach(d=>{
-    if(!d.collected){
-      ctx.beginPath();
-      ctx.arc(d.x,d.y,d.r,0,Math.PI*2);
-      ctx.fill();
-    }
-  });
-
-  // pebble
-  ctx.fillStyle = '#c9c9c9';
-  ctx.beginPath();
-  ctx.arc(pebble.x,pebble.y,pebble.r,0,Math.PI*2);
-  ctx.fill();
-
-  // HUD
-  hud.textContent =
-    `Mass: ${pebble.mass.toFixed(1)}  |  Momentum: ${pebble.vx.toFixed(1)}  |  Distance: ${distance|0}`;
-}
-
-/* ---------- main loop ---------- */
-function loop(){
-  update();
-  draw();
   requestAnimationFrame(loop);
 }
-spawnDebris();
-loop();
+requestAnimationFrame(loop);
+
+/* ───────── Game Start/Restart ───────── */
+function restart(){
+  started=true;gameOver=false;splash.classList.remove('show');
+  pebble.reset();[...smallRocks,...bigRocks].forEach(r=>r.reset());particles.length=0;last=performance.now();
+}
+splash.addEventListener('click',restart);
+cvs.addEventListener('click',()=>{if(!started||gameOver)restart();});
 </script>
 </body>
 </html>
