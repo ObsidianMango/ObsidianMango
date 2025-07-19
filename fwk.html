@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ultimate Boat Fireworks Show</title>
+  <style>
+    /* Reset & full-screen canvas */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script>
+    // Get canvas and context
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    let cw = canvas.width = window.innerWidth;
+    let ch = canvas.height = window.innerHeight;
+    
+    // Define water: bottom 1/8 of the screen is water.
+    let horizonY = ch * 7 / 8;
+    const boatYOffset = 10; // Boat floats a few pixels above water.
+    let boatY = horizonY - boatYOffset;
+    let boatX = cw / 2;
+    let boatSpeed = 0.5;
+    let boatDirection = 1; // 1 for right, -1 for left
+
+    // Utility random function
+    function random(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+    
+    // ----- Starfield (for sky and its reflection) -----
+    let stars = [];
+    function initStars() {
+      stars = [];
+      const starCount = 150;
+      for (let i = 0; i < starCount; i++) {
+        const x = Math.random() * cw;
+        const y = Math.random() * horizonY; // only in the sky
+        const radius = Math.random() * 1.5;
+        const alpha = random(0.3, 1);
+        stars.push({ x, y, radius, alpha });
+      }
+    }
+    initStars();
+    
+    // ----- Arrays for fireworks, explosion particles, and water ripples -----
+    let fireworks = [];
+    let particles = [];
+    let ripples = [];
+
+    // ----- Ripple Class (for water disturbance from the boat) -----
+    class Ripple {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 0;
+        this.maxRadius = random(30, 60);
+        this.alpha = 0.6;
+        this.lineWidth = 2;
+      }
+      update() {
+        this.radius += 0.5;
+        this.alpha -= 0.005;
+      }
+      draw() {
+        ctx.save();
+        // Clip drawing to only the water area.
+        ctx.beginPath();
+        ctx.rect(0, horizonY, cw, ch - horizonY);
+        ctx.clip();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,255,255,${this.alpha})`;
+        ctx.lineWidth = this.lineWidth;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // ----- Firework (Rocket) Class -----
+    class Firework {
+      constructor() {
+        // Rockets launch from the boat (with slight horizontal variation)
+        this.x = boatX + random(-10, 10);
+        this.y = boatY;
+        // Explosion altitude: firework explodes in the upper 1⁄3 of the screen.
+        this.explosionY = random(ch * 0.1, ch * 0.33);
+        // 10% chance for a "megaton" explosion; otherwise choose randomly from several types.
+        if (Math.random() < 0.1) {
+          this.explosionType = "megaton";
+        } else {
+          let types = ["circle", "burst", "sparkle", "spiral", "fountain", "confetti"];
+          this.explosionType = types[Math.floor(random(0, types.length))];
+        }
+        // Set initial velocities (with a wider horizontal range for extra arc)
+        this.vx = random(-2, 2);
+        this.vy = random(-16, -20);
+        this.gravity = 0.2;
+        this.hue = random(0, 360);
+      }
+      update() {
+        // Occasionally modify horizontal drift for a more dramatic arc.
+        if (Math.random() < 0.05) {
+          this.vx += random(-0.5, 0.5);
+        }
+        this.vy += this.gravity;
+        this.x += this.vx;
+        this.y += this.vy;
+        // Explode when reaching the designated altitude.
+        if (this.y <= this.explosionY) {
+          this.explode();
+          return false; // Signal removal.
+        }
+        return true;
+      }
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = `hsl(${this.hue}, 100%, 50%)`;
+        ctx.fill();
+      }
+      explode() {
+        spawnExplosionParticles(this.x, this.y, this.hue, this.explosionType);
+      }
+    }
+
+    // ----- Explosion Particle Class -----
+    class ExplosionParticle {
+      constructor(x, y, hue, angle, speed, decay) {
+        this.x = x;
+        this.y = y;
+        this.hue = hue;
+        this.angle = angle;
+        this.speed = speed;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.friction = 0.95;
+        this.gravity = 0.05;
+        this.alpha = 1;
+        this.decay = decay;
+        this.size = random(2, 4);
+      }
+      update() {
+        this.vx *= this.friction;
+        this.vy *= this.friction;
+        this.vy += this.gravity;
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= this.decay;
+      }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = `hsl(${this.hue}, 100%, 50%)`;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // ----- Spawn Explosion Particles Based on Type -----
+    function spawnExplosionParticles(x, y, hue, type) {
+      if (type === "megaton") {
+        // Massive multicolor explosion lasting longer.
+        const particleCount = 150;
+        for (let i = 0; i < particleCount; i++) {
+          const angle = random(0, Math.PI * 2);
+          const speed = random(3, 10);
+          const decay = random(0.002, 0.01);
+          // Each particle gets its own random hue.
+          const newHue = random(0, 360);
+          particles.push(new ExplosionParticle(x, y, newHue, angle, speed, decay));
+        }
+      } else if (type === "circle") {
+        const particleCount = 50;
+        const angleStep = (Math.PI * 2) / particleCount;
+        for (let i = 0; i < particleCount; i++) {
+          const angle = i * angleStep;
+          const speed = random(2, 6);
+          const decay = random(0.01, 0.03);
+          particles.push(new ExplosionParticle(x, y, hue, angle, speed, decay));
+        }
+      } else if (type === "burst") {
+        const particleCount = 30;
+        for (let i = 0; i < particleCount; i++) {
+          const angle = random(0, Math.PI * 2);
+          const speed = random(3, 8);
+          const decay = random(0.02, 0.04);
+          particles.push(new ExplosionParticle(x, y, hue, angle, speed, decay));
+        }
+      } else if (type === "sparkle") {
+        const particleCount = 70;
+        const angleStep = (Math.PI * 2) / particleCount;
+        for (let i = 0; i < particleCount; i++) {
+          const angle = i * angleStep + random(-0.1, 0.1);
+          const speed = random(1, 4);
+          const decay = random(0.03, 0.05);
+          particles.push(new ExplosionParticle(x, y, hue, angle, speed, decay));
+        }
+      } else if (type === "spiral") {
+        // Create a spiral effect by gradually increasing the angle.
+        const particleCount = 50;
+        for (let i = 0; i < particleCount; i++) {
+          let angle = i * 0.3; // Incremental angle to form a spiral.
+          const speed = random(2, 6) * (1 + i / particleCount);
+          const decay = random(0.01, 0.03);
+          particles.push(new ExplosionParticle(x, y, hue, angle, speed, decay));
+        }
+      } else if (type === "fountain") {
+        // Fountain: particles mostly upward with a slight spread.
+        const particleCount = 40;
+        for (let i = 0; i < particleCount; i++) {
+          // Angles centered upward (around -90°) with a narrow spread.
+          let angle = random(-Math.PI / 8, Math.PI / 8) - Math.PI / 2;
+          const speed = random(2, 5);
+          const decay = random(0.02, 0.04);
+          particles.push(new ExplosionParticle(x, y, hue, angle, speed, decay));
+        }
+      } else if (type === "confetti") {
+        // Confetti: many small, quickly decaying particles.
+        const particleCount = 80;
+        for (let i = 0; i < particleCount; i++) {
+          const angle = random(0, Math.PI * 2);
+          const speed = random(1, 3);
+          const decay = random(0.04, 0.07);
+          particles.push(new ExplosionParticle(x, y, hue, angle, speed, decay));
+        }
+      }
+    }
+
+    // ----- Drawing the Background (Sky, Stars & Water) -----
+    function drawBackground() {
+      // Sky gradient
+      const skyGradient = ctx.createLinearGradient(0, 0, 0, horizonY);
+      skyGradient.addColorStop(0, "#001");
+      skyGradient.addColorStop(1, "#223");
+      ctx.fillStyle = skyGradient;
+      ctx.fillRect(0, 0, cw, horizonY);
+      
+      // Draw stars in the sky
+      for (let star of stars) {
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${star.alpha})`;
+        ctx.fill();
+      }
+      
+      // Water gradient
+      const waterGradient = ctx.createLinearGradient(0, horizonY, 0, ch);
+      waterGradient.addColorStop(0, "#001133");
+      waterGradient.addColorStop(1, "#000");
+      ctx.fillStyle = waterGradient;
+      ctx.fillRect(0, horizonY, cw, ch - horizonY);
+      
+      // Reflection of stars in the water
+      for (let star of stars) {
+        if (star.y < horizonY) {
+          const reflectedY = horizonY + (horizonY - star.y);
+          ctx.beginPath();
+          ctx.arc(star.x, reflectedY, star.radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255,255,255,${star.alpha * 0.3})`;
+          ctx.fill();
+        }
+      }
+    }
+
+    // ----- Drawing the Boat & Its Reflection -----
+    function drawBoat() {
+      ctx.save();
+      ctx.translate(boatX, boatY);
+      // Hull
+      ctx.beginPath();
+      ctx.moveTo(-20, 0);
+      ctx.lineTo(20, 0);
+      ctx.lineTo(10, 10);
+      ctx.lineTo(-10, 10);
+      ctx.closePath();
+      ctx.fillStyle = "#552";
+      ctx.fill();
+      // Mast
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -30);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // Sail
+      ctx.beginPath();
+      ctx.moveTo(0, -30);
+      ctx.lineTo(15, -15);
+      ctx.lineTo(0, -15);
+      ctx.closePath();
+      ctx.fillStyle = "#aaa";
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawBoatReflection() {
+      ctx.save();
+      ctx.globalAlpha = 0.3; // Lower opacity for the reflection.
+      // Reflect vertically about the horizon.
+      ctx.translate(boatX, horizonY * 2 - boatY);
+      ctx.scale(1, -1);
+      // Draw boat shape.
+      ctx.beginPath();
+      ctx.moveTo(-20, 0);
+      ctx.lineTo(20, 0);
+      ctx.lineTo(10, 10);
+      ctx.lineTo(-10, 10);
+      ctx.closePath();
+      ctx.fillStyle = "#552";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -30);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, -30);
+      ctx.lineTo(15, -15);
+      ctx.lineTo(0, -15);
+      ctx.closePath();
+      ctx.fillStyle = "#aaa";
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // ----- Draw Reflection for Fireworks & Explosion Particles -----
+    function drawReflection(x, y, radius, color, alpha) {
+      const reflectedY = horizonY + (horizonY - y);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(x, reflectedY, radius, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // ----- Animation Loop -----
+    function animate() {
+      requestAnimationFrame(animate);
+      ctx.clearRect(0, 0, cw, ch);
+      drawBackground();
+      
+      // Update and draw water ripples.
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        ripples[i].update();
+        ripples[i].draw();
+        if (ripples[i].alpha <= 0) {
+          ripples.splice(i, 1);
+        }
+      }
+      // Occasionally create a new ripple at the boat's waterline.
+      if (Math.random() < 0.02) {
+        ripples.push(new Ripple(boatX, horizonY));
+      }
+      
+      // Update boat position.
+      boatX += boatSpeed * boatDirection;
+      if (boatX < 50 || boatX > cw - 50) {
+        boatDirection *= -1;
+      }
+      
+      // Update and draw firework rockets.
+      for (let i = fireworks.length - 1; i >= 0; i--) {
+        if (!fireworks[i].update()) {
+          fireworks.splice(i, 1);
+        } else {
+          fireworks[i].draw();
+        }
+      }
+      
+      // Update and draw explosion particles.
+      for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        particles[i].draw();
+        if (particles[i].alpha <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+      
+      // Draw reflections for active rockets.
+      for (let fw of fireworks) {
+        if (fw.y < horizonY) {
+          drawReflection(fw.x, fw.y, 3, `hsl(${fw.hue}, 100%, 50%)`, 0.3);
+        }
+      }
+      // Draw reflections for explosion particles.
+      for (let p of particles) {
+        if (p.y < horizonY) {
+          drawReflection(p.x, p.y, p.size, `hsl(${p.hue}, 100%, 50%)`, p.alpha * 0.3);
+        }
+      }
+      
+      // Draw boat reflection and then the boat.
+      drawBoatReflection();
+      drawBoat();
+      
+      // Launch new firework rockets continuously.
+      if (Math.random() < 0.03) {
+        fireworks.push(new Firework());
+      }
+    }
+    
+    animate();
+    
+    // Update canvas dimensions and recalc values on window resize.
+    window.addEventListener("resize", () => {
+      cw = canvas.width = window.innerWidth;
+      ch = canvas.height = window.innerHeight;
+      horizonY = ch * 7 / 8;
+      boatY = horizonY - boatYOffset;
+      boatX = cw / 2;
+      initStars();
+    });
+  </script>
+</body>
+</html>

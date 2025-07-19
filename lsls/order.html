@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Order Receiving & Van Loading</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        html, body { box-sizing: border-box; }
+        body {
+            background: #191a1e;
+            color: #e0e0e0;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+        }
+        h1 {
+            margin-top: 30px;
+            font-size: 2em;
+            letter-spacing: 1px;
+        }
+        .order-board {
+            margin: 20px 0 10px 0;
+            background: #232438;
+            border-radius: 18px;
+            padding: 14px 32px;
+            box-shadow: 0 2px 12px #0008;
+            font-size: 1.2em;
+        }
+        .warehouse {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-bottom: 36px;
+            margin-top: 18px;
+            width: 100vw;
+        }
+        .stack-area {
+            text-align: center;
+            user-select: none;
+        }
+        .stack-img {
+            width: 90px;
+            height: auto;
+            cursor: pointer;
+            filter: drop-shadow(0 2px 6px #000a);
+            transition: transform 0.15s;
+            touch-action: manipulation;
+        }
+        .stack-img:active,
+        .stack-img.enlarged {
+            transform: scale(1.08);
+        }
+        .stack-label {
+            margin-top: 6px;
+            font-size: 1.07em;
+        }
+        .van-area {
+            margin-top: 8px;
+            margin-bottom: 30px;
+        }
+        .van-img {
+            width: 180px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 30;
+            will-change: transform, top;
+        }
+        .confirm-btn {
+            margin-top: 14px;
+            padding: 13px 34px;
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #fff;
+            background: linear-gradient(90deg, #406edb, #3cb371 60%);
+            border: none;
+            border-radius: 1em;
+            box-shadow: 0 2px 12px #0008;
+            cursor: pointer;
+            display: none;
+            position: absolute;
+            left: 50%;
+            bottom: 32px;
+            transform: translateX(-50%);
+        }
+        .crashable-abs {
+            position: absolute !important;
+            margin: 0 !important;
+            box-sizing: border-box !important;
+            z-index: 10;
+        }
+        .crash-out {
+            transition: transform 1.15s cubic-bezier(.44,.79,.34,1.2), opacity 1.15s;
+            will-change: transform, opacity;
+        }
+        /* Smoke animation */
+        .smoke {
+            position: absolute;
+            bottom: 54px;
+            width: 26px;
+            height: 26px;
+            background: radial-gradient(ellipse at center, #fff 60%, #bbb 100%);
+            opacity: 0.82;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 25;
+            animation: smoke-move 1.8s forwards;
+        }
+        @keyframes smoke-move {
+            0% { opacity: 0.8; }
+            40% { opacity: 0.6; }
+            70% { opacity: 0.32; }
+            100% { opacity: 0; }
+        }
+        @media (max-width: 640px) {
+            .warehouse {
+                gap: 8vw;
+            }
+            .van-img {
+                width: 95vw;
+                max-width: 220px;
+            }
+            .stack-img {
+                width: 20vw;
+                min-width: 65px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1 id="mainTitle">Load the Van!</h1>
+    <div class="order-board" id="orderBoard"></div>
+    <div class="warehouse" id="warehouse"></div>
+    <div class="van-area" id="vanArea">
+        <img src="van-empty.png" class="van-img" id="vanImg" alt="Van">
+    </div>
+    <button class="confirm-btn" id="confirmBtn">Drive!</button>
+    <script>
+        // ---- ONLY BEER AND WINE ----
+        const PRODUCT_TYPES = [
+            { key: 'beer', label: 'Beer', img: 'beer-stack.png' },
+            { key: 'wine', label: 'Wine', img: 'wine-stack.png' }
+        ];
+        function getRandomOrder() {
+            let order = {};
+            order.beer = 2 + Math.floor(Math.random()*5); // 2–6
+            order.wine = 2 + Math.floor(Math.random()*5); // 2–6
+            return order;
+        }
+        let order = getRandomOrder();
+
+        let productMap = {};
+        PRODUCT_TYPES.forEach(t=>{productMap[t.key]=t;});
+
+        // ---- DOM Elements ----
+        const orderBoard = document.getElementById('orderBoard');
+        const warehouse = document.getElementById('warehouse');
+        const vanImg = document.getElementById('vanImg');
+        const confirmBtn = document.getElementById('confirmBtn');
+        const mainTitle = document.getElementById('mainTitle');
+
+        // ---- DYNAMIC WAREHOUSE GENERATION ----
+        let loaded = {};
+        let left = {};
+        Object.keys(order).forEach(k=>{ loaded[k]=0; left[k]=order[k]; });
+
+        function renderWarehouse() {
+            warehouse.innerHTML = '';
+            Object.keys(order).forEach((key, idx) => {
+                let info = productMap[key];
+                let stackDiv = document.createElement('div');
+                stackDiv.className = 'stack-area';
+                stackDiv.innerHTML = `
+                    <img src="${info.img}" class="stack-img" id="${key}StackImg" alt="${info.label} Stack">
+                    <div class="stack-label" id="${key}Count"></div>
+                `;
+                warehouse.appendChild(stackDiv);
+            });
+        }
+
+        function updateCounts() {
+            Object.keys(order).forEach((key) => {
+                let countEl = document.getElementById(key + 'Count');
+                let imgEl = document.getElementById(key + 'StackImg');
+                countEl.textContent = left[key] > 0 ? `${left[key]} ${productMap[key].label} to Load` : "Done!";
+                imgEl.style.opacity = left[key] > 0 ? "1" : "0.4";
+            });
+        }
+        function updateOrderBoard() {
+            let txt = "Order: ";
+            let arr = [];
+            Object.keys(order).forEach((key) => {
+                arr.push(`<b>${order[key]} ${productMap[key].label}</b>`);
+            });
+            orderBoard.innerHTML = txt + arr.join(" & ");
+        }
+        function updateVanImg() {
+            let totalLeft = Object.values(left).reduce((a, b) => a + b, 0);
+            if (totalLeft === Object.values(order).reduce((a, b) => a + b, 0)) {
+                vanImg.src = "van-empty.png";
+            } else if (totalLeft > 0) {
+                vanImg.src = "van-loading.png";
+            } else {
+                vanImg.src = "van-loaded.png";
+            }
+        }
+        function checkOrderComplete() {
+            let totalLeft = Object.values(left).reduce((a, b) => a + b, 0);
+            if (totalLeft === 0) {
+                setTimeout(() => {
+                    vanImg.src = "van-door-closed.png";
+                    confirmBtn.style.display = "inline-block";
+                }, 700);
+            }
+        }
+
+        function attachHandlers() {
+            Object.keys(order).forEach((key) => {
+                let imgEl = document.getElementById(key + 'StackImg');
+                imgEl.onclick = () => {
+                    if (left[key] > 0) {
+                        left[key]--;
+                        loaded[key]++;
+                        updateCounts();
+                        updateVanImg();
+                        checkOrderComplete();
+                    }
+                };
+                // Add enlarge effect for both mouse and touch
+                imgEl.addEventListener('mousedown', function() {
+                    imgEl.classList.add('enlarged');
+                });
+                imgEl.addEventListener('mouseup', function() {
+                    imgEl.classList.remove('enlarged');
+                });
+                imgEl.addEventListener('mouseleave', function() {
+                    imgEl.classList.remove('enlarged');
+                });
+                imgEl.addEventListener('touchstart', function() {
+                    imgEl.classList.add('enlarged');
+                });
+                ['touchend', 'touchcancel', 'touchleave'].forEach(evt => {
+                    imgEl.addEventListener(evt, function() {
+                        imgEl.classList.remove('enlarged');
+                    });
+                });
+            });
+        }
+
+        // --- COLLISION-ACTIVATED PHYSICS + MASS SMOKE ---
+        confirmBtn.onclick = () => {
+            // Only make stack images and labels absolute
+            requestAnimationFrame(() => {
+                const crashables = [
+                    ...Array.from(document.querySelectorAll('.stack-img')),
+                    ...Array.from(document.querySelectorAll('.stack-label'))
+                ];
+                crashables.forEach(el => {
+                    if (el.classList.contains('crashable-abs')) return;
+                    const rect = el.getBoundingClientRect();
+                    const scrollY = window.scrollY || window.pageYOffset;
+                    const scrollX = window.scrollX || window.pageXOffset;
+                    el.style.position = 'absolute';
+                    el.style.left = (rect.left + scrollX) + 'px';
+                    el.style.top = (rect.top + scrollY) + 'px';
+                    el.style.width = rect.width + 'px';
+                    el.style.height = rect.height + 'px';
+                    el.classList.add('crashable-abs');
+                });
+
+                // Massive burnout: 22-34 puffs, randomized
+                function makeSmoke(n, baseX) {
+                    for(let i=0;i<n;i++) {
+                        let smoke = document.createElement('div');
+                        smoke.className = "smoke";
+                        let size = 14+Math.random()*44;
+                        let leftOffset = (Math.random()-0.5)*110 + (baseX||0);
+                        let delay = (Math.random()*0.8).toFixed(2);
+                        let ymove = -80-Math.random()*110;
+                        let xmove = leftOffset*1.2 + (Math.random()-0.5)*60;
+                        smoke.style.width = smoke.style.height = size+"px";
+                        smoke.style.left = `calc(50% + ${leftOffset}px)`;
+                        smoke.style.opacity = 0.57 + Math.random()*0.35;
+                        smoke.style.background = `radial-gradient(ellipse at center, #fff 60%, #${["bbb","ccc","eee","d7d7d7"][Math.floor(Math.random()*4)]} 100%)`;
+                        smoke.style.animationDelay = delay+"s";
+                        smoke.style.animationDuration = (1.1+Math.random()*1.25)+"s";
+                        smoke.style.zIndex = 25;
+                        smoke.animate([
+                            {transform:`translateY(0) scale(1)`, opacity:smoke.style.opacity},
+                            {transform:`translate(${xmove}px, ${ymove}px) scale(${1.2+Math.random()*1.1})`, opacity:0}
+                        ], {
+                            duration: 1300+Math.random()*1000,
+                            fill:'forwards',
+                            delay:delay*1000
+                        });
+                        document.body.appendChild(smoke);
+                        setTimeout(() => { smoke.remove(); }, 2300+delay*1000);
+                    }
+                }
+                makeSmoke(28 + Math.floor(Math.random()*8), 0);
+
+                // Van animation using requestAnimationFrame
+                const vh = window.innerHeight || document.documentElement.clientHeight;
+                const docTop = window.scrollY || window.pageYOffset;
+                const vanStart = vh - vanImg.offsetHeight - 32;
+                const vanEnd = -vanImg.offsetHeight - 60;
+                let vanY = vanStart;
+                vanImg.style.top = vanY + docTop + "px";
+                vanImg.style.left = "50%";
+                vanImg.style.transform = "translateX(-50%)";
+                vanImg.style.transition = "none";
+                vanImg.style.position = "absolute";
+                vanImg.style.zIndex = 30;
+
+                // Each crashable: get vertical position (center)
+                const hitTargets = crashables
+                    .filter(el => el !== vanImg)
+                    .map(el => ({
+                        el,
+                        hit: false,
+                        y: el.getBoundingClientRect().top + el.offsetHeight / 2 + docTop
+                    }));
+
+                function crashEffect(target) {
+                    target.hit = true;
+                    const el = target.el;
+                    el.classList.add('crash-out');
+                    const vanRect = vanImg.getBoundingClientRect();
+                    const elRect = el.getBoundingClientRect();
+                    const vanMidX = vanRect.left + vanRect.width / 2;
+                    const elMidX = elRect.left + elRect.width / 2;
+                    let direction = elMidX === vanMidX ? (Math.random()<0.5?-1:1) : Math.sign(elMidX - vanMidX);
+                    let spread = 260 + Math.random()*160;
+                    let up = -80 + Math.random()*-140;
+                    el.style.transform = `translate(${direction * spread}px, ${up}px) rotate(${(direction)* (18+Math.random()*28)}deg) scale(0.82)`;
+                    el.style.opacity = 0.15;
+                }
+
+                function animateVan() {
+                    vanY -= 5; // speed
+                    if (vanY > vanEnd) {
+                        vanImg.style.top = vanY + docTop + "px";
+                        hitTargets.forEach(target => {
+                            if (!target.hit && vanY < target.y - vanImg.offsetHeight/2) {
+                                crashEffect(target);
+                            }
+                        });
+                        requestAnimationFrame(animateVan);
+                    } else {
+                        setTimeout(() => {
+                            crashables.forEach(el=>el.style.display='none');
+                            window.location.href = "index.html";
+                        }, 900);
+                    }
+                }
+                animateVan();
+            });
+        };
+
+        function init() {
+            renderWarehouse();
+            updateCounts();
+            updateOrderBoard();
+            updateVanImg();
+            attachHandlers();
+            confirmBtn.style.display = "none";
+        }
+        init();
+    </script>
+</body>
+</html>

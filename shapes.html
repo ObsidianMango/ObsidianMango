@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>3D Collision Simulator - Mango</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <!-- Include Three.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+  <script>
+    // Set up scene, camera, and renderer
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.z = 60;
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Add ambient and directional lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(1, 1, 1);
+    scene.add(directionalLight);
+
+    // Define the "room" boundaries (a cube in which objects bounce)
+    const roomSize = 50;
+
+    // Utility: Random number between min and max
+    function randomInRange(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    // Create a random geometry from several types
+    function createRandomGeometry() {
+      const types = [
+        () => new THREE.BoxGeometry(randomInRange(2, 5), randomInRange(2, 5), randomInRange(2, 5)),
+        () => new THREE.SphereGeometry(randomInRange(1.5, 3), 16, 16),
+        () => new THREE.ConeGeometry(randomInRange(1.5, 3), randomInRange(3, 6), 16),
+        () => new THREE.TorusGeometry(randomInRange(1.5, 3), randomInRange(0.5, 1.5), 16, 32)
+      ];
+      const index = Math.floor(Math.random() * types.length);
+      return types[index]();
+    }
+
+    // Create an object with a random geometry, material, and initial velocity
+    function createObject() {
+      const geometry = createRandomGeometry();
+      geometry.computeBoundingSphere();
+      const material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(Math.random(), Math.random(), Math.random()),
+        roughness: 0.5,
+        metalness: 0.5
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      // Set random position within the room
+      mesh.position.set(
+        randomInRange(-roomSize, roomSize),
+        randomInRange(-roomSize, roomSize),
+        randomInRange(-roomSize, roomSize)
+      );
+      scene.add(mesh);
+      // Random velocity vector
+      const velocity = new THREE.Vector3(
+        randomInRange(-0.2, 0.2),
+        randomInRange(-0.2, 0.2),
+        randomInRange(-0.2, 0.2)
+      );
+      // Use computed bounding sphere radius for collision detection
+      const radius = geometry.boundingSphere.radius;
+      return { mesh, velocity, radius };
+    }
+
+    // Create multiple objects
+    const objects = [];
+    const numObjects = 20;
+    for (let i = 0; i < numObjects; i++) {
+      objects.push(createObject());
+    }
+
+    // Basic elastic collision response for equal-mass objects
+    function resolveCollision(objA, objB) {
+      const posA = objA.mesh.position;
+      const posB = objB.mesh.position;
+      const distance = posA.distanceTo(posB);
+      const minDistance = objA.radius + objB.radius;
+      if (distance < minDistance) {
+        // Compute normalized collision vector
+        const n = new THREE.Vector3().subVectors(posA, posB).normalize();
+        // Project velocities onto the collision normal
+        const vA = objA.velocity.clone();
+        const vB = objB.velocity.clone();
+        const vA_proj = n.clone().multiplyScalar(vA.dot(n));
+        const vB_proj = n.clone().multiplyScalar(vB.dot(n));
+        // Exchange the normal components for elastic collision
+        objA.velocity.add(vB_proj).sub(vA_proj);
+        objB.velocity.add(vA_proj).sub(vB_proj);
+        // Adjust positions to avoid overlap
+        const overlap = (minDistance - distance) / 2;
+        posA.add(n.clone().multiplyScalar(overlap));
+        posB.add(n.clone().multiplyScalar(-overlap));
+      }
+    }
+
+    // Animation loop: update positions, check collisions, and render
+    function animate() {
+      requestAnimationFrame(animate);
+      // Update object positions
+      objects.forEach(obj => {
+        obj.mesh.position.add(obj.velocity);
+        // Bounce off room boundaries on each axis
+        ['x', 'y', 'z'].forEach(axis => {
+          if (obj.mesh.position[axis] > roomSize || obj.mesh.position[axis] < -roomSize) {
+            obj.velocity[axis] = -obj.velocity[axis];
+            obj.mesh.position[axis] = THREE.MathUtils.clamp(obj.mesh.position[axis], -roomSize, roomSize);
+          }
+        });
+      });
+      // Check for collisions between objects
+      for (let i = 0; i < objects.length; i++) {
+        for (let j = i + 1; j < objects.length; j++) {
+          resolveCollision(objects[i], objects[j]);
+        }
+      }
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Adjust scene on window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

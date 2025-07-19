@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Minesweeper Clone</title>
+    <style>
+        /* Ensure the whole game is contained within the screen */
+        html, body {
+            font-family: sans-serif;
+            text-align: center;
+            background-color: #C0C0C0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            margin: 0;
+        }
+        .board-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: silver;
+            padding: 10px;
+            border: 3px solid gray;
+            box-sizing: border-box;
+        }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: gray;
+            padding: 5px;
+            border: 2px solid black;
+            width: 100%;
+            max-width: 400px;
+            margin: auto;
+        }
+        .led {
+            font-family: monospace;
+            font-size: 24px;
+            color: red;
+            background: black;
+            padding: 5px 10px;
+            width: 60px;
+            text-align: center;
+            border: 2px inset darkgray;
+        }
+        .face-button {
+            font-size: 24px;
+            padding: 5px;
+            background: lightgray;
+            border: 2px outset white;
+            cursor: pointer;
+        }
+        .difficulty-menu {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .difficulty-menu button {
+            padding: 10px 20px;
+            font-size: 18px;
+            background: lightgray;
+            border: 2px outset white;
+            cursor: pointer;
+        }
+        .grid-container {
+            display: flex;
+            justify-content: center;
+            background: gray;
+            border: 3px solid black;
+            padding: 5px;
+            width: 100%;
+            max-width: 90vw;
+            height: 50vh;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .grid {
+            display: grid;
+            gap: 2px;
+            background: silver;
+            padding: 5px;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+        }
+        .cell {
+            width: 100%;
+            height: 100%;
+            background: lightgray;
+            border: 2px outset white;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.2vw;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+        .cell:disabled {
+            border: 2px inset gray;
+            cursor: default;
+        }
+        .mine {
+            color: red;
+            font-size: 1.2vw;
+        }
+        .flag {
+            color: blue;
+            font-size: 1.2vw;
+        }
+        @media (max-width: 600px) {
+            .status-bar {
+                max-width: 90vw;
+            }
+            .cell {
+                font-size: 3vw;
+            }
+            .mine, .flag {
+                font-size: 3vw;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="difficulty-menu">
+    <button onclick="startGame('easy')">Easy</button>
+    <button onclick="startGame('medium')">Medium</button>
+    <button onclick="startGame('hard')">Hard</button>
+</div>
+
+<div class="board-container">
+    <div class="status-bar">
+        <div id="moveCounter" class="led">000</div>
+        <button id="faceButton" class="face-button" onclick="resetGame()">😊</button>
+        <div id="timeCounter" class="led">000</div>
+    </div>
+    <div class="grid-container">
+        <div id="gridContainer" class="grid"></div>
+    </div>
+</div>
+
+<script>
+    const LEVELS = {
+        easy: { size: 9, mines: 10 },
+        medium: { size: 16, mines: 40 },
+        hard: { size: 30, mines: 99 }
+    };
+
+    let boardSize, mineCount, board = [];
+    let moveCounter = 0, timer = 0, timerInterval;
+    let firstClick = true;
+
+    function startGame(level) {
+        boardSize = LEVELS[level].size;
+        mineCount = LEVELS[level].mines;
+        createBoard(boardSize, mineCount);
+    }
+
+    function createBoard(size, mines) {
+        const gridContainer = document.getElementById("gridContainer");
+        gridContainer.innerHTML = "";
+        gridContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+        gridContainer.style.gridTemplateRows = `repeat(${size}, 1fr)`;
+
+        boardSize = size;
+        mineCount = mines;
+        moveCounter = 0;
+        timer = 0;
+        firstClick = true;
+        clearInterval(timerInterval);
+        document.getElementById("moveCounter").textContent = "000";
+        document.getElementById("timeCounter").textContent = "000";
+        document.getElementById("faceButton").textContent = "😊";
+
+        board = Array.from({ length: size }, () => Array(size).fill(0));
+
+        let placedMines = 0;
+        while (placedMines < mines) {
+            let x = Math.floor(Math.random() * size);
+            let y = Math.floor(Math.random() * size);
+            if (board[x][y] === 0) {
+                board[x][y] = "M";
+                placedMines++;
+            }
+        }
+
+        for (let x = 0; x < size; x++) {
+            for (let y = 0; y < size; y++) {
+                if (board[x][y] === "M") continue;
+                let count = 0;
+                for (let dx of [-1, 0, 1]) {
+                    for (let dy of [-1, 0, 1]) {
+                        let nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < size && ny >= 0 && ny < size && board[nx][ny] === "M") {
+                            count++;
+                        }
+                    }
+                }
+                board[x][y] = count;
+            }
+        }
+
+        for (let x = 0; x < size; x++) {
+            for (let y = 0; y < size; y++) {
+                let button = document.createElement("button");
+                button.className = "cell";
+                button.dataset.x = x;
+                button.dataset.y = y;
+                button.onclick = () => revealCell(x, y);
+                button.oncontextmenu = (e) => { 
+                    e.preventDefault();
+                    toggleFlag(x, y);
+                };
+                gridContainer.appendChild(button);
+            }
+        }
+    }
+
+    function revealCell(x, y) {
+        let button = document.querySelector(`button[data-x="${x}"][data-y="${y}"]`);
+        if (!button || button.disabled || button.textContent === "🚩") return;
+        if (board[x][y] === "M") {
+            revealMines();
+        }
+        button.disabled = true;
+        button.textContent = board[x][y] > 0 ? board[x][y] : "";
+    }
+
+    function toggleFlag(x, y) {
+        let button = document.querySelector(`button[data-x="${x}"][data-y="${y}"]`);
+        button.textContent = button.textContent === "🚩" ? "" : "🚩";
+    }
+
+    function resetGame() {
+        startGame('easy');
+    }
+
+    startGame('easy');
+</script>
+
+</body>
+</html>

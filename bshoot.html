@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pop-A-Shot Basketball</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; overflow: hidden; background: #191715; }
+    canvas { display: block; }
+    #retroUI {
+      position: absolute; top: 10px; left: 0; width: 100vw; z-index: 10; text-align: center; pointer-events: none;
+    }
+    .panel {
+      display: inline-block;
+      padding: 22px 0;
+      width: 47vw; min-width: 120px; max-width: 220px;
+      border: 6px solid #00ff75;
+      border-radius: 13px;
+      background: #222014;
+      color: #ffeb59;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 2em;
+      margin: 0 1vw;
+      box-shadow: 0 2px 16px #2f8a;
+      text-shadow: 3px 3px 0 #000, 0 0 15px #fff82e;
+      letter-spacing: 1px;
+    }
+    #instructions {
+      color: #fff0b8;
+      background: #0956ab;
+      border: 4px solid #fff048;
+      margin: 14px auto 0 auto;
+      border-radius: 7px;
+      font-size: 1.3em;
+      width: 88vw; max-width: 420px;
+      padding: 14px 0 14px 0;
+      box-shadow: 0 2px 12px #2746ac;
+      text-shadow: 2px 2px 0 #033b64;
+      text-align: center;
+    }
+    #metersUI {
+      position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 5;
+    }
+    #powerBarCanvas {
+      position: absolute;
+      left: 50%; top: 73vh;
+      width: 76vw; min-width: 110px; max-width: 390px;
+      height: 54px;
+      margin-left: -38vw;
+      z-index: 6;
+      background: transparent;
+      pointer-events: none;
+    }
+    .score-pop {
+      position: absolute;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 2.5em;
+      font-weight: bold;
+      color: #fff849;
+      text-shadow:
+        -3px -3px 8px #2d008a,  3px 3px 8px #F58426,
+        0 0 20px #fff, 0 0 6px #00ff75,
+        3px 0px 0px #191715, -3px 0px 0px #191715,
+        0px 3px 0px #191715, 0px -3px 0px #191715;
+      padding: 0.06em 0.25em;
+      border-radius: 10px;
+      border: 3px solid #fff;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 99;
+      animation: popFade 1.15s forwards;
+      user-select: none;
+    }
+    @keyframes popFade {
+      0%   { transform: translateY(25px) scale(1.1); opacity: 0.95;}
+      60%  { transform: translateY(-14px) scale(1.05); opacity: 1;}
+      90%  { transform: translateY(-36px) scale(0.96); opacity: 0.9;}
+      100% { transform: translateY(-54px) scale(0.95); opacity: 0;}
+    }
+  </style>
+</head>
+<body>
+  <div id="retroUI">
+    <div class="panel">SCORE:<br><span id="score">0</span></div>
+    <div class="panel">STREAK:<br><span id="streak">0</span></div>
+    <div id="instructions">
+      TAP TO START POWER<br>TAP AGAIN IN YELLOW "SWEET SPOT" TO SHOOT!
+    </div>
+  </div>
+  <div id="metersUI">
+    <canvas id="powerBarCanvas" width="340" height="54"></canvas>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js"></script>
+  <script>
+    // --- UI refs ---
+    const scoreDisplay = document.getElementById("score");
+    const streakDisplay = document.getElementById("streak");
+    const powerCanvas = document.getElementById("powerBarCanvas");
+    const powerCtx = powerCanvas.getContext("2d");
+
+    let gameStarted = true;
+    let score = 0, streak = 0;
+
+    // --- Three.js setup ---
+    let scene = new THREE.Scene();
+    let camera = new THREE.PerspectiveCamera(73, window.innerWidth/window.innerHeight, 0.1, 1000);
+    let renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // --- Lighting ---
+    let light = new THREE.DirectionalLight(0xffffff, 2.3);
+    light.position.set(6, 12, 7);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0x6e7ab3, 0.52));
+
+    // --- Court ---
+    let courtGroup = new THREE.Group();
+    for(let x=-7; x<=7; x++){
+      for(let z=-10; z<=15; z+=2){
+        let stripe = new THREE.Mesh(
+          new THREE.PlaneGeometry(1.06, 2.01),
+          new THREE.MeshPhongMaterial({
+            color: (x+z)%2===0 ? 0xd0b183 : 0xb08d57, shininess: 65, reflectivity: 0.21
+          })
+        );
+        stripe.position.set(x*1.06, 0.012, z);
+        stripe.rotation.x = -Math.PI/2;
+        courtGroup.add(stripe);
+      }
+    }
+    let key = new THREE.Mesh(
+      new THREE.BoxGeometry(3.6, 0.01, 7),
+      new THREE.MeshPhongMaterial({ color: 0xf6f2db })
+    );
+    key.position.set(0, 0.014, -8.5);
+    courtGroup.add(key);
+    let freeThrow = new THREE.Mesh(
+      new THREE.TorusGeometry(1.7, 0.031, 12, 60),
+      new THREE.MeshPhongMaterial({ color: 0xf6f2db })
+    );
+    freeThrow.position.set(0, 0.016, -5.2);
+    freeThrow.rotation.x = -Math.PI/2;
+    courtGroup.add(freeThrow);
+    let centerCircle = new THREE.Mesh(
+      new THREE.TorusGeometry(2.2, 0.034, 12, 60),
+      new THREE.MeshPhongMaterial({ color: 0xf6f2db })
+    );
+    centerCircle.position.set(0, 0.016, 0);
+    centerCircle.rotation.x = -Math.PI/2;
+    courtGroup.add(centerCircle);
+    scene.add(courtGroup);
+
+    // --- MASSIVE CROWD: fills from court floor, up/back, behind hoop ---
+    function makeKnicksCrowd() {
+      const group = new THREE.Group();
+      let crowdColors = [0x006BB6, 0xF58426, 0xffffff];
+      let crowdRows = 40; // extra tall
+      let perRow = 40;    // extra wide
+      let w = 0.80, h = 1.15, d = 0.25;
+      let yStart = 0.01;   // court floor
+      let zStart = -13.0; // right behind the hoop post
+      for (let row = 0; row < crowdRows; row++) {
+        let y = yStart + (row * 0.85) + (Math.random() * 0.08);
+        let z = zStart - (row * 0.45);
+        for (let i = 0; i < perRow; i++) {
+          let color = crowdColors[Math.floor(Math.random()*crowdColors.length)];
+          let box = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            new THREE.MeshPhongMaterial({ color: color })
+          );
+          let spread = 15 - row * 0.18;
+          box.position.set(
+            -spread + (i * (2 * spread) / (perRow - 1)),
+            y,
+            z
+          );
+          group.add(box);
+        }
+      }
+      return group;
+    }
+    scene.add(makeKnicksCrowd());
+
+    // --- Hoop and Ball ---
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.11, 0.13, 8, 18),
+      new THREE.MeshPhongMaterial({ color: 0xa7a7a7 })
+    );
+    post.position.set(0, 2.12, -12.7);
+    scene.add(post);
+
+    const backboard = new THREE.Mesh(
+      new THREE.BoxGeometry(3.1, 1.89, 0.13),
+      new THREE.MeshPhongMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.89
+      })
+    );
+    backboard.position.set(0, 5, -12);
+    scene.add(backboard);
+
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(0.75, 0.08, 16, 32),
+      new THREE.MeshPhongMaterial({ color: 0xF58426 })
+    );
+    rim.position.set(0, 4.18, -11.5);
+    rim.rotation.x = Math.PI / 2;
+    scene.add(rim);
+
+    const netGeo = new THREE.CylinderGeometry(0.74, 0.55, 0.58, 16, 1, true);
+    const netMat = new THREE.MeshPhongMaterial({
+      color: 0xffffff, wireframe: true, opacity: 0.85, transparent: true
+    });
+    const net = new THREE.Mesh(netGeo, netMat);
+    net.position.set(0, 3.89, -11.5);
+    scene.add(net);
+
+    const rimPlane = { z: -11.5, y: 4.18, r: 0.78 };
+
+    const ballGeometry = new THREE.SphereGeometry(0.31, 32, 32);
+    const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xff9900 });
+    const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+    scene.add(ball);
+
+    // --- Game State ---
+    let velocity = new THREE.Vector3();
+    let isShot = false, powerLevel = 0, awaitingPower = false;
+    let scoredLastShot = false, fallingThrough = false, inNet = false, floorBounce = false;
+    let sweetSpotMin = 0.57, sweetSpotMax = 0.76;
+    let powerAnim = 0.23, powerDir = 1, powerActive = false;
+    let scorePopSide = 1; // alternate left/right
+
+    // --- Score Pop ---
+    function spawnScorePop(pts) {
+      let div = document.createElement('div');
+      div.className = 'score-pop';
+      div.textContent = pts > 1 ? '+2' : '+1';
+      div.style.opacity = "1";
+      let baseY = window.innerHeight * 0.33;
+      let left = scorePopSide > 0 ? '65vw' : '15vw';
+      div.style.left = left;
+      div.style.top = baseY + 'px';
+      div.style.borderColor = pts > 1 ? "#00ff75" : "#fff";
+      div.style.color = pts > 1 ? "#00ffdc" : "#fff849";
+      document.body.appendChild(div);
+      setTimeout(()=>{div.style.opacity=0}, 800);
+      setTimeout(()=>{if(div.parentNode)div.parentNode.removeChild(div);}, 1300);
+      scorePopSide *= -1;
+    }
+
+    // --- Particle Burst
+    let particles = [];
+    function spawnParticleBurst(x, y, z, n, colorSet) {
+      for (let i = 0; i < n; i++) {
+        let angle = Math.random()*2*Math.PI;
+        let speed = 0.11 + Math.random()*0.12;
+        let dx = Math.cos(angle)*speed;
+        let dz = Math.sin(angle)*speed;
+        let dy = 0.11 + Math.random()*0.12;
+        let color = colorSet[Math.floor(Math.random()*colorSet.length)];
+        particles.push({
+          x, y, z,
+          dx, dy, dz,
+          color,
+          t: 0,
+          life: 18 + Math.floor(Math.random()*14)
+        });
+      }
+    }
+    function drawParticles() {
+      let ctx = renderer.getContext();
+      for (let i = particles.length-1; i >= 0; i--) {
+        let p = particles[i];
+        let [sx, sy] = toScreenCoords(p.x, p.y, p.z);
+        ctx.save();
+        ctx.globalAlpha = 1 - p.t/p.life;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 9 - 5*p.t/p.life, 0, 2*Math.PI);
+        ctx.fillStyle = p.color;
+        ctx.shadowBlur = 13;
+        ctx.shadowColor = "#fff";
+        ctx.fill();
+        ctx.restore();
+        p.x += p.dx;
+        p.y += p.dy;
+        p.z += p.dz;
+        p.dy -= 0.008;
+        p.t++;
+        if (p.t > p.life) particles.splice(i, 1);
+      }
+    }
+    function toScreenCoords(x, y, z) {
+      let v = new THREE.Vector3(x, y, z);
+      v.project(camera);
+      return [
+        Math.round((v.x + 1)/2 * window.innerWidth),
+        Math.round((-v.y + 1)/2 * window.innerHeight)
+      ];
+    }
+
+    function drawPowerBar(power) {
+      powerCtx.clearRect(0,0,powerCanvas.width,powerCanvas.height);
+      let w = powerCanvas.width-38, h = 22, x = 19, y = 24;
+      powerCtx.save();
+      powerCtx.strokeStyle = "#fff048";
+      powerCtx.lineWidth = 6;
+      powerCtx.strokeRect(x, y, w, h);
+      let smin = x + w * sweetSpotMin;
+      let smax = x + w * sweetSpotMax;
+      powerCtx.fillStyle = "#ffe96b";
+      powerCtx.globalAlpha = 0.67;
+      powerCtx.fillRect(smin, y, smax-smin, h);
+      powerCtx.globalAlpha = 1.0;
+      let grad = powerCtx.createLinearGradient(x, y, x+w, y+h);
+      grad.addColorStop(0, "#00ff75");
+      grad.addColorStop(0.5, "#fff048");
+      grad.addColorStop(1, "#ff5858");
+      powerCtx.fillStyle = grad;
+      powerCtx.fillRect(x, y, w*power, h);
+      let px = x + w*power;
+      powerCtx.beginPath();
+      powerCtx.arc(px, y+h/2, 16, 0, 2*Math.PI);
+      powerCtx.fillStyle = "#fff048";
+      powerCtx.shadowBlur = 7;
+      powerCtx.shadowColor = "#00ff75";
+      powerCtx.fill();
+      powerCtx.restore();
+      powerCtx.font = '15px "Press Start 2P", monospace';
+      powerCtx.fillStyle = "#0036cc";
+      powerCtx.textAlign = "center";
+      powerCtx.fillText("POWER", powerCanvas.width/2, 20);
+      powerCtx.font = '11px "Press Start 2P", monospace';
+      powerCtx.fillStyle = "#222";
+      powerCtx.fillText("SWEET SPOT!", (smin+smax)/2, y+h-2);
+    }
+
+    function resetBall() {
+      setTimeout(() => {
+        ball.position.set(0, 1.5, 2);
+        velocity.set(0, 0, 0);
+        isShot = false;
+        awaitingPower = false;
+        scoredLastShot = false;
+        fallingThrough = false;
+        inNet = false;
+        floorBounce = false;
+        showUI();
+      }, 730);
+    }
+
+    // --- Only handle streak in takeShot; scoring after ball passes through rim ---
+    function takeShot(powerValue) {
+      let swish = (powerValue >= sweetSpotMin && powerValue <= sweetSpotMax);
+      let baseZ = -0.183 - 0.121*powerValue;
+      let baseY = 0.12 + 0.182*powerValue;
+      velocity.set(0, baseY, baseZ);
+      isShot = true;
+      awaitingPower = false;
+      hideUI();
+
+      // Only update streak here, not score!
+      if(swish){
+        streak++;
+      } else if (Math.abs(powerValue - (sweetSpotMin+sweetSpotMax)/2) < 0.14) {
+        streak++;
+      } else {
+        streak = 0;
+      }
+      streakDisplay.textContent = streak;
+      // Mark if this shot is "eligible" to score
+      scoredLastShot = (swish || Math.abs(powerValue - (sweetSpotMin+sweetSpotMax)/2) < 0.14) ? 1 : 0;
+    }
+
+    function checkBackboardCollision() {
+      const bb = { z: -12, x1: -1.62, x2: 1.62, y1: 3.92, y2: 5.94 };
+      if (velocity.z <= 0) return;
+      if (
+        ball.position.z < bb.z + 0.17 &&
+        ball.position.z > bb.z - 0.22 &&
+        ball.position.x > bb.x1 && ball.position.x < bb.x2 &&
+        ball.position.y > bb.y1 && ball.position.y < bb.y2
+      ) {
+        velocity.z *= -0.7;
+        velocity.y *= 0.93 + (Math.random()-0.5)*0.10;
+        ball.position.z = bb.z + 0.17;
+      }
+    }
+
+    function checkRimBounce() {
+      if (
+        Math.abs(ball.position.z - rimPlane.z) < 0.14 &&
+        ball.position.y < rimPlane.y + 0.29 &&
+        Math.abs(ball.position.x) < rimPlane.r + 0.16 &&
+        velocity.y < 0
+      ) {
+        velocity.y *= -0.44 - Math.random()*0.07;
+        velocity.x *= 0.32 + Math.random()*0.13;
+        velocity.z *= 0.73 + Math.random()*0.14;
+      }
+    }
+
+    function updateBallPhysics() {
+      velocity.y -= 0.008;
+      ball.position.add(velocity);
+
+      // Only now: when the ball physically falls through, add to score!
+      if (scoredLastShot && !fallingThrough && ball.position.y < 3.7 && ball.position.z < -11.3 && ball.position.z > -11.7) {
+        fallingThrough = true;
+        inNet = true;
+
+        let pts = (streak >= 3) ? 2 : 1;
+        score += pts;
+        scoreDisplay.textContent = score;
+
+        // Ensure ball always falls fast after score (no slow bug)
+        velocity.set(
+          (Math.random() - 0.5) * 0.01,
+          -0.38 - Math.abs(Math.random()*0.07), // Always strongly negative (fast drop)
+          -0.015 + (Math.random()-0.5)*0.012
+        );
+        spawnParticleBurst(0, 4.08, -11.5, 16 + 8*pts,
+          ["#fff048","#00ff75","#006BB6","#F58426","#fff","#e0e0e0"]);
+        spawnScorePop(pts);
+      }
+      if (fallingThrough && !floorBounce && ball.position.y <= 0.32) {
+        velocity.y *= -0.47;
+        velocity.x *= 0.77;
+        velocity.z *= 0.85;
+        floorBounce = true;
+        ball.position.y = 0.32;
+      }
+      if (floorBounce && Math.abs(velocity.y) < 0.015 && ball.position.y <= 0.35) {
+        velocity.set(0,0,0);
+        setTimeout(resetBall, 500);
+      }
+      // Only reset streak if shot was a miss!
+      if (ball.position.y < 0.11 || ball.position.z < -15) {
+        if (!fallingThrough) {
+          streak = 0;
+          streakDisplay.textContent = streak;
+        }
+        resetBall(true);
+      }
+    }
+
+    function tap() {
+      if (!gameStarted) return;
+      if (isShot) return;
+      if (!awaitingPower) {
+        awaitingPower = true;
+        powerActive = true;
+        powerAnim = Math.random()*0.13+0.23;
+        powerDir = 1;
+      } else {
+        awaitingPower = false;
+        powerActive = false;
+        takeShot(powerLevel);
+      }
+    }
+    window.addEventListener("mousedown", tap);
+    window.addEventListener("touchstart", function(e){ e.preventDefault(); tap(); }, {passive:false});
+
+    function setCamera() {
+      if(window.innerHeight > window.innerWidth){
+        camera.position.set(0, 2.1, 6.5);
+        camera.lookAt(0, 4.45, -11.5);
+      } else {
+        camera.position.set(0, 1.7, 7.9);
+        camera.lookAt(0, 4.1, -11.5);
+      }
+    }
+    setCamera();
+
+    function resizeUI() {
+      setTimeout(()=>{
+        powerCanvas.width = Math.floor(window.innerWidth * 0.76);
+        if (powerCanvas.width > 390) powerCanvas.width = 390;
+        powerCanvas.height = 54;
+      }, 10);
+    }
+    window.addEventListener('resize', ()=>{
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      setCamera();
+      resizeUI();
+    });
+
+    function hideUI() {
+      powerCanvas.style.opacity = "0";
+      document.getElementById("retroUI").style.opacity = "0.7";
+      document.getElementById("instructions").style.opacity = "0";
+    }
+    function showUI() {
+      powerCanvas.style.opacity = "1";
+      document.getElementById("retroUI").style.opacity = "1";
+      document.getElementById("instructions").style.opacity = "1";
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (powerActive && awaitingPower && !isShot) {
+        powerAnim += 0.0092 * powerDir;
+        if (powerAnim > 1) { powerAnim = 1; powerDir = -1; }
+        if (powerAnim < 0.18) { powerAnim = 0.18; powerDir = 1; }
+        drawPowerBar(powerAnim);
+        powerLevel = powerAnim;
+      } else {
+        powerCtx.clearRect(0,0,powerCanvas.width,powerCanvas.height);
+      }
+      if (isShot) {
+        updateBallPhysics();
+        checkRimBounce();
+        checkBackboardCollision();
+      }
+      renderer.render(scene, camera);
+      drawParticles();
+    }
+
+    resizeUI();
+    animate();
+    resetBall();
+
+  </script>
+</body>
+</html>

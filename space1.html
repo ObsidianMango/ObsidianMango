@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>✨ Starfield Hyperdrive</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+    canvas {
+      display: block;
+    }
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .speed-button {
+      padding: 15px 30px;
+      font-size: 20px;
+      border: none;
+      cursor: pointer;
+      color: white;
+      border-radius: 5px;
+      transition: 0.3s;
+      margin: 0 10px;
+    }
+    .speed-button.active {
+      box-shadow: 0 0 15px white;
+    }
+    /* Mode-specific button colors */
+    .speed-button[data-mode="light"] {
+      background: green;
+    }
+    .speed-button[data-mode="ridiculous"] {
+      background: yellow;
+      color: black;
+    }
+    .speed-button[data-mode="ludicrous"] {
+      background: red;
+    }
+    .speed-button[data-mode="plaid"] {
+      background: repeating-linear-gradient(
+        45deg,
+        #ff69b4,
+        #ff69b4 5px,
+        #8a2be2 5px,
+        #8a2be2 10px
+      );
+    }
+  </style>
+</head>
+<body>
+  <canvas id="starfield"></canvas>
+  <div id="controls">
+    <button class="speed-button active" data-mode="light">Light Speed</button>
+    <button class="speed-button" data-mode="ridiculous">Ridiculous Speed</button>
+    <button class="speed-button" data-mode="ludicrous">Ludicrous Speed</button>
+    <button class="speed-button" data-mode="plaid">Plaid</button>
+  </div>
+  <script>
+    const canvas = document.getElementById("starfield");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // Mode settings with multipliers
+    const modeSettings = {
+      light: { multiplier: 1 },
+      ridiculous: { multiplier: 5 },
+      ludicrous: { multiplier: 10 },
+      plaid: { multiplier: 20 }
+    };
+    let currentMode = "light";
+    let speedMultiplier = modeSettings[currentMode].multiplier;
+    const baseSpeed = 2;
+    const numStars = 300;
+    let stars = [];
+
+    class Star {
+      constructor() {
+        this.reset();
+      }
+      reset() {
+        this.x = (Math.random() - 0.5) * canvas.width;
+        this.y = (Math.random() - 0.5) * canvas.height;
+        this.z = Math.random() * canvas.width;
+      }
+      update() {
+        this.z -= baseSpeed * speedMultiplier;
+        if (this.z < 1) this.reset();
+      }
+      draw() {
+        let sx = (this.x / this.z) * (canvas.width / 2) + canvas.width / 2;
+        let sy = (this.y / this.z) * (canvas.height / 2) + canvas.height / 2;
+        let r = (1 - this.z / canvas.width) * 3;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx.fillStyle = "white";
+        ctx.fill();
+      }
+    }
+
+    for (let i = 0; i < numStars; i++) {
+      stars.push(new Star());
+    }
+
+    // New, layered plaid overlay to simulate racing toward a constantly forming plaid grid.
+    function drawPlaidOverlay() {
+      const t = Date.now();
+      const layers = 5; // number of layers for a deep, dynamic effect
+      const baseCellSize = 50;
+      // Colors for the plaid squares with transparency.
+      const colors = [
+        "rgba(255, 0, 0, 0.15)",
+        "rgba(0, 255, 0, 0.15)",
+        "rgba(0, 0, 255, 0.15)",
+        "rgba(255, 255, 0, 0.15)"
+      ];
+
+      for (let i = 0; i < layers; i++) {
+        ctx.save();
+        // Each layer zooms and rotates slightly differently.
+        // The zoom increases rapidly to simulate rushing forward.
+        const zoomSpeed = 0.005;
+        const zoom = 1 + ((t * zoomSpeed + i * 0.5) % 20);
+        const rotation = ((t * 0.0008) + i * 0.3) % (Math.PI * 2);
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(rotation);
+        ctx.scale(zoom, zoom);
+
+        // Each layer has its own offset to add dynamic movement.
+        const offset = ((t * 0.1) + i * 30) % baseCellSize;
+        // Calculate grid dimensions to ensure complete coverage.
+        const gridWidth = canvas.width / zoom + baseCellSize * 2;
+        const gridHeight = canvas.height / zoom + baseCellSize * 2;
+        const startX = -gridWidth / 2 - offset;
+        const startY = -gridHeight / 2 - offset;
+        const endX = gridWidth / 2 + offset;
+        const endY = gridHeight / 2 + offset;
+
+        for (let x = startX; x < endX; x += baseCellSize) {
+          for (let y = startY; y < endY; y += baseCellSize) {
+            const index = ((Math.floor(x / baseCellSize) + Math.floor(y / baseCellSize)) % colors.length + colors.length) % colors.length;
+            ctx.fillStyle = colors[index];
+            ctx.fillRect(x, y, baseCellSize, baseCellSize);
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    function animate() {
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      stars.forEach(star => {
+        star.update();
+        star.draw();
+      });
+      if (currentMode === "plaid") {
+        drawPlaidOverlay();
+      }
+      requestAnimationFrame(animate);
+    }
+
+    const speedButtons = document.querySelectorAll(".speed-button");
+    speedButtons.forEach(button => {
+      button.addEventListener("click", () => {
+        currentMode = button.getAttribute("data-mode");
+        speedMultiplier = modeSettings[currentMode].multiplier;
+        speedButtons.forEach(btn => btn.classList.remove("active"));
+        button.classList.add("active");
+      });
+    });
+
+    window.addEventListener("resize", () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+
+    animate();
+  </script>
+</body>
+</html>

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Claw Machine – Tri-Claw, Emoji-Burst Prize, 3D Trophy Room</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    html, body {height: 100%; margin: 0; padding: 0; overflow: hidden; background: #131f23;}
+    #container {width:100vw;height:100vh;}
+    #ui {
+      position: fixed; left: 0; right: 0; bottom: 22px;
+      display: flex; justify-content: center; gap: 18px; z-index: 9;
+      pointer-events: none; flex-wrap: wrap;
+    }
+    .btn {pointer-events: auto; background: #ffe066; border: none; border-radius: 20px; padding: 13px 28px; font-size: 1.15rem; font-weight: bold; color: #57490a; cursor: pointer; box-shadow: 0 2px 10px #2226; transition: transform 0.1s; user-select: none;}
+    .btn:active { transform: scale(0.97);}
+    .dpad {display: grid; grid-template: "a b c" "d e f" "g h i"; gap: 3px; margin-right: 14px; pointer-events: auto; align-items: center; justify-items: center;}
+    .dpad-btn {width: 38px; height: 38px; font-size: 1.3rem; border-radius: 50%; padding: 0; min-width: 0; min-height: 0; box-shadow: 0 1px 5px #3337; background: #f4ecd1; color: #474318; border: 2px solid #b7a138; font-weight: 600; cursor: pointer;}
+    #prizeMsg {position: fixed; left: 0; right: 0; top: 36px; text-align: center; font-size: 2rem; color: #fffbe8; text-shadow: 0 2px 10px #000a; font-weight: 800; letter-spacing: 0.07em; opacity: 0; z-index: 99; transition: opacity 0.3s; pointer-events: none;}
+    #prizeMsg.show {opacity: 1;}
+    #showPrizesBtn {
+      position:fixed;right:16px;top:18px;z-index:1000;
+      padding:11px 22px;font-size:1.14rem;border-radius:13px;
+      background:#ffe066;color:#70550e;border:none;box-shadow:0 2px 12px #0003;
+      font-weight:700;cursor:pointer;
+    }
+    #prizeTrophyView {
+      display:none;position:fixed;z-index:1200;left:0;top:0;width:100vw;height:100vh;
+      background:rgba(18,22,25,0.97);align-items:center;justify-content:center;flex-direction:column;
+    }
+    #prizeTrophyView button {
+      position:absolute;top:18px;right:28px;font-size:2rem;background:none;border:none;color:#fff;cursor:pointer;z-index:1220;
+    }
+    @media (max-width:600px){
+      .btn{font-size:1.02rem;padding:10px 13px;}
+      .dpad-btn{width:32px;height:32px;font-size:1.09rem;}
+      #showPrizesBtn{padding:7px 12px;font-size:1rem;}
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <div id="ui">
+    <div class="dpad">
+      <button class="dpad-btn" id="upBtn"    style="grid-area: b;">&#8593;</button>
+      <button class="dpad-btn" id="leftBtn"  style="grid-area: d;">&#8592;</button>
+      <button class="dpad-btn" id="rightBtn" style="grid-area: f;">&#8594;</button>
+      <button class="dpad-btn" id="downBtn"  style="grid-area: h;">&#8595;</button>
+    </div>
+    <button class="btn" id="grabBtn">Grab!</button>
+  </div>
+  <button id="showPrizesBtn">Show Prizes</button>
+  <div id="prizeMsg"></div>
+  <div id="prizeTrophyView"></div>
+  <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
+  <script>
+  // --- CONFIG ---
+  const EMOJIS = [
+    "🦖","🍕","🍔","🌭","🍩","🍒","🧀","🐙","🐸","🦄","🐧","🐲","🥒","🍇","🥑",
+    "🥨","🦀","🎲","🎮","🧸","🎈","🌈","💎","🌶️","🍉","🍌","🤠","🥳","😻","👾","🍔","🍩"
+  ];
+  const BALL_RADIUS = 0.25, CLAW_FINGER_RADIUS = 0.19, BALL_COUNT = 26;
+  const CLAW_X_LIMIT = 1.05, CLAW_Z_LIMIT = 0.8, CLAW_Y_HOME = 2.7, CLAW_Y_DROP = 0.58;
+  const CLAW_SPEED = 0.048, CLAW_VERT_SPEED = 0.039, CLAW_Z_SPEED = 0.045, CLAW_GRAB_DURATION = 350;
+  const FINGER_COUNT = 3;
+  const FINGER_OPEN_LENGTH = 0.35, FINGER_CLOSED_LENGTH = 0.14;
+  const PRIZE_X = 1.04, PRIZE_Z = 0.79;
+  const TUBE_RADIUS = 0.33, TUBE_HEIGHT = 1.14, TUBE_THICK = 0.06, TUBE_Y = TUBE_HEIGHT/2-0.02;
+
+  // --- THREE.js setup ---
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a2228);
+  const camera = new THREE.PerspectiveCamera(55, window.innerWidth/window.innerHeight, 0.05, 100);
+  camera.position.set(0, 3.9, 6.1); camera.lookAt(0,1.6,0);
+  const renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  document.getElementById('container').appendChild(renderer.domElement);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.95));
+  let dLight = new THREE.DirectionalLight(0xfffbbe, 0.8);
+  dLight.position.set(0,6,3); scene.add(dLight);
+
+  // --- Physics setup ---
+  const world = new CANNON.World();
+  world.gravity.set(0,-9.8,0);
+  world.broadphase = new CANNON.NaiveBroadphase();
+  world.solver.iterations = 13;
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(2.7,0.13,2.4), new THREE.MeshPhongMaterial({color:0x426077}));
+  floor.position.y = -0.06; scene.add(floor);
+  const floorBody = new CANNON.Body({mass:0});
+  floorBody.addShape(new CANNON.Box(new CANNON.Vec3(1.35,0.07,1.2)));
+  floorBody.position.set(0,0,0); world.addBody(floorBody);
+  function makeWall(x,y,z,sx,sy,sz) {
+    let mesh = new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz), new THREE.MeshPhongMaterial({color:0x688bad,transparent:true,opacity:0.34}));
+    mesh.position.set(x,y,z); scene.add(mesh);
+    let body = new CANNON.Body({mass:0});
+    body.addShape(new CANNON.Box(new CANNON.Vec3(sx/2,sy/2,sz/2)));
+    body.position.set(x,y,z); world.addBody(body);
+  }
+  makeWall(-1.31,1.23,0, 0.07,2.5,2.4);
+  makeWall( 1.31,1.23,0, 0.07,2.5,2.4);
+  makeWall(0,1.23,-1.13, 2.6,2.5,0.07);
+  makeWall(0,1.05,1.13, 2.6,2.18,0.07);
+
+  // --- Round Glass Tube as Physical Chute ---
+  const tubeGeometry = new THREE.CylinderGeometry(TUBE_RADIUS, TUBE_RADIUS, TUBE_HEIGHT, 46, 1, true);
+  const tubeMaterial = new THREE.MeshPhongMaterial({color:0x91bbfa, transparent:true, opacity:0.24, side:THREE.DoubleSide});
+  const tubeMesh = new THREE.Mesh(tubeGeometry, tubeMaterial);
+  tubeMesh.position.set(PRIZE_X, TUBE_Y, PRIZE_Z);
+  scene.add(tubeMesh);
+  // Top/bottom rings
+  const ringGeom = new THREE.TorusGeometry(TUBE_RADIUS+0.006, 0.023, 13, 34);
+  const ringMat = new THREE.MeshPhongMaterial({color:0xffee88, shininess: 65});
+  const ringMeshTop = new THREE.Mesh(ringGeom, ringMat);
+  ringMeshTop.position.set(PRIZE_X, TUBE_Y+TUBE_HEIGHT/2-0.013, PRIZE_Z); ringMeshTop.rotation.x = Math.PI/2;
+  const ringMeshBot = new THREE.Mesh(ringGeom, ringMat);
+  ringMeshBot.position.set(PRIZE_X, TUBE_Y-TUBE_HEIGHT/2+0.013, PRIZE_Z); ringMeshBot.rotation.x = Math.PI/2;
+  scene.add(ringMeshTop); scene.add(ringMeshBot);
+  // Physics: invisible tube (thin vertical wall cylinders)
+  const tubeSegments = 12;
+  const tubeAngleStep = 2*Math.PI/tubeSegments;
+  for(let i=0;i<tubeSegments;i++) {
+    let angle = i*tubeAngleStep;
+    let cx = PRIZE_X+Math.cos(angle)*(TUBE_RADIUS-TUBE_THICK/2-0.015);
+    let cz = PRIZE_Z+Math.sin(angle)*(TUBE_RADIUS-TUBE_THICK/2-0.015);
+    let tubeWallBody = new CANNON.Body({mass:0});
+    tubeWallBody.addShape(new CANNON.Box(new CANNON.Vec3(TUBE_THICK/2, TUBE_HEIGHT/2, 0.017)));
+    tubeWallBody.position.set(cx, TUBE_Y, cz);
+    tubeWallBody.quaternion.setFromEuler(0, -angle, 0);
+    world.addBody(tubeWallBody);
+  }
+
+  // --- Balls ---
+  let balls = [];
+  let fadingBalls = [];
+  let emojiBursts = [];
+  let wonPrizes = [];
+  function getRandomColor() {
+    let h = Math.floor(Math.random()*360);
+    return `hsl(${h},88%,62%)`;
+  }
+  function createColorBall(x, z, emoji) {
+    let mat = new THREE.MeshPhongMaterial({color: getRandomColor(), shininess:60, transparent:true, opacity:1});
+    let mesh = new THREE.Mesh(new THREE.SphereGeometry(BALL_RADIUS, 32, 24), mat);
+    mesh.position.set(x, 0.31 + BALL_RADIUS, z); scene.add(mesh);
+    let body = new CANNON.Body({mass:0.17, position: new CANNON.Vec3(x,0.31+BALL_RADIUS,z), shape: new CANNON.Sphere(BALL_RADIUS), linearDamping: 0.35, angularDamping:0.44 });
+    body.allowSleep = true; body.position.set(x,0.31+BALL_RADIUS,z); world.addBody(body);
+    balls.push({mesh, body, grabbed: false, beingHeld: false, fading: false, emoji: emoji});
+  }
+  function setupBalls() {
+    balls.forEach(b=>{scene.remove(b.mesh); world.removeBody(b.body);});
+    balls = []; let used = [];
+    let count = BALL_COUNT;
+    let triesTotal = 0;
+    for(let i=0; i<count; ++i) {
+      let tries=0, x=0,z=0, ok=false;
+      while(tries<180 && triesTotal < count*180){
+        x = (Math.random()-0.5)*1.5; z = (Math.random()-0.5)*1.15;
+        let chuteDist = Math.sqrt((x-PRIZE_X)**2 + (z-PRIZE_Z)**2);
+        if (chuteDist < (TUBE_RADIUS-0.03)) { tries++; triesTotal++; continue; }
+        if(!used.some(u=>(Math.abs(u.x-x)<BALL_RADIUS*1.15&&Math.abs(u.z-z)<BALL_RADIUS*0.50))) { ok=true; break;}
+        tries++; triesTotal++;
+      }
+      if (!ok) continue;
+      used.push({x,z});
+      createColorBall(x, z, EMOJIS[i % EMOJIS.length]);
+    }
+  }
+
+  // --- Claw ---
+  let clawX = 0, targetClawX = 0;
+  let clawY = CLAW_Y_HOME, targetClawY = CLAW_Y_HOME;
+  let clawZ = 0, targetClawZ = 0;
+  let clawOpen = 1, targetClawOpen = 1;
+  let clawGrabbing = false, heldBall = null;
+  let lastPrizeEmoji = "🦖";
+  let clawFingers = [];
+  const clawGroup = new THREE.Group();
+
+  function buildClaw() {
+    while(clawGroup.children.length) clawGroup.remove(clawGroup.children[0]);
+    let rail = new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,2.11,20), new THREE.MeshPhongMaterial({color:0xe0e0e0}));
+    rail.position.set(0, 3.05, 0); rail.rotation.z = Math.PI/2; clawGroup.add(rail);
+    let rail2 = new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,1.51,20), new THREE.MeshPhongMaterial({color:0xf2f2ea}));
+    rail2.position.set(0, 3.05, 0); rail2.rotation.x = Math.PI/2; clawGroup.add(rail2);
+    let rod = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,1.8,14), new THREE.MeshPhongMaterial({color:0xcfcfcf}));
+    rod.position.set(0,0.93,0); clawGroup.add(rod);
+    let head = new THREE.Mesh(new THREE.SphereGeometry(0.16,22,16), new THREE.MeshPhongMaterial({color:0xa9a9a9, shininess:70}));
+    head.position.set(0,0,0); clawGroup.add(head);
+    clawFingers = [];
+    for(let i=0; i<FINGER_COUNT; i++){
+      let angle = i * (2*Math.PI / FINGER_COUNT);
+      let fingerGroup = new THREE.Group();
+      let finger = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.019,0.29,12,1), new THREE.MeshPhongMaterial({color:0xb0b0b0, shininess:90}));
+      finger.position.y = -0.145;
+      fingerGroup.add(finger);
+      fingerGroup.position.set(Math.sin(angle)*FINGER_OPEN_LENGTH, -0.12, Math.cos(angle)*FINGER_OPEN_LENGTH);
+      fingerGroup.userData = { baseAngle: angle };
+      clawGroup.add(fingerGroup);
+      clawFingers.push(fingerGroup);
+    }
+    clawGroup.position.set(clawX, clawY, clawZ);
+    scene.add(clawGroup);
+  }
+  buildClaw();
+  function updateClawVisual() {
+    clawGroup.position.set(clawX, clawY, clawZ);
+    let openL = clawOpen * FINGER_OPEN_LENGTH + (1-clawOpen)*FINGER_CLOSED_LENGTH;
+    for(let i=0;i<FINGER_COUNT;i++) {
+      let a = clawFingers[i].userData.baseAngle;
+      clawFingers[i].position.set(Math.sin(a)*openL, -0.12, Math.cos(a)*openL);
+    }
+  }
+  function tickClawTween() {
+    clawX += (targetClawX - clawX) * CLAW_SPEED;
+    clawY += (targetClawY - clawY) * CLAW_VERT_SPEED;
+    clawZ += (targetClawZ - clawZ) * CLAW_Z_SPEED;
+    clawOpen += (targetClawOpen - clawOpen) * 0.19;
+  }
+  function resetClaw() {
+    targetClawX = clawX = 0; targetClawY = clawY = CLAW_Y_HOME;
+    targetClawZ = clawZ = 0; targetClawOpen = clawOpen = 1;
+    clawGrabbing = false; heldBall = null;
+  }
+  function moveClaw(dx, dz) {
+    if(clawGrabbing) return;
+    targetClawX = Math.max(-CLAW_X_LIMIT, Math.min(CLAW_X_LIMIT, targetClawX + dx*0.36));
+    targetClawZ = Math.max(-CLAW_Z_LIMIT, Math.min(CLAW_Z_LIMIT, targetClawZ + dz*0.32));
+  }
+
+  // Explode the *prize* emoji at pos
+  function explodeEmojisAt(pos, emoji) {
+    const burst = [];
+    const burstCount = 14 + Math.floor(Math.random()*3);
+    for(let i=0; i<burstCount; ++i) {
+      let cnv = document.createElement("canvas"); cnv.width=cnv.height=64;
+      let ctx = cnv.getContext("2d");
+      ctx.font = "38px serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(emoji,32,38);
+      let tex = new THREE.CanvasTexture(cnv);
+      let mat = new THREE.SpriteMaterial({map:tex,transparent:true});
+      let sprite = new THREE.Sprite(mat);
+      sprite.position.set(pos.x, pos.y, pos.z);
+      let ang = Math.random()*Math.PI*2;
+      let v = 0.34 + Math.random()*0.45;
+      sprite.vel = {
+        x: Math.cos(ang) * v * (0.88+0.22*Math.random()),
+        y: Math.random()*0.41+0.20,
+        z: Math.sin(ang) * v * (0.88+0.22*Math.random())
+      };
+      sprite.t0 = performance.now();
+      sprite.material.opacity = 1;
+      scene.add(sprite);
+      burst.push(sprite);
+    }
+    emojiBursts.push(burst);
+  }
+
+  // --- Claw Sequence ---
+  function doClawSequence() {
+    if(clawGrabbing) return;
+    clawGrabbing = true;
+    targetClawY = CLAW_Y_DROP;
+    setTimeout(()=>{
+      targetClawOpen = 1;
+      setTimeout(()=>{
+        targetClawOpen = 0;
+        setTimeout(()=>{
+          let nearest = null, minDist=99;
+          balls.forEach(b=>{
+            if(b.grabbed) return;
+            let rel = new THREE.Vector3(b.body.position.x-clawX, b.body.position.y-(clawY-0.19), b.body.position.z-clawZ);
+            let dxy = Math.sqrt(rel.x*rel.x + rel.z*rel.z);
+            if(rel.y < 0.19 && rel.y > -0.22 && dxy < BALL_RADIUS * 1.15) {
+              let dist = Math.abs(rel.y) + dxy;
+              if(dist < minDist) { minDist = dist; nearest = b; }
+            }
+          });
+          if(nearest) {
+            nearest.grabbed = true; heldBall = nearest;
+            nearest.beingHeld = true;
+            nearest.body.velocity.set(0,0,0);
+            nearest.body.position.set(clawX, clawY-0.19, clawZ);
+            nearest.mesh.position.set(clawX, clawY-0.19, clawZ);
+            nearest.body.type = CANNON.Body.KINEMATIC;
+          }
+          setTimeout(()=>{
+            targetClawY = CLAW_Y_HOME;
+            setTimeout(()=>{
+              let startX = clawX, startZ = clawZ;
+              let endX = PRIZE_X, endZ = PRIZE_Z;
+              let moveTime = 660;
+              let startTime = performance.now();
+              function moveClawOverTube() {
+                let t = (performance.now() - startTime)/moveTime;
+                if (t > 1) t = 1;
+                clawX = startX + (endX-startX)*t;
+                clawZ = startZ + (endZ-startZ)*t;
+                targetClawX = clawX;
+                targetClawZ = clawZ;
+                if (heldBall) {
+                  heldBall.body.position.set(clawX, clawY-0.19, clawZ);
+                  heldBall.mesh.position.set(clawX, clawY-0.19, clawZ);
+                }
+                if (t < 1) requestAnimationFrame(moveClawOverTube);
+                else setTimeout(()=>{
+                  // Drop: Open claw and let physics take over!
+                  targetClawOpen = 1;
+                  if(heldBall) {
+                    lastPrizeEmoji = heldBall.emoji;
+                    heldBall.body.type = CANNON.Body.DYNAMIC;
+                    heldBall.beingHeld = false;
+                    heldBall.grabbed = false;
+                    setTimeout(()=>showPrizeRandomEmoji(), 800);
+                    heldBall = null;
+                  }
+                  setTimeout(()=>{clawGrabbing = false;}, 900);
+                }, 400);
+              }
+              moveClawOverTube();
+            }, 340);
+          }, 220);
+        }, CLAW_GRAB_DURATION);
+      }, 230);
+    }, 190);
+  }
+
+  function showPrizeRandomEmoji() {
+    const prizeMsg = document.getElementById('prizeMsg');
+    let emoji = lastPrizeEmoji || '🦖';
+    prizeMsg.innerHTML = `You caught: <span style="font-size:2.5rem">${emoji}</span>`;
+    prizeMsg.classList.add('show');
+    wonPrizes.push(emoji);
+    setTimeout(()=>prizeMsg.classList.remove('show'), 2000);
+  }
+
+  // --- UI HANDLERS ---
+  document.getElementById('leftBtn').onclick  = ()=>moveClaw(-1,0);
+  document.getElementById('rightBtn').onclick = ()=>moveClaw(1,0);
+  document.getElementById('upBtn').onclick    = ()=>moveClaw(0,-1);
+  document.getElementById('downBtn').onclick  = ()=>moveClaw(0,1);
+  document.getElementById('grabBtn').onclick  = doClawSequence;
+  window.addEventListener('keydown',e=>{
+    if(e.repeat)return;
+    if(e.key==='ArrowLeft'||e.key==='a') moveClaw(-1,0);
+    if(e.key==='ArrowRight'||e.key==='d') moveClaw(1,0);
+    if(e.key==='ArrowUp'||e.key==='w') moveClaw(0,-1);
+    if(e.key==='ArrowDown'||e.key==='s') moveClaw(0,1);
+    if(e.key===' '||e.key==='Enter') doClawSequence();
+  });
+  let lastTap=0, touchX=0, touchY=0;
+  renderer.domElement.addEventListener('touchstart',e=>{
+    if(e.touches.length==1) {
+      touchX = e.touches[0].clientX;
+      touchY = e.touches[0].clientY;
+    }
+  });
+  renderer.domElement.addEventListener('touchend',e=>{
+    let dx = e.changedTouches[0].clientX - touchX;
+    let dy = e.changedTouches[0].clientY - touchY;
+    if(Math.abs(dx)>40 || Math.abs(dy)>40) {
+      if(Math.abs(dx)>Math.abs(dy)) moveClaw(dx>0 ? 1 : -1, 0);
+      else moveClaw(0, dy>0 ? 1 : -1);
+    } else {
+      let now=Date.now();
+      if(now-lastTap<340) doClawSequence();
+      lastTap=now;
+    }
+  });
+  window.addEventListener('resize',()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // Resize trophy room if open
+    if(trophyRenderer && trophyCamera){
+      trophyRenderer.setSize(window.innerWidth, window.innerHeight);
+      trophyCamera.aspect = window.innerWidth / window.innerHeight;
+      trophyCamera.updateProjectionMatrix();
+    }
+  });
+
+  // --- PRIZE TROPHY ROOM UI ---
+  const showPrizesBtn = document.getElementById('showPrizesBtn');
+  const prizeTrophyView = document.getElementById('prizeTrophyView');
+  let trophyRenderer, trophyScene, trophyCamera, trophySprites = [], trophyAnimId, isTrophyView = false;
+
+  showPrizesBtn.onclick = function() {
+    isTrophyView = !isTrophyView;
+    prizeTrophyView.style.display = isTrophyView ? "flex" : "none";
+    if (isTrophyView) {
+      startTrophyRoom();
+    } else {
+      stopTrophyRoom();
+    }
+  };
+
+  function startTrophyRoom() {
+    // Clear previous stuff
+    prizeTrophyView.innerHTML = '';
+    // Add close btn
+    let closeBtn = document.createElement('button');
+    closeBtn.textContent = "✕";
+    closeBtn.onclick = ()=>{ isTrophyView=false; prizeTrophyView.style.display="none"; stopTrophyRoom(); };
+    prizeTrophyView.appendChild(closeBtn);
+
+    // Create Three.js renderer/camera/scene for trophy
+    trophyRenderer = new THREE.WebGLRenderer({alpha:true,antialias:true});
+    trophyRenderer.setSize(window.innerWidth, window.innerHeight);
+    prizeTrophyView.appendChild(trophyRenderer.domElement);
+
+    trophyScene = new THREE.Scene();
+    trophyCamera = new THREE.PerspectiveCamera(65, window.innerWidth/window.innerHeight, 0.1, 50);
+    trophyCamera.position.set(0,0,6);
+    trophyCamera.lookAt(0,0,0);
+
+    // Lights
+    trophyScene.add(new THREE.AmbientLight(0xffffff, 0.84));
+    let l = new THREE.DirectionalLight(0xffffe0, 0.43); l.position.set(4,5,7); trophyScene.add(l);
+
+    // Make emoji sprites in a ring
+    trophySprites = [];
+    const N = wonPrizes.length;
+    for(let i=0;i<N;i++){
+      let emoji = wonPrizes[i];
+      let cnv = document.createElement("canvas"); cnv.width=cnv.height=64;
+      let ctx = cnv.getContext("2d");
+      ctx.font = "40px serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(emoji,32,38);
+      let tex = new THREE.CanvasTexture(cnv);
+      let mat = new THREE.SpriteMaterial({map:tex,transparent:true});
+      let spr = new THREE.Sprite(mat);
+      let angle = i*2*Math.PI/N;
+      spr.position.set(Math.cos(angle)*2.3, Math.sin(angle)*1.2, 0);
+      spr.scale.set(0.89,0.89,0.89);
+      trophyScene.add(spr);
+      trophySprites.push({spr, angle0:angle, i});
+    }
+    animateTrophyRoom();
+  }
+
+  function animateTrophyRoom() {
+  if(!isTrophyView) return;
+  let t = performance.now()/1000;
+  let N = trophySprites.length;
+  for(let j=0;j<N;j++) {
+    let obj = trophySprites[j];
+    let a = obj.angle0 + t*0.29;
+    let y = Math.sin(a)*1.2 + Math.sin(t+obj.i)*0.23;
+    obj.spr.position.set(Math.cos(a)*2.3, y, Math.sin(a)*0.2);
+
+    // Spin the sprite's own Y axis (3D rotation)
+    obj.spr.material.rotation = t*1.4; // keeps the emoji upright on its face
+    obj.spr.rotation.y = t*1.5 + j; // spin in place along Y
+  }
+  trophyRenderer.render(trophyScene, trophyCamera);
+  trophyAnimId = requestAnimationFrame(animateTrophyRoom);
+}
+  function stopTrophyRoom() {
+    if(trophyAnimId) cancelAnimationFrame(trophyAnimId);
+    if(trophyRenderer) { trophyRenderer.dispose(); trophyRenderer=null; }
+    if(trophyScene) { while(trophyScene.children.length) trophyScene.remove(trophyScene.children[0]); }
+    if(prizeTrophyView.firstChild) prizeTrophyView.innerHTML="";
+  }
+
+  // --- ANIMATE ---
+  function animate() {
+    tickClawTween();
+    updateClawVisual();
+    world.step(1/60);
+
+    // Explode/fade balls as soon as they hit the TOP of the chute
+    let now = performance.now();
+    let tubeTop = TUBE_Y + TUBE_HEIGHT/2 - 0.10;
+    for (let i = balls.length - 1; i >= 0; i--) {
+      let b = balls[i];
+      let inTubeXY =
+        Math.abs(b.body.position.x - PRIZE_X) < TUBE_RADIUS * 0.90 &&
+        Math.abs(b.body.position.z - PRIZE_Z) < TUBE_RADIUS * 0.90;
+      let atTubeTop = Math.abs(b.body.position.y - tubeTop) < 0.20;
+      if (!b.grabbed && !b.beingHeld && inTubeXY && atTubeTop) {
+        if (!b.fading) {
+          b.fading = true;
+          b.fadeStart = now;
+          b.fadePos = b.mesh.position.clone();
+          explodeEmojisAt(b.mesh.position, b.emoji);
+          fadingBalls.push(b);
+          world.removeBody(b.body);
+          balls.splice(i, 1);
+        }
+      }
+    }
+
+    balls.forEach(b=>{
+      if(b.beingHeld && heldBall===b) {
+        b.body.position.set(clawX, clawY-0.19, clawZ);
+        b.mesh.position.copy(b.body.position);
+      } else {
+        b.mesh.position.copy(b.body.position);
+        b.mesh.quaternion.copy(b.body.quaternion);
+      }
+    });
+
+    // Animate faded balls
+    for (let i = fadingBalls.length - 1; i >= 0; i--) {
+      let fb = fadingBalls[i];
+      if (fb.fadePos) fb.mesh.position.copy(fb.fadePos);
+      let t = Math.min(1, (now - fb.fadeStart) / 800);
+      if (fb.mesh.material.opacity === undefined) {
+        fb.mesh.material.transparent = true;
+        fb.mesh.material.opacity = 1.0;
+      }
+      fb.mesh.material.opacity = 1.0 - t;
+      if (t >= 1) {
+        scene.remove(fb.mesh);
+        fadingBalls.splice(i, 1);
+      }
+    }
+
+    // Animate emoji bursts!
+    for(let j=emojiBursts.length-1; j>=0; j--) {
+      let burst = emojiBursts[j];
+      for(let i=burst.length-1; i>=0; i--) {
+        let part = burst[i];
+        let age = (now - part.t0)/1200;
+        if(age > 1) {
+          scene.remove(part); burst.splice(i,1); continue;
+        }
+        part.material.opacity = 1 - age;
+        part.position.x += part.vel.x * (1-age) * 0.9;
+        part.position.y += part.vel.y * (1-age) * 0.92;
+        part.position.z += part.vel.z * (1-age) * 0.91;
+      }
+      if(burst.length===0) emojiBursts.splice(j,1);
+    }
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+  }
+  setupBalls();
+  resetClaw();
+  animate();
+  </script>
+</body>
+</html>

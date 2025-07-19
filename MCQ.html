@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maze Cheese Quest</title>
+  <style>
+    body {
+      background: black;
+      color: white;
+      font-family: 'Press Start 2P', monospace;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    canvas {
+      display: block;
+      margin: 20px auto;
+      border: 5px solid white;
+    }
+    .header {
+      font-size: 24px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+    .score {
+      font-size: 16px;
+      margin-top: 5px;
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="header" onclick="showMenu()">Maze Cheese Quest</div>
+  <div class="score">Score: <span id="score">0</span></div>
+  <canvas id="mazeCanvas" width="720" height="720"></canvas>
+
+  <script>
+    const canvas = document.getElementById('mazeCanvas');
+    const ctx = canvas.getContext('2d');
+    const gridSize = 36;
+    const cellSize = canvas.width / gridSize;
+    let maze = [];
+    let player = { x: 0, y: 0 };
+    let cheese = { x: 0, y: 0 };
+    let hole = { x: 0, y: 0 };
+    let cat = { x: 0, y: 0 };
+    let score = 0;
+    let level = 1;
+    let hasCheese = false;
+    let catActive = false;
+    let invincible = false;
+    let lastDirection = { dx: 0, dy: 0 }; // Tracks the last movement direction
+
+    function generateMaze() {
+      maze = Array.from({ length: gridSize }, () =>
+        Array.from({ length: gridSize }, () => Math.random() > 0.7 ? '🌽' : '')
+      );
+
+      maze[player.y][player.x] = ''; // Start player position
+      cheese = createAccessiblePosition(player.x, player.y);
+      maze[cheese.y][cheese.x] = '🧀';
+
+      if (level >= 5) {
+        catActive = true;
+        cat = createAccessiblePosition(player.x, player.y);
+        maze[cat.y][cat.x] = '🐱';
+      } else {
+        catActive = false;
+      }
+
+      hasCheese = false; // Reset the cheese collection status
+    }
+
+    function spawnHole() {
+      hole = createAccessiblePosition(cheese.x, cheese.y);
+      maze[hole.y][hole.x] = '⚫';
+    }
+
+    function createAccessiblePosition(startX, startY) {
+      let x = startX;
+      let y = startY;
+      while (maze[y][x] === '🌽' || (x === startX && y === startY)) {
+        x = Math.floor(Math.random() * gridSize);
+        y = Math.floor(Math.random() * gridSize);
+      }
+      return { x, y };
+    }
+
+    function drawMaze() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          ctx.fillStyle = maze[y][x] === '🌽' ? '#8B4513' : '#228B22'; // Brown for corn, green for grass
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+
+          if (maze[y][x]) {
+            ctx.fillStyle = '#FFF';
+            ctx.font = `${cellSize * 0.8}px "Press Start 2P"`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(maze[y][x], x * cellSize + cellSize / 2, y * cellSize + cellSize / 2);
+          }
+        }
+      }
+    }
+
+    function movePlayer(dx, dy) {
+      const newX = player.x + dx;
+      const newY = player.y + dy;
+
+      // Update the last direction
+      lastDirection = { dx, dy };
+
+      if (
+        newX >= 0 && newX < gridSize &&
+        newY >= 0 && newY < gridSize &&
+        maze[newY][newX] !== '🌽'
+      ) {
+        maze[player.y][player.x] = '';
+        player.x = newX;
+        player.y = newY;
+
+        if (!hasCheese && player.x === cheese.x && player.y === cheese.y) {
+          hasCheese = true;
+          maze[cheese.y][cheese.x] = '';
+          spawnHole(); // Spawn the hole only after cheese is eaten
+        } else if (hasCheese && player.x === hole.x && player.y === hole.y) {
+          score++;
+          level++;
+          document.getElementById('score').textContent = score;
+          generateMaze();
+        } else {
+          maze[player.y][player.x] = '🐭';
+        }
+        drawMaze();
+      }
+    }
+
+    function eatCorn() {
+      const { dx, dy } = lastDirection;
+
+      // Check the two cells in the direction the player is facing
+      for (let step = 1; step <= 2; step++) {
+        const targetX = player.x + dx * step;
+        const targetY = player.y + dy * step;
+
+        // Ensure the target cell is within bounds
+        if (targetX >= 0 && targetX < gridSize && targetY >= 0 && targetY < gridSize) {
+          if (maze[targetY][targetX] === '🌽') {
+            maze[targetY][targetX] = ''; // Remove the corn
+          }
+        }
+      }
+
+      drawMaze(); // Redraw the maze after eating corn
+    }
+
+    function moveCat() {
+      if (!catActive || invincible) return;
+
+      maze[cat.y][cat.x] = '';
+      const dx = Math.sign(player.x - cat.x);
+      const dy = Math.sign(player.y - cat.y);
+      if (
+        cat.x + dx >= 0 && cat.x + dx < gridSize &&
+        cat.y + dy >= 0 && cat.y + dy < gridSize &&
+        maze[cat.y + dy][cat.x + dx] !== '🌽'
+      ) {
+        cat.x += dx;
+        cat.y += dy;
+      }
+      if (cat.x === player.x && cat.y === player.y) {
+        alert('Caught by the cat! Game Over.');
+        score = 0;
+        level = 1;
+        generateMaze();
+      }
+      maze[cat.y][cat.x] = '🐱';
+      drawMaze();
+    }
+
+    document.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case 'ArrowUp': movePlayer(0, -1); break;
+        case 'ArrowDown': movePlayer(0, 1); break;
+        case 'ArrowLeft': movePlayer(-1, 0); break;
+        case 'ArrowRight': movePlayer(1, 0); break;
+        case ' ': eatCorn(); break; // Spacebar to eat corn
+      }
+    });
+
+    canvas.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    });
+
+    canvas.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+
+      if (Math.abs(dx) > Math.abs(dy)) {
+        dx > 0 ? movePlayer(1, 0) : movePlayer(-1, 0);
+      } else {
+        dy > 0 ? movePlayer(0, 1) : movePlayer(0, -1);
+      }
+    });
+
+    generateMaze();
+    drawMaze();
+    setInterval(moveCat, 500);
+  </script>
+</body>
+</html>

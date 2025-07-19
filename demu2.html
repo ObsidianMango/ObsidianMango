@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Enhanced 3D Demo for Mango</title>
+  <style>
+    body { margin: 0; overflow: hidden; background-color: #000; }
+    canvas { display: block; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js';
+    import { GUI } from 'https://unpkg.com/dat.gui@0.7.9/build/dat.gui.module.js';
+
+    // Basic Scene Setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(
+      75, window.innerWidth / window.innerHeight, 0.1, 1000
+    );
+    camera.position.z = 5;
+    
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.1;
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+    scene.add(ambientLight);
+    const pointLight = new THREE.PointLight(0xffffff, 1);
+    pointLight.position.set(10, 10, 10);
+    scene.add(pointLight);
+
+    // Global Settings for GUI
+    const settings = {
+      geometryType: 'Torus Knot',
+      autoColor: false,
+      autoColorSpeed: 0.005,
+      hue: 0.0,
+      rotationSpeedX: 0.01,
+      rotationSpeedY: 0.01,
+      wireframe: false,
+      // Particle controls
+      particleSize: 0.1,
+      showParticles: true,
+      autoParticleColors: false,
+      autoParticleColorSpeed: 0.0005,
+      randomizeParticles: () => { randomizeParticleColors(); }
+    };
+
+    // Common Material for the Main Shape
+    const shapeMaterial = new THREE.MeshStandardMaterial({
+      color: 0xff6347,
+      roughness: 0.5,
+      metalness: 0.5,
+      wireframe: settings.wireframe
+    });
+
+    let mainMesh = null;
+    function createShape(geometryType) {
+      if (mainMesh !== null) {
+        scene.remove(mainMesh);
+        mainMesh.geometry.dispose();
+      }
+      let geometry;
+      switch(geometryType) {
+        case 'Sphere':
+          geometry = new THREE.SphereGeometry(1, 32, 32);
+          break;
+        case 'Cube':
+          geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+          break;
+        case 'Torus':
+          geometry = new THREE.TorusGeometry(1, 0.3, 16, 100);
+          break;
+        case 'Icosahedron':
+          geometry = new THREE.IcosahedronGeometry(1, 0);
+          break;
+        case 'Torus Knot':
+        default:
+          geometry = new THREE.TorusKnotGeometry(1, 0.3, 128, 16);
+          break;
+      }
+      mainMesh = new THREE.Mesh(geometry, shapeMaterial);
+      scene.add(mainMesh);
+    }
+    createShape(settings.geometryType);
+
+    // Particle System with Multi-Color Support
+    const particlesCount = 5000;
+    const particlesGeometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particlesCount * 3);
+    const colors = new Float32Array(particlesCount * 3);
+    for (let i = 0; i < particlesCount; i++) {
+      positions[i * 3]     = (Math.random() - 0.5) * 100;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 100;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
+
+      colors[i * 3]     = Math.random();
+      colors[i * 3 + 1] = Math.random();
+      colors[i * 3 + 2] = Math.random();
+    }
+    particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const particlesMaterial = new THREE.PointsMaterial({
+      size: settings.particleSize,
+      vertexColors: true
+    });
+    const particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
+    scene.add(particleSystem);
+
+    function randomizeParticleColors() {
+      const colorAttr = particlesGeometry.attributes.color;
+      for (let i = 0; i < particlesCount; i++) {
+        colorAttr.array[i * 3]     = Math.random();
+        colorAttr.array[i * 3 + 1] = Math.random();
+        colorAttr.array[i * 3 + 2] = Math.random();
+      }
+      colorAttr.needsUpdate = true;
+    }
+
+    // GUI Setup
+    const gui = new GUI();
+    gui.add(settings, 'geometryType', ['Torus Knot', 'Sphere', 'Cube', 'Torus', 'Icosahedron'])
+       .name('Shape Type')
+       .onChange(value => { createShape(value); });
+    gui.add(settings, 'wireframe')
+       .name('Wireframe')
+       .onChange(value => { shapeMaterial.wireframe = value; });
+    gui.add(settings, 'rotationSpeedX', 0, 0.1).name('Rotation Speed X');
+    gui.add(settings, 'rotationSpeedY', 0, 0.1).name('Rotation Speed Y');
+    gui.addColor({ color: '#' + shapeMaterial.color.getHexString() }, 'color')
+       .name('Shape Color')
+       .onChange(color => {
+         shapeMaterial.color.set(color);
+         const hsl = { h: 0, s: 0, l: 0 };
+         shapeMaterial.color.getHSL(hsl);
+         settings.hue = hsl.h;
+       });
+    gui.add(settings, 'autoColor').name('Auto Change Color');
+    gui.add(settings, 'autoColorSpeed', 0.001, 0.05).name('Auto Color Speed');
+
+    // Particle controls
+    gui.add(settings, 'particleSize', 0.01, 2).name('Particle Size')
+       .onChange(value => { particlesMaterial.size = value; });
+    gui.add(settings, 'showParticles').name('Show Particles')
+       .onChange(value => { particleSystem.visible = value; });
+    gui.add(settings, 'autoParticleColors').name('Auto Particle Colors');
+    gui.add(settings, 'autoParticleColorSpeed', 0.0001, 0.01).name('Particle Color Speed');
+    gui.add(settings, 'randomizeParticles').name('Randomize Particle Colors');
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      if (mainMesh) {
+        mainMesh.rotation.x += settings.rotationSpeedX;
+        mainMesh.rotation.y += settings.rotationSpeedY;
+      }
+      
+      if (settings.autoColor) {
+        settings.hue = (settings.hue + settings.autoColorSpeed) % 1;
+        shapeMaterial.color.setHSL(settings.hue, 0.5, 0.5);
+      }
+      
+      if (settings.autoParticleColors) {
+        const colorAttr = particlesGeometry.attributes.color;
+        for (let i = 0; i < particlesCount; i++) {
+          colorAttr.array[i * 3] = (colorAttr.array[i * 3] + settings.autoParticleColorSpeed) % 1;
+          colorAttr.array[i * 3 + 1] = (colorAttr.array[i * 3 + 1] + settings.autoParticleColorSpeed) % 1;
+          colorAttr.array[i * 3 + 2] = (colorAttr.array[i * 3 + 2] + settings.autoParticleColorSpeed) % 1;
+        }
+        colorAttr.needsUpdate = true;
+      }
+      
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dangle Dash - Ultimate Articulated Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <style>
+        body { text-align: center; }
+        canvas { display: block; margin: auto; }
+        .buttons { position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-around; }
+        button { font-size: 20px; padding: 15px; width: 45%; border: none; cursor: pointer; }
+        .boost { background: orange; color: white; }
+        .release { background: red; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="buttons">
+        <button class="boost" onclick="boostSwing()">Boost Swing</button>
+        <button class="release" onclick="releaseBall()">Release</button>
+    </div>
+
+    <script>
+        let pivotX, pivotY;
+        let segments = 5;
+        let armLengths = [];
+        let angles = [];
+        let angularVelocities = [];
+        let gravity = 0.02;
+        let damping = 0.99;
+        let ball;
+        let targets = [];
+        let hazards = [];
+        let score = 0;
+        let released = false;
+
+        function setup() {
+            createCanvas(400, 600);
+            pivotX = width / 2;
+            pivotY = 80;
+
+            for (let i = 0; i < segments; i++) {
+                armLengths.push(40 + i * 10); // Slightly increasing segment length
+                angles.push(Math.PI / 4);
+                angularVelocities.push(0);
+            }
+
+            ball = { x: 0, y: 0, radius: 12, speedX: 0, speedY: 0 };
+
+            for (let i = 0; i < 4; i++) {
+                targets.push({ x: random(50, width - 50), y: random(250, height - 100), radius: 15 });
+            }
+
+            for (let i = 0; i < 2; i++) {
+                hazards.push({ x: random(50, width - 50), y: random(250, height - 100), radius: 10 });
+            }
+        }
+
+        function draw() {
+            background(240);
+
+            let prevX = pivotX;
+            let prevY = pivotY;
+
+            for (let i = 0; i < segments; i++) {
+                if (!released) {
+                    let force = -gravity * sin(angles[i]);
+                    angularVelocities[i] += force;
+                    angularVelocities[i] *= damping;
+                    angles[i] += angularVelocities[i];
+                }
+
+                let newX = prevX + armLengths[i] * sin(angles[i]);
+                let newY = prevY + armLengths[i] * cos(angles[i]);
+
+                stroke(0);
+                line(prevX, prevY, newX, newY);
+
+                prevX = newX;
+                prevY = newY;
+            }
+
+            if (!released) {
+                ball.x = prevX;
+                ball.y = prevY;
+            } else {
+                ball.x += ball.speedX;
+                ball.y += ball.speedY;
+                ball.speedY += gravity;
+
+                if (ball.x < 0 || ball.x > width) ball.speedX *= -1; // Bounce off walls
+                if (ball.y > height) resetPendulum();
+            }
+
+            fill(0);
+            ellipse(ball.x, ball.y, ball.radius * 2);
+
+            fill(50, 200, 50);
+            for (let i = 0; i < targets.length; i++) {
+                ellipse(targets[i].x, targets[i].y, targets[i].radius * 2);
+            }
+
+            fill(200, 50, 50);
+            for (let i = 0; i < hazards.length; i++) {
+                ellipse(hazards[i].x, hazards[i].y, hazards[i].radius * 2);
+            }
+
+            for (let i = 0; i < targets.length; i++) {
+                if (dist(ball.x, ball.y, targets[i].x, targets[i].y) < ball.radius + targets[i].radius) {
+                    score += 1;
+                    ball.speedX *= 0.9; // Slow slightly after hitting a target
+                    ball.speedY *= -0.7;
+                    targets[i].x = random(50, width - 50);
+                    targets[i].y = random(250, height - 100);
+                }
+            }
+
+            for (let i = 0; i < hazards.length; i++) {
+                if (dist(ball.x, ball.y, hazards[i].x, hazards[i].y) < ball.radius + hazards[i].radius) {
+                    score -= 1;
+                    ball.speedX *= 0.9;
+                    ball.speedY *= -0.7;
+                    hazards[i].x = random(50, width - 50);
+                    hazards[i].y = random(250, height - 100);
+                }
+            }
+
+            fill(0);
+            textSize(20);
+            text("Score: " + score, 10, 30);
+        }
+
+        function releaseBall() {
+            if (!released) {
+                released = true;
+                ball.speedX = angularVelocities[segments - 1] * 25; // Stronger fling effect
+                ball.speedY = angularVelocities[segments - 2] * 18;
+            }
+        }
+
+        function boostSwing() {
+            if (!released) {
+                for (let i = 0; i < segments; i++) {
+                    angularVelocities[i] += 0.05 + i * 0.01; // Increasing boost effect per segment
+                }
+            }
+        }
+
+        function resetPendulum() {
+            released = false;
+            for (let i = 0; i < segments; i++) {
+                angles[i] = Math.PI / 4;
+                angularVelocities[i] = 0;
+            }
+            ball.speedX = 0;
+            ball.speedY = 0;
+        }
+    </script>
+</body>
+</html>

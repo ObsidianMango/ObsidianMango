@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Met Art Browser – 3D Experience</title>
+  <style>
+    /* Reset & Base Styles */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background: #f4f4f4;
+      overflow-x: hidden;
+      perspective: 1000px;
+    }
+    
+    /* Loading Overlay */
+    .loading-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.8);
+      display: flex; justify-content: center; align-items: center;
+      z-index: 3000;
+    }
+    .spinner {
+      width: 60px; height: 60px;
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #222;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* Navigation & Menu */
+    .nav {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      background: #222;
+      color: #fff;
+      display: flex; align-items: center;
+      padding: 10px 20px;
+      z-index: 1000;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+    .menu-toggle {
+      cursor: pointer;
+      font-size: 1.8em;
+      margin-right: 20px;
+      transition: transform 0.3s ease;
+    }
+    .menu-toggle:hover { transform: rotateY(180deg); }
+    .menu-content {
+      position: fixed;
+      top: 0; left: -300px;
+      width: 300px; height: 100%;
+      background: #222;
+      color: #fff;
+      padding: 20px;
+      overflow-y: auto;
+      z-index: 1001;
+      transform: rotateY(90deg);
+      transform-origin: left;
+      transition: transform 0.5s ease, left 0.5s ease;
+    }
+    .menu-content.active {
+      left: 0;
+      transform: rotateY(0);
+    }
+    .menu-content h2 {
+      margin-bottom: 20px;
+      font-size: 1.8em;
+      border-bottom: 2px solid #444;
+      padding-bottom: 10px;
+      text-align: center;
+    }
+    .department {
+      padding: 12px 10px;
+      margin: 5px 0;
+      font-size: 1.2em;
+      background: #333;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.3s ease;
+    }
+    .department:hover {
+      background: #444;
+      transform: translateX(5px);
+    }
+    
+    /* Main Container with Parallax Background */
+    .container {
+      padding-top: 60px;
+      text-align: center;
+      position: relative;
+      background: fixed;
+      background: linear-gradient(135deg, #ffffff, #f0f0f0);
+      min-height: 100vh;
+      transition: background 0.8s ease;
+    }
+    .art-display {
+      max-width: 90%;
+      max-height: 80vh;
+      margin: 20px auto;
+      border: 5px solid #222;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      cursor: pointer;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+    }
+    .art-display.hidden { opacity: 0; }
+    .art-display:hover { transform: scale(1.05) rotateY(5deg); }
+    
+    /* Info Overlay */
+    .info-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      justify-content: center; align-items: center;
+      padding: 20px;
+      z-index: 2000;
+    }
+    .info-overlay.active { display: flex; }
+    .info-content {
+      background: #fff;
+      color: #333;
+      padding: 20px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      border-radius: 5px;
+      position: relative;
+      text-align: left;
+      animation: fadeIn 0.5s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .close-info {
+      position: absolute;
+      top: 10px; right: 10px;
+      cursor: pointer;
+      font-size: 1.2em;
+      background: #222;
+      color: #fff;
+      padding: 5px 10px;
+      border-radius: 3px;
+    }
+    
+    /* Control Buttons with 3D Effects */
+    .controls {
+      position: fixed;
+      bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 15px;
+      z-index: 1000;
+    }
+    .btn {
+      background: #222;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      font-size: 1em;
+      cursor: pointer;
+      border-radius: 20px;
+      transition: background 0.3s ease, transform 0.3s ease;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    .btn:hover {
+      background: #444;
+      transform: translateY(-3px);
+    }
+    .btn:active { transform: scale(0.95); }
+    
+    /* Fullscreen Modal */
+    .modal {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.95);
+      display: none;
+      justify-content: center; align-items: center;
+      z-index: 1500;
+    }
+    .modal.active { display: flex; }
+    .modal img {
+      max-width: 95%;
+      max-height: 95%;
+      border: 5px solid #fff;
+      box-shadow: 0 0 20px rgba(255,255,255,0.5);
+      animation: fadeIn 0.5s ease;
+    }
+    .close-modal {
+      position: fixed;
+      top: 20px; right: 20px;
+      background: #fff;
+      border: none;
+      font-size: 1.5em;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 3px;
+      z-index: 1600;
+    }
+
+    /* Mobile Adjustments */
+    @media (max-width: 600px) {
+      .menu-content {
+        width: 100%;
+        left: -100%;
+      }
+      .menu-content.active { left: 0; }
+      .menu-content h2 { font-size: 2em; }
+      .department { font-size: 1.4em; padding: 15px 12px; }
+      .controls { gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Navigation & Animated Menu -->
+  <div class="nav">
+    <div class="menu-toggle" id="menuToggle">&#9776;</div>
+    <h1>The Met Art Browser</h1>
+  </div>
+  <div class="menu-content" id="menuContent">
+    <h2>Departments</h2>
+    <div id="departmentsList">
+      <!-- Departments will be loaded here -->
+    </div>
+  </div>
+
+  <!-- Main Container with Parallax Background -->
+  <div class="container" id="container">
+    <img id="artImage" class="art-display hidden" src="" alt="Artwork" title="Tap to view fullscreen" crossorigin="anonymous">
+  </div>
+
+  <!-- Controls with 3D Buttons -->
+  <div class="controls">
+    <button class="btn" id="nextBtn">Next</button>
+    <button class="btn" id="diceBtn">&#9859;</button>
+    <button class="btn" id="infoBtn">Info</button>
+  </div>
+
+  <!-- Info Overlay with Fade-In Animation -->
+  <div class="info-overlay" id="infoOverlay">
+    <div class="info-content" id="infoContent">
+      <button class="close-info" id="closeInfo">X</button>
+      <!-- Info details will go here -->
+    </div>
+  </div>
+
+  <!-- Fullscreen Modal with Animated Image -->
+  <div class="modal" id="modal">
+    <button class="close-modal" id="closeModal">X</button>
+    <img id="modalImage" src="" alt="Full Screen Artwork">
+  </div>
+
+  <script>
+    // Global state
+    let departments = [];
+    let currentDepartmentId = null;
+    let artObjectIDs = [];
+    let currentIndex = 0;
+    let currentArt = {}; // Stores current art details
+
+    // Emoji mapping for departments
+    const emojiMap = {
+      "American Decorative Arts": "🇺🇸",
+      "Ancient Near Eastern Art": "🏺",
+      "Arms and Armor": "⚔️",
+      "Arts of Africa, Oceania, and the Americas": "🌍",
+      "Asian Art": "🎎",
+      "The American Wing": "🇺🇸",
+      "European Paintings": "🖼️",
+      "Greek and Roman Art": "🏛️",
+      "Islamic Art": "🕌",
+      "Medieval Art": "🛡️",
+      "Modern and Contemporary Art": "🎨"
+    };
+
+    // DOM Elements
+    const menuToggle = document.getElementById('menuToggle');
+    const menuContent = document.getElementById('menuContent');
+    const departmentsList = document.getElementById('departmentsList');
+    const artImage = document.getElementById('artImage');
+    const container = document.getElementById('container');
+    const nextBtn = document.getElementById('nextBtn');
+    const diceBtn = document.getElementById('diceBtn');
+    const infoBtn = document.getElementById('infoBtn');
+    const infoOverlay = document.getElementById('infoOverlay');
+    const infoContent = document.getElementById('infoContent');
+    const closeInfo = document.getElementById('closeInfo');
+    const modal = document.getElementById('modal');
+    const modalImage = document.getElementById('modalImage');
+    const closeModal = document.getElementById('closeModal');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+
+    // Loading functions
+    function showLoading() { loadingOverlay.style.display = 'flex'; }
+    function hideLoading() { loadingOverlay.style.display = 'none'; }
+
+    // Toggle menu (with flip effect)
+    menuToggle.addEventListener('click', () => {
+      menuContent.classList.toggle('active');
+    });
+
+    // Close info overlay
+    closeInfo.addEventListener('click', () => { infoOverlay.classList.remove('active'); });
+
+    // Close modal
+    closeModal.addEventListener('click', () => { modal.classList.remove('active'); });
+
+    // Open modal on artwork click, load high-res image if available
+    artImage.addEventListener('click', () => {
+      if (artImage.src) {
+        modalImage.src = currentArt.primaryImage || artImage.src;
+        modal.classList.add('active');
+      }
+    });
+
+    // Handle image load errors: try another random image
+    artImage.addEventListener('error', () => {
+      console.warn("Image failed to load, trying another...");
+      randomArt();
+    });
+
+    // Fade in art image and update background gradient on load
+    artImage.addEventListener('load', () => {
+      artImage.classList.remove('hidden');
+      setGradientBackground();
+    });
+
+    // Set gradient background based on average color of the art image
+    function setGradientBackground() {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = artImage.naturalWidth / 10;
+      canvas.height = artImage.naturalHeight / 10;
+      ctx.drawImage(artImage, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let r = 0, g = 0, b = 0, count = 0;
+      for (let i = 0; i < imageData.length; i += 4) {
+        r += imageData[i]; g += imageData[i+1]; b += imageData[i+2];
+        count++;
+      }
+      r = Math.floor(r / count); g = Math.floor(g / count); b = Math.floor(b / count);
+      container.style.background = `linear-gradient(135deg, rgba(${r},${g},${b},0.8), rgba(${r},${g},${b},0.4))`;
+    }
+
+    // Filter out fragments based on title/objectName containing "fragment"
+    function isFragment(art) {
+      const check = str => str && str.toLowerCase().includes("fragment");
+      return check(art.title) || check(art.objectName);
+    }
+
+    // Fetch departments from The Met API
+    async function fetchDepartments() {
+      showLoading();
+      try {
+        const res = await fetch('https://collectionapi.metmuseum.org/public/collection/v1/departments');
+        const data = await res.json();
+        departments = data.departments;
+        renderDepartments();
+        // Landing page: load random painting from a random department
+        const randomDept = departments[Math.floor(Math.random() * departments.length)];
+        currentDepartmentId = randomDept.departmentId;
+        fetchArtObjects(randomDept.departmentId);
+      } catch (error) {
+        console.error('Error fetching departments:', error);
+      } finally { hideLoading(); }
+    }
+
+    // Render departments with emojis; clicking loads a random painting from that category
+    function renderDepartments() {
+      departmentsList.innerHTML = '';
+      departments.forEach(dept => {
+        const div = document.createElement('div');
+        div.className = 'department';
+        const emoji = emojiMap[dept.displayName] || "🎨";
+        div.textContent = `${emoji} ${dept.displayName}`;
+        div.dataset.deptId = dept.departmentId;
+        div.addEventListener('click', () => {
+          currentDepartmentId = dept.departmentId;
+          fetchArtObjects(dept.departmentId);
+          menuContent.classList.remove('active');
+        });
+        departmentsList.appendChild(div);
+      });
+    }
+
+    // Fetch art object IDs for a department
+    async function fetchArtObjects(departmentId) {
+      showLoading();
+      try {
+        const searchUrl = `https://collectionapi.metmuseum.org/public/collection/v1/search?departmentId=${departmentId}&hasImages=true&q=a`;
+        const res = await fetch(searchUrl);
+        const data = await res.json();
+        if (data.total > 0) {
+          artObjectIDs = data.objectIDs;
+          currentIndex = Math.floor(Math.random() * artObjectIDs.length);
+          loadArt(artObjectIDs[currentIndex]);
+        } else {
+          alert("No art found for this department.");
+        }
+      } catch (error) {
+        console.error('Error fetching art objects:', error);
+      } finally { hideLoading(); }
+    }
+
+    // Load art details by objectID; if it's a fragment or missing image, try another.
+    async function loadArt(objectID) {
+      showLoading();
+      try {
+        const url = `https://collectionapi.metmuseum.org/public/collection/v1/objects/${objectID}`;
+        const res = await fetch(url);
+        const art = await res.json();
+        currentArt = art;
+        if (art && art.primaryImageSmall && !isFragment(art)) {
+          artImage.classList.add('hidden');
+          artImage.src = art.primaryImageSmall;
+          artImage.alt = art.title || "Artwork";
+          artImage.title = art.title || "Artwork";
+          setInfoContent(art);
+        } else {
+          randomArt();
+        }
+      } catch (error) {
+        console.error('Error loading art object:', error);
+        randomArt();
+      } finally { hideLoading(); }
+    }
+
+    // Set info overlay content
+    function setInfoContent(art) {
+      infoContent.innerHTML = `
+        <button class="close-info" id="closeInfo">X</button>
+        <h2>${art.title || "Untitled"}</h2>
+        <p><strong>Artist:</strong> ${art.artistDisplayName || "Unknown"}</p>
+        <p><strong>Date:</strong> ${art.objectDate || "N/A"}</p>
+        <p><strong>Department:</strong> ${art.department || "N/A"}</p>
+        <p><strong>Medium:</strong> ${art.medium || "N/A"}</p>
+        <p><strong>Dimensions:</strong> ${art.dimensions || "N/A"}</p>
+        ${art.creditLine ? `<p><strong>Credit:</strong> ${art.creditLine}</p>` : ""}
+        ${art.objectURL ? `<p><a href="${art.objectURL}" target="_blank">More Info</a></p>` : ""}
+      `;
+      document.getElementById('closeInfo').addEventListener('click', () => {
+        infoOverlay.classList.remove('active');
+      });
+    }
+
+    // Next art: sequentially load next artwork in the current category
+    function nextArt() {
+      if (artObjectIDs.length) {
+        currentIndex = (currentIndex + 1) % artObjectIDs.length;
+        loadArt(artObjectIDs[currentIndex]);
+      }
+    }
+
+    // Random art: load a random artwork from the current category
+    function randomArt() {
+      if (artObjectIDs.length) {
+        currentIndex = Math.floor(Math.random() * artObjectIDs.length);
+        loadArt(artObjectIDs[currentIndex]);
+      }
+    }
+
+    // Button event listeners
+    nextBtn.addEventListener('click', nextArt);
+    diceBtn.addEventListener('click', randomArt);
+    infoBtn.addEventListener('click', () => { infoOverlay.classList.add('active'); });
+
+    // Initial fetch for landing page
+    fetchDepartments();
+  </script>
+</body>
+</html>

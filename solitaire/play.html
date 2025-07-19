@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>♠️Solitaire</title>
+  <style>
+    /* Basic body and font styles */
+    body {
+      margin: 0;
+      padding: 0;
+      background: #333;
+      color: white;
+      font-family: Georgia, serif;
+    }
+    /* Canvas: we use the tile image as background, and disable touch actions */
+    #gameCanvas {
+      display: block;
+      margin: 0 auto;
+      background: url("tilebg.jpg");
+      background-size: cover;
+      border: 2px solid #000;
+      max-width: 1000px;
+      width: 100%;
+      height: auto;
+      touch-action: none;
+    }
+    /* Control panel – minimal */
+    #controls {
+      text-align: center;
+      padding: 8px;
+      background: #222;
+    }
+    #controls button {
+      margin: 0 5px;
+      padding: 4px 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    /* Modal overlay for theme selection */
+    #themePreview {
+      position: fixed;
+      top: 0; 
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+    #themePreview .modal-content {
+      background: #444;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    #themePreview .modal-content img {
+      width: 80px;
+      height: 120px;
+      margin: 5px;
+      border: 2px solid white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    /* Status bar in bottom-right for score/timer */
+    #statusBar {
+      position: fixed;
+      right: 10px;
+      bottom: 10px;
+      background: rgba(0,0,0,0.6);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="controls">
+    <button id="restartButton">Restart</button>
+    <button id="themeButton">Change Theme</button>
+  </div>
+  <div id="themePreview">
+    <div class="modal-content" id="themeModalContent"></div>
+  </div>
+  <div id="statusBar">
+    <span id="score">Score: 0</span> | 
+    <span id="timer">Time: 00:00</span>
+  </div>
+  <script>
+    /* =====================================
+       Utility Functions
+       ===================================== */
+    // Draw a rounded rectangle path on the provided context.
+    function drawRoundedRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+
+    // Fisher-Yates shuffle: Randomly reorders the items in the deck.
+    function shuffle(deck) {
+      for (let i = deck.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+    }
+
+    /* =====================================
+       Global Variables & Constants
+       ===================================== */
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Set logical dimensions; actual size will be responsive.
+    const LOGICAL_WIDTH = 1000;
+    const LOGICAL_HEIGHT = 700;
+    canvas.width = LOGICAL_WIDTH;
+    canvas.height = LOGICAL_HEIGHT;
+
+    // Card dimensions (100x150) and layout constants.
+    const CARD_WIDTH = 100;
+    const CARD_HEIGHT = 150;
+    const CORNER_RADIUS = 10;
+    const TABLEAU_SPACING = 20; // Vertical offset in a tableau stack
+    let margin = 10;
+    let gapFixed = 10; // Used for spacing stock/waste/foundation
+
+    // Pile counts.
+    const FOUNDATION_COUNT = 4;
+    const TABLEAU_COUNT = 7;
+
+    // Data structures for piles
+    let stockPile = { cards: [], x: 0, y: 0 };
+    let wastePile = { cards: [], x: 0, y: 0 };
+    let foundationPiles = [];
+    let tableauPiles = [];
+
+    // Initialize pile arrays (will get their positions updated in updateLayout())
+    for (let i = 0; i < FOUNDATION_COUNT; i++) {
+      foundationPiles.push({ cards: [], x: 0, y: 0 });
+    }
+    for (let i = 0; i < TABLEAU_COUNT; i++) {
+      tableauPiles.push({ cards: [], x: 0, y: 0 });
+    }
+
+    // The deck array (will be filled with Card objects)
+    let deck = [];
+
+    // Score and Timer variables
+    let score = 0;
+    let elapsedTime = 0;
+    let timerInterval = null;
+
+    // Drag & Drop variables
+    let draggedCards = null;   // Array of cards being dragged
+    let dragOrigin = null;     // Object: { type: "waste" | "tableau" | "foundation", index: ?, from: ? }
+    let dragOffsetX = 0, dragOffsetY = 0;
+    let dragFrameRequested = false; // For throttling redraw during dragging
+
+    // Card back themes: load img1.png to img10.png
+    let cardThemes = [];
+    for (let i = 1; i <= 10; i++) {
+      let img = new Image();
+      img.src = "img" + i + ".png";
+      cardThemes.push(img);
+    }
+    let currentCardBack = cardThemes[0];
+
+    // Suits and pip layouts for number cards
+    const suits = ["H", "D", "C", "S"];
+    const pipLayouts = {
+      2: [{x:50, y:25}, {x:50, y:75}],
+      3: [{x:50, y:20}, {x:50, y:50}, {x:50, y:80}],
+      4: [{x:30, y:25}, {x:70, y:25}, {x:30, y:75}, {x:70, y:75}],
+      5: [{x:30, y:25}, {x:70, y:25}, {x:50, y:50}, {x:30, y:75}, {x:70, y:75}],
+      6: [{x:30, y:20}, {x:70, y:20}, {x:30, y:50}, {x:70, y:50}, {x:30, y:80}, {x:70, y:80}],
+      7: [{x:30, y:20}, {x:70, y:20}, {x:30, y:50}, {x:70, y:50}, {x:30, y:80}, {x:70, y:80}, {x:50, y:35}],
+      8: [{x:30, y:20}, {x:70, y:20}, {x:30, y:50}, {x:70, y:50}, {x:30, y:80}, {x:70, y:80}, {x:50, y:35}, {x:50, y:65}],
+      9: [{x:30, y:20}, {x:70, y:20}, {x:30, y:50}, {x:70, y:50}, {x:30, y:80}, {x:70, y:80}, {x:50, y:20}, {x:50, y:50}, {x:50, y:80}],
+      10: [{x:30, y:20}, {x:70, y:20}, {x:30, y:40}, {x:70, y:40}, {x:30, y:60}, {x:70, y:60}, {x:30, y:80}, {x:70, y:80}, {x:50, y:30}, {x:50, y:70}]
+    };
+
+    /* =====================================
+       Card Class Definition
+       ===================================== */
+  class Card {
+    constructor(suit, rank, faceUp = false) {
+      this.suit = suit;
+      this.rank = rank;
+      this.faceUp = faceUp;
+      this.x = 0;
+      this.y = 0;
+    }
+    getColor() {
+      return (this.suit === "H" || this.suit === "D") ? "red" : "black";
+    }
+    draw(ctx) {
+      // Draw white card background + border, or card back if faceDown
+      ctx.fillStyle = "white";
+      drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+      ctx.fill();
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 2;
+      drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+      ctx.stroke();
+
+      if (!this.faceUp) {
+        // Draw card back image or placeholder
+        if (currentCardBack.complete) {
+          ctx.save();
+          drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+          ctx.clip();
+          ctx.drawImage(currentCardBack, this.x, this.y, CARD_WIDTH, CARD_HEIGHT);
+          ctx.restore();
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 2;
+          drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = "blue";
+          drawRoundedRect(ctx, this.x, this.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+          ctx.fill();
+        }
+        return;
+      }
+
+      // Face-up card details
+      const rankStr = (
+        this.rank === 1  ? "A" :
+        this.rank === 11 ? "J" :
+        this.rank === 12 ? "Q" :
+        this.rank === 13 ? "K" : this.rank
+      );
+      const suitSymbol = (
+        this.suit === "H" ? "♥" :
+        this.suit === "D" ? "♦" :
+        this.suit === "C" ? "♣" : "♠"
+      );
+
+      // TOP-LEFT corner: Rank on first line, suit on second line
+      ctx.fillStyle = this.getColor();
+      ctx.font = "16px Arial";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(rankStr, this.x + 5, this.y + 5);
+      ctx.fillText(suitSymbol, this.x + 5, this.y + 23);
+
+      // BOTTOM-RIGHT corner: Suit on first line, rank on second line
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(suitSymbol, this.x + CARD_WIDTH - 5, this.y + CARD_HEIGHT - 5 - 18);
+      ctx.fillText(rankStr, this.x + CARD_WIDTH - 5, this.y + CARD_HEIGHT - 5);
+
+      // Center graphics (pips, letter for face cards, etc.) same as before
+      if (this.rank === 1) {
+        ctx.fillStyle = this.getColor();
+        ctx.font = "bold 60px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(suitSymbol, this.x + CARD_WIDTH / 2, this.y + CARD_HEIGHT / 2);
+      } else if (this.rank >= 2 && this.rank <= 10) {
+        // number cards: pip layouts
+        ctx.fillStyle = this.getColor();
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const layout = pipLayouts[this.rank];
+        if (layout) {
+          layout.forEach(pos => {
+            const px = this.x + (pos.x / 100) * CARD_WIDTH;
+            const py = this.y + (pos.y / 100) * CARD_HEIGHT;
+            ctx.fillText(suitSymbol, px, py);
+          });
+        }
+      } else {
+        // J, Q, K
+        ctx.fillStyle = this.getColor();
+        ctx.font = "bold 40px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        let letter = (this.rank === 11 ? "J" : this.rank === 12 ? "Q" : "K");
+        ctx.fillText(letter, this.x + CARD_WIDTH / 2, this.y + CARD_HEIGHT / 2);
+      }
+    }
+
+    contains(px, py) {
+      return (
+        px >= this.x && px <= this.x + CARD_WIDTH &&
+        py >= this.y && py <= this.y + CARD_HEIGHT
+      );
+    }
+  }
+
+    /* =====================================
+       Layout Update & Responsive Canvas
+       ===================================== */
+    function updateLayout() {
+      // Update pile positions based on current canvas dimensions.
+      // Stock and Waste positions.
+      stockPile.x = margin;
+      stockPile.y = margin;
+      wastePile.x = stockPile.x + CARD_WIDTH + gapFixed;
+      wastePile.y = margin;
+
+      // Foundation positions (right-aligned).
+      for (let i = 0; i < FOUNDATION_COUNT; i++) {
+        let fp = foundationPiles[i];
+        fp.x = canvas.width - margin - (FOUNDATION_COUNT - i) * (CARD_WIDTH + gapFixed) + gapFixed;
+        fp.y = margin;
+      }
+
+      // Tableau positions: evenly spaced across the width.
+      let availableWidth = canvas.width - 2 * margin - TABLEAU_COUNT * CARD_WIDTH;
+      let gapTableau = TABLEAU_COUNT > 1 ? availableWidth / (TABLEAU_COUNT - 1) : 0;
+      for (let i = 0; i < TABLEAU_COUNT; i++) {
+        let tp = tableauPiles[i];
+        tp.x = margin + i * (CARD_WIDTH + gapTableau);
+        tp.y = margin + CARD_HEIGHT + 50;
+      }
+    }
+
+    function resizeCanvas() {
+      // Maintain the aspect ratio (1000:700 = 10:7).
+      let containerWidth = canvas.clientWidth;
+      canvas.width = containerWidth;
+      canvas.height = containerWidth * (LOGICAL_HEIGHT / LOGICAL_WIDTH);
+      updateLayout();
+      drawGame();
+    }
+    window.addEventListener("resize", resizeCanvas);
+
+    /* =====================================
+       Game Initialization & Deck Setup
+       ===================================== */
+    function createDeck() {
+      deck = [];
+      for (let s of suits) {
+        for (let r = 1; r <= 13; r++) {
+          deck.push(new Card(s, r, false));
+        }
+      }
+    }
+
+    function initGame() {
+      createDeck();
+      shuffle(deck);
+
+      // Clear all piles
+      stockPile.cards = [];
+      wastePile.cards = [];
+      foundationPiles.forEach(p => p.cards = []);
+      tableauPiles.forEach(p => p.cards = []);
+
+      // Deal to 7 tableau piles (classic Klondike)
+      for (let i = 0; i < TABLEAU_COUNT; i++) {
+        for (let j = 0; j <= i; j++) {
+          let c = deck.pop();
+          c.faceUp = (j === i);
+          tableauPiles[i].cards.push(c);
+        }
+      }
+      // Remaining cards become the stock
+      stockPile.cards = deck.slice();
+
+      score = 0;
+      elapsedTime = 0;
+      if (timerInterval) clearInterval(timerInterval);
+      startTimer();
+      updateStatus();
+      drawGame();
+    }
+
+    /* =====================================
+       Timer & Status Updates
+       ===================================== */
+    function updateStatus() {
+      document.getElementById("score").textContent = "Score: " + score;
+      document.getElementById("timer").textContent = "Time: " + formatTime(elapsedTime);
+    }
+    function formatTime(sec) {
+      let m = Math.floor(sec / 60);
+      let s = sec % 60;
+      return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+    }
+    function startTimer() {
+      timerInterval = setInterval(() => {
+        elapsedTime++;
+        updateStatus();
+      }, 1000);
+    }
+
+    /* =====================================
+       Foundation Move Helper
+       ===================================== */
+    function validFoundationMove(card, foundationCards) {
+      if (foundationCards.length === 0) {
+        return card.rank === 1;
+      } else {
+        let top = foundationCards[foundationCards.length - 1];
+        return (card.suit === top.suit && card.rank === top.rank + 1);
+      }
+    }
+    function autoMoveCard(card, originType, originIndex, cardIndex) {
+      for (let i = 0; i < foundationPiles.length; i++) {
+        let fp = foundationPiles[i];
+        if (validFoundationMove(card, fp.cards)) {
+          if (originType === "waste") {
+            wastePile.cards.pop();
+          } else if (originType === "tableau") {
+            let pile = tableauPiles[originIndex];
+            pile.cards.splice(cardIndex, 1);
+            if (pile.cards.length > 0)
+              pile.cards[pile.cards.length - 1].faceUp = true;
+          } else if (originType === "foundation") {
+            foundationPiles[originIndex].cards.pop();
+          }
+          card.x = fp.x;
+          card.y = fp.y;
+          fp.cards.push(card);
+          score += 15;
+          drawGame();
+          updateStatus();
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /* =====================================
+       Pointer / Drag & Drop Logic
+       ===================================== */
+    canvas.addEventListener("pointerdown", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      // --- STOCK PILE: 3-card draw with recycling ---
+      if (mx >= stockPile.x && mx <= stockPile.x + CARD_WIDTH &&
+          my >= stockPile.y && my <= stockPile.y + CARD_HEIGHT) {
+        if (wastePile.cards.length > 0) {
+          stockPile.cards = stockPile.cards.concat(wastePile.cards);
+          wastePile.cards = [];
+        }
+        if (stockPile.cards.length > 0) {
+          const drawCount = Math.min(3, stockPile.cards.length);
+          for (let i = 0; i < drawCount; i++) {
+            let c = stockPile.cards.shift();
+            c.faceUp = true;
+            wastePile.cards.push(c);
+          }
+          drawGame();
+          updateStatus();
+        }
+        return;
+      }
+
+      // --- WASTE PILE: Drag only the top card ---
+      if (wastePile.cards.length > 0) {
+        let top = wastePile.cards[wastePile.cards.length - 1];
+        if (top.contains(mx, my)) {
+          draggedCards = [top];
+          dragOrigin = { type: "waste" };
+          dragOffsetX = mx - wastePile.x;
+          dragOffsetY = my - wastePile.y;
+          wastePile.cards.pop();
+          drawGame();
+          return;
+        }
+      }
+
+      // --- FOUNDATION Piles: Allow dragging the top card ---
+      for (let i = 0; i < foundationPiles.length; i++) {
+        let fp = foundationPiles[i];
+        if (fp.cards.length > 0) {
+          let top = fp.cards[fp.cards.length - 1];
+          if (top.contains(mx, my)) {
+            draggedCards = [top];
+            dragOrigin = { type: "foundation", index: i };
+            dragOffsetX = mx - top.x;
+            dragOffsetY = my - top.y;
+            fp.cards.pop();
+            drawGame();
+            return;
+          }
+        }
+      }
+
+      // --- TABLEAU Piles: Drag cards (a stack) from a tableau pile ---
+      for (let i = 0; i < tableauPiles.length; i++) {
+        let pile = tableauPiles[i];
+        for (let j = pile.cards.length - 1; j >= 0; j--) {
+          let card = pile.cards[j];
+          let cx = pile.x;
+          let cy = pile.y + j * TABLEAU_SPACING;
+          if (mx >= cx && mx <= cx + CARD_WIDTH && my >= cy && my <= cy + CARD_HEIGHT) {
+            if (!card.faceUp) break;
+            draggedCards = pile.cards.splice(j);
+            dragOrigin = { type: "tableau", index: i, from: j };
+            dragOffsetX = mx - cx;
+            dragOffsetY = my - cy;
+            drawGame();
+            return;
+          }
+        }
+      }
+    });
+
+    canvas.addEventListener("pointermove", (e) => {
+      if (!draggedCards) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      for (let k = 0; k < draggedCards.length; k++) {
+        draggedCards[k].x = mx - dragOffsetX;
+        draggedCards[k].y = my - dragOffsetY + k * TABLEAU_SPACING;
+      }
+      if (!dragFrameRequested) {
+        dragFrameRequested = true;
+        requestAnimationFrame(() => {
+          drawGame();
+          dragFrameRequested = false;
+        });
+      }
+    });
+
+    canvas.addEventListener("pointerup", (e) => {
+      if (!draggedCards) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      let dropped = false;
+
+      // --- Attempt drop onto TABLEAU piles ---
+      for (let i = 0; i < tableauPiles.length; i++) {
+        let pile = tableauPiles[i];
+        if (mx >= pile.x && mx <= pile.x + CARD_WIDTH) {
+          if (pile.cards.length === 0) {
+            if (draggedCards[0].rank === 13) {
+              draggedCards.forEach((card, k) => {
+                card.x = pile.x;
+                card.y = pile.y + k * TABLEAU_SPACING;
+              });
+              pile.cards = pile.cards.concat(draggedCards);
+              dropped = true;
+              score += 5;
+              break;
+            }
+          } else {
+            let target = pile.cards[pile.cards.length - 1];
+            if (target.faceUp &&
+                target.rank === draggedCards[0].rank + 1 &&
+                target.getColor() !== draggedCards[0].getColor()) {
+              let baseY = target.y;
+              draggedCards.forEach((card, k) => {
+                card.x = pile.x;
+                card.y = baseY + CARD_HEIGHT + k * TABLEAU_SPACING;
+              });
+              pile.cards = pile.cards.concat(draggedCards);
+              dropped = true;
+              score += 5;
+              break;
+            }
+          }
+        }
+      }
+
+      // --- Attempt drop onto FOUNDATION (only single card moves) ---
+      if (!dropped && draggedCards.length === 1) {
+        let card = draggedCards[0];
+        for (let i = 0; i < foundationPiles.length; i++) {
+          let fp = foundationPiles[i];
+          if (mx >= fp.x && mx <= fp.x + CARD_WIDTH &&
+              my >= fp.y && my <= fp.y + CARD_HEIGHT) {
+            if (fp.cards.length === 0) {
+              if (card.rank === 1) {
+                card.x = fp.x;
+                card.y = fp.y;
+                fp.cards.push(card);
+                dropped = true;
+                score += 10;
+                break;
+              }
+            } else {
+              let top = fp.cards[fp.cards.length - 1];
+              if (card.suit === top.suit && card.rank === top.rank + 1) {
+                card.x = fp.x;
+                card.y = fp.y;
+                fp.cards.push(card);
+                dropped = true;
+                score += 10;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // --- If invalid move, return dragged cards to origin ---
+      if (!dropped) {
+        if (dragOrigin.type === "waste" || dragOrigin.type === "foundation") {
+          if (dragOrigin.type === "waste")
+            wastePile.cards.push(draggedCards[0]);
+          else
+            foundationPiles[dragOrigin.index].cards.push(draggedCards[0]);
+        } else if (dragOrigin.type === "tableau") {
+          tableauPiles[dragOrigin.index].cards = tableauPiles[dragOrigin.index].cards.concat(draggedCards);
+        }
+      } else {
+        if (dragOrigin.type === "tableau") {
+          let originPile = tableauPiles[dragOrigin.index];
+          if (originPile.cards.length > 0) {
+            originPile.cards[originPile.cards.length - 1].faceUp = true;
+            score += 5;
+          }
+        }
+      }
+      draggedCards = null;
+      dragOrigin = null;
+      drawGame();
+      updateStatus();
+    });
+
+    // --- Double-click auto-move logic ---
+    canvas.addEventListener("dblclick", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      if (wastePile.cards.length > 0) {
+        let top = wastePile.cards[wastePile.cards.length - 1];
+        if (top.contains(mx, my)) {
+          autoMoveCard(top, "waste");
+          return;
+        }
+      }
+      for (let i = 0; i < tableauPiles.length; i++) {
+        let pile = tableauPiles[i];
+        if (pile.cards.length > 0) {
+          let top = pile.cards[pile.cards.length - 1];
+          if (top.contains(mx, my)) {
+            autoMoveCard(top, "tableau", i, pile.cards.length - 1);
+            return;
+          }
+        }
+      }
+    });
+
+    /* =====================================
+       Drawing the Game Board
+       ===================================== */
+    function drawGame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw Stock Pile
+      if (stockPile.cards.length > 0) {
+        if (currentCardBack.complete) {
+          ctx.save();
+          drawRoundedRect(ctx, stockPile.x, stockPile.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+          ctx.clip();
+          ctx.drawImage(currentCardBack, stockPile.x, stockPile.y, CARD_WIDTH, CARD_HEIGHT);
+          ctx.restore();
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 2;
+          drawRoundedRect(ctx, stockPile.x, stockPile.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = "blue";
+          drawRoundedRect(ctx, stockPile.x, stockPile.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+          ctx.fill();
+        }
+      } else {
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        drawRoundedRect(ctx, stockPile.x, stockPile.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+        ctx.stroke();
+      }
+
+      // Draw Waste Pile (fanned)
+      wastePile.cards.forEach((c, i) => {
+        c.x = wastePile.x + i * 20;
+        c.y = wastePile.y;
+        c.draw(ctx);
+      });
+
+      // Draw Foundation Piles
+      foundationPiles.forEach(fp => {
+        if (fp.cards.length > 0) {
+          let top = fp.cards[fp.cards.length - 1];
+          top.x = fp.x;
+          top.y = fp.y;
+          top.draw(ctx);
+        } else {
+          ctx.strokeStyle = "white";
+          ctx.lineWidth = 2;
+          drawRoundedRect(ctx, fp.x, fp.y, CARD_WIDTH, CARD_HEIGHT, CORNER_RADIUS);
+          ctx.stroke();
+        }
+      });
+
+      // Draw Tableau Piles
+      tableauPiles.forEach(pile => {
+        pile.cards.forEach((c, j) => {
+          c.x = pile.x;
+          c.y = pile.y + j * TABLEAU_SPACING;
+          c.draw(ctx);
+        });
+      });
+
+      // Draw Dragged Cards on Top
+      if (draggedCards) {
+        draggedCards.forEach(c => c.draw(ctx));
+      }
+    }
+
+    /* =====================================
+       Theme Modal Logic
+       ===================================== */
+    document.getElementById("themeButton").addEventListener("click", () => {
+      const themePreview = document.getElementById("themePreview");
+      const themeModalContent = document.getElementById("themeModalContent");
+      themeModalContent.innerHTML = "";
+      cardThemes.forEach((img, index) => {
+        const thumb = document.createElement("img");
+        thumb.src = img.src;
+        thumb.addEventListener("click", () => {
+          currentCardBack = cardThemes[index];
+          themePreview.style.display = "none";
+          drawGame();
+        });
+        themeModalContent.appendChild(thumb);
+      });
+      themePreview.style.display = "flex";
+    });
+    document.getElementById("themePreview").addEventListener("click", (e) => {
+      if (e.target.id === "themePreview") {
+        e.currentTarget.style.display = "none";
+      }
+    });
+
+    /* =====================================
+       Restart Button
+       ===================================== */
+    document.getElementById("restartButton").addEventListener("click", () => {
+      initGame();
+    });
+
+    /* =====================================
+       Start the Game
+       ===================================== */
+    window.onload = () => {
+      updateLayout();
+      initGame();
+      resizeCanvas(); // Ensure canvas is responsive on load.
+    };
+  </script>
+</body>
+</html>

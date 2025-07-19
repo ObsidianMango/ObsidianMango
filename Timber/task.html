@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Timber 3D Viewer (Auto-fit)</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+<script type="module">
+  import * as THREE from 'three';
+  import { MTLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.154.0/examples/jsm/loaders/MTLLoader.js';
+  import { OBJLoader } from 'https://cdn.jsdelivr.net/npm/three@0.154.0/examples/jsm/loaders/OBJLoader.js';
+
+  let scene, camera, renderer, model, clock;
+
+  // Scene + Camera
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  clock = new THREE.Clock();
+
+  // Lights
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  scene.add(ambientLight);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+  dirLight.position.set(5, 10, 7);
+  scene.add(dirLight);
+
+  // MTL then OBJ
+  const mtlLoader = new MTLLoader();
+  mtlLoader.setPath('./');
+  mtlLoader.load('timber.mtl', (materials) => {
+    materials.preload();
+    const objLoader = new OBJLoader();
+    objLoader.setMaterials(materials);
+    objLoader.setPath('./');
+    objLoader.load('timber.obj', (mesh) => {
+      model = mesh;
+      scene.add(model);
+
+      // Auto-fit object in the camera view
+      fitCameraToObject(model);
+    });
+  });
+
+  // Handle resizes
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  function fitCameraToObject(object3D) {
+    const box = new THREE.Box3().setFromObject(object3D);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    // Reposition the model so it's centered at the origin
+    object3D.position.x += (object3D.position.x - center.x);
+    object3D.position.y += (object3D.position.y - center.y);
+    object3D.position.z += (object3D.position.z - center.z);
+
+    // Update the bounding box after re-centering
+    box.setFromObject(object3D);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraZ = maxDim / (2 * Math.tan(fov / 2));
+
+    cameraZ *= 2.4; // Zoom out a bit more for padding
+    camera.position.set(0, 0, cameraZ);
+    camera.lookAt(0, 0, 0);
+
+    // Update near/far planes
+    const minZ = box.min.z;
+    const maxZ = box.max.z;
+    if (minZ < 0) camera.near = Math.max(0.1, 0.1 - minZ);
+    camera.far = cameraZ + (maxZ - minZ) * 2;
+    camera.updateProjectionMatrix();
+  }
+
+  // Animate
+  function animate() {
+    requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+
+    if (model) {
+      // Simple rotation & bobbing
+      model.rotation.y += delta;
+      model.position.y = Math.sin(Date.now() * 0.003) * 0.2;
+    }
+
+    renderer.render(scene, camera);
+  }
+  animate();
+</script>
+</body>
+</html>

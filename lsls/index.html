@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Driving Avoid Game</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=yes">
+  <style>
+    html, body {
+      background: #181e23;
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #distance, #lives {
+      font-family: monospace;
+      font-size: 1.25rem;
+      color: #fff;
+      text-align: center;
+      user-select: none;
+      margin: 0;
+      z-index: 2;
+      position: relative;
+    }
+    #lives {
+      margin-top: 12px;
+      margin-bottom: -8px;
+      letter-spacing: 2px;
+    }
+    #gameContainer {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #181e23;
+      z-index: 1;
+    }
+    canvas {
+      background: #252b33;
+      box-shadow: 0 0 24px #000b;
+      border-radius: 14px;
+      display: block;
+      margin: auto;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw;
+      max-height: 100vh;
+      touch-action: none;
+    }
+    @media (max-width: 650px) {
+      #distance, #lives {
+        font-size: 1.1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="lives">Lives: 3</div>
+  <div id="distance">Distance: 0 / 0</div>
+  <div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+  <script>
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let W = window.innerWidth, H = window.innerHeight;
+
+    function resizeCanvas() {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = W;
+      canvas.height = H;
+      updateRoadVars();
+      if (typeof setPlayerToLane === 'function' && typeof player !== 'undefined') {
+        setPlayerToLane(currentLane);
+        player.y = H - player.height - 14;
+      }
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // ROAD AND PLAYER/LANE SYSTEM
+    let roadW, roadLeft, laneCount, laneWidth, roadRight;
+    function updateRoadVars() {
+      roadW = W * 0.62;
+      roadLeft = (W - roadW) / 2;
+      laneCount = 3;
+      laneWidth = roadW / laneCount;
+      roadRight = roadLeft + roadW;
+    }
+
+    // PLAYER
+    const playerImg = new Image();
+    playerImg.src = 'van.png';
+    let currentLane = 1;
+    const player = {
+      x: 0, y: 0, width: 56, height: 90,
+      img: playerImg,
+      speed: 4
+    };
+
+    // OBSTACLE PNGs
+    const potholeImg = new Image(); potholeImg.src = 'pothole.png';
+    const blockadeImg = new Image(); blockadeImg.src = 'blockade.png';
+    const bikeImg = new Image(); bikeImg.src = 'bike.png';
+    const obstacleTypes = [
+      { name: 'pothole', color: '#888', label: 'POT', width: 48, height: 28, img: potholeImg },
+      { name: 'blockade', color: '#cb4040', label: 'BLK', width: 54, height: 38, img: blockadeImg },
+      { name: 'bike', color: '#36c489', label: 'BIKE', width: 44, height: 44, img: bikeImg }
+    ];
+    let obstacles = [];
+
+    // GAME STATE
+    let lives = 3, distance = 0, gameOver = false;
+    let distanceGoal = 5000;
+    let winFlash = false;
+    let winFlashTime = 0;
+    const WIN_FLASH_DURATION = 1250; // ms
+
+    // DIVIDER ANIMATION
+    let roadDividerOffset = 0;
+    const dividerLength = 36, dividerGap = 36;
+
+    // INPUT + SWIPE + KEYBOARD CONTROL
+    let keys = {};
+    let touchStartX = 0, touchStartY = 0, lastSwipeTime = 0;
+
+    // SWIPE CONTROLS (mobile)
+    if (isMobile) {
+      canvas.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 1) {
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+        }
+      }, { passive: false });
+
+      canvas.addEventListener('touchend', function(e) {
+        if (e.changedTouches.length === 1) {
+          let dx = e.changedTouches[0].clientX - touchStartX;
+          let dy = e.changedTouches[0].clientY - touchStartY;
+          let absDx = Math.abs(dx), absDy = Math.abs(dy);
+          let now = Date.now();
+          if (now - lastSwipeTime < 100) return;
+          lastSwipeTime = now;
+          if (absDx > 40 || absDy > 40) {
+            e.preventDefault();
+            if (absDx > absDy) {
+              if (dx > 0) { keys['swipeRight'] = true; }
+              else if (dx < 0) { keys['swipeLeft'] = true; }
+            } else {
+              if (dy > 0) { keys['swipeDown'] = true; }
+              else if (dy < 0) { keys['swipeUp'] = true; }
+            }
+          }
+        }
+      }, { passive: false });
+    }
+
+    // KEYBOARD CONTROLS (desktop)
+    if (!isMobile) {
+      document.addEventListener('keydown', e => keys[e.key] = true);
+      document.addEventListener('keyup', e => keys[e.key] = false);
+    }
+
+    // LANE RESTRICTED SPAWN
+    let spawnDelay = 64, spawnTick = 0;
+    let bikeSpawnDelay = 120, bikeSpawnTick = 0;
+    function spawnObstacle() {
+      if (bikeSpawnTick >= bikeSpawnDelay) {
+        let toLane = Math.floor(Math.random() * laneCount);
+        let fromLeft = Math.random() > 0.5;
+        let startX = fromLeft ? roadLeft - 50 : roadRight + 10;
+        let endX = roadLeft + toLane * laneWidth + laneWidth / 2 - obstacleTypes[2].width / 2;
+        let startY = Math.random() * H * 0.35 + 16;
+        let distX = endX - startX, distY = H - startY;
+        let duration = 150 + Math.random() * 60;
+        let dx = distX / duration, dy = distY / duration;
+        obstacles.push({ x: startX, y: startY, width: obstacleTypes[2].width, height: obstacleTypes[2].height, dx: dx, dy: dy, speed: 0, type: 2 });
+        bikeSpawnTick = 0;
+      } else {
+        let lane = Math.floor(Math.random() * laneCount);
+        let which = Math.random() > 0.5 ? 0 : 1, o = obstacleTypes[which];
+        obstacles.push({
+          lane: lane,
+          x: roadLeft + lane * laneWidth + laneWidth / 2 - o.width / 2,
+          y: -o.height,
+          width: o.width, height: o.height,
+          speed: 4 + Math.random()*1.4,
+          type: which
+        });
+      }
+    }
+
+    function drawRoad() {
+      ctx.fillStyle = "#242b33";
+      ctx.fillRect(roadLeft, 0, roadW, H);
+      ctx.strokeStyle = "#888";
+      ctx.lineWidth = 6;
+      ctx.setLineDash([]);
+      for (let i = 1; i < laneCount; i++) {
+        let x = roadLeft + i * laneWidth;
+        let y = -((roadDividerOffset) % (dividerLength + dividerGap));
+        while (y < H) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x, Math.min(y + dividerLength, H));
+          ctx.stroke();
+          y += dividerLength + dividerGap;
+        }
+      }
+      ctx.strokeStyle = "#f3c968";
+      ctx.lineWidth = 9;
+      ctx.beginPath();
+      ctx.moveTo(roadLeft, 0); ctx.lineTo(roadLeft, H);
+      ctx.moveTo(roadRight, 0); ctx.lineTo(roadRight, H);
+      ctx.stroke();
+    }
+
+    function setPlayerToLane(lane) {
+      currentLane = lane;
+      player.x = roadLeft + currentLane * laneWidth + laneWidth/2 - player.width/2;
+    }
+
+    function drawPlayer(customY) {
+      const y = customY !== undefined ? customY : player.y;
+      if (player.img && player.img.complete) {
+        ctx.drawImage(player.img, player.x, y, player.width, player.height);
+      } else {
+        ctx.fillStyle = "#bcc6cc";
+        ctx.fillRect(player.x, y, player.width, player.height);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(player.x, y, player.width, player.height);
+        ctx.font = "bold 16px monospace";
+        ctx.fillStyle = "#222";
+        ctx.textAlign = "center";
+        ctx.fillText("VAN", player.x + player.width/2, y + player.height/2 + 6);
+      }
+    }
+
+    function drawObstacles() {
+      for (let obs of obstacles) {
+        let oType = obstacleTypes[obs.type];
+        if (oType.img && oType.img.complete) {
+          ctx.drawImage(oType.img, obs.x, obs.y, obs.width, obs.height);
+        } else {
+          ctx.fillStyle = oType.color;
+          ctx.beginPath();
+          if (obs.type === 0) ctx.ellipse(obs.x + obs.width/2, obs.y + obs.height/2, obs.width/2, obs.height/2, 0, 0, Math.PI*2), ctx.fill();
+          else if (obs.type === 1) ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+          else if (obs.type === 2) ctx.arc(obs.x + obs.width/2, obs.y + obs.height/2, obs.width/2, 0, Math.PI*2), ctx.fill();
+          ctx.strokeStyle = "#111";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+          ctx.font = "bold 14px monospace";
+          ctx.fillStyle = "#fff";
+          ctx.textAlign = "center";
+          ctx.fillText(oType.label, obs.x + obs.width/2, obs.y + obs.height/2 + 6);
+        }
+      }
+    }
+
+    function updateObstacles() {
+      for (let obs of obstacles) {
+        if (obs.type === 2) { obs.x += obs.dx; obs.y += obs.dy; }
+        else { obs.y += obs.speed; }
+      }
+      obstacles = obstacles.filter(obs => obs.y < H + 60 && obs.x > roadLeft - 80 && obs.x < roadRight + 80);
+    }
+
+    function rectsCollide(a, b) {
+      return (
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y
+      );
+    }
+
+    function updatePlayer() {
+      // Slow dash speed
+      let baseObsSpeed = 4;
+      let movingObs = obstacles.filter(o => o.type === 0 || o.type === 1);
+      if (movingObs.length) {
+        baseObsSpeed = movingObs.reduce((sum, o) => sum + o.speed, 0) / movingObs.length;
+      }
+      player.speed = baseObsSpeed * 0.5; // SLOWER DASH
+
+      // Keyboard (desktop)
+      if (!isMobile) {
+        if ((keys['ArrowLeft'] || keys['a'])) {
+          if (currentLane > 0) setPlayerToLane(currentLane - 1);
+          keys['ArrowLeft'] = false; keys['a'] = false;
+        }
+        if ((keys['ArrowRight'] || keys['d'])) {
+          if (currentLane < laneCount - 1) setPlayerToLane(currentLane + 1);
+          keys['ArrowRight'] = false; keys['d'] = false;
+        }
+      }
+
+      // Mobile swipe
+      if (isMobile) {
+        if (keys['swipeLeft']) {
+          if (currentLane > 0) setPlayerToLane(currentLane - 1);
+          keys['swipeLeft'] = false;
+        }
+        if (keys['swipeRight']) {
+          if (currentLane < laneCount - 1) setPlayerToLane(currentLane + 1);
+          keys['swipeRight'] = false;
+        }
+        if (keys['swipeUp']) {
+          player.y -= Math.max(H / 8, player.height * 3) * 0.65; // Smoother, slower
+          keys['swipeUp'] = false;
+        }
+        if (keys['swipeDown']) {
+          player.y += Math.max(H / 8, player.height * 3) * 0.65;
+          keys['swipeDown'] = false;
+        }
+      }
+
+      // Up/down on desktop
+      if (!isMobile) {
+        let moveY = 0;
+        if (keys['ArrowUp'] || keys['w']) moveY = -1;
+        if (keys['ArrowDown'] || keys['s']) moveY = 1;
+        player.y += moveY * player.speed;
+      }
+
+      player.y = Math.max(0, Math.min(player.y, H - player.height));
+    }
+
+    function resetGameVars() {
+      setPlayerToLane(1);
+      player.y = H - player.height - 14;
+      lives = 3; obstacles = [];
+      gameOver = false;
+      winFlash = false;
+      winFlashTime = 0;
+      let rand = Math.random();
+      if (rand < 0.7) {
+        distanceGoal = Math.floor(Math.random() * 4000) + 0000;
+      } else {
+        distanceGoal = Math.floor(Math.random() * 4000) + 9000;
+      }
+      distance = 0;
+      document.getElementById('lives').textContent = 'Lives: ' + lives;
+      document.getElementById('distance').textContent = "Distance: " + distance + " / " + distanceGoal;
+    }
+
+    function drawGameOver() {
+      ctx.fillStyle = "rgba(0,0,0,0.75)";
+      ctx.fillRect(0,0,W,H);
+      ctx.font = "bold 36px monospace";
+      ctx.fillStyle = "#ff3c3c";
+      ctx.textAlign = "center";
+      ctx.fillText("You Failed!", W/2, H/2-20);
+      ctx.font = "bold 22px monospace";
+      ctx.fillStyle = "#fff";
+      ctx.fillText("Distance: "+distance, W/2, H/2+30);
+      ctx.font = "bold 16px monospace";
+      ctx.fillText("Tap or Press R to Retry", W/2, H/2+60);
+    }
+
+    function drawOrderCompleteFlash() {
+      ctx.fillStyle = "#fff";
+      ctx.globalAlpha = 1;
+      ctx.fillRect(0, 0, W, H);
+      ctx.font = "bold 60px monospace";
+      ctx.fillStyle = "#198144";
+      ctx.textAlign = "center";
+      ctx.fillText("ORDER COMPLETE!", W/2, H/2);
+      ctx.globalAlpha = 1;
+    }
+
+    function gameLoop(ts) {
+      ctx.clearRect(0, 0, W, H);
+
+      if (winFlash) {
+        drawOrderCompleteFlash();
+        if (performance.now() - winFlashTime > WIN_FLASH_DURATION) {
+          window.location.href = "order.html";
+          return;
+        }
+        requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      drawRoad();
+      drawObstacles();
+
+      if (!gameOver) {
+        drawPlayer();
+        updatePlayer();
+        updateObstacles();
+        roadDividerOffset -= 5;
+        if (roadDividerOffset < 0) roadDividerOffset += (dividerLength + dividerGap);
+
+        let hit = false;
+        for (let obs of obstacles) {
+          if (rectsCollide(player, obs)) { hit = true; break; }
+        }
+        if (hit) {
+          lives--;
+          document.getElementById('lives').textContent = 'Lives: ' + lives;
+          if (lives <= 0) { gameOver = true; }
+          else {
+            player.y = H - player.height - 14;
+            obstacles = obstacles.filter(obs => obs.y < player.y - 80);
+          }
+        }
+        spawnTick++; bikeSpawnTick++;
+        if (spawnTick > spawnDelay) { spawnObstacle(); spawnTick = 0; }
+        distance++;
+        document.getElementById('distance').textContent = "Distance: " + distance + " / " + distanceGoal;
+
+        // === FLASH ON WIN, THEN REDIRECT ===
+        if (distance >= distanceGoal && !winFlash) {
+          winFlash = true;
+          winFlashTime = performance.now();
+          drawOrderCompleteFlash();
+          requestAnimationFrame(gameLoop);
+          return;
+        }
+
+        requestAnimationFrame(gameLoop);
+      } else {
+        drawGameOver();
+      }
+    }
+
+    function handleRestart(e) {
+      if (gameOver) {
+        resetGameVars();
+        gameLoop();
+      }
+    }
+    canvas.addEventListener('touchstart', handleRestart);
+    document.addEventListener('keydown', function(e) {
+      if ((gameOver) && (e.key === 'r' || e.key === 'R')) {
+        handleRestart();
+      }
+    });
+
+    resizeCanvas();
+    resetGameVars();
+    gameLoop();
+  </script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Mobile UPC Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    /* Global Styles */
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    header {
+      width: 100%;
+      padding: 20px;
+      background-color: #007bff;
+      color: #fff;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    main {
+      width: 100%;
+      max-width: 600px;
+      padding: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .scanner-wrapper {
+      width: 90%;
+      max-width: 600px;
+      height: 300px; /* Fixed height for a compact camera view */
+      background-color: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 10px;
+      position: relative;
+    }
+    #interactive {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .guide {
+      position: absolute;
+      width: 80%;
+      height: 50%;
+      border: 2px dashed rgba(0, 123, 255, 0.7);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    #result {
+      padding: 10px;
+      font-size: 18px;
+      text-align: center;
+      background-color: #e9ecef;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-around;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    button {
+      padding: 10px 15px;
+      border: none;
+      background-color: #007bff;
+      color: #fff;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+      flex: 1 1 30%;
+    }
+    button:disabled {
+      background-color: #aaa;
+      cursor: not-allowed;
+    }
+    #upcDisplay {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    footer {
+      padding: 10px;
+      text-align: center;
+      font-size: 14px;
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>UPC Scanner</h1>
+  </header>
+  <main>
+    <div class="scanner-wrapper">
+      <div id="interactive" class="viewport"></div>
+      <!-- Centered guide overlay -->
+      <div class="guide"></div>
+      <div id="result">Waiting for scan...</div>
+    </div>
+    <div id="upcDisplay"></div>
+    <div class="button-group">
+      <button id="copyBtn" disabled>Copy UPC</button>
+      <button id="searchBtn" disabled>Google Image Search</button>
+      <button id="toggleScanBtn">Stop Scan</button>
+    </div>
+  </main>
+  <footer>
+    <p>Powered by QuaggaJS</p>
+  </footer>
+
+  <!-- Include QuaggaJS from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <script>
+    let currentCode = "";
+    let scanningActive = true;
+
+    // Store configuration in a variable for reinitialization
+    const config = {
+      inputStream: {
+        name: "Live",
+        type: "LiveStream",
+        target: document.querySelector('#interactive'),
+        constraints: {
+          width: { min: 640 },
+          height: { min: 480 },
+          facingMode: "environment"
+        }
+      },
+      decoder: {
+        // Only scanning for 12/13-digit barcodes (UPC-A/EAN-13)
+        readers: ["ean_reader", "upc_reader"]
+      }
+    };
+
+    // Function to initialize the scanner
+    function initScanner() {
+      Quagga.init(config, function(err) {
+        if (err) {
+          console.error(err);
+          alert("Error initializing camera: " + err);
+          return;
+        }
+        Quagga.start();
+        // Attach event listener for detection each time we initialize
+        Quagga.offDetected(); // remove any existing listeners
+        Quagga.onDetected(function(result) {
+          const code = result.codeResult.code;
+          if (code !== currentCode) {
+            currentCode = code;
+            document.getElementById("result").innerText = "Scanned UPC: " + code;
+            document.getElementById("upcDisplay").innerText = "UPC: " + code;
+            document.getElementById("copyBtn").disabled = false;
+            document.getElementById("searchBtn").disabled = false;
+          }
+        });
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+      if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+        initScanner();
+      } else {
+        alert("getUserMedia is not supported on your browser.");
+      }
+
+      document.getElementById("copyBtn").addEventListener("click", function() {
+        if (currentCode) {
+          navigator.clipboard.writeText(currentCode).then(function() {
+            alert("UPC copied to clipboard: " + currentCode);
+          }, function(err) {
+            alert("Failed to copy: " + err);
+          });
+        }
+      });
+
+      document.getElementById("searchBtn").addEventListener("click", function() {
+        if (currentCode) {
+          // Open a new tab with a Google Image search for the UPC
+          const url = "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(currentCode);
+          window.open(url, '_blank');
+        }
+      });
+
+      document.getElementById("toggleScanBtn").addEventListener("click", function() {
+        if (scanningActive) {
+          Quagga.stop();
+          scanningActive = false;
+          this.innerText = "Start Scan";
+          document.getElementById("result").innerText = "Scan stopped. Press 'Start Scan' to scan again.";
+        } else {
+          // Reinitialize the scanner
+          currentCode = "";
+          document.getElementById("result").innerText = "Waiting for scan...";
+          document.getElementById("upcDisplay").innerText = "";
+          document.getElementById("copyBtn").disabled = true;
+          document.getElementById("searchBtn").disabled = true;
+          initScanner();
+          scanningActive = true;
+          this.innerText = "Stop Scan";
+        }
+      });
+    });
+  </script>
+</body>
+</html>

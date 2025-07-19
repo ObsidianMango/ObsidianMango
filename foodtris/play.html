@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Updated meta viewport tag to prevent zooming -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <title>🍕FOODTRIS</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+    html, body {
+      margin: 0;
+      /* Background image set to tile repeating */
+      background: url('bgg.png') repeat, #111;
+      color: #fff;
+      font-family: 'Press Start 2P', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      height: 100vh;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    canvas {
+      background: repeating-linear-gradient(
+          to right,
+          #222,
+          #222 1px,
+          #111 1px,
+          #111 20px
+        ),
+        repeating-linear-gradient(
+          to bottom,
+          #222,
+          #222 1px,
+          #111 1px,
+          #111 20px
+        );
+      border: 2px solid #fff;
+      touch-action: manipulation;
+      margin-bottom: 20px;
+    }
+    /* Game Title */
+    #game-title {
+      font-size: 36px;
+      font-weight: bold;
+      text-align: center;
+      margin: 10px 0 5px 0;
+      background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    /* Level Display */
+    #level {
+      font-size: 12px;
+      margin: 0;
+      text-align: center;
+    }
+    /* Score Display */
+    #score {
+      font-size: 12px;
+      margin: 5px 0;
+      text-align: center;
+    }
+    /* Progress Bar Container */
+    #row-meter-container {
+      width: 240px;
+      height: 10px;
+      background-color: #444;
+      margin: 5px auto 10px auto;
+    }
+    /* Progress Bar Fill */
+    #row-meter {
+      height: 100%;
+      width: 0%;
+      background-color: #0f0;
+      transition: width 0.3s;
+    }
+    /* Start Screen Overlay including instructions */
+    #start-screen {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #000;
+      color: #0f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      text-align: center;
+    }
+    #start-screen h1 {
+      font-size: 36px;
+      font-weight: bold;
+      text-align: center;
+      margin: 10px 0 5px 0;
+      background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    #play-prompt {
+      font-size: 12px;
+      margin-top: 20px;
+      animation: blink 1s infinite;
+      cursor: pointer;
+    }
+    /* Start Screen Instructions */
+    #start-instructions {
+      font-size: 14px;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    /* Big Keyboard Arrow Display (hidden by default) */
+    #arrow-display {
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 72px;
+      display: none;
+      pointer-events: none;
+      z-index: 5;
+      color: #fff;
+    }
+    /* Animation: slide the arrow from center then fade out with shimmer effect */
+    #arrow-display.animate {
+      animation: slideFade 0.5s ease-out forwards, shimmer 1s linear infinite;
+    }
+    @keyframes slideFade {
+      from {
+        transform: translateX(-50%);
+        opacity: 1;
+      }
+      to {
+        transform: translate(calc(-50% + var(--dx)), var(--dy));
+        opacity: 0;
+      }
+    }
+    @keyframes shimmer {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.5); }
+    }
+    /* Media query for mobile: position arrow display at the bottom center as it was originally */
+    @media (max-width: 600px) {
+      #arrow-display {
+        position: fixed;
+        bottom: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 72px;
+      }
+      /* Use same animation keyframe for mobile */
+      #arrow-display.animate {
+        animation: slideFade 0.5s ease-out forwards, shimmer 1s linear infinite;
+      }
+    }
+    /* Game Over Overlay */
+    #game-over {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.9);
+      color: #f00;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 11;
+      overflow: hidden;
+    }
+    #game-over h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    #game-over p {
+      font-size: 12px;
+      margin-bottom: 20px;
+    }
+    #game-over button {
+      font-size: 16px;
+      padding: 10px 20px;
+      background: #444;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Start Screen -->
+  <div id="start-screen">
+    <h1>FOODTRIS</h1>
+    <p id="play-prompt">Play Now</p>
+    <div id="start-instructions">
+      <p>Swipe up to rotate</p>
+      <p>Swipe left/right to move</p>
+      <p>Swipe down to drop</p>
+    </div>
+  </div>
+  <!-- Game Over Overlay -->
+  <div id="game-over">
+    <h1>Game Over</h1>
+    <p id="final-stats"></p>
+    <button onclick="restartGame()">Restart</button>
+  </div>
+  <!-- Top HUD: Title, Level, Score, Progress Bar -->
+  <div id="game-title">FOODTRIS</div>
+  <div id="level">Level: 1</div>
+  <div id="score">Score: 0</div>
+  <div id="row-meter-container">
+    <div id="row-meter"></div>
+  </div>
+  <!-- Game Board -->
+  <canvas id="tetris" width="240" height="400"></canvas>
+  <!-- Hidden Keyboard/Swipe Arrow Display -->
+  <div id="arrow-display"></div>
+
+  <script>
+    // Prevent default scrolling on touchmove to keep the page stationary
+    document.addEventListener('touchmove', function(e) {
+      e.preventDefault();
+    }, { passive: false });
+
+    // ---------------------------------------------------
+    // Canvas Setup
+    // ---------------------------------------------------
+    const canvas = document.getElementById('tetris');
+    const context = canvas.getContext('2d');
+    context.scale(20, 20);
+    context.font = "1px monospace";
+    context.textAlign = "start";
+    context.textBaseline = "top";
+
+    // ---------------------------------------------------
+    // Global Variables
+    // ---------------------------------------------------
+    const emojiTypes = ["🍒", "🍇", "🥑", "🍋", "🍕", "🧀", "🍪"];
+    const emoji = () => emojiTypes[Math.floor(Math.random() * emojiTypes.length)];
+    const createMatrix = (w, h) => Array.from({ length: h }, () => Array(w).fill(""));
+
+    let score = 0;
+    let rowsCleared = 0;
+    let level = 1;
+    let dropInterval = 800;
+    let dropCounter = 0;
+    let lastTime = 0;
+    let running = false;
+
+    // ---------------------------------------------------
+    // Update DOM Display Functions
+    // ---------------------------------------------------
+    function updateScore() {
+      document.getElementById('score').textContent = "Score: " + score;
+    }
+
+    function updateLevel() {
+      document.getElementById('level').textContent = "Level: " + level;
+    }
+
+    function updateRowMeter() {
+      const maxRows = 10;
+      const meter = document.getElementById("row-meter");
+      const percentage = Math.min((rowsCleared / maxRows) * 100, 100);
+      meter.style.width = percentage + "%";
+      if (rowsCleared >= maxRows) {
+        levelUp();
+      }
+    }
+
+    function levelUp() {
+      level++;
+      updateLevel();
+      rowsCleared = 0;
+      document.getElementById("row-meter").style.width = "0%";
+      dropInterval = Math.max(100, dropInterval - 100);
+    }
+
+    // ---------------------------------------------------
+    // Game Piece Creation
+    // ---------------------------------------------------
+    function createPiece(type) {
+      const e = emoji();
+      let matrix;
+      if (type === 'T') matrix = [[ "", e, ""], [ e, e, e ]];
+      if (type === 'O') matrix = [[ e, e ], [ e, e ]];
+      if (type === 'L') matrix = [[ "", "", e ], [ e, e, e ]];
+      if (type === 'J') matrix = [[ e, "", "" ], [ e, e, e ]];
+      if (type === 'I') matrix = [[ e ], [ e ], [ e ], [ e ]];
+      if (type === 'S') matrix = [[ "", e, e ], [ e, e, "" ]];
+      if (type === 'Z') matrix = [[ e, e, "" ], [ "", e, e ]];
+      return { matrix, emoji: e };
+    }
+
+    // ---------------------------------------------------
+    // Drawing Functions
+    // ---------------------------------------------------
+    function drawMatrix(matrix, offset) {
+      matrix.forEach((row, y) => {
+        row.forEach((val, x) => {
+          if (val) {
+            context.fillText(val, x + offset.x, y + offset.y + 0.1);
+          }
+        });
+      });
+    }
+
+    function drawHighlight() {
+      for (let x = 0; x < player.matrix[0].length; x++) {
+        let colFilled = false;
+        let colBottom = -1;
+        for (let y = 0; y < player.matrix.length; y++) {
+          if (player.matrix[y][x]) {
+            colFilled = true;
+            colBottom = Math.max(colBottom, y + 1);
+          }
+        }
+        if (colFilled) {
+          const startY = player.pos.y + colBottom;
+          const colX = player.pos.x + x;
+          const height = arena.length - startY;
+          context.save();
+          context.fillStyle = "rgba(255, 255, 0, 0.2)";
+          context.fillRect(colX, startY, 1, height);
+          context.restore();
+        }
+      }
+    }
+
+    function draw() {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      drawMatrix(arena, { x: 0, y: 0 });
+      drawHighlight();
+      drawMatrix(player.matrix, player.pos);
+    }
+
+    // ---------------------------------------------------
+    // Collision & Merge Functions
+    // ---------------------------------------------------
+    function collide(arena, player) {
+      const [m, o] = [player.matrix, player.pos];
+      for (let y = 0; y < m.length; y++) {
+        for (let x = 0; x < m[y].length; x++) {
+          if (m[y][x] && (arena[y + o.y] && arena[y + o.y][x + o.x]) !== "") {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function merge(arena, player) {
+      player.matrix.forEach((row, y) => {
+        row.forEach((val, x) => {
+          if (val) arena[y + player.pos.y][x + player.pos.x] = val;
+        });
+      });
+    }
+
+    // ---------------------------------------------------
+    // Player Movement & Rotation
+    // ---------------------------------------------------
+    function playerDrop() {
+      player.pos.y++;
+      if (collide(arena, player)) {
+        player.pos.y--;
+        merge(arena, player);
+        playerReset();
+        arenaSweep();
+      }
+      dropCounter = 0;
+    }
+
+    function hardDrop() {
+      while (!collide(arena, player)) {
+        player.pos.y++;
+      }
+      player.pos.y--;
+      merge(arena, player);
+      playerReset();
+      arenaSweep();
+      dropCounter = 0;
+    }
+
+    function playerMove(dir) {
+      player.pos.x += dir;
+      if (collide(arena, player)) {
+        player.pos.x -= dir;
+      }
+    }
+
+    function playerRotate() {
+      const oldMatrix = player.matrix;
+      let rotated = [];
+      for (let x = 0; x < oldMatrix[0].length; x++) {
+        rotated[x] = [];
+        for (let y = oldMatrix.length - 1; y >= 0; y--) {
+          rotated[x].push(oldMatrix[y][x]);
+        }
+      }
+      rotated = rotated.map(row => row.map(cell => cell ? player.emoji : ""));
+      const prevMatrix = player.matrix;
+      player.matrix = rotated;
+      if (collide(arena, player)) {
+        player.matrix = prevMatrix;
+      }
+    }
+
+    // ---------------------------------------------------
+    // Arena, Sweeping & Leveling
+    // ---------------------------------------------------
+    const arena = createMatrix(12, 20);
+
+    function arenaSweep() {
+      outer: for (let y = arena.length - 1; y >= 0; y--) {
+        for (let x = 0; x < arena[y].length; x++) {
+          if (!arena[y][x]) continue outer;
+        }
+        const clearedRow = arena.splice(y, 1)[0];
+        score += 100;
+        updateScore();
+        rowsCleared++;
+        updateRowMeter();
+        for (let x = 0; x < clearedRow.length; x++) {
+          const sparkle = document.createElement("div");
+          sparkle.style.position = "absolute";
+          sparkle.style.left = `${x * 20 + canvas.offsetLeft}px`;
+          sparkle.style.top = `${y * 20 + canvas.offsetTop}px`;
+          sparkle.style.width = "4px";
+          sparkle.style.height = "4px";
+          sparkle.style.backgroundColor = getRandomColor();
+          sparkle.style.borderRadius = "50%";
+          document.body.appendChild(sparkle);
+          const offsetX = (Math.random() - 0.5) * 200;
+          const offsetY = (Math.random() - 0.5) * 200;
+          const scaleFactor = Math.random() * 2 + 1;
+          sparkle.style.transition = "transform 1s ease-out, opacity 1s ease-out";
+          void sparkle.offsetHeight;
+          sparkle.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scaleFactor})`;
+          sparkle.style.opacity = "0";
+          setTimeout(() => sparkle.remove(), 1000);
+        }
+        arena.unshift(Array(arena[0].length).fill(""));
+        y++;
+      }
+    }
+
+    // ---------------------------------------------------
+    // Player Setup & Reset
+    // ---------------------------------------------------
+    const player = {
+      pos: { x: 0, y: 0 },
+      matrix: null,
+      emoji: null
+    };
+
+    function playerReset() {
+      const pieces = 'ILJOTSZ';
+      const piece = createPiece(pieces[Math.floor(Math.random() * pieces.length)]);
+      player.matrix = piece.matrix;
+      player.emoji = piece.emoji;
+      player.pos.y = 0;
+      player.pos.x = ((arena[0].length / 2) | 0) - ((player.matrix[0].length / 2) | 0);
+      if (collide(arena, player)) {
+        gameOver();
+      }
+    }
+
+    // ---------------------------------------------------
+    // Fireworks Functions for Game Over Celebration
+    // ---------------------------------------------------
+    function getRandomColor() {
+      const letters = '0123456789ABCDEF';
+      let color = '#';
+      for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+      }
+      return color;
+    }
+
+    function showFireworks() {
+      const gameOverEl = document.getElementById('game-over');
+      const rect = gameOverEl.getBoundingClientRect();
+      const containerWidth = rect.width;
+      const containerHeight = rect.height;
+      const numFireworks = level;
+      const pixelsPerFirework = Math.floor(score / level);
+      for (let i = 0; i < numFireworks; i++) {
+        const centerX = Math.random() * containerWidth;
+        const centerY = Math.random() * containerHeight;
+        for (let j = 0; j < pixelsPerFirework; j++) {
+          const pixel = document.createElement("div");
+          pixel.style.position = "absolute";
+          pixel.style.width = "4px";
+          pixel.style.height = "4px";
+          pixel.style.backgroundColor = getRandomColor();
+          pixel.style.borderRadius = "50%";
+          pixel.style.left = `${centerX}px`;
+          pixel.style.top = `${centerY}px`;
+          gameOverEl.appendChild(pixel);
+          
+          // Use polar coordinates for a natural explosion shape
+          const angle = Math.random() * Math.PI * 2;
+          const maxRadius = 200;
+          const radius = Math.sqrt(Math.random()) * maxRadius;
+          const offsetX = Math.cos(angle) * radius;
+          const offsetY = Math.sin(angle) * radius;
+          
+          const scaleFactor = Math.random() * 2 + 1;
+          pixel.style.transition = "transform 1s ease-out, opacity 1s ease-out";
+          void pixel.offsetHeight;
+          pixel.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scaleFactor})`;
+          pixel.style.opacity = "0";
+          setTimeout(() => pixel.remove(), 1000);
+        }
+      }
+    }
+
+    // ---------------------------------------------------
+    // Game Over Logic
+    // ---------------------------------------------------
+    function gameOver() {
+      running = false;
+      document.getElementById('final-stats').textContent = "Score: " + score + " | Level: " + level;
+      document.getElementById('game-over').style.display = "flex";
+      showFireworks();
+    }
+
+    function restartGame() {
+      score = 0;
+      rowsCleared = 0;
+      level = 1;
+      dropInterval = 800;
+      updateScore();
+      updateLevel();
+      document.getElementById("row-meter").style.width = "0%";
+      for (let y = 0; y < arena.length; y++) {
+        for (let x = 0; x < arena[y].length; x++) {
+          arena[y][x] = "";
+        }
+      }
+      document.getElementById('game-over').style.display = "none";
+      playerReset();
+      running = true;
+      lastTime = 0;
+      update();
+    }
+
+    // ---------------------------------------------------
+    // Animation Loop
+    // ---------------------------------------------------
+    function update(time = 0) {
+      if (!running) return;
+      const delta = time - lastTime;
+      lastTime = time;
+      dropCounter += delta;
+      if (dropCounter > dropInterval) {
+        playerDrop();
+      }
+      draw();
+      requestAnimationFrame(update);
+    }
+
+    // ---------------------------------------------------
+    // Touch Controls: Expanded Swipe Area via Document
+    // ---------------------------------------------------
+    let touchStartX = 0, touchStartY = 0;
+    document.addEventListener('touchstart', function(e) {
+      const touch = e.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+    }, false);
+
+    document.addEventListener('touchend', function(e) {
+      const touch = e.changedTouches[0];
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+      const threshold = 30;
+      // If horizontal swipe is dominant
+      if (absDx > absDy && absDx > threshold) {
+        if (dx > 0) {
+          move(1);
+          arrowDisplay.textContent = "⮕";
+          arrowDisplay.style.display = "block";
+          arrowDisplay.style.setProperty("--dx", "100px");
+          arrowDisplay.style.setProperty("--dy", "0px");
+          arrowDisplay.classList.remove('animate');
+          void arrowDisplay.offsetWidth;
+          arrowDisplay.classList.add('animate');
+        } else {
+          move(-1);
+          arrowDisplay.textContent = "⬅︎";
+          arrowDisplay.style.display = "block";
+          arrowDisplay.style.setProperty("--dx", "-100px");
+          arrowDisplay.style.setProperty("--dy", "0px");
+          arrowDisplay.classList.remove('animate');
+          void arrowDisplay.offsetWidth;
+          arrowDisplay.classList.add('animate');
+        }
+      }
+      // If vertical swipe is dominant
+      else if (absDy > absDx && absDy > threshold) {
+        if (dy > 0) {
+          hardDrop();
+          arrowDisplay.textContent = "⬇︎";
+          arrowDisplay.style.display = "block";
+          arrowDisplay.style.setProperty("--dx", "0px");
+          arrowDisplay.style.setProperty("--dy", "100px");
+          arrowDisplay.classList.remove('animate');
+          void arrowDisplay.offsetWidth;
+          arrowDisplay.classList.add('animate');
+        } else {
+          rotate();
+          arrowDisplay.textContent = "⬆︎";
+          arrowDisplay.style.display = "block";
+          arrowDisplay.style.setProperty("--dx", "0px");
+          arrowDisplay.style.setProperty("--dy", "-100px");
+          arrowDisplay.classList.remove('animate');
+          void arrowDisplay.offsetWidth;
+          arrowDisplay.classList.add('animate');
+        }
+      }
+    }, false);
+
+    // ---------------------------------------------------
+    // Controls & Game Start (Keyboard)
+    // ---------------------------------------------------
+    const arrowDisplay = document.getElementById('arrow-display');
+    // Listen for the animation end event to hide the arrow after a full cycle (for desktop)
+    arrowDisplay.addEventListener("animationend", () => {
+      arrowDisplay.style.display = "none";
+    });
+
+    document.addEventListener("keydown", e => {
+      if (e.key === "ArrowLeft") {
+        move(-1);
+        arrowDisplay.textContent = "⬅︎";
+        arrowDisplay.style.display = "block";
+        arrowDisplay.style.setProperty("--dx", "-100px");
+        arrowDisplay.style.setProperty("--dy", "0px");
+        arrowDisplay.classList.remove('animate');
+        void arrowDisplay.offsetWidth;
+        arrowDisplay.classList.add('animate');
+      } else if (e.key === "ArrowRight") {
+        move(1);
+        arrowDisplay.textContent = "⮕";
+        arrowDisplay.style.display = "block";
+        arrowDisplay.style.setProperty("--dx", "100px");
+        arrowDisplay.style.setProperty("--dy", "0px");
+        arrowDisplay.classList.remove('animate');
+        void arrowDisplay.offsetWidth;
+        arrowDisplay.classList.add('animate');
+      } else if (e.key === "ArrowDown") {
+        hardDrop();
+        arrowDisplay.textContent = "⬇︎";
+        arrowDisplay.style.display = "block";
+        arrowDisplay.style.setProperty("--dx", "0px");
+        arrowDisplay.style.setProperty("--dy", "100px");
+        arrowDisplay.classList.remove('animate');
+        void arrowDisplay.offsetWidth;
+        arrowDisplay.classList.add('animate');
+      } else if (e.key === "ArrowUp" || e.key === "w") {
+        rotate();
+        arrowDisplay.textContent = "⬆︎";
+        arrowDisplay.style.display = "block";
+        arrowDisplay.style.setProperty("--dx", "0px");
+        arrowDisplay.style.setProperty("--dy", "-100px");
+        arrowDisplay.classList.remove('animate');
+        void arrowDisplay.offsetWidth;
+        arrowDisplay.classList.add('animate');
+      }
+    });
+    // Removed keyup listener to allow full animation to play
+
+    function move(dir)   { playerMove(dir); }
+    function rotate()    { playerRotate(); }
+    function drop()      { hardDrop(); }
+
+    // ---------------------------------------------------
+    // Game Start
+    // ---------------------------------------------------
+    document.getElementById('play-prompt').addEventListener('click', function() {
+      document.getElementById('start-screen').style.display = 'none';
+      running = true;
+      playerReset();
+      update();
+    });
+  </script>
+</body>
+</html>

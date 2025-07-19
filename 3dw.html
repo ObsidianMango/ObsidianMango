@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>BabylonJS 3D Level</title>
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    canvas { width: 100%; height: 100%; touch-action: none; }
+  </style>
+  <!-- BabylonJS core and loaders -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+</head>
+<body>
+  <canvas id="renderCanvas"></canvas>
+  <script>
+    // Get the canvas element and create the BabylonJS engine
+    const canvas = document.getElementById("renderCanvas");
+    const engine = new BABYLON.Engine(canvas, true);
+
+    // Create the scene
+    const scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color3(0.8, 0.8, 0.8);
+
+    // Add a hemispheric light
+    const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+    light.intensity = 0.8;
+
+    // Create a FollowCamera for third-person view
+    const followCamera = new BABYLON.FollowCamera("FollowCam", new BABYLON.Vector3(0, 5, -10), scene);
+    followCamera.radius = 10; // Distance from target
+    followCamera.heightOffset = 5;
+    followCamera.rotationOffset = 180;
+    followCamera.cameraAcceleration = 0.05;
+    followCamera.maxCameraSpeed = 20;
+    scene.activeCamera = followCamera;
+    followCamera.attachControl(canvas, true);
+
+    // Global variables for our character and movement
+    let character = null;
+    const moveSpeed = 0.1;
+    const inputMap = {};
+
+    // Register keyboard events using ActionManager
+    scene.actionManager = new BABYLON.ActionManager(scene);
+    scene.actionManager.registerAction(
+      new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyDownTrigger, evt => {
+        inputMap[evt.sourceEvent.key] = true;
+      })
+    );
+    scene.actionManager.registerAction(
+      new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyUpTrigger, evt => {
+        inputMap[evt.sourceEvent.key] = false;
+      })
+    );
+
+    // Load the house model (OBJ with accompanying MTL if available)
+    BABYLON.SceneLoader.ImportMesh("", "3d files/house/", "house.obj", scene, meshes => {
+      // House model loaded; adjust positioning if necessary
+    });
+
+    // Load the character model
+    BABYLON.SceneLoader.ImportMesh("", "3d files/link (Goron)/", "Goron Link.obj", scene, meshes => {
+      // Assume the first mesh is the character root
+      character = meshes[0];
+      character.position = new BABYLON.Vector3(0, 0, 0);
+      // Lock the follow camera onto the character
+      followCamera.lockedTarget = character;
+    });
+
+    // Update movement before each render
+    scene.onBeforeRenderObservable.add(() => {
+      if (character) {
+        let direction = new BABYLON.Vector3(0, 0, 0);
+        // Using WASD or arrow keys
+        if (inputMap["w"] || inputMap["W"] || inputMap["ArrowUp"]) {
+          direction.z += 1;
+        }
+        if (inputMap["s"] || inputMap["S"] || inputMap["ArrowDown"]) {
+          direction.z -= 1;
+        }
+        if (inputMap["a"] || inputMap["A"] || inputMap["ArrowLeft"]) {
+          direction.x -= 1;
+        }
+        if (inputMap["d"] || inputMap["D"] || inputMap["ArrowRight"]) {
+          direction.x += 1;
+        }
+        if (direction.length() > 0) {
+          direction.normalize();
+          // Move the character. Use moveWithCollisions if you have collision settings enabled.
+          character.moveWithCollisions(direction.scale(moveSpeed));
+          // Rotate to face the direction of movement
+          character.rotation.y = Math.atan2(direction.x, direction.z);
+        }
+      }
+    });
+
+    // Render loop
+    engine.runRenderLoop(() => {
+      scene.render();
+    });
+
+    // Resize the engine on window resize
+    window.addEventListener("resize", () => {
+      engine.resize();
+    });
+  </script>
+</body>
+</html>

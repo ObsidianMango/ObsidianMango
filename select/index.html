@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Character Selection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+        .orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .character-card {
+            border: 2px solid transparent;
+            transition: transform 0.3s, border-color 0.3s, filter 0.3s;
+            cursor: pointer;
+            background-color: #2a2a3e;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .character-card:hover:not(.selected) {
+            transform: translateY(-10px) scale(1.05);
+            border-color: #7f5af0;
+        }
+        .character-card.selected {
+            filter: none;
+            border-color: #00f2ea;
+            transform: scale(1.1);
+            box-shadow: 0 0 25px rgba(0,242,234,0.7);
+        }
+        .character-card.unselected {
+            filter: grayscale(90%) brightness(0.6);
+            transform: scale(0.95);
+        }
+        .character-image {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+        }
+        .btn-confirm {
+            background-color: #7f5af0;
+            color: #fff;
+            transition: background-color 0.3s, transform 0.3s;
+            padding: 12px 24px;
+        }
+        .btn-confirm:hover {
+            background-color: #6b47d8;
+            transform: scale(1.05);
+        }
+        .btn-confirm:disabled {
+            background-color: #4a4a5e;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1a1a2e; }
+        ::-webkit-scrollbar-thumb { background: #7f5af0; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b47d8; }
+        .message-box-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        .message-box-overlay.active {
+            opacity: 1; visibility: visible;
+        }
+        .message-box-content {
+            background-color: #2a2a3e;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center; color: #e0e0e0;
+            border: 1px solid #7f5af0;
+            max-width: 90%; width: 400px;
+        }
+        .message-box-content h2 { font-family: 'Orbitron', sans-serif; color: #00f2ea; margin-bottom: 15px;}
+        .message-box-content p { margin-bottom: 20px;}
+        .message-box-button {
+            background-color: #7f5af0; color: white;
+            padding: 10px 20px; border-radius: 8px; border: none;
+            cursor: pointer; transition: background-color 0.2s;
+        }
+        .message-box-button:hover { background-color: #6b47d8; }
+        .center-viewport {
+            min-height: calc(100vh - 220px);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        @media (max-width: 768px) {
+            .center-viewport { min-height: auto; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <header class="mb-6 text-center">
+        <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold orbitron tracking-wider" style="color: #00f2ea;">CHOOSE YOUR HERO</h1>
+        <p class="text-base sm:text-lg text-gray-400 mt-2">Select a character to begin your adventure.</p>
+    </header>
+
+    <div class="center-viewport w-full flex flex-col items-center">
+        <div id="characterGrid"
+            class="grid gap-4 w-full max-w-3xl mx-auto"
+            style="justify-content: center;">
+        </div>
+    </div>
+
+    <div class="mt-6 text-center w-full max-w-md">
+        <button id="confirmButton" class="btn-confirm rounded-lg font-semibold text-lg sm:text-xl shadow-lg" disabled>
+            Confirm Selection
+        </button>
+    </div>
+
+    <div id="customMessageBox" class="message-box-overlay">
+        <div class="message-box-content">
+            <h2 id="messageBoxTitle">Notification</h2>
+            <p id="messageBoxText">This is a message.</p>
+            <button id="messageBoxButton" class="message-box-button">OK</button>
+        </div>
+    </div>
+
+    <script>
+        const characters = [
+            { id: 1, name: "Steve", title: "The Thinkerer", imagePath: "images/steve.png", description: "A determined explorer, ready for any challenge." },
+            { id: 2, name: "Scooter", title: "Keegan", imagePath: "images/scooter.PNG", description: "Quick and agile, always on the move." },
+            { id: 3, name: "Gary", title: "The Wise", imagePath: "images/gary.PNG", description: "Strategic and cunning, with a plan for every situation." },
+            { id: 4, name: "Bill", title: "The Boss", imagePath: "images/boss.PNG", description: "A natural leader, inspiring allies and striking fear into foes." },
+            { id: 5, name: "Hammer", title: "The Jack", imagePath: "images/hammer.PNG", description: "Incredibly strong, capable of shattering defenses." },
+            { id: 6, name: "Mike", title: "Merry Prankster", imagePath: "images/mikes.PNG", description: "A master of unique skills and tools." },
+            { id: 7, name: "Devin", title: "The Devinator", imagePath: "images/devin.PNG", description: "Wields mystical arts to aid and attack." },
+            { id: 8, name: "Mike", title: "The Grape Guy", imagePath: "images/mikek.PNG", description: "Experienced and wise, a true survivor." }
+        ];
+
+        const characterGrid = document.getElementById('characterGrid');
+        const confirmButton = document.getElementById('confirmButton');
+        let selectedCharacterId = null;
+
+        const customMessageBox = document.getElementById('customMessageBox');
+        const messageBoxTitle = document.getElementById('messageBoxTitle');
+        const messageBoxText = document.getElementById('messageBoxText');
+        const messageBoxButton = document.getElementById('messageBoxButton');
+
+        let redirectPending = false;
+
+        function showMessage(title, text, callback) {
+            messageBoxTitle.textContent = title;
+            messageBoxText.textContent = text;
+            customMessageBox.classList.add('active');
+            redirectPending = typeof callback === "function" ? callback : null;
+        }
+
+        messageBoxButton.addEventListener('click', () => {
+            customMessageBox.classList.remove('active');
+            if (redirectPending) {
+                redirectPending();
+                redirectPending = false;
+            }
+        });
+
+        function getGridColsRows() {
+            if(window.innerWidth < 640) {
+                return {cols: 2, rows: 4};
+            } else {
+                return {cols: 4, rows: 2};
+            }
+        }
+
+        function renderCharacters() {
+            characterGrid.innerHTML = '';
+            const {cols, rows} = getGridColsRows();
+            characterGrid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+            const maxCharacters = cols * rows;
+            const visibleCharacters = characters.slice(0, maxCharacters);
+
+            visibleCharacters.forEach(character => {
+                const card = document.createElement('div');
+                card.className = 'character-card rounded-lg overflow-hidden p-3';
+                card.setAttribute('data-character-id', character.id);
+
+                if (character.id === selectedCharacterId) {
+                    card.classList.add('selected');
+                } else {
+                    card.classList.add('unselected');
+                }
+
+                const altText = character.name;
+                const placeholderInitial = character.name.charAt(0).toUpperCase();
+                card.innerHTML = `
+                    <img src="${character.imagePath}" alt="${altText}" class="character-image rounded-md mb-2" onerror="this.onerror=null; this.src='https://placehold.co/300x300/1a1a2e/e0e0e0?text=${placeholderInitial}'; this.alt='Image not found for ${altText}';">
+                    <h3 class="text-lg font-semibold text-center orbitron truncate" style="color: #00f2ea;">${character.name}</h3>
+                    <p class="text-xs text-gray-400 text-center truncate">${character.title}</p>
+                `;
+                card.addEventListener('click', () => selectCharacterById(character.id));
+                characterGrid.appendChild(card);
+            });
+
+            characterGrid.style.justifyContent = 'center';
+        }
+
+        function selectCharacterById(characterId) {
+            const character = characters.find(c => c.id === characterId);
+            if (!character) return;
+            selectedCharacterId = character.id;
+            confirmButton.disabled = false;
+            renderCharacters();
+            const selectedCardElement = characterGrid.querySelector(`.character-card[data-character-id="${selectedCharacterId}"]`);
+            if (selectedCardElement) {
+                selectedCardElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            }
+        }
+
+        function initializeSelection() {
+            if (characters.length > 0) {
+                selectCharacterById(characters[0].id);
+            } else {
+                confirmButton.disabled = true;
+            }
+            renderCharacters();
+        }
+
+        confirmButton.addEventListener('click', () => {
+            if (selectedCharacterId) {
+                const selectedChar = characters.find(c => c.id === selectedCharacterId);
+                showMessage(
+                    'Character Confirmed!',
+                    `You have selected ${selectedChar.name}, ${selectedChar.title}. Prepare for adventure!`,
+                    function() {
+                        window.location.href = 'https://obsidianmango.github.io/ObsidianMango/lsls/order.html';
+                    }
+                );
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (characters.length === 0) return;
+            let currentIndex = characters.findIndex(c => c.id === selectedCharacterId);
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                currentIndex = (currentIndex - 1 + characters.length) % characters.length;
+                selectCharacterById(characters[currentIndex].id);
+            } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                currentIndex = (currentIndex + 1) % characters.length;
+                selectCharacterById(characters[currentIndex].id);
+            }
+        });
+
+        window.addEventListener('resize', renderCharacters);
+
+        initializeSelection();
+    </script>
+</body>
+</html>

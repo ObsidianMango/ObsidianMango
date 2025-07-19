@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Retro font -->
+  <link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Emoji FPS Game - Retro Edition</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+      font-family: 'Press Start 2P', cursive;
+  -ms-touch-action: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #000;
+    }
+    /* HUD overlay */
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 5px;
+      text-align: center;
+      font-size: 12px;
+      color: #fff;
+      background: rgba(0,0,0,0.6);
+      z-index: 2;
+    }
+    /* Final screen overlay */
+    #finalScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 3;
+      color: #fff;
+      text-align: center;
+    }
+    #finalScreen h1 {
+      font-size: 28px;
+      margin-bottom: 20px;
+    }
+    #finalScreen p {
+      font-size: 14px;
+      margin: 5px;
+    }
+    /* Animated play again button */
+    #playAgainBtn {
+      padding: 10px 20px;
+      border: 2px solid #fff;
+      border-radius: 5px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 20px;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    /* Joystick */
+    #joystick {
+      position: absolute;
+      bottom: 10%;
+      left: 5%;
+      width: 80px;
+      height: 80px;
+      border: 2px solid #aaa;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      touch-action: none;
+      z-index: 2;
+    }
+    #joystickKnob {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      top: 50%;
+      left: 50%;
+      background: rgba(255,255,255,0.3);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    /* Shoot button displays current weapon */
+    #shootBtn {
+      position: absolute;
+      bottom: 5%;
+      right: 5%;
+      width: 80px;
+      height: 80px;
+      border: 2px solid #aaa;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      font-size: 36px;
+      line-height: 80px;
+      text-align: center;
+      color: #fff;
+      user-select: none;
+      touch-action: none;
+      z-index: 2;
+    }
+    /* Swap & Interact buttons on right side (stacked above shoot button) */
+    #swapBtn, #interactBtn {
+      position: absolute;
+      right: 5%;
+      width: 80px;
+      height: 80px;
+      border: 2px solid #aaa;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      font-size: 28px;
+      line-height: 80px;
+      text-align: center;
+      color: #fff;
+      user-select: none;
+      touch-action: none;
+      z-index: 2;
+    }
+    #swapBtn { bottom: 30%; }
+    #interactBtn { bottom: 15%; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="overlay">Level: 1 | Roosters: 0 | Ghosts: 0 | HP: 100 | Weapon: 🍗 | Time: 0s | Score: 0</div>
+  <div id="finalScreen">
+    <h1>GAME OVER</h1>
+    <p id="finalTime"></p>
+    <p id="finalScore"></p>
+    <div id="playAgainBtn">Play Again</div>
+  </div>
+  <div id="joystick"><div id="joystickKnob"></div></div>
+  <div id="shootBtn">🍗</div>
+  <div id="swapBtn">🔄</div>
+  <div id="interactBtn">🚪</div>
+  <script>
+    
+    (() => {
+      // Declare lastTime once.
+      let lastTime = performance.now();
+      // For door interaction: when the door button is pressed, we mark the door for opening.
+      // In this version, once a door is marked (doorStates entry created), updateDoors will gradually open it.
+      // (No need to hold the button continuously.)
+      let lastTouchEnd = 0;
+      document.addEventListener('gesturestart', function(e) {
+  e.preventDefault();
+});
+document.addEventListener('touchend', function(event) {
+  const now = new Date().getTime();
+  if (now - lastTouchEnd <= 300) {
+    event.preventDefault();
+  }
+  lastTouchEnd = now;
+}, false);
+      // Canvas & context setup
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      window.addEventListener('resize', resizeCanvas);
+      resizeCanvas();
+
+      // UI Elements
+      const overlay = document.getElementById('overlay');
+      const finalScreen = document.getElementById('finalScreen');
+      const finalTimeElem = document.getElementById('finalTime');
+      const finalScoreElem = document.getElementById('finalScore');
+      const playAgainBtn = document.getElementById('playAgainBtn');
+      const joystick = document.getElementById('joystick');
+      const joystickKnob = document.getElementById('joystickKnob');
+      const shootBtn = document.getElementById('shootBtn');
+      const swapBtn = document.getElementById('swapBtn');
+      const interactBtn = document.getElementById('interactBtn');
+
+      // Game state variables
+      let currentLevel = 0;
+      let score = 0;
+      let levelData = []; // 0: empty, 1: wall, 2: closed door, 3: open door
+      let enemies = [];   // {x, y, dx, dy, isGhost, health, shootCooldown}
+      let pickups = [];   // {x, y, type} where type: 'rock' or 'dagger'
+      let player = { x: 0, y: 0, angle: 0, health: 100, weapon: "🍗" };
+      let inventory = ["🍗"];
+      let projectiles = []; // {x, y, dx, dy, rotation, rotationSpeed, weapon}
+      let particles = [];   // {x, y, z, vx, vy, vz, life, color}
+      let gameStartTime = performance.now();
+      let gameOver = false;
+      let damageFlashTimer = 0;
+
+      // --- Door Animation Settings ---
+      let doorStates = {}; // key: "x,y", value: progress (0 to 1) for doors being opened
+      const doorSpeed = 0.5; // how fast the door opens
+      const doorMaxOffset = 50; // maximum upward offset in pixels when door is fully open
+
+      // Level definitions (using characters: '#' wall, 'd' door, 'P' player, 'R' rooster, 'G' ghost, 'K' rock, 'D' dagger)
+      const levels = [
+        [
+          "###########",
+          "#...#.R...#",
+          "#...#.K..#",
+          "#...d.....#",
+          "#...#.....#",
+          "#.P.#.R..#",
+          "###########"
+        ],
+        [
+          "###############",
+          "#P....d..D...#",
+          "#.....#.......#",
+          "#.....#...R..#",
+          "#.....#.......#",
+          "#.....d.G....#",
+          "###############"
+        ],
+         // Level 1 – 7×11; horizontal divider with door at center.
+  [
+    "###########",
+    "#...P...R.#",
+    "#.........#",
+    "#####d#####",
+    "#..K....D.#",
+    "#.........#",
+    "###########"
+  ],
+  // Level 2 – 7×15; vertical divider with door in one row.
+  [
+    "###############",
+    "#....R.#...G..#",
+    "#......#......#",
+    "#....P.d....D.#",
+    "#......#......#",
+    "#...K..#...R..#",
+    "###############"
+  ],
+  // Level 3 – 9×17; mixed dividers.
+  [
+    "#################",
+    "#...............#",
+    "#...R...d....K..#",
+    "#...............#",
+    "########d########",
+    "#....G.....D....#",
+    "#...............#",
+    "#...K...R.......#",
+    "#################"
+  ],
+  // Level 4 – 7×13; vertical divider only.
+  [
+    "#############",
+    "#...R.#...G.#",
+    "#...........#",
+    "#..P..d....D#",
+    "#...........#",
+    "#...K.#...R.#",
+    "#############"
+  ],
+  // Level 5 – 7×13; horizontal divider only.
+  [
+    "#############",
+    "#.....P.....#",
+    "#...R.......#",
+    "######d######", // 6 '#' then d then 6 '#' = 13 columns
+    "#...K...D...#",
+    "#..........R#",
+    "#############"
+  ],
+  // Level 6 – 9×15; horizontal divider.
+  [
+    "###############",
+    "#....P........#",
+    "#...R.........#",
+    "#######d#######", // 7 '#' then d then 7 '#' = 15 columns
+    "#.............#",
+    "#...K.....D...#",
+    "#......R......#",
+    "#.............#",
+    "###############"
+  ],
+  // Level 7 – 9×15; vertical divider.
+  [
+    "###############",
+    "#...R..#...G..#",
+    "#......#......#",
+    "#..P...d...K..#",
+    "#......#......#",
+    "#...D..#...R..#",
+    "#......#......#",
+    "#...G..#...K..#",
+    "###############"
+  ],
+  // Level 8 – 11×17; mixed dividers.
+  [
+    "#################",
+    "#...R.......G...#",
+    "#...............#",
+    "#...P...d...K...#",
+    "#...............#",
+    "########d########",
+    "#...G.....D...#",
+    "#...............#",
+    "#...K.....R...#",
+    "#...............#",
+    "#################"
+  ],
+  // Level 9 – 11×17; vertical divider.
+  [
+    "#################",
+    "#...R..#...G...#",
+    "#......#.......#",
+    "#..P...d...K..D#",
+    "#......#.......#",
+    "#...G..#...R...#",
+    "#......#.......#",
+    "#...K..#...D...#",
+    "#......#.......#",
+    "#...R..#...G...#",
+    "#################"
+  ],
+  // Level 10 – 11×19; horizontal divider.
+  [
+    "###################",
+    "#.....P..........#",
+    "#...R............#",
+    "#...............#",
+    "#########d#########", // 9 '#' then d then 9 '#' = 19 columns
+    "#...............#",
+    "#...K.....D.....#",
+    "#......R........#",
+    "#...............#",
+    "#...G.....K.....#",
+    "###################"
+  ],
+  // Level 11 – 13×19; vertical divider with mixed obstacles.
+  [
+    "###################",
+    "#...R...#...G...R.#",
+    "#.......#.......#.#",
+    "#..P....d...K...D.#",
+    "#.......#.......#.#",
+    "#...G...#...R...K.#",
+    "#.......#.......#.#",
+    "#...K...#...D...R.#",
+    "#.......#.......#.#",
+    "#...R...#...G...K.#",
+    "###################",
+    "#................#",
+    "###################"
+  ],
+  // Level 12 – 13×21; horizontal divider.
+  [
+    "#####################",
+    "#.....P...........R.#",
+    "#...R...............#",
+    "#...................#",
+    "##########d##########", // 10 '#' then d then 10 '#' = 21 columns
+    "#...................#",
+    "#...K.......D......#",
+    "#.......R..........#",
+    "#...................#",
+    "#...G.......K......#",
+    "#..........R........#",
+    "#####################",
+    "#...................#"
+  ],
+  // Level 13 – 13×21; vertical divider.
+  [
+    "#####################",
+    "#...R....#....G...R.#",
+    "#........#..........#",
+    "#..P.....d....K.....#",
+    "#........#..........#",
+    "#...G....#....R...K.#",
+    "#........#..........#",
+    "#...K....#....D...R.#",
+    "#........#..........#",
+    "#...R....#....G...K.#",
+    "#........#..........#",
+    "#...K....#....D...R.#",
+    "#####################"
+  ],
+  // Level 14 – 15×23; horizontal divider.
+  [
+    "#######################",
+    "#.....P.............R.#",
+    "#...R.................#",
+    "#.....................#",
+    "###########d###########", // 11 '#' then d then 11 '#' = 23 columns
+    "#.....................#",
+    "#...K.......D........#",
+    "#.......R............#",
+    "#.....................#",
+    "#...G.......K........#",
+    "#.....................#",
+    "#..........R..........#",
+    "#.....................#",
+    "#...R.......G........#",
+    "#######################"
+  ],
+  // Level 15 – 15×23; vertical divider.
+  [
+    "#######################",
+    "#...R...#...G...#...R.#",
+    "#.......#.......#.....#",
+    "#..P....d...K...d...D.#",
+    "#.......#.......#.....#",
+    "#...G...#...R...#...K.#",
+    "#.......#.......#.....#",
+    "#...K...#...D...#...R.#",
+    "#.......#.......#.....#",
+    "#...R...#...G...#...K.#",
+    "#.......#.......#.....#",
+    "#...K...#...D...#...R.#",
+    "#.......#.......#.....#",
+    "#...R...#...G...#...K.#",
+    "#######################"
+  ],
+  // Level 16 – 15×25; horizontal divider.
+  [
+    "#########################",
+    "#.....P...............R.#",
+    "#...R...................#",
+    "#.......................#",
+    "############d############", // 12 '#' then d then 12 '#' = 25 columns
+    "#.......................#",
+    "#...K.......D.........#",
+    "#.......R.............#",
+    "#.......................#",
+    "#...G.......K.........#",
+    "#.......................#",
+    "#..........R..........#",
+    "#.......................#",
+    "#...R.......G.........#",
+    "#########################"
+  ],
+  // Level 17 – 15×25; vertical divider.
+  [
+    "#########################",
+    "#...R...#...G...#...R..#",
+    "#.......#.......#......#",
+    "#..P....d...K...d...D..#",
+    "#.......#.......#......#",
+    "#...G...#...R...#...K..#",
+    "#.......#.......#......#",
+    "#...K...#...D...#...R..#",
+    "#.......#.......#......#",
+    "#...R...#...G...#...K..#",
+    "#.......#.......#......#",
+    "#...K...#...D...#...R..#",
+    "#.......#.......#......#",
+    "#...R...#...G...#...K..#",
+    "#########################"
+  ],
+  // Level 18 – 11×21; horizontal divider (variation).
+  [
+    "#####################",
+    "#.....P...........R.#",
+    "#...R...............#",
+    "#...................#",
+    "##########d##########", // 10 '#' then d then 10 '#' = 21 columns
+    "#...................#",
+    "#...K.......D......#",
+    "#.......R..........#",
+    "#...................#",
+    "#...G.......K......#",
+    "#####################"
+  ],
+  // Level 19 – 11×21; vertical divider (variation).
+  [
+    "#####################",
+    "#...R...#...G...R..#",
+    "#.......#.......#..#",
+    "#..P....d...K...D..#",
+    "#.......#.......#..#",
+    "#...G...#...R...K..#",
+    "#.......#.......#..#",
+    "#...K...#...D...R..#",
+    "#.......#.......#..#",
+    "#...R...#...G...K..#",
+    "#####################"
+  ],
+  // Level 20 – 13×23; horizontal divider.
+  [
+    "#######################",
+    "#.....P.............R.#",
+    "#...R.................#",
+    "#.....................#",
+    "###########d###########", // 11 '#' then d then 11 '#' = 23 columns
+    "#.....................#",
+    "#...K.......D........#",
+    "#.......R............#",
+    "#.....................#",
+    "#...G.......K........#",
+    "#..........R..........#",
+    "#######################"
+  ],
+  // Level 21 – 13×23; vertical divider.
+  [
+    "#######################",
+    "#...R...#...G...#...R.#",
+    "#.......#.......#.....#",
+    "#..P....d...K...d...D.#",
+    "#.......#.......#.....#",
+    "#...G...#...R...#...K.#",
+    "#.......#.......#.....#",
+    "#...K...#...D...#...R.#",
+    "#.......#.......#.....#",
+    "#...R...#...G...#...K.#",
+    "#######################"
+  ],
+  // Level 22 – 15×25; horizontal divider.
+  [
+    "#########################",
+    "#.....P...............R.#",
+    "#...R...................#",
+    "#.......................#",
+    "############d############", // 12 '#' then d then 12 '#' = 25 columns
+    "#.......................#",
+    "#...K.......D.........#",
+    "#.......R.............#",
+    "#.......................#",
+    "#...G.......K.........#",
+    "#.......................#",
+    "#..........R..........#",
+    "#########################"
+  ],
+  // Level 23 – 15×25; vertical divider.
+  [
+    "#########################",
+    "#...R...#...G...#...R..#",
+    "#.......#.......#......#",
+    "#..P....d...K...d...D..#",
+    "#.......#.......#......#",
+    "#...G...#...R...#...K..#",
+    "#.......#.......#......#",
+    "#...K...#...D...#...R..#",
+    "#.......#.......#......#",
+    "#...R...#...G...#...K..#",
+    "#########################"
+  ],
+  // Level 24 – 13×21; horizontal divider (repeat variation).
+  [
+    "#####################",
+    "#.....P...........R.#",
+    "#...R...............#",
+    "#...................#",
+    "##########d##########", // 10 '#' then d then 10 '#' = 21 columns
+    "##########d##########",
+    "#...K.......D......#",
+    "#.......R..........#",
+    "#####################"
+  ],
+  // Level 25 – 13×21; vertical divider (repeat variation).
+  [
+    "#####################",
+    "#...R...#...G...R..#",
+    "#.......#.......#..#",
+    "#..P....d...K...D..#",
+    "#.......#.......#..#",
+    "#...G...#...R...K..#",
+    "#####################"
+  ],
+  // Level 26 – 15×27; horizontal divider with extra open row.
+  [
+    "###########################",
+    "#.....P...............R...#",
+    "#...R.....................#",
+    "#.........................#",
+    "#.................#.......#",
+    "###############d###############", // 13 '#' then d then 13 '#' = 27 columns
+    "#.........................#",
+    "#...K.......D.............#",
+    "#.......R..................#",
+    "#.........................#",
+    "#...G.......K.............#",
+    "#..........R..............#",
+    "###########################"
+  ],
+  // Level 27 – 15×27; vertical divider.
+  [
+    "###########################",
+    "#...R...#...G...#...R....#",
+    "#.......#.......#........#",
+    "#..P....d...K...d...D....#",
+    "#.......#.......#........#",
+    "#...G...#...R...#...K....#",
+    "#.......#.......#........#",
+    "#...K...#...D...#...R....#",
+    "#.......#.......#........#",
+    "#...R...#...G...#...K....#",
+    "###########################"
+  ],
+  // Level 28 – 17×29; horizontal divider.
+  [
+    "#############################",
+    "#.....P.................R...#",
+    "#...R.......................#",
+    "#...........................#",
+    "#...........................#",
+    "#...........................#",
+    "#...........................#",
+    "##############d##############", // 14 '#' then d then 14 '#' = 29 columns
+    "#...........................#",
+    "#...K.......D...............#",
+    "#.......R...................#",
+    "#...........................#",
+    "#...G.......K...............#",
+    "#..........R................#",
+    "#############################",
+    "#############################",
+    "#############################"
+  ],
+  // Level 29 – 17×29; vertical divider.
+  [
+    "#############################",
+    "#...R...#...G...#...R......#",
+    "#.......#.......#..........#",
+    "#..P....d...K...d...D......#",
+    "#.......#.......#..........#",
+    "#...G...#...R...#...K......#",
+    "#.......#.......#..........#",
+    "#...K...#...D...#...R......#",
+    "#.......#.......#..........#",
+    "#...R...#...G...#...K......#",
+    "#############################",
+    "#############################",
+    "#############################"
+  ],
+  // Level 30 – 17×31; grand horizontal divider.
+  [
+    "###############################",
+    "#.....P...............R......#",
+    "#...R.........................#",
+    "#.............................#",
+    "#.............................#",
+    "#.............................#",
+    "#.............................#",
+    "###############d###############", // 15 '#' then d then 15 '#' = 31 columns
+    "#.............................#",
+    "#...K.......D.................#",
+    "#.......R.....................#",
+    "#.............................#",
+    "#...G.......K.................#",
+    "#..........R..................#",
+    "###############################",
+    "###############################",
+    "###############################"
+  ]
+      ];
+
+      // Colors & settings
+      const ceilingColor = "#005588"; 
+      const floorColor = "#444444";
+      const wallColor = "#c0c0c0";
+      const wallColorDark = "#888888";
+      const doorColor = "#8B4513";  // Brown color for closed door
+      const explosionColors = ["255,165,0", "255,100,0", "255,255,0"];
+      const ghostExplosionColor = "255,0,0";
+
+      // Joystick variables
+      let moveForward = 0;
+      let turnDirection = 0;
+      const moveSpeed = 3.0;
+      const turnSpeed = 2.0;
+      const joystickRadius = 40;
+      let joystickActive = false;
+      let joystickPointerId = null;
+      let joystickCenterX = 0;
+      let joystickCenterY = 0;
+
+      // Keyboard input
+      const keys = {};
+
+      // Utility: Line-of-sight check (applied to enemies, pickups, and projectiles)
+      function lineOfSight(x1, y1, x2, y2) {
+        const dx = x2 - x1, dy = y2 - y1;
+        const dist = Math.hypot(dx, dy);
+        const steps = Math.ceil(dist / 0.1);
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          const x = x1 + dx * t, y = y1 + dy * t;
+          if (isWall(x, y)) return false;
+        }
+        return true;
+      }
+
+      // Level loading – doors are left closed (cell value 2) until the player interacts.
+      function loadLevel(index) {
+        currentLevel = index;
+        enemies = [];
+        projectiles = [];
+        particles = [];
+        pickups = [];
+        doorStates = {};  // reset door states
+        gameStartTime = performance.now();
+        gameOver = false;
+        player.health = 10;
+        player.weapon = "🍗";
+        inventory = ["🍗"];
+        const rows = levels[index];
+        levelData = [];
+        for (let y = 0; y < rows.length; y++) {
+          const rowStr = rows[y];
+          const rowArr = [];
+          for (let x = 0; x < rowStr.length; x++) {
+            const ch = rowStr[x];
+            if (ch === "#") {
+              rowArr.push(1);
+            } else if (ch === "d") {
+              rowArr.push(2); // closed door
+              // Do not open automatically; doorStates will be created when interact() is called.
+            } else if (ch === "P") {
+              player.x = x + 0.5;
+              player.y = y + 0.5;
+              player.angle = 0;
+              rowArr.push(0);
+            } else if (ch === "R") {
+              enemies.push({ x: x + 0.5, y: y + 0.5, dx: (Math.random()-0.5)*1.5, dy: (Math.random()-0.5)*1.5, isGhost: false, shootCooldown: 3.0 });
+              rowArr.push(0);
+            } else if (ch === "G") {
+              enemies.push({ x: x + 0.5, y: y + 0.5, dx: 0, dy: 0, isGhost: true, health: 2, shootCooldown: 1.0 });
+              rowArr.push(0);
+            } else if (ch === "K") {
+              pickups.push({ x: x + 0.5, y: y + 0.5, type: "rock" });
+              rowArr.push(0);
+            } else if (ch === "D") {
+              pickups.push({ x: x + 0.5, y: y + 0.5, type: "dagger" });
+              rowArr.push(0);
+            } else {
+              rowArr.push(0);
+            }
+          }
+          levelData.push(rowArr);
+        }
+      }
+
+      // isWall: cells with 1 (wall) or 2 (closed door) block movement.
+      function isWall(x, y) {
+        const mx = Math.floor(x), my = Math.floor(y);
+        if (my < 0 || my >= levelData.length || mx < 0 || mx >= levelData[0].length)
+          return true;
+        return (levelData[my][mx] === 1 || levelData[my][mx] === 2);
+      }
+
+      // Update door animations – now once a door is marked for opening, it will open gradually.
+      function updateDoors(dt) {
+        for (const key in doorStates) {
+          doorStates[key] += dt * doorSpeed;
+          if (doorStates[key] >= 1) {
+            const parts = key.split(',');
+            const mx = parseInt(parts[0]);
+            const my = parseInt(parts[1]);
+            levelData[my][mx] = 0; // door now open
+            delete doorStates[key];
+          }
+        }
+      }
+
+      // Explosions
+      function createExplosion(x, y) {
+        const count = 150;
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * 2 * Math.PI;
+          const speed = Math.random() * 3 + 1;
+          const vx = Math.sin(angle) * speed;
+          const vy = -Math.cos(angle) * speed;
+          const vz = (Math.random()-0.5) * 6;
+          const col = explosionColors[Math.floor(Math.random() * explosionColors.length)];
+          particles.push({ x, y, z: 0, vx, vy, vz, life: 1.0, color: col });
+        }
+      }
+      function createGhostExplosion(x, y) {
+        const count = 300;
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * 2 * Math.PI;
+          const speed = Math.random() * 4 + 2;
+          const vx = Math.sin(angle) * speed;
+          const vy = -Math.cos(angle) * speed;
+          const vz = (Math.random()-0.5) * 8;
+          particles.push({ x, y, z: 0, vx, vy, vz, life: 1.0, color: ghostExplosionColor });
+        }
+      }
+
+      // Player shooting
+      function shoot() {
+        const dirX = Math.sin(player.angle);
+        const dirY = -Math.cos(player.angle);
+        const speed = 6.0;
+        projectiles.push({ x: player.x, y: player.y, dx: dirX * speed, dy: dirY * speed, rotation: 0, rotationSpeed: Math.PI * 2, weapon: player.weapon });
+      }
+
+      // Enemy shooting (for both non-ghosts and ghosts; ghosts shoot slower)
+      function enemyShoot(enemy) {
+        const dx = player.x - enemy.x;
+        const dy = player.y - enemy.y;
+        const dist = Math.hypot(dx, dy);
+        const dirX = dx / dist;
+        const dirY = dy / dist;
+        const speed = enemy.isGhost ? 0.5 : 1.0;
+        projectiles.push({ x: enemy.x, y: enemy.y, dx: dirX * speed, dy: dirY * speed, rotation: 0, rotationSpeed: enemy.isGhost ? Math.PI : Math.PI * 2, weapon: "💥" });
+      }
+
+      // Swap weapon (player)
+      function swapWeapon() {
+        if (inventory.length < 2) return;
+        let idx = inventory.indexOf(player.weapon);
+        idx = (idx + 1) % inventory.length;
+        player.weapon = inventory[idx];
+        shootBtn.textContent = player.weapon;
+      }
+
+      // Interact: When the player interacts and is targeting a door cell (value 2),
+      // add that door to doorStates if it isn’t already.
+      function interact() {
+        const interactDist = 1.0;
+        const doorX = player.x + Math.sin(player.angle) * interactDist;
+        const doorY = player.y - Math.cos(player.angle) * interactDist;
+        const mx = Math.floor(doorX);
+        const my = Math.floor(doorY);
+        if (my < 0 || my >= levelData.length || mx < 0 || mx >= levelData[0].length) return;
+        if (levelData[my][mx] === 2) {
+          const key = `${mx},${my}`;
+          if (doorStates[key] === undefined) {
+            doorStates[key] = 0;
+          }
+        }
+      }
+
+      // Final screen & restart
+      function showFinalScreen() {
+        finalTimeElem.textContent = "Time: " + Math.floor((performance.now() - gameStartTime) / 1000) + "s";
+        finalScoreElem.textContent = "Score: " + score;
+        finalScreen.style.display = "flex";
+      }
+      function restartGame() {
+        finalScreen.style.display = "none";
+        score = 0;
+        loadLevel(0);
+        gameStartTime = performance.now();
+        gameOver = false;
+        lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
+      }
+      playAgainBtn.addEventListener("click", restartGame);
+
+      // For pointer-based interact button, simply call interact() on pointerdown.
+      interactBtn.addEventListener('pointerdown', (e) => { 
+        e.preventDefault(); 
+        interact();
+      });
+
+      // For keyboard, use 'e' to interact.
+      window.addEventListener('keydown', (e) => {
+        if (e.key === "e") { e.preventDefault(); interact(); }
+      });
+
+      // Joystick event handling
+      joystick.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        joystickActive = true;
+        joystickPointerId = e.pointerId;
+        const rect = joystick.getBoundingClientRect();
+        joystickCenterX = rect.left + rect.width / 2;
+        joystickCenterY = rect.top + rect.height / 2;
+        joystick.setPointerCapture(joystickPointerId);
+        const dx = e.clientX - joystickCenterX;
+        const dy = e.clientY - joystickCenterY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let normX = dist ? dx / dist : 0, normY = dist ? dy / dist : 0;
+        if (dist > joystickRadius) { normX = dx / dist; normY = dy / dist; }
+        if (dist < 5) { normX = 0; normY = 0; }
+        moveForward = -normY;
+        turnDirection = normX;
+        joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
+      });
+      joystick.addEventListener('pointermove', (e) => {
+        if (!joystickActive || e.pointerId !== joystickPointerId) return;
+        const dx = e.clientX - joystickCenterX;
+        const dy = e.clientY - joystickCenterY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let normX = dist ? dx / dist : 0, normY = dist ? dy / dist : 0;
+        if (dist > joystickRadius) { normX = dx / dist; normY = dy / dist; }
+        if (dist < 5) { normX = 0; normY = 0; }
+        moveForward = -normY;
+        turnDirection = normX;
+        joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
+      });
+      joystick.addEventListener('pointerup', (e) => {
+        if (e.pointerId !== joystickPointerId) return;
+        joystick.releasePointerCapture(joystickPointerId);
+        joystickActive = false;
+        joystickPointerId = null;
+        moveForward = 0;
+        turnDirection = 0;
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
+      });
+      joystick.addEventListener('pointercancel', (e) => {
+        if (e.pointerId !== joystickPointerId) return;
+        joystickActive = false;
+        joystickPointerId = null;
+        moveForward = 0;
+        turnDirection = 0;
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
+      });
+
+      shootBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); shoot(); });
+      window.addEventListener('keydown', (e) => {
+        keys[e.key] = true;
+        if (e.key === " ") { e.preventDefault(); shoot(); }
+      });
+      window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+      
+      swapBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); swapWeapon(); });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === "q") { e.preventDefault(); swapWeapon(); }
+      });
+
+      // Main game loop – level only advances when all enemies are killed.
+      function gameLoop(time) {
+        const dt = Math.min((time - lastTime) / 1000, 0.1);
+        lastTime = time;
+        if (!gameOver) {
+          let kbMove = 0, kbTurn = 0;
+          if (keys['w'] || keys['ArrowUp']) kbMove += 1;
+          if (keys['s'] || keys['ArrowDown']) kbMove -= 1;
+          if (keys['a'] || keys['ArrowLeft']) kbTurn -= 1;
+          if (keys['d'] || keys['ArrowRight']) kbTurn += 1;
+          const effectiveMove = (joystickActive ? moveForward : 0) + kbMove;
+          const effectiveTurn = (joystickActive ? turnDirection : 0) + kbTurn;
+          
+          player.angle += effectiveTurn * turnSpeed * dt;
+          if (player.angle < 0) player.angle += Math.PI * 2;
+          if (player.angle >= Math.PI * 2) player.angle -= Math.PI * 2;
+          if (effectiveMove !== 0) {
+            const step = effectiveMove * moveSpeed * dt;
+            const newX = player.x + Math.sin(player.angle) * step;
+            const newY = player.y - Math.cos(player.angle) * step;
+            if (!isWall(newX, player.y)) player.x = newX;
+            if (!isWall(player.x, newY)) player.y = newY;
+          }
+          
+          // Process pickups
+          for (let i = 0; i < pickups.length; i++) {
+            const pu = pickups[i];
+            if (Math.hypot(player.x - pu.x, player.y - pu.y) < 0.5) {
+              if (!inventory.includes(pu.type === "rock" ? "🪨" : "🗡️"))
+                inventory.push(pu.type === "rock" ? "🪨" : "🗡️");
+              player.weapon = pu.type === "rock" ? "🪨" : "🗡️";
+              shootBtn.textContent = player.weapon;
+              score += 50;
+              pickups.splice(i, 1);
+              i--;
+            }
+          }
+          
+          // Process enemies and enemy shooting
+          for (let i = 0; i < enemies.length; i++) {
+            const enemy = enemies[i];
+            if (enemy.isGhost) {
+              if (enemy.shootCooldown === undefined) enemy.shootCooldown = 1.0;
+              enemy.shootCooldown -= dt;
+              if (enemy.shootCooldown <= 0) {
+                enemyShoot(enemy);
+                enemy.shootCooldown = 1.0;
+              }
+              const dx = player.x - enemy.x, dy = player.y - enemy.y;
+              const dist = Math.hypot(dx, dy);
+              const chaseSpeed = 2.5;
+              enemy.dx = (dx / dist) * chaseSpeed;
+              enemy.dy = (dy / dist) * chaseSpeed;
+            } else {
+              if (enemy.shootCooldown === undefined) enemy.shootCooldown = 3.0;
+              enemy.shootCooldown -= dt;
+              if (enemy.shootCooldown <= 0) {
+                enemyShoot(enemy);
+                enemy.shootCooldown = 3.0;
+              }
+            }
+            let newX = enemy.x + enemy.dx * dt;
+            let newY = enemy.y + enemy.dy * dt;
+            if (!isWall(newX, enemy.y)) enemy.x = newX; else enemy.dx = -enemy.dx;
+            if (!isWall(enemy.x, newY)) enemy.y = newY; else enemy.dy = -enemy.dy;
+            if (enemy.isGhost && Math.hypot(player.x - enemy.x, player.y - enemy.y) < 0.5) {
+              player.health--;
+              damageFlashTimer = 0.2;
+              enemy.x -= enemy.dx * dt * 2;
+              enemy.y -= enemy.dy * dt * 2;
+              if (player.health <= 0) gameOver = true;
+            }
+          }
+          
+          // Process projectiles
+          for (let i = 0; i < projectiles.length; i++) {
+            const proj = projectiles[i];
+            proj.x += proj.dx * dt;
+            proj.y += proj.dy * dt;
+            proj.rotation += proj.rotationSpeed * dt;
+            if (proj.weapon === "💥") {
+              if (Math.hypot(player.x - proj.x, player.y - proj.y) < 0.5) {
+                player.health--;
+                createExplosion(proj.x, proj.y);
+                projectiles.splice(i, 1);
+                i--;
+                continue;
+              }
+            }
+            if (isWall(proj.x, proj.y)) {
+              createExplosion(proj.x, proj.y);
+              projectiles.splice(i, 1);
+              i--;
+              continue;
+            }
+            if (proj.x < 0 || proj.y < 0 || proj.x >= levelData[0].length || proj.y >= levelData.length) {
+              projectiles.splice(i, 1);
+              i--;
+              continue;
+            }
+            if (!lineOfSight(player.x, player.y, proj.x, proj.y)) continue;
+            if (proj.weapon !== "💥") {
+              for (let j = 0; j < enemies.length; j++) {
+                const enemy = enemies[j];
+                if (Math.hypot(enemy.x - proj.x, enemy.y - proj.y) < 0.5) {
+                  if (enemy.isGhost) {
+                    enemy.health--;
+                    if (enemy.health <= 0) { createGhostExplosion(enemy.x, enemy.y); score += 300; enemies.splice(j, 1); j--; }
+                  } else { createExplosion(enemy.x, enemy.y); score += 100; enemies.splice(j, 1); j--; }
+                  projectiles.splice(i, 1);
+                  i--;
+                  break;
+                }
+              }
+            }
+          }
+          
+          // Process explosion particles
+          for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.z += p.vz * dt;
+            p.life -= dt;
+            if (p.life <= 0) { particles.splice(i, 1); i--; }
+          }
+          
+          // Update door animations (doors will now open gradually once marked by interact())
+          updateDoors(dt);
+          
+          // Level progression: Only progress when all enemies are killed.
+          if (enemies.length === 0) {
+            if (currentLevel < levels.length - 1) loadLevel(currentLevel + 1);
+            else gameOver = true;
+          }
+          if (damageFlashTimer > 0) damageFlashTimer = Math.max(damageFlashTimer - dt, 0);
+          const elapsedTime = Math.floor((performance.now() - gameStartTime) / 1000);
+          let roosterCount = 0, ghostCount = 0;
+          for (const enemy of enemies) { enemy.isGhost ? ghostCount++ : roosterCount++; }
+          overlay.textContent = `Level: ${currentLevel+1} | Roosters: ${roosterCount} | Ghosts: ${ghostCount} | HP: ${player.health} | Weapon: ${player.weapon} | Time: ${elapsedTime}s | Score: ${score}`;
+          shootBtn.textContent = player.weapon;
+          if (player.health <= 0) gameOver = true;
+          renderScene();
+          if (gameOver) { showFinalScreen(); return; }
+          requestAnimationFrame(gameLoop);
+        } else {
+          showFinalScreen();
+        }
+      }
+
+      // Render function for drawing the scene (includes door offset for marked doors)
+      function renderScene() {
+        const w = canvas.width, h = canvas.height;
+        ctx.fillStyle = ceilingColor;
+        ctx.fillRect(0, 0, w, h/2);
+        ctx.fillStyle = floorColor;
+        ctx.fillRect(0, h/2, w, h/2);
+        const posX = player.x, posY = player.y;
+        const dirX = Math.sin(player.angle), dirY = -Math.cos(player.angle);
+        const fov = 1.0472;
+        const planeLen = Math.tan(fov/2);
+        const planeX = -dirY * planeLen, planeY = dirX * planeLen;
+        for (let x = 0; x < w; x++) {
+          const cameraX = 2 * x / w - 1;
+          const rayDirX = dirX + planeX * cameraX;
+          const rayDirY = dirY + planeY * cameraX;
+          let mapX = Math.floor(posX), mapY = Math.floor(posY);
+          let sideDistX, sideDistY;
+          const deltaDistX = (rayDirX === 0) ? Infinity : Math.abs(1 / rayDirX);
+          const deltaDistY = (rayDirY === 0) ? Infinity : Math.abs(1 / rayDirY);
+          let stepX, stepY, hit = 0, side = 0;
+          if (rayDirX < 0) { stepX = -1; sideDistX = (posX - mapX) * deltaDistX; }
+          else { stepX = 1; sideDistX = (mapX + 1 - posX) * deltaDistX; }
+          if (rayDirY < 0) { stepY = -1; sideDistY = (posY - mapY) * deltaDistY; }
+          else { stepY = 1; sideDistY = (mapY + 1 - posY) * deltaDistY; }
+          while (hit === 0) {
+            if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
+            else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
+            if (mapX < 0 || mapX >= levelData[0].length || mapY < 0 || mapY >= levelData.length) { hit = 1; break; }
+            if (levelData[mapY][mapX] === 1 || levelData[mapY][mapX] === 2) hit = 1;
+          }
+          let perpWallDist = (side === 0) ? sideDistX - deltaDistX : sideDistY - deltaDistY;
+          if (perpWallDist < 0.01) perpWallDist = 0.01;
+          const lineHeight = Math.floor(h / perpWallDist);
+          let drawStart = Math.floor(-lineHeight/2 + h/2);
+          if (drawStart < 0) drawStart = 0;
+          let drawEnd = Math.floor(lineHeight/2 + h/2);
+          if (drawEnd >= h) drawEnd = h - 1;
+          if (levelData[mapY][mapX] === 2) {
+            const doorKey = `${mapX},${mapY}`;
+            const progress = doorStates[doorKey] || 0;
+            const doorOffset = progress * doorMaxOffset;
+            drawStart = Math.max(drawStart - doorOffset, 0);
+            ctx.fillStyle = doorColor;
+          } else {
+            ctx.fillStyle = (side === 1) ? wallColorDark : wallColor;
+          }
+          ctx.fillRect(x, drawStart, 1, drawEnd - drawStart + 1);
+        }
+        const spriteList = [];
+        const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+        const halfW = w / 2, halfH = h / 2;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (const enemy of enemies) {
+          if (!lineOfSight(player.x, player.y, enemy.x, enemy.y)) continue;
+          const ex = enemy.x - posX, ey = enemy.y - posY;
+          const transformX = invDet * (dirY * ex - dirX * ey);
+          const transformY = invDet * (-planeY * ex + planeX * ey);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor(h / transformY));
+          spriteList.push({ type: 'enemy', char: enemy.isGhost ? "👻" : "🐓", x: spriteX, height: spriteHeight, depth: transformY });
+        }
+        for (const pu of pickups) {
+          if (!lineOfSight(player.x, player.y, pu.x, pu.y)) continue;
+          const px = pu.x - posX, py = pu.y - posY;
+          const transformX = invDet * (dirY * px - dirX * py);
+          const transformY = invDet * (-planeY * px + planeX * py);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.3));
+          const emoji = pu.type === "rock" ? "🪨" : "🗡️";
+          spriteList.push({ type: 'pickup', char: emoji, x: spriteX, height: spriteHeight, depth: transformY });
+        }
+        for (const proj of projectiles) {
+          if (!lineOfSight(player.x, player.y, proj.x, proj.y)) continue;
+          const px = proj.x - posX, py = proj.y - posY;
+          const transformX = invDet * (dirY * px - dirX * py);
+          const transformY = invDet * (-planeY * px + planeX * py);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.3));
+          spriteList.push({ type: 'projectile', char: proj.weapon, x: spriteX, height: spriteHeight < 1 ? 1 : spriteHeight, depth: transformY, rotation: proj.rotation });
+        }
+        for (const p of particles) {
+          const fx = p.x - posX, fy = p.y - posY;
+          const transformX = invDet * (dirY * fx - dirX * fy);
+          const transformY = invDet * (-planeY * fx + planeX * fy);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.1));
+          const yOffset = p.z * 50;
+          spriteList.push({ type: 'particle', x: spriteX, height: spriteHeight < 1 ? 1 : spriteHeight, depth: transformY, alpha: p.life, color: p.color, yOffset: yOffset });
+        }
+        spriteList.sort((a, b) => b.depth - a.depth);
+        for (const spr of spriteList) {
+          if (spr.x < -spr.height || spr.x > canvas.width + spr.height) continue;
+          if (spr.type === 'projectile') {
+            ctx.save();
+            ctx.translate(spr.x, halfH);
+            ctx.rotate(spr.rotation);
+            ctx.font = spr.height + "px sans-serif";
+            ctx.fillStyle = "#fff";
+            ctx.fillText(spr.char, 0, 0);
+            ctx.restore();
+          } else if (spr.type === 'enemy' || spr.type === 'pickup') {
+            ctx.font = spr.height + "px sans-serif";
+            ctx.fillStyle = "#fff";
+            ctx.fillText(spr.char, spr.x, halfH);
+          } else if (spr.type === 'particle') {
+            ctx.fillStyle = "rgba(" + spr.color + "," + spr.alpha.toFixed(2) + ")";
+            ctx.fillRect(spr.x - spr.height/2, halfH - spr.yOffset - spr.height/2, spr.height, spr.height);
+          }
+        }
+        if (damageFlashTimer > 0) {
+          ctx.fillStyle = "rgba(255,0,0,0.4)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      // Event listeners for joystick, buttons, and keyboard:
+      joystick.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        joystickActive = true;
+        joystickPointerId = e.pointerId;
+        const rect = joystick.getBoundingClientRect();
+        joystickCenterX = rect.left + rect.width / 2;
+        joystickCenterY = rect.top + rect.height / 2;
+        joystick.setPointerCapture(joystickPointerId);
+        const dx = e.clientX - joystickCenterX;
+        const dy = e.clientY - joystickCenterY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let normX = dist ? dx / dist : 0, normY = dist ? dy / dist : 0;
+        if (dist > joystickRadius) { normX = dx / dist; normY = dy / dist; }
+        if (dist < 5) { normX = 0; normY = 0; }
+        moveForward = -normY;
+        turnDirection = normX;
+        joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
+      });
+      joystick.addEventListener('pointermove', (e) => {
+        if (!joystickActive || e.pointerId !== joystickPointerId) return;
+        const dx = e.clientX - joystickCenterX;
+        const dy = e.clientY - joystickCenterY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let normX = dist ? dx / dist : 0, normY = dist ? dy / dist : 0;
+        if (dist > joystickRadius) { normX = dx / dist; normY = dy / dist; }
+        if (dist < 5) { normX = 0; normY = 0; }
+        moveForward = -normY;
+        turnDirection = normX;
+        joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
+      });
+      joystick.addEventListener('pointerup', (e) => {
+        if (e.pointerId !== joystickPointerId) return;
+        joystick.releasePointerCapture(joystickPointerId);
+        joystickActive = false;
+        joystickPointerId = null;
+        moveForward = 0;
+        turnDirection = 0;
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
+      });
+      joystick.addEventListener('pointercancel', (e) => {
+        if (e.pointerId !== joystickPointerId) return;
+        joystickActive = false;
+        joystickPointerId = null;
+        moveForward = 0;
+        turnDirection = 0;
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
+      });
+
+      shootBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); shoot(); });
+      window.addEventListener('keydown', (e) => {
+        keys[e.key] = true;
+        if (e.key === " ") { e.preventDefault(); shoot(); }
+      });
+      window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+      
+      swapBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); swapWeapon(); });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === "q") { e.preventDefault(); swapWeapon(); }
+      });
+
+      // For door interaction, we use the interact button and the "e" key.
+      window.addEventListener('keydown', (e) => {
+        if (e.key === "e") { e.preventDefault(); interact(); }
+      });
+      interactBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); interact(); });
+
+      // Main game loop – level advances only when all enemies are killed.
+      function gameLoop(time) {
+        const dt = Math.min((time - lastTime) / 1000, 0.1);
+        lastTime = time;
+        if (!gameOver) {
+          let kbMove = 0, kbTurn = 0;
+          if (keys['w'] || keys['ArrowUp']) kbMove += 1;
+          if (keys['s'] || keys['ArrowDown']) kbMove -= 1;
+          if (keys['a'] || keys['ArrowLeft']) kbTurn -= 1;
+          if (keys['d'] || keys['ArrowRight']) kbTurn += 1;
+          const effectiveMove = (joystickActive ? moveForward : 0) + kbMove;
+          const effectiveTurn = (joystickActive ? turnDirection : 0) + kbTurn;
+          
+          player.angle += effectiveTurn * turnSpeed * dt;
+          if (player.angle < 0) player.angle += Math.PI * 2;
+          if (player.angle >= Math.PI * 2) player.angle -= Math.PI * 2;
+          if (effectiveMove !== 0) {
+            const step = effectiveMove * moveSpeed * dt;
+            const newX = player.x + Math.sin(player.angle) * step;
+            const newY = player.y - Math.cos(player.angle) * step;
+            if (!isWall(newX, player.y)) player.x = newX;
+            if (!isWall(player.x, newY)) player.y = newY;
+          }
+          // Process pickups
+          for (let i = 0; i < pickups.length; i++) {
+            const pu = pickups[i];
+            if (Math.hypot(player.x - pu.x, player.y - pu.y) < 0.5) {
+              if (!inventory.includes(pu.type === "rock" ? "🪨" : "🗡️"))
+                inventory.push(pu.type === "rock" ? "🪨" : "🗡️");
+              player.weapon = pu.type === "rock" ? "🪨" : "🗡️";
+              shootBtn.textContent = player.weapon;
+              score += 50;
+              pickups.splice(i, 1);
+              i--;
+            }
+          }
+          // Process enemies and enemy shooting
+          for (let i = 0; i < enemies.length; i++) {
+            const enemy = enemies[i];
+            if (enemy.isGhost) {
+              if (enemy.shootCooldown === undefined) enemy.shootCooldown = 1.0;
+              enemy.shootCooldown -= dt;
+              if (enemy.shootCooldown <= 0) {
+                enemyShoot(enemy);
+                enemy.shootCooldown = 1.0;
+              }
+              const dx = player.x - enemy.x, dy = player.y - enemy.y;
+              const dist = Math.hypot(dx, dy);
+              const chaseSpeed = 2.5;
+              enemy.dx = (dx / dist) * chaseSpeed;
+              enemy.dy = (dy / dist) * chaseSpeed;
+            } else {
+              if (enemy.shootCooldown === undefined) enemy.shootCooldown = 3.0;
+              enemy.shootCooldown -= dt;
+              if (enemy.shootCooldown <= 0) {
+                enemyShoot(enemy);
+                enemy.shootCooldown = 3.0;
+              }
+            }
+            let newX = enemy.x + enemy.dx * dt;
+            let newY = enemy.y + enemy.dy * dt;
+            if (!isWall(newX, enemy.y)) enemy.x = newX; else enemy.dx = -enemy.dx;
+            if (!isWall(enemy.x, newY)) enemy.y = newY; else enemy.dy = -enemy.dy;
+            if (enemy.isGhost && Math.hypot(player.x - enemy.x, player.y - enemy.y) < 0.5) {
+              player.health--;
+              damageFlashTimer = 0.2;
+              enemy.x -= enemy.dx * dt * 2;
+              enemy.y -= enemy.dy * dt * 2;
+              if (player.health <= 0) gameOver = true;
+            }
+          }
+          // Process projectiles
+          for (let i = 0; i < projectiles.length; i++) {
+            const proj = projectiles[i];
+            proj.x += proj.dx * dt;
+            proj.y += proj.dy * dt;
+            proj.rotation += proj.rotationSpeed * dt;
+            if (proj.weapon === "💥") {
+              if (Math.hypot(player.x - proj.x, player.y - proj.y) < 0.5) {
+                player.health--;
+                createExplosion(proj.x, proj.y);
+                projectiles.splice(i, 1);
+                i--;
+                continue;
+              }
+            }
+            if (isWall(proj.x, proj.y)) {
+              createExplosion(proj.x, proj.y);
+              projectiles.splice(i, 1);
+              i--;
+              continue;
+            }
+            if (proj.x < 0 || proj.y < 0 || proj.x >= levelData[0].length || proj.y >= levelData.length) {
+              projectiles.splice(i, 1);
+              i--;
+              continue;
+            }
+            if (!lineOfSight(player.x, player.y, proj.x, proj.y)) continue;
+            if (proj.weapon !== "💥") {
+              for (let j = 0; j < enemies.length; j++) {
+                const enemy = enemies[j];
+                if (Math.hypot(enemy.x - proj.x, enemy.y - proj.y) < 0.5) {
+                  if (enemy.isGhost) {
+                    enemy.health--;
+                    if (enemy.health <= 0) { createGhostExplosion(enemy.x, enemy.y); score += 300; enemies.splice(j, 1); j--; }
+                  } else { createExplosion(enemy.x, enemy.y); score += 100; enemies.splice(j, 1); j--; }
+                  projectiles.splice(i, 1);
+                  i--;
+                  break;
+                }
+              }
+            }
+          }
+          // Process explosion particles
+          for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.z += p.vz * dt;
+            p.life -= dt;
+            if (p.life <= 0) { particles.splice(i, 1); i--; }
+          }
+          // Update door animations (once a door is marked via interact(), it opens gradually regardless of further interaction)
+          updateDoors(dt);
+          // Level progression: Only progress when all enemies are killed.
+          if (enemies.length === 0) {
+            if (currentLevel < levels.length - 1) loadLevel(currentLevel + 1);
+            else gameOver = true;
+          }
+          if (damageFlashTimer > 0) damageFlashTimer = Math.max(damageFlashTimer - dt, 0);
+          const elapsedTime = Math.floor((performance.now() - gameStartTime) / 1000);
+          let roosterCount = 0, ghostCount = 0;
+          for (const enemy of enemies) { enemy.isGhost ? ghostCount++ : roosterCount++; }
+          overlay.textContent = `Level: ${currentLevel+1} | Roosters: ${roosterCount} | Ghosts: ${ghostCount} | HP: ${player.health} | Weapon: ${player.weapon} | Time: ${elapsedTime}s | Score: ${score}`;
+          shootBtn.textContent = player.weapon;
+          if (player.health <= 0) gameOver = true;
+          renderScene();
+          if (gameOver) { showFinalScreen(); return; }
+          requestAnimationFrame(gameLoop);
+        } else {
+          showFinalScreen();
+        }
+      }
+
+      // Render function for drawing the scene (with door offset for marked doors)
+      function renderScene() {
+        const w = canvas.width, h = canvas.height;
+        ctx.fillStyle = ceilingColor;
+        ctx.fillRect(0, 0, w, h/2);
+        ctx.fillStyle = floorColor;
+        ctx.fillRect(0, h/2, w, h/2);
+        const posX = player.x, posY = player.y;
+        const dirX = Math.sin(player.angle), dirY = -Math.cos(player.angle);
+        const fov = 1.0472;
+        const planeLen = Math.tan(fov/2);
+        const planeX = -dirY * planeLen, planeY = dirX * planeLen;
+        for (let x = 0; x < w; x++) {
+          const cameraX = 2 * x / w - 1;
+          const rayDirX = dirX + planeX * cameraX;
+          const rayDirY = dirY + planeY * cameraX;
+          let mapX = Math.floor(posX), mapY = Math.floor(posY);
+          let sideDistX, sideDistY;
+          const deltaDistX = (rayDirX === 0) ? Infinity : Math.abs(1 / rayDirX);
+          const deltaDistY = (rayDirY === 0) ? Infinity : Math.abs(1 / rayDirY);
+          let stepX, stepY, hit = 0, side = 0;
+          if (rayDirX < 0) { stepX = -1; sideDistX = (posX - mapX) * deltaDistX; }
+          else { stepX = 1; sideDistX = (mapX + 1 - posX) * deltaDistX; }
+          if (rayDirY < 0) { stepY = -1; sideDistY = (posY - mapY) * deltaDistY; }
+          else { stepY = 1; sideDistY = (mapY + 1 - posY) * deltaDistY; }
+          while (hit === 0) {
+            if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
+            else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
+            if (mapX < 0 || mapX >= levelData[0].length || mapY < 0 || mapY >= levelData.length) { hit = 1; break; }
+            if (levelData[mapY][mapX] === 1 || levelData[mapY][mapX] === 2) hit = 1;
+          }
+          let perpWallDist = (side === 0) ? sideDistX - deltaDistX : sideDistY - deltaDistY;
+          if (perpWallDist < 0.01) perpWallDist = 0.01;
+          const lineHeight = Math.floor(h / perpWallDist);
+          let drawStart = Math.floor(-lineHeight/2 + h/2);
+          if (drawStart < 0) drawStart = 0;
+          let drawEnd = Math.floor(lineHeight/2 + h/2);
+          if (drawEnd >= h) drawEnd = h - 1;
+          if (levelData[mapY][mapX] === 2) {
+            const doorKey = `${mapX},${mapY}`;
+            const progress = doorStates[doorKey] || 0;
+            const doorOffset = progress * doorMaxOffset;
+            drawStart = Math.max(drawStart - doorOffset, 0);
+            ctx.fillStyle = doorColor;
+          } else {
+            ctx.fillStyle = (side === 1) ? wallColorDark : wallColor;
+          }
+          ctx.fillRect(x, drawStart, 1, drawEnd - drawStart + 1);
+        }
+        const spriteList = [];
+        const invDet = 1.0 / (planeX * dirY - dirX * planeY);
+        const halfW = w / 2, halfH = h / 2;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (const enemy of enemies) {
+          if (!lineOfSight(player.x, player.y, enemy.x, enemy.y)) continue;
+          const ex = enemy.x - posX, ey = enemy.y - posY;
+          const transformX = invDet * (dirY * ex - dirX * ey);
+          const transformY = invDet * (-planeY * ex + planeX * ey);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor(h / transformY));
+          spriteList.push({ type: 'enemy', char: enemy.isGhost ? "👻" : "🐓", x: spriteX, height: spriteHeight, depth: transformY });
+        }
+        for (const pu of pickups) {
+          if (!lineOfSight(player.x, player.y, pu.x, pu.y)) continue;
+          const px = pu.x - posX, py = pu.y - posY;
+          const transformX = invDet * (dirY * px - dirX * py);
+          const transformY = invDet * (-planeY * px + planeX * py);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.3));
+          const emoji = pu.type === "rock" ? "🪨" : "🗡️";
+          spriteList.push({ type: 'pickup', char: emoji, x: spriteX, height: spriteHeight, depth: transformY });
+        }
+        for (const proj of projectiles) {
+          if (!lineOfSight(player.x, player.y, proj.x, proj.y)) continue;
+          const px = proj.x - posX, py = proj.y - posY;
+          const transformX = invDet * (dirY * px - dirX * py);
+          const transformY = invDet * (-planeY * px + planeX * py);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.3));
+          spriteList.push({ type: 'projectile', char: proj.weapon, x: spriteX, height: spriteHeight < 1 ? 1 : spriteHeight, depth: transformY, rotation: proj.rotation });
+        }
+        for (const p of particles) {
+          const fx = p.x - posX, fy = p.y - posY;
+          const transformX = invDet * (dirY * fx - dirX * fy);
+          const transformY = invDet * (-planeY * fx + planeX * fy);
+          if (transformY <= 0) continue;
+          const spriteX = halfW * (1 + transformX / transformY);
+          const spriteHeight = Math.abs(Math.floor((h / transformY) * 0.1));
+          const yOffset = p.z * 50;
+          spriteList.push({ type: 'particle', x: spriteX, height: spriteHeight < 1 ? 1 : spriteHeight, depth: transformY, alpha: p.life, color: p.color, yOffset: yOffset });
+        }
+        spriteList.sort((a, b) => b.depth - a.depth);
+        for (const spr of spriteList) {
+          if (spr.x < -spr.height || spr.x > canvas.width + spr.height) continue;
+          if (spr.type === 'projectile') {
+            ctx.save();
+            ctx.translate(spr.x, halfH);
+            ctx.rotate(spr.rotation);
+            ctx.font = spr.height + "px sans-serif";
+            ctx.fillStyle = "#fff";
+            ctx.fillText(spr.char, 0, 0);
+            ctx.restore();
+          } else if (spr.type === 'enemy' || spr.type === 'pickup') {
+            ctx.font = spr.height + "px sans-serif";
+            ctx.fillStyle = "#fff";
+            ctx.fillText(spr.char, spr.x, halfH);
+          } else if (spr.type === 'particle') {
+            ctx.fillStyle = "rgba(" + spr.color + "," + spr.alpha.toFixed(2) + ")";
+            ctx.fillRect(spr.x - spr.height/2, halfH - spr.yOffset - spr.height/2, spr.height, spr.height);
+          }
+        }
+        if (damageFlashTimer > 0) {
+          ctx.fillStyle = "rgba(255,0,0,0.4)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
+      // Event listeners for joystick, buttons, and keyboard:
+      joystick.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        joystickActive = true;
+        joystickPointerId = e.pointerId;
+        const rect = joystick.getBoundingClientRect();
+        joystickCenterX = rect.left + rect.width / 2;
+        joystickCenterY = rect.top + rect.height / 2;
+        joystick.setPointerCapture(joystickPointerId);
+        const dx = e.clientX - joystickCenterX;
+        const dy = e.clientY - joystickCenterY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let normX = dist ? dx / dist : 0, normY = dist ? dy / dist : 0;
+        if (dist > joystickRadius) { normX = dx / dist; normY = dy / dist; }
+        if (dist < 5) { normX = 0; normY = 0; }
+        moveForward = -normY;
+        turnDirection = normX;
+        joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
+      });
+      joystick.addEventListener('pointermove', (e) => {
+        if (!joystickActive || e.pointerId !== joystickPointerId) return;
+        const dx = e.clientX - joystickCenterX;
+        const dy = e.clientY - joystickCenterY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let normX = dist ? dx / dist : 0, normY = dist ? dy / dist : 0;
+        if (dist > joystickRadius) { normX = dx / dist; normY = dy / dist; }
+        if (dist < 5) { normX = 0; normY = 0; }
+        moveForward = -normY;
+        turnDirection = normX;
+        joystickKnob.style.transform = `translate(-50%, -50%) translate(${normX * joystickRadius}px, ${normY * joystickRadius}px)`;
+      });
+      joystick.addEventListener('pointerup', (e) => {
+        if (e.pointerId !== joystickPointerId) return;
+        joystick.releasePointerCapture(joystickPointerId);
+        joystickActive = false;
+        joystickPointerId = null;
+        moveForward = 0;
+        turnDirection = 0;
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
+      });
+      joystick.addEventListener('pointercancel', (e) => {
+        if (e.pointerId !== joystickPointerId) return;
+        joystickActive = false;
+        joystickPointerId = null;
+        moveForward = 0;
+        turnDirection = 0;
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
+      });
+
+      shootBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); shoot(); });
+      window.addEventListener('keydown', (e) => {
+        keys[e.key] = true;
+        if (e.key === " ") { e.preventDefault(); shoot(); }
+      });
+      window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+      
+      swapBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); swapWeapon(); });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === "q") { e.preventDefault(); swapWeapon(); }
+      });
+
+      // For door interaction, use the interact button or the "e" key.
+      window.addEventListener('keydown', (e) => {
+        if (e.key === "e") { e.preventDefault(); interact(); }
+      });
+      interactBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); interact(); });
+
+      // Start the game loop
+      loadLevel(0);
+      requestAnimationFrame(gameLoop);
+    })();
+  </script>
+</body>
+</html>

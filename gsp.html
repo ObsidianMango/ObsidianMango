@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Garden State Parkway Dash</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <style>
+    html,body { margin:0; padding:0; overflow:hidden; background:#213d2d; }
+    #gameCanvas { width:100vw; height:100vh; display:block;}
+    #hud { position:fixed;top:0;left:0;width:100%;color:#fff;font-size:2em;font-family:sans-serif;padding:10px;text-shadow:2px 2px #2a613d;z-index:2;letter-spacing:.03em;}
+    #hud span { font-weight:bold;}
+    #title {position:fixed;top:0;width:100%;text-align:center;font-family:sans-serif;font-size:2.1em;letter-spacing:.07em;color:#ffe047;text-shadow:2px 2px #244022, 0 2px 12px #181;z-index:10;font-weight:900;margin-top:12px;}
+    #gameover {position:fixed;top:36%;left:0;width:100%;text-align:center;color:#ffe047;font-size:2.3em;display:none;z-index:9;text-shadow:2px 2px #213d2d, 0 2px 12px #181;}
+    button {font-size:1.15em;padding:12px 32px;margin-top:1em;}
+    #toll {position:fixed;top:80px;right:14px;font-size:1.2em;background:#232; color:#ffe047;padding:8px 18px;border-radius:22px;border:2px solid #ffe047;box-shadow:2px 2px 12px #1237;z-index:12;letter-spacing:0.03em;}
+  </style>
+</head>
+<body>
+  <div id="title">Garden State Parkway Dash</div>
+  <div id="hud">Score: <span id="score">0</span></div>
+  <div id="toll">TOLL: $<span id="tollval">1.50</span></div>
+  <div id="gameover"></div>
+  <canvas id="gameCanvas"></canvas>
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script>
+    // ------ Babylon.js scene setup ------
+    const canvas = document.getElementById("gameCanvas");
+    const engine = new BABYLON.Engine(canvas, true);
+    const scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color3(0.11, 0.22, 0.16);
+
+    // --- Conventional Chase Camera ---
+    const camera = new BABYLON.FreeCamera("ChaseCam", new BABYLON.Vector3(0, 3, -10), scene);
+    camera.fov = 0.85;
+    camera.setTarget(new BABYLON.Vector3(0, 0.5, 0));
+    camera.attachControl(canvas, false);
+
+    // Light
+    new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
+
+    // ----- Lanes -----
+    const LANES = [-2,0,2];
+    const LANE_SPEEDS = [1.3, 1.1, 1.0];
+    const BASE_SPEED = 0.28; // player base speed (feel free to adjust)
+
+    // Road and decor
+    const road = BABYLON.MeshBuilder.CreateBox("road", {width:7.5, height:0.1, depth:44}, scene);
+    road.position.y = -0.11;
+    road.material = new BABYLON.StandardMaterial("roadmat", scene);
+    road.material.diffuseColor = new BABYLON.Color3(0.23,0.29,0.22);
+
+    // Shoulders (classic Parkway sandy tan)
+    for (let x of [-4.25, 4.25]) {
+      const shoulder = BABYLON.MeshBuilder.CreateBox("shoulder", {width:1.2,height:0.1,depth:44}, scene);
+      shoulder.position.x = x;
+      shoulder.position.y = -0.09;
+      shoulder.position.z = 0;
+      shoulder.material = new BABYLON.StandardMaterial("shouldermat", scene);
+      shoulder.material.diffuseColor = new BABYLON.Color3(0.89,0.81,0.56);
+    }
+
+    // Lane dashes
+    for(let l of [-1,1]) {
+      for(let i=0;i<18;++i) {
+        const dash = BABYLON.MeshBuilder.CreateBox("dash", {width:0.13, height:0.02, depth:1.7}, scene);
+        dash.position.x = l;
+        dash.position.y = 0.05;
+        dash.position.z = i*2.4-18;
+        dash.material = new BABYLON.StandardMaterial("dashmat", scene);
+        dash.material.diffuseColor = BABYLON.Color3.White();
+      }
+    }
+
+    // Parkway trees
+    for(let side of [-3.5,3.5]){
+      for(let i=0;i<13;i++){
+        const tree = BABYLON.MeshBuilder.CreateCylinder("tree", {diameter:0.38,height:1.7,tessellation:7}, scene);
+        tree.position.x = side + (Math.random()-0.5)*0.7;
+        tree.position.y = 0.85;
+        tree.position.z = i*3.4-14+Math.random();
+        const green = new BABYLON.StandardMaterial("leaves", scene);
+        green.diffuseColor = new BABYLON.Color3(0.19+Math.random()*0.1,0.42,0.16+Math.random()*0.14);
+        tree.material = green;
+      }
+    }
+
+    // ----- Player car -----
+    let playerLane = 1;
+    let playerZ = 0;
+    const player = BABYLON.MeshBuilder.CreateBox("player", {width:0.7, height:0.35, depth:1.3}, scene);
+    player.position.set(LANES[playerLane],0.21,playerZ);
+    const playerMat = new BABYLON.StandardMaterial("playermat", scene);
+    playerMat.diffuseColor = new BABYLON.Color3(0.09,0.47,0.36); // Parkway green
+    player.material = playerMat;
+
+    // ----- Traffic vehicles -----
+    let vehicles = [];
+    function spawnVehicle(type, lane, z, relSpeed){
+      let mesh, mat;
+      if(type==="beer"){
+        mesh = BABYLON.MeshBuilder.CreateBox("beer", {width:0.85, height:0.48, depth:2.0}, scene);
+        mat = new BABYLON.StandardMaterial("beer", scene);
+        mat.diffuseColor = new BABYLON.Color3(0.96,0.80,0.25);
+      } else if(type==="cop"){
+        mesh = BABYLON.MeshBuilder.CreateBox("cop", {width:0.8, height:0.37, depth:1.45}, scene);
+        mat = new BABYLON.StandardMaterial("cop", scene);
+        mat.diffuseColor = new BABYLON.Color3(0.09,0.25,0.64);
+      } else {
+        mesh = BABYLON.MeshBuilder.CreateBox("car", {width:0.67, height:0.32, depth:1.17}, scene);
+        mat = new BABYLON.StandardMaterial("car", scene);
+        const c = Math.random();
+        mat.diffuseColor = new BABYLON.Color3(0.37+c*0.5,0.26+c*0.3,0.27+(1-c)*0.5);
+      }
+      mesh.material = mat;
+      mesh.position.set(LANES[lane], mesh.scaling.y/2 + 0.16, z);
+      return {type, lane, mesh, relSpeed};
+    }
+
+    // Controls: Keyboard + swipe
+    function setLane(lane){
+      playerLane = Math.max(0, Math.min(2, lane));
+      player.position.x = LANES[playerLane];
+    }
+    window.addEventListener('keydown', e => {
+      if(e.key==="ArrowLeft" || e.key==="a") setLane(playerLane-1);
+      if(e.key==="ArrowRight" || e.key==="d") setLane(playerLane+1);
+    });
+    let touchX = null;
+    canvas.addEventListener("touchstart", e=>{touchX = e.touches[0].clientX;});
+    canvas.addEventListener("touchend", e=>{
+      if(touchX){
+        let dx = e.changedTouches[0].clientX - touchX;
+        if(Math.abs(dx)>30){
+          if(dx>0) setLane(playerLane+1);
+          else setLane(playerLane-1);
+        }
+        touchX = null;
+      }
+    });
+
+    // Score
+    let score=0, running=true, toll = 1.50;
+    let spawnZ = 18; // Start spawning ahead of player
+
+    // --- Only a few cars per lane at a time, not packed! ---
+    function maybeSpawnVehicle() {
+      // Check if there are too many cars already (1-2 per lane ahead)
+      let maxPerLane = 2;
+      let minGap = 7; // minimum distance between cars in a lane
+      for(let lane=0; lane<3; lane++){
+        let inLane = vehicles.filter(v => v.lane===lane && v.mesh.position.z > player.position.z+4);
+        if(inLane.length >= maxPerLane) continue;
+        // Spawn chance: low, random
+        if(Math.random() < 0.30){
+          // Only spawn if far from last car in lane
+          let farEnough = inLane.every(v => Math.abs(v.mesh.position.z-spawnZ)>minGap);
+          if(farEnough){
+            // Random car type
+            let r = Math.random();
+            let type = r<0.09 ? "cop" : r<0.19 ? "beer" : "car";
+            // Each car has a random speed relative to player (range: -0.12 to +0.14)
+            let relSpeed = (Math.random()-0.3)*0.19; // Some slower, some faster
+            vehicles.push(spawnVehicle(type, lane, player.position.z + 17 + Math.random()*7, relSpeed));
+          }
+        }
+      }
+    }
+
+    // ------ Main Loop ------
+    let lastScoreZ = 0;
+    engine.runRenderLoop(()=>{
+      if(!running) return;
+
+      // Occasionally spawn cars ahead (not every frame)
+      if(Math.random()<0.12) maybeSpawnVehicle();
+
+      // Move all vehicles "with" player, based on relative speed
+      for(let v of vehicles){
+        v.mesh.position.z += BASE_SPEED + v.relSpeed; // if relSpeed<0, you overtake; if >0, they overtake you
+      }
+
+      // Remove vehicles far behind
+      vehicles = vehicles.filter(v=>{
+        if(v.mesh.position.z < player.position.z-6){
+          v.mesh.dispose();
+          return false;
+        }
+        return true;
+      });
+
+      // Score: based on distance traveled
+      if(player.position.z - lastScoreZ > 1.8){
+        score++;
+        toll += 0.15;
+        lastScoreZ = player.position.z;
+        document.getElementById('score').textContent = score;
+        document.getElementById('tollval').textContent = toll.toFixed(2);
+      }
+
+      // Collision detection
+      for(let v of vehicles){
+        if(Math.abs(player.position.x-v.mesh.position.x)<0.7 && Math.abs(player.position.z-v.mesh.position.z)<1.1){
+          if(v.type==='beer'){
+            score+=5;
+            toll += 1.10;
+            document.getElementById('score').textContent = score;
+            document.getElementById('tollval').textContent = toll.toFixed(2);
+            v.mesh.dispose();
+            v.mesh.position.z = -999;
+          } else {
+            running = false;
+            player.material.diffuseColor = new BABYLON.Color3(0.99,0.06,0.1);
+            document.getElementById('gameover').style.display='block';
+            document.getElementById('gameover').innerHTML = `
+              🚨 <b>TOO JERSEY!</b> 🚨<br>Final Parkway Score: ${score}<br>
+              Final Toll: $${toll.toFixed(2)}<br>
+              <button onclick="location.reload()">Restart</button>
+            `;
+          }
+        }
+      }
+
+      // Move player forward (always)
+      player.position.z += BASE_SPEED;
+
+      // Camera chase mode, steady
+      let camTarget = player.position.clone();
+      let desiredCamPos = new BABYLON.Vector3(camTarget.x, camTarget.y+2.1, camTarget.z-7.5);
+      camera.position = BABYLON.Vector3.Lerp(camera.position, desiredCamPos, 0.13);
+      camera.setTarget(new BABYLON.Vector3(camTarget.x, camTarget.y+0.2, camTarget.z+7));
+
+      scene.render();
+    });
+
+    window.addEventListener('resize', ()=>engine.resize());
+  </script>
+</body>
+</html>

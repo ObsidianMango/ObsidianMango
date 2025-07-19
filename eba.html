@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Emoji Battle Arena</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
+      color: #fff;
+      margin: 0;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-top: 20px;
+    }
+
+    #scoreboard {
+      margin-top: 10px;
+      font-size: 1.2rem;
+    }
+
+    #emoji-selection {
+      margin: 20px;
+    }
+
+    #emoji-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 15px;
+      justify-content: center;
+    }
+
+    #emoji-grid span {
+      font-size: 3rem;
+      padding: 10px;
+      cursor: pointer;
+      border: 2px solid #fff;
+      border-radius: 10px;
+      background-color: #34495e;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    #emoji-grid span:hover {
+      transform: scale(1.2);
+      box-shadow: 0 4px 15px rgba(255, 255, 255, 0.5);
+    }
+
+    #battle-arena {
+      position: relative;
+      margin: 20px auto;
+      max-width: 600px;
+      height: 300px;
+      background: radial-gradient(circle, #34495e, #2c3e50);
+      border: 2px solid #fff;
+      border-radius: 20px;
+      overflow: hidden;
+    }
+
+    #arena-background {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      z-index: 1;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+    }
+
+    .emoji-bg {
+      font-size: 1.5rem;
+      color: rgba(255, 255, 255, 0.8);
+      width: 10%;
+      text-align: center;
+      animation: floatUpAndDown 2s infinite;
+    }
+
+    @keyframes floatUpAndDown {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+
+    .fighter {
+      position: absolute;
+      bottom: 25%;
+      font-size: 4rem;
+      transition: transform 0.3s ease-out;
+      z-index: 1;
+    }
+
+    /* Fighter1 on left, Fighter2 on right */
+    #fighter1 {
+      left: 10%;
+      transform: scaleX(-1);
+    }
+    #fighter2 {
+      right: 10%;
+    }
+
+    .hearts {
+      position: absolute;
+      top: 5%;
+      display: flex;
+      gap: 5px;
+      font-size: 1.5rem;
+      z-index: 3;
+    }
+
+    /* Place hearts1 above fighter1 (left) and hearts2 above fighter2 (right) */
+    #hearts1 {
+      left: 10%;
+      right: unset;
+      flex-direction: row;
+    }
+    #hearts2 {
+      right: 10%;
+      left: unset;
+      flex-direction: row-reverse;
+    }
+
+    .overlay-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 50px;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 2;
+    }
+
+    .projectile {
+      position: absolute;
+      font-size: 2rem;
+      animation: shoot 0.7s linear;
+      z-index: 3;
+    }
+
+    @keyframes shoot {
+      from {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      to {
+        opacity: 0.5;
+        transform: translateX(calc(100% - 20px));
+      }
+    }
+
+    .explode {
+      font-size: 5rem;
+      animation: explode 0.8s ease-out forwards;
+    }
+
+    @keyframes explode {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(2);
+        opacity: 0.7;
+      }
+      100% {
+        transform: scale(0);
+        opacity: 0;
+      }
+    }
+
+    #result {
+      margin-top: 20px;
+      font-size: 1.5rem;
+    }
+
+    #battle-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      font-weight: bold;
+      color: red;
+      z-index: 4;
+      display: none;
+    }
+
+    .platform {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 85px;
+      background-color: #2c5364;
+      z-index: 4;
+      border-top-left-radius: 10px;
+      border-top-right-radius: 10px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      margin-top: 20px;
+      border: none;
+      border-radius: 5px;
+      background: #e74c3c;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #c0392b;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* Moves container */
+    #moves {
+      margin-top: 20px;
+    }
+
+    #moves button {
+      margin: 0 10px;
+    }
+
+    /* Attack text animation */
+    .attack-text {
+      position: absolute;
+      font-size: 1.5rem;
+      color: #ffff00;
+      font-weight: bold;
+      z-index: 5;
+      animation: popIn 0.1s forwards;
+      opacity: 1;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.5); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .fade-out {
+      animation: fadeOut 0.7s forwards;
+    }
+    @keyframes fadeOut {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="scoreboard">
+    Player Wins: <span id="player-score">0</span> | CPU Wins: <span id="cpu-score">0</span>
+  </div>
+
+  <div id="emoji-selection">
+    <h2>Welcome to Emoji Battle Arena Now Pick Your Fighter</h2>
+    <div id="emoji-grid"></div>
+  </div>
+
+  <div id="battle-arena" class="hidden">
+    <div id="arena-background"></div>
+    <div class="overlay-bar"></div>
+    <div class="hearts" id="hearts1"></div>
+    <div class="hearts" id="hearts2"></div>
+    <div class="fighter" id="fighter1"></div>
+    <div class="fighter" id="fighter2"></div>
+    <div class="platform"></div>
+    <div id="battle-overlay"></div>
+  </div>
+
+  <!-- Moves container (hidden by default) -->
+  <div id="moves" class="hidden">
+    <button data-move="bam">BAM</button>
+    <button data-move="pow">POW</button>
+    <button data-move="splat">SPLAT</button>
+    <button data-move="zonk">ZONK</button>
+  </div>
+
+  <div id="result" class="hidden"></div>
+  <button id="play-again" class="hidden">Play Again</button>
+
+  <script>
+    const emojis = [
+      "🦖","👾","🦄","🍔","🐉","🦁","🐺","🤖","🐙","🧸",
+      "🐔","🐢","👽","👁️","💀","👹","🍌",
+      "🧛‍♂️","🧟‍♀️","🦹‍♂️","🕷️","🦂","🦸‍♀️","🦈","🧙‍♂️","🤡","🐄",
+     ,"✂️","🌪️","🧚‍♀️"
+    ];
+    const crowdEmojis = [
+      "🙋‍♂️","🙋‍♀️","🙆‍♂️","🙆‍♀️","🙆","🙋","🤦‍♂️","🤦‍♀️","💁‍♂️","💁‍♀️","🙎‍♂️","🙎‍♀️",
+      "🙎","🙍‍♂️","🙍‍♀️","🙍","🤷‍♂️","🤷‍♀️","🤷","🙋🏻‍♂️","🙋🏽‍♀️","🙆🏿‍♂️","🙆🏽‍♀️",
+      "🙆🏼","🙋🏿","🤦🏻‍♂️","🤦🏽‍♀️","💁🏿‍♂️","💁🏽‍♀️","🙎🏼‍♂️","🙎🏽‍♀️","🙎🏿","🙍🏼‍♂️",
+      "🙍🏽‍♀️","🙍🏿","🤷🏻‍♂️","🤷🏽‍♀️","🤷🏿"
+    ];
+
+    const emojiGrid       = document.getElementById("emoji-grid");
+    const battleArena     = document.getElementById("battle-arena");
+    const arenaBackground = document.getElementById("arena-background");
+    const emojiSelection  = document.getElementById("emoji-selection");
+    const fighter1        = document.getElementById("fighter1");
+    const fighter2        = document.getElementById("fighter2");
+    const hearts1         = document.getElementById("hearts1");
+    const hearts2         = document.getElementById("hearts2");
+    const result          = document.getElementById("result");
+    const playAgainBtn    = document.getElementById("play-again");
+    const battleOverlay   = document.getElementById("battle-overlay");
+    const movesContainer  = document.getElementById("moves");
+    const playerScoreEl   = document.getElementById("player-score");
+    const cpuScoreEl      = document.getElementById("cpu-score");
+
+    let hearts1Count = 6;
+    let hearts2Count = 6;
+    let playerScore  = 0;
+    let cpuScore     = 0;
+
+    emojis.forEach(emoji => {
+      const span = document.createElement("span");
+      span.textContent = emoji;
+      span.onclick = () => initiateBattle(emoji);
+      emojiGrid.appendChild(span);
+    });
+
+    function createHearts(container, count) {
+      container.innerHTML = "";
+      for (let i = 0; i < count; i++) {
+        const heart = document.createElement("span");
+        heart.textContent = "❤️";
+        container.appendChild(heart);
+      }
+    }
+
+    function populateBackground() {
+      for (let i = 0; i < 100; i++) {
+        const emojiDiv = document.createElement("div");
+        emojiDiv.classList.add("emoji-bg");
+        emojiDiv.textContent = crowdEmojis[Math.floor(Math.random() * crowdEmojis.length)];
+        arenaBackground.appendChild(emojiDiv);
+      }
+    }
+
+    function animateComputerSelection(opponentEmoji, callback) {
+      let index = 0;
+      const interval = setInterval(() => {
+        fighter2.textContent = emojis[index];
+        index = (index + 1) % emojis.length;
+      }, 100);
+      setTimeout(() => {
+        clearInterval(interval);
+        fighter2.textContent = opponentEmoji;
+        callback();
+      }, 2000);
+    }
+
+    function initiateBattle(playerEmoji) {
+      const opponentEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+      emojiSelection.classList.add("hidden");
+      battleArena.classList.remove("hidden");
+
+      fighter1.textContent = playerEmoji;
+      animateComputerSelection(opponentEmoji, () => startBattle(playerEmoji, opponentEmoji));
+    }
+
+    function startBattle(playerEmoji, opponentEmoji) {
+      hearts1Count = 6;
+      hearts2Count = 6;
+      createHearts(hearts1, hearts1Count);
+      createHearts(hearts2, hearts2Count);
+      movesContainer.classList.remove("hidden");
+
+      // Each move button triggers user attack
+      document.querySelectorAll("#moves button").forEach(btn => {
+        btn.addEventListener("click", () => {
+          handleUserMove(btn.dataset.move);
+        });
+      });
+    }
+
+    // Handle user move (1 damage or miss)
+    function handleUserMove(moveName) {
+      showAttackText(fighter1, moveName);
+
+      const didHit = Math.random() < 0.5; // 50% chance to hit
+      const damage = didHit ? 1 : 0;
+
+      fireProjectile(fighter1, fighter2);
+
+      hearts2Count -= damage;
+      if (hearts2Count < 0) hearts2Count = 0;
+      createHearts(hearts2, hearts2Count);
+
+      if (hearts2Count <= 0) {
+        endBattle(fighter1.textContent);
+      } else {
+        setTimeout(computerTurn, 800);
+      }
+    }
+
+    // Computer also has 1 damage or miss
+    function computerTurn() {
+      const movesArray = ["bam", "pow", "splat", "zonk"];
+      const compChoice = movesArray[Math.floor(Math.random() * movesArray.length)];
+
+      showAttackText(fighter2, compChoice);
+
+      const didHit = Math.random() < 0.5;
+      const damage = didHit ? 1 : 0;
+
+      fireProjectile(fighter2, fighter1);
+
+      hearts1Count -= damage;
+      if (hearts1Count < 0) hearts1Count = 0;
+      createHearts(hearts1, hearts1Count);
+
+      if (hearts1Count <= 0) {
+        endBattle(fighter2.textContent);
+      }
+    }
+
+    function showAttackText(attacker, moveName) {
+      const textEl = document.createElement("div");
+      textEl.classList.add("attack-text");
+      textEl.textContent = moveName.toUpperCase();
+
+      textEl.style.left = attacker.offsetLeft + "px";
+      textEl.style.bottom = "180px";
+
+      battleArena.appendChild(textEl);
+
+      setTimeout(() => {
+        textEl.classList.add("fade-out");
+      }, 300);
+      setTimeout(() => {
+        if (battleArena.contains(textEl)) {
+          battleArena.removeChild(textEl);
+        }
+      }, 1000);
+    }
+
+    function fireProjectile(fromFighter, toFighter) {
+      const projectile = document.createElement("div");
+      projectile.classList.add("projectile");
+      projectile.textContent = "⭐️";
+
+      projectile.style.left = fromFighter.offsetLeft + fromFighter.offsetWidth / 2 + "px";
+      projectile.style.bottom = "85px";
+
+      const distance = toFighter.offsetLeft - fromFighter.offsetLeft;
+      if (fromFighter === fighter1) {
+        projectile.style.transform = `translateX(${distance}px)`;
+      } else {
+        projectile.style.transform = `translateX(${distance * -1}px)`;
+      }
+
+      battleArena.appendChild(projectile);
+      setTimeout(() => {
+        if (battleArena.contains(projectile)) {
+          battleArena.removeChild(projectile);
+        }
+      }, 700);
+    }
+
+    function endBattle(winnerEmoji) {
+      movesContainer.classList.add("hidden");
+      result.textContent = `${winnerEmoji} Wins!`;
+      result.classList.remove("hidden");
+
+      const playerEmoji = fighter1.textContent;
+      const playerWon = (winnerEmoji === playerEmoji);
+
+      battleOverlay.textContent = playerWon ? "WIN" : "LOSE";
+      battleOverlay.style.display = "flex";
+
+      const loser = playerWon ? fighter2 : fighter1;
+      loser.classList.add("explode");
+
+      if (playerWon) {
+        playerScore++;
+        playerScoreEl.textContent = playerScore;
+      } else {
+        cpuScore++;
+        cpuScoreEl.textContent = cpuScore;
+      }
+
+      playAgainBtn.classList.remove("hidden");
+    }
+
+    playAgainBtn.onclick = () => {
+      result.classList.add("hidden");
+      playAgainBtn.classList.add("hidden");
+      battleOverlay.style.display = "none";
+      emojiSelection.classList.remove("hidden");
+      battleArena.classList.add("hidden");
+      movesContainer.classList.add("hidden");
+
+      fighter1.classList.remove("explode");
+      fighter2.classList.remove("explode");
+      hearts1.innerHTML = "";
+      hearts2.innerHTML = "";
+      fighter1.textContent = "";
+      fighter2.textContent = "";
+    };
+
+    populateBackground();
+  </script>
+</body>
+</html>

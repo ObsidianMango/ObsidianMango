@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Poop Drop Game</title>
+  <!-- Retro pixel font from Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(135deg, #ff7e5f, #feb47b);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Press Start 2P', cursive;
+      color: #fff;
+    }
+    #gameContainer {
+      position: relative;
+      width: 90vw;
+      height: 85vh; /* Adjusted to be slightly shorter */
+      max-width: 600px;
+      max-height: 800px;
+      background: linear-gradient(145deg, #ffe259, #ffa751);
+      border: 4px solid #000;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    /* Header for Score, Timer, and Consecutive Misses */
+    #header {
+      position: absolute;
+      top: 0;
+      width: 100%;
+      height: 40px;
+      background: linear-gradient(90deg, #00c6ff, #0072ff);
+      color: #fff;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      font-size: 14px;
+      z-index: 10;
+      text-shadow: 1px 1px 2px #000;
+    }
+    /* Food emojis container (top area) */
+    #foodContainer {
+      position: absolute;
+      top: 45px;
+      left: 0;
+      width: 100%;
+      height: 100px;
+      z-index: 5;
+    }
+    .food {
+      position: absolute;
+      font-size: 30px;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.1s;
+      text-shadow: 1px 1px 2px #000;
+    }
+    .food:active {
+      transform: scale(1.2);
+    }
+    /* Poo Meter */
+    #pooMeterContainer {
+      position: absolute;
+      top: 150px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%; /* Increased width for 32 segments */
+      height: 20px;
+      border: 2px solid #000;
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      z-index: 10;
+    }
+    #pooMeterFill {
+      height: 100%;
+      background: linear-gradient(90deg, #76b852, #8DC26F);
+      width: 0%;
+    }
+    /* POOP button */
+    #poopButton {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 16px;
+      padding: 10px 20px;
+      z-index: 10;
+      cursor: pointer;
+      background: linear-gradient(90deg, #ff416c, #ff4b2b);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    /* Toilet Emoji at Bottom (2x size) */
+    #toilet {
+      position: absolute;
+      bottom: 70px;
+      font-size: 80px;
+      user-select: none;
+      z-index: 5;
+    }
+    /* Falling poop emoji */
+    .poop {
+      position: absolute;
+      font-size: 30px;
+      user-select: none;
+      z-index: 5;
+      text-shadow: 1px 1px 2px #000;
+    }
+    /* Floating text animation */
+    @keyframes rise {
+      0% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-50px); }
+    }
+    .floatingText {
+      position: absolute;
+      font-size: 20px;
+      font-weight: bold;
+      color: #ff0;
+      text-shadow: 1px 1px 2px #000;
+      animation: rise 1s ease-out forwards;
+      pointer-events: none;
+      z-index: 15;
+    }
+    /* Squish and fade animation for misses */
+    @keyframes squish {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.2, 0.5); opacity: 0; }
+    }
+    .squish {
+      animation: squish 0.5s ease-out forwards;
+    }
+    /* Splash and Game Over Overlays */
+    #splashScreen,
+    #gameOverScreen {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 20;
+      text-align: center;
+      padding: 20px;
+    }
+    #splashScreen h1,
+    #gameOverScreen h1 {
+      font-size: 36px;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px #000;
+    }
+    #splashScreen p,
+    #gameOverScreen p {
+      font-size: 16px;
+      margin-bottom: 30px;
+      text-shadow: 1px 1px 2px #000;
+    }
+    #splashScreen button,
+    #gameOverScreen button {
+      font-size: 18px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #ff416c, #ff4b2b);
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <div id="header">
+      <span id="score">Score: 0</span>
+      <span id="timer">Time: 330</span>
+      <span id="misses">Misses: 0</span>
+    </div>
+    <div id="foodContainer"></div>
+    <div id="pooMeterContainer">
+      <div id="pooMeterFill"></div>
+    </div>
+    <button id="poopButton">POOP</button>
+    <div id="toilet">🚽</div>
+    
+    <!-- Splash Screen Overlay -->
+    <div id="splashScreen">
+      <h1>Poop Drop</h1>
+      <p>The game to play while you drop poop</p>
+      <button id="startButton">Start Game</button>
+    </div>
+    
+    <!-- Game Over Overlay -->
+    <div id="gameOverScreen" style="display: none;">
+      <h1>Game Over</h1>
+      <p>Wow, you stink!</p>
+      <button id="playAgainButton">Play Again</button>
+    </div>
+  </div>
+
+  <script>
+    // ----- Game Variables & Constants -----
+    let gameWidth = document.getElementById('gameContainer').clientWidth;
+    let gameHeight = document.getElementById('gameContainer').clientHeight;
+    const maxPooMeter = 32;  // Updated to 32 segments instead of 8
+    const poopCost = 1;      // Each poop uses 1 unit
+    let score = 0;
+    let timer = 330;         // Timer starts at 330 seconds
+    let consecutiveMisses = 0; // Game over if >= 50 consecutive misses
+    let pooMeter = 0;        // Current meter (0 to 32)
+    let gameRunning = false;
+    const poopSpeed = 300;   // pixels per second
+
+    let fallingPoops = [];
+    let lastFrame = performance.now();
+    let timerInterval = null;
+
+    // Food types with varying fill values
+       const foods = [
+  // Fruits
+  { emoji: '🍏', value: 1 },
+  { emoji: '🍎', value: 1 },
+  { emoji: '🍐', value: 1 },
+  { emoji: '🍊', value: 1 },
+  { emoji: '🍋', value: 1 },
+  { emoji: '🍌', value: 2 },
+  { emoji: '🍉', value: 3 },
+  { emoji: '🍇', value: 2 },
+  { emoji: '🍓', value: 2 },
+  { emoji: '🍈', value: 2 },
+  { emoji: '🍒', value: 1 },
+  { emoji: '🍑', value: 1 },
+  { emoji: '🍍', value: 2 },
+  { emoji: '🥭', value: 2 },
+  { emoji: '🥝', value: 1 },
+  // Vegetables
+  { emoji: '🍅', value: 1 },
+  { emoji: '🍆', value: 1 },
+  { emoji: '🥑', value: 1 },
+  { emoji: '🥦', value: 1 },
+  { emoji: '🥒', value: 1 },
+  { emoji: '🥕', value: 1 },
+  { emoji: '🌽', value: 1 },
+  { emoji: '🥔', value: 1 },
+  // Meats and Proteins
+  { emoji: '🍖', value: 3 },
+  { emoji: '🍗', value: 3 },
+  { emoji: '🥩', value: 3 },
+  { emoji: '🥓', value: 3 },
+  // Seafood
+  { emoji: '🍤', value: 3 },
+  { emoji: '🍣', value: 3 },
+  { emoji: '🦞', value: 3 },
+  { emoji: '🦐', value: 3 },
+  { emoji: '🦑', value: 3 },
+  // Meals
+  { emoji: '🍔', value: 3 },
+  { emoji: '🍟', value: 2 },
+  { emoji: '🍕', value: 3 },
+  { emoji: '🌭', value: 3 },
+  { emoji: '🥪', value: 2 },
+  { emoji: '🌮', value: 2 },
+  { emoji: '🌯', value: 2 },
+  { emoji: '🥙', value: 2 },
+  // Desserts & Sweets
+  { emoji: '🍦', value: 2 },
+  { emoji: '🍧', value: 2 },
+  { emoji: '🍨', value: 2 },
+  { emoji: '🍩', value: 2 },
+  { emoji: '🍪', value: 1 },
+  { emoji: '🎂', value: 3 },
+  { emoji: '🍰', value: 3 },
+  { emoji: '🧁', value: 2 },
+  { emoji: '🍫', value: 2 },
+  { emoji: '🍬', value: 1 },
+  { emoji: '🍭', value: 1 },
+  { emoji: '🍮', value: 2 },
+  { emoji: '🍯', value: 1 },
+  // Breakfast
+  { emoji: '🥞', value: 2 },
+  // Breads & Grains
+  { emoji: '🍞', value: 1 },
+  { emoji: '🥐', value: 1 },
+  { emoji: '🥖', value: 1 },
+  { emoji: '🥯', value: 1 },
+  { emoji: '🧀', value: 1 },
+  // Other Meals
+  { emoji: '🍲', value: 3 },
+  { emoji: '🍛', value: 3 },
+  { emoji: '🍜', value: 3 },
+  { emoji: '🍝', value: 3 },
+  { emoji: '🍙', value: 1 },
+  { emoji: '🍚', value: 1 },
+  { emoji: '🍘', value: 1 },
+  { emoji: '🍢', value: 2 },
+  { emoji: '🍡', value: 2 },
+  { emoji: '🍥', value: 1 },
+  { emoji: '🍱', value: 3 },
+  // Snacks & Others
+  { emoji: '🍿', value: 1 },
+  { emoji: '🥫', value: 1 },
+  { emoji: '🥟', value: 2 },
+  { emoji: '🥠', value: 1 },
+ 
+  { emoji: '🥡', value: 1 }
+];
+
+    // ----- DOM Elements -----
+    const gameContainer = document.getElementById('gameContainer');
+    const foodContainer = document.getElementById('foodContainer');
+    const pooMeterFill = document.getElementById('pooMeterFill');
+    const scoreDisplay = document.getElementById('score');
+    const timerDisplay = document.getElementById('timer');
+    const missesDisplay = document.getElementById('misses');
+    const poopButton = document.getElementById('poopButton');
+    const toilet = document.getElementById('toilet');
+    const splashScreen = document.getElementById('splashScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const startButton = document.getElementById('startButton');
+    const playAgainButton = document.getElementById('playAgainButton');
+
+    // Update game dimensions on resize
+    window.addEventListener('resize', function() {
+      gameWidth = gameContainer.clientWidth;
+      gameHeight = gameContainer.clientHeight;
+    });
+
+    // ----- Utility Functions -----
+    function updatePooMeterDisplay() {
+      let percentage = (pooMeter / maxPooMeter) * 100;
+      pooMeterFill.style.width = percentage + '%';
+    }
+    function updateScoreDisplay() {
+      scoreDisplay.innerText = 'Score: ' + score;
+    }
+    function updateTimerDisplay() {
+      timerDisplay.innerText = 'Time: ' + timer;
+    }
+    function updateMissesDisplay() {
+      missesDisplay.innerText = 'Misses: ' + consecutiveMisses;
+    }
+    function showFloatingText(text, x, y) {
+      const ft = document.createElement('div');
+      ft.classList.add('floatingText');
+      ft.innerText = text;
+      ft.style.left = x + 'px';
+      ft.style.top = y + 'px';
+      gameContainer.appendChild(ft);
+      setTimeout(() => { ft.remove(); }, 1000);
+    }
+
+    // ----- Food Emoji Spawn & Handling -----
+    function spawnFood(foodObj) {
+      const foodElem = document.createElement('div');
+      foodElem.classList.add('food');
+      foodElem.innerText = foodObj.emoji;
+      foodElem.setAttribute('data-value', foodObj.value);
+      const x = Math.random() * (gameWidth - 60) + 30;
+      const y = Math.random() * (80 - 30) + 10;
+      foodElem.style.left = x + 'px';
+      foodElem.style.top = y + 'px';
+
+      foodElem.addEventListener('click', function () {
+        let fillValue = parseInt(this.getAttribute('data-value'));
+        pooMeter = Math.min(maxPooMeter, pooMeter + fillValue);
+        updatePooMeterDisplay();
+        this.remove();
+        setTimeout(() => { spawnFood(foodObj); }, 3000);
+      });
+
+      foodContainer.appendChild(foodElem);
+    }
+    function initFood() {
+      foodContainer.innerHTML = '';
+      foods.forEach(food => spawnFood(food));
+    }
+
+    // ----- POOP Button Handling -----
+    poopButton.addEventListener('click', function () {
+      if (!gameRunning) return;
+      if (pooMeter >= poopCost) {
+        pooMeter -= poopCost;
+        updatePooMeterDisplay();
+        const poopElem = document.createElement('div');
+        poopElem.classList.add('poop');
+        poopElem.innerText = '💩';
+        const startX = gameWidth / 2 - 15;
+        const startY = 170;
+        poopElem.style.left = startX + 'px';
+        poopElem.style.top = startY + 'px';
+        gameContainer.appendChild(poopElem);
+        fallingPoops.push({ element: poopElem, x: startX, y: startY });
+      }
+    });
+
+    // ----- Toilet Movement -----
+    function updateToiletPosition(time) {
+      const amplitude = (gameWidth - 80) / 2;
+      const centerX = gameWidth / 2;
+      const period = 5000;
+      const x = centerX + amplitude * Math.sin((2 * Math.PI / period) * time) - 40;
+      toilet.style.left = x + 'px';
+    }
+
+    // ----- Game Loop -----
+    function gameLoop(time) {
+      if (!gameRunning) return;
+      const dt = (time - lastFrame) / 1000;
+      lastFrame = time;
+      
+      for (let i = fallingPoops.length - 1; i >= 0; i--) {
+        const poop = fallingPoops[i];
+        poop.y += poopSpeed * dt;
+        poop.element.style.top = poop.y + 'px';
+        if (poop.y > gameHeight - 120) {
+          const poopRect = poop.element.getBoundingClientRect();
+          const poopCenterX = poopRect.left + poopRect.width / 2;
+          const toiletRect = toilet.getBoundingClientRect();
+          if (poopCenterX >= toiletRect.left && poopCenterX <= toiletRect.right) {
+            // Hit: update score, show floating text, reset consecutive misses
+            score += 10;
+            updateScoreDisplay();
+            consecutiveMisses = 0;
+            updateMissesDisplay();
+            const gameRect = gameContainer.getBoundingClientRect();
+            const floatX = toiletRect.left - gameRect.left + (toiletRect.width / 2) - 20;
+            const floatY = toiletRect.top - gameRect.top - 40;
+            showFloatingText("+10", floatX, floatY);
+            poop.element.remove();
+          } else {
+            // Miss: increment consecutive misses and animate squish
+            consecutiveMisses++;
+            updateMissesDisplay();
+            poop.element.classList.add('squish');
+            setTimeout(() => { poop.element.remove(); }, 500);
+            if (consecutiveMisses >= 50) {
+              gameOver();
+              return;
+            }
+          }
+          fallingPoops.splice(i, 1);
+        }
+      }
+      updateToiletPosition(time);
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ----- Timer Countdown (ends game if timer reaches 0) -----
+    function startTimer() {
+      timerInterval = setInterval(() => {
+        if (!gameRunning) return;
+        timer--;
+        updateTimerDisplay();
+        if (timer <= 0) {
+          gameOver();
+        }
+      }, 1000);
+    }
+
+    // ----- Game Over -----
+    function gameOver() {
+      gameRunning = false;
+      clearInterval(timerInterval);
+      gameOverScreen.style.display = 'flex';
+    }
+
+    // ----- Start / Reset Game -----
+    function startGame() {
+      score = 0;
+      timer = 330;
+      consecutiveMisses = 0;
+      pooMeter = 0;
+      fallingPoops.forEach(poop => poop.element.remove());
+      fallingPoops = [];
+      updateScoreDisplay();
+      updateTimerDisplay();
+      updateMissesDisplay();
+      updatePooMeterDisplay();
+      initFood();
+      splashScreen.style.display = 'none';
+      gameOverScreen.style.display = 'none';
+      gameRunning = true;
+      lastFrame = performance.now();
+      startTimer();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ----- Button Event Listeners -----
+    startButton.addEventListener('click', startGame);
+    playAgainButton.addEventListener('click', startGame);
+  </script>
+</body>
+</html>
