@@ -73,14 +73,21 @@
         }
 
         .filter-btn {
-            padding: 12px 18px;
+            padding: 12px;
             cursor: pointer;
             background-color: #212121;
             color: #76ff03;
             border: 2px solid #76ff03;
             border-radius: 5px;
+            font-size: 20px; /* Larger for emoji icons */
+            transition: background-color 0.3s, color 0.3s, box-shadow 0.3s, padding 0.3s;
+            min-width: 50px; /* Smaller for icons */
+            text-align: center;
+        }
+
+        .filter-btn.full-text {
+            padding: 12px 18px;
             font-size: 14px;
-            transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
             min-width: 120px;
         }
 
@@ -96,19 +103,23 @@
             box-shadow: 0 2px 4px rgba(118, 255, 3, 0.2);
         }
 
-        .loading, .error-message {
+        #toggleLabels {
+            padding: 10px 15px;
+            font-size: 12px;
+            min-width: auto;
+        }
+
+        .loading {
             display: none;
             text-align: center;
-            font-size: 1.2rem;
+            font-size: 4rem;
             margin: 20px auto;
             width: 100%;
-            color: #ffcc00;
         }
 
         .spinner {
             display: inline-block;
             animation: spin 2s linear infinite;
-            font-size: 4rem;
         }
 
         @keyframes spin {
@@ -129,14 +140,9 @@
             border-radius: 10px;
             overflow: hidden;
             cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.5s ease;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
             text-align: center;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-            opacity: 0;
-        }
-
-        .event-tile.visible {
-            opacity: 1;
         }
 
         .event-tile:hover {
@@ -271,13 +277,12 @@
             background: #212121;
             border: 2px solid #76ff03;
             border-radius: 5px;
-            transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
+            transition: background-color 0.3s, color 0.3s;
         }
 
         .popup-footer a:hover {
             background-color: #76ff03;
             color: #121212;
-            box-shadow: 0 4px 8px rgba(118, 255, 3, 0.3);
         }
 
         /* Media Queries for Mobile */
@@ -310,15 +315,15 @@
     <h1>On This Day in History</h1>
     <div class="date-display" id="dateDisplay"></div>
     <div class="controls">
-        <button id="prevDay" aria-label="Previous Day">← Previous Day</button>
-        <input type="date" id="datePicker" aria-label="Select Date">
-        <button id="nextDay" aria-label="Next Day">Next Day →</button>
-        <button id="sortButton" aria-label="Toggle Sort Order">Sort: Oldest First</button>
+        <button id="prevDay">← Previous Day</button>
+        <input type="date" id="datePicker">
+        <button id="nextDay">Next Day →</button>
+        <button id="sortButton">Sort: Oldest First</button>
+        <button id="toggleLabels">Show Labels</button>
     </div>
     <div id="loading" class="loading">
         <span id="spinnerEmoji" class="spinner"></span>
     </div>
-    <div id="errorMessage" class="error-message"></div>
     <div id="filters" class="filters"></div>
     <div id="eventsContainer" class="events-container"></div>
 
@@ -326,29 +331,28 @@
     <div id="overlay" class="overlay" style="display: none;"></div>
 
     <!-- Pop-Up -->
-    <div id="popup" class="mock-popup" style="display: none;" role="dialog" aria-modal="true">
+    <div id="popup" class="mock-popup" style="display: none;">
         <div class="popup-header">
-            <button class="close-btn" onclick="closePopup()" aria-label="Close Popup">×</button>
+            <button class="close-btn" onclick="closePopup()">×</button>
             <span id="popupYear" class="popup-year"></span>
             <span id="popupTitle" class="popup-title"></span>
         </div>
         <img id="popupImage" class="popup-image" src="" alt="Event Image">
         <div class="popup-body" id="popupBody"></div>
         <div class="popup-footer">
-            <a id="popupLink" href="#" target="_blank" aria-label="Read More on Wikipedia">Read More</a>
+            <a id="popupLink" href="#" target="_blank">Read More</a>
         </div>
     </div>
 
     <script>
         const WIKIPEDIA_API_BASE = "https://en.wikipedia.org/api/rest_v1/feed/onthisday/all";
-        const CACHE_KEY_PREFIX = "oth_events_";
-        const USER_AGENT = 'OnThisDayApp/1.0 (https://example.com/contact; your.email@example.com)';
 
         let currentDate = new Date();
         let events = [];
         let sortAscending = true;
         let enabledCategories = new Set();
         let categoryCounts = {};
+        let showFilterLabels = false; // Default to emoji-only
 
         const eventCategories = [
             { name: "Conflicts", keywords: ["war", "battle", "conflict", "invasion", "revolt", "rebellion", "siege", "attack", "victory", "defeat"] },
@@ -384,63 +388,19 @@
             return date.toLocaleDateString(undefined, options);
         }
 
-        function getCacheKey(date) {
-            const { month, day } = formatDateForAPI(date);
-            return `${CACHE_KEY_PREFIX}${month}-${day}`;
-        }
-
-        async function fetchWithTimeout(url, timeout = 10000) {
-            return Promise.race([
-                fetch(url, {
-                    headers: {
-                        'User-Agent': USER_AGENT
-                    }
-                }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), timeout))
-            ]);
-        }
-
-        async function retryFetch(url, retries = 3, delay = 1000) {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetchWithTimeout(url);
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    return response;
-                } catch (e) {
-                    if (i < retries - 1) {
-                        await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
-                    } else {
-                        throw e;
-                    }
-                }
-            }
-        }
-
         async function fetchOnThisDay(date) {
-            const cacheKey = getCacheKey(date);
-            const cachedData = localStorage.getItem(cacheKey);
-            if (cachedData) {
-                return JSON.parse(cachedData);
-            }
-
             const { month, day } = formatDateForAPI(date);
             const url = `${WIKIPEDIA_API_BASE}/${month}/${day}`;
 
             try {
-                const response = await retryFetch(url);
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Failed to fetch data.");
                 const data = await response.json();
-                localStorage.setItem(cacheKey, JSON.stringify(data));
                 return data;
             } catch (error) {
                 console.error(error);
-                return null;
+                return {};
             }
-        }
-
-        function getUniqueKey(event) {
-            const year = event.year || 'annual';
-            const title = event.pages[0]?.normalized || event.pages[0]?.title || event.text.toLowerCase().replace(/\s+/g, '-');
-            return `${year}-${title}`;
         }
 
         function classifyEvents() {
@@ -481,13 +441,14 @@
                 const btn = document.createElement("button");
                 const isDefaultOff = catName === "Births" || catName === "Deaths";
                 btn.className = isDefaultOff ? "filter-btn" : "filter-btn active";
+                if (showFilterLabels) {
+                    btn.classList.add("full-text");
+                }
                 btn.dataset.category = catName;
-                btn.setAttribute("aria-pressed", !isDefaultOff);
                 const emoji = categoryEmojis[catName] || "";
-                btn.textContent = `${emoji} ${catName} (${categoryCounts[catName] || 0})`;
+                btn.textContent = showFilterLabels ? `${emoji} ${catName} (${categoryCounts[catName] || 0})` : emoji;
                 btn.addEventListener("click", () => {
                     btn.classList.toggle("active");
-                    btn.setAttribute("aria-pressed", btn.classList.contains("active"));
                     updateEnabledCategories();
                     renderEvents();
                 });
@@ -518,14 +479,11 @@
                 sortAscending ? getYearForSort(a) - getYearForSort(b) : getYearForSort(b) - getYearForSort(a)
             );
 
-            sortedEvents.forEach((event, index) => {
+            sortedEvents.forEach(event => {
                 const imageSrc = getEventImage(event.pages);
                 const subtopic = event.pages[0]?.description || "General Event";
                 const tile = document.createElement("div");
                 tile.className = "event-tile";
-                tile.setAttribute("role", "button");
-                tile.setAttribute("tabindex", "0");
-                tile.setAttribute("aria-label", `View details for ${event.text}`);
                 if (imageSrc === "📜") {
                     tile.innerHTML = `
                         <div style="font-size: 4rem; color: #ffcc00; padding: 20px;">📜</div>
@@ -546,11 +504,7 @@
                     `;
                 }
                 tile.addEventListener("click", () => openPopup(event, imageSrc));
-                tile.addEventListener("keydown", (e) => {
-                    if (e.key === "Enter") openPopup(event, imageSrc);
-                });
                 container.appendChild(tile);
-                setTimeout(() => tile.classList.add("visible"), index * 50); // Staggered fade-in
             });
         }
 
@@ -573,7 +527,6 @@
             document.getElementById("popupTitle").textContent = event.text;
             document.getElementById("popupBody").textContent = event.pages[0]?.extract || "No summary available.";
             document.getElementById("popupLink").href = `https://en.wikipedia.org/wiki/${event.pages[0]?.title}`;
-            document.getElementById("popup").focus(); // For accessibility
         }
 
         function closePopup() {
@@ -585,9 +538,7 @@
             currentDate = date;
 
             const loading = document.getElementById("loading");
-            const errorMessage = document.getElementById("errorMessage");
             loading.style.display = "block";
-            errorMessage.style.display = "none";
             document.getElementById("eventsContainer").innerHTML = "";
 
             const categories = Object.keys(categoryEmojis);
@@ -596,31 +547,13 @@
             document.getElementById("spinnerEmoji").textContent = emoji;
 
             const data = await fetchOnThisDay(currentDate);
-            if (!data) {
-                loading.style.display = "none";
-                errorMessage.textContent = "Couldn't fetch events—please try again later or check your connection.";
-                errorMessage.style.display = "block";
-                return;
-            }
-
-            const allRawEvents = [
-                ...(data.selected || []).map(e => ({...e, type: "Historical Event"})),
+            events = [
                 ...(data.events || []).map(e => ({...e, type: "Historical Event"})),
+                ...(data.selected || []).map(e => ({...e, type: "Historical Event"})),
                 ...(data.births || []).map(b => ({...b, type: "Birth"})),
                 ...(data.deaths || []).map(d => ({...d, type: "Death"})),
                 ...(data.holidays || []).map(h => ({...h, type: "Holiday"}))
             ];
-
-            // Deduplicate
-            const uniqueMap = new Map();
-            allRawEvents.forEach(event => {
-                const key = getUniqueKey(event);
-                if (!uniqueMap.has(key)) {
-                    uniqueMap.set(key, event);
-                }
-            });
-            events = Array.from(uniqueMap.values());
-
             classifyEvents();
             computeCategoryCounts();
             document.getElementById("dateDisplay").textContent = formatDateForDisplay(currentDate);
@@ -654,12 +587,13 @@
             renderEvents();
         });
 
-        document.getElementById("overlay").addEventListener("click", closePopup);
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape" && document.getElementById("popup").style.display === "flex") {
-                closePopup();
-            }
+        document.getElementById("toggleLabels").addEventListener("click", () => {
+            showFilterLabels = !showFilterLabels;
+            document.getElementById("toggleLabels").textContent = showFilterLabels ? "Hide Labels" : "Show Labels";
+            renderFilters();
         });
+
+        document.getElementById("overlay").addEventListener("click", closePopup);
 
         async function initialize() {
             document.getElementById("dateDisplay").textContent = formatDateForDisplay(currentDate);
