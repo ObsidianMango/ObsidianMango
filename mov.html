@@ -189,6 +189,29 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .filter-toggle {
+            padding: 8px 12px;
+            font-size: 14px;
+            font-family: 'Orbitron', sans-serif;
+            color: #eaeaea;
+            background-color: #22254b;
+            border: 2px solid #4e4c67;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.3s ease, background-color 0.3s ease, color 0.3s ease;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+        }
+        .filter-toggle:hover {
+            transform: scale(1.1);
+            background-color: #4e4c67;
+            color: #00ffc3;
+        }
+        @media (max-width: 768px) {
+            .filter-toggle {
+                font-size: 12px;
+                padding: 6px 10px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -200,6 +223,7 @@
             <span id="arrow" class="arrow">↑</span>
         </div>
         <button id="nextDay">Next Day →</button>
+        <button id="filterToggle" class="filter-toggle">🇺🇸 US Only</button>
     </div>
     <div id="moviesContainer" class="movie-list"></div>
 
@@ -214,15 +238,19 @@
         let currentDate = new Date();
         let movies = [];
         let sortAscending = true;
+        let isUSOnly = true; // Default to US only
 
         function formatSPARQLQuery(month, day) {
+            let countryFilter = isUSOnly ? '?item wdt:P495 wd:Q30.' : ''; // wd:Q30 is United States
             return `
                 SELECT ?item ?itemLabel ?release_date ?imdbLink (GROUP_CONCAT(DISTINCT ?genreLabel; separator=", ") AS ?genres) WHERE {
                   ?item wdt:P31 wd:Q11424;            # Instance of a movie
                         wdt:P577 ?release_date.       # Release date
+                  ${countryFilter}
                   OPTIONAL { ?item wdt:P345 ?imdbLink. } # IMDb ID
                   OPTIONAL { ?item wdt:P136 ?genre. ?genre rdfs:label ?genreLabel FILTER(LANG(?genreLabel) = "en"). }
                   FILTER((MONTH(?release_date) = ${month}) && (DAY(?release_date) = ${day}))
+                  FILTER NOT EXISTS { ?item wdt:P136 wd:Q18552918 } # Exclude pornographic films
                   SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
                 }
                 GROUP BY ?item ?itemLabel ?release_date ?imdbLink
@@ -333,6 +361,12 @@
             sortAscending = !sortAscending;
             document.getElementById("arrow").textContent = sortAscending ? "↑" : "↓";
             renderMovies();
+        });
+
+        document.getElementById("filterToggle").addEventListener("click", () => {
+            isUSOnly = !isUSOnly;
+            document.getElementById("filterToggle").textContent = isUSOnly ? "🇺🇸 US Only" : "🌍 Worldwide";
+            updateMoviesForDate(currentDate);
         });
 
         // Initialize the app
