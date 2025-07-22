@@ -105,6 +105,7 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0, 255, 195, 0.3);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
         }
         .movie-item:nth-child(odd) {
             background-color: #1f203a;
@@ -143,13 +144,18 @@
             padding: 3px 6px;
             text-transform: uppercase;
         }
+        .movie-info-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
         .movie-year {
             font-family: 'Orbitron', sans-serif;
             color: #ff6f61;
             font-size: 16px;
             font-weight: bold;
             white-space: nowrap;
-            margin-left: auto;
         }
         .loading-screen {
             position: fixed;
@@ -212,6 +218,68 @@
                 padding: 6px 10px;
             }
         }
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.7);
+        }
+        .modal-content {
+            background-color: #22254b;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 255, 195, 0.5);
+            width: 80%;
+            max-width: 600px;
+            color: #eaeaea;
+            font-family: 'Roboto', sans-serif;
+        }
+        .close {
+            color: #eaeaea;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: #00ffc3;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .modal-content h2 {
+            font-family: 'Orbitron', sans-serif;
+            color: #ffd369;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .modal-content p {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        .modal-content .movie-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .modal-content .movie-year {
+            color: #ff6f61;
+            font-weight: bold;
+        }
+        .modal-content a {
+            color: #00ffc3;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .modal-content a:hover {
+            color: #ffd369;
+        }
     </style>
 </head>
 <body>
@@ -227,6 +295,18 @@
     </div>
     <div id="moviesContainer" class="movie-list"></div>
 
+    <!-- Modal -->
+    <div id="movieModal" class="modal">
+        <div class="modal-content">
+            <span class="close">×</span>
+            <h2 id="modalTitle"></h2>
+            <p id="modalGenres"></p>
+            <p id="modalDuration"></p>
+            <p id="modalYear"></p>
+            <p id="modalImdb"></p>
+        </div>
+    </div>
+
     <!-- Loading Screen -->
     <div id="loadingScreen" class="loading-screen">
         <div class="spinner"></div>
@@ -241,19 +321,22 @@
         let isUSOnly = true; // Default to US only
 
         function formatSPARQLQuery(month, day) {
-            let countryFilter = isUSOnly ? '?item wdt:P495 wd:Q30.' : ''; // wd:Q30 is United States
+            let countryFilter = isUSOnly ? '?item wdt:P495 wd:Q30.' : '';
             return `
-                SELECT ?item ?itemLabel ?release_date ?imdbLink (GROUP_CONCAT(DISTINCT ?genreLabel; separator=", ") AS ?genres) WHERE {
+                SELECT ?item ?itemLabel ?release_date ?imdbLink (GROUP_CONCAT(DISTINCT ?genreLabel; separator=", ") AS ?genres) ?duration WHERE {
                   ?item wdt:P31 wd:Q11424;            # Instance of a movie
                         wdt:P577 ?release_date.       # Release date
                   ${countryFilter}
                   OPTIONAL { ?item wdt:P345 ?imdbLink. } # IMDb ID
                   OPTIONAL { ?item wdt:P136 ?genre. ?genre rdfs:label ?genreLabel FILTER(LANG(?genreLabel) = "en"). }
+                  OPTIONAL { ?item wdt:P2047 ?duration. } # Duration in minutes
                   FILTER((MONTH(?release_date) = ${month}) && (DAY(?release_date) = ${day}))
                   FILTER NOT EXISTS { ?item wdt:P136 wd:Q18552918 } # Exclude pornographic films
+                  FILTER NOT EXISTS { ?item wdt:P1657 wd:Q18665344 } # Exclude NC-17
+                  FILTER NOT EXISTS { ?item wdt:P1657 wd:Q18665334 } # Exclude X-rated
                   SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
                 }
-                GROUP BY ?item ?itemLabel ?release_date ?imdbLink
+                GROUP BY ?item ?itemLabel ?release_date ?imdbLink ?duration
                 ORDER BY ?release_date
             `;
         }
@@ -284,16 +367,22 @@
                                 imdbLink: movie.imdbLink?.value
                                     ? `https://www.imdb.com/title/${movie.imdbLink.value}/`
                                     : null,
-                                genres: movie.genres?.value
-                                    .replace(/ film/gi, '')
-                                    .split(', ')
-                                    .slice(0, 2)
-                                    .join(', ')
-                                    .toUpperCase() || "UNKNOWN",
+                                rawGenres: movie.genres?.value || "",
+                                duration: movie.duration?.value ? `${movie.duration.value} min` : "",
                             }
                         ])
                     ).values()
                 );
+
+                // Process genres
+                uniqueMovies.forEach(movie => {
+                    const raw = movie.rawGenres.replace(/ film/gi, '').trim();
+                    movie.fullGenres = raw.toUpperCase() || "UNKNOWN";
+                    const shortList = raw.split(', ').slice(0, 2).join(', ').toUpperCase();
+                    movie.genres = shortList || "UNKNOWN";
+                    delete movie.rawGenres;
+                });
+
                 toggleLoadingScreen(false);
                 return uniqueMovies.filter(movie => !/^Q\d+$/.test(movie.title));
             } catch (error) {
@@ -332,8 +421,15 @@
                     <div class="movie-tags">
                         ${movie.genres.split(', ').map(genre => `<span class="movie-tag">${genre}</span>`).join('')}
                     </div>
-                    <div class="movie-year">${movie.year}</div>
+                    <div class="movie-info-right">
+                        <div class="movie-year">${movie.year}</div>
+                    </div>
                 `;
+                movieItem.addEventListener('click', function(e) {
+                    if (e.target.tagName !== 'A') {
+                        openModal(movie);
+                    }
+                });
                 container.appendChild(movieItem);
             });
         }
@@ -345,6 +441,27 @@
             } else {
                 loadingScreen.classList.remove("active");
             }
+        }
+
+        // Modal functions
+        const modal = document.getElementById("movieModal");
+        const closeSpan = document.getElementsByClassName("close")[0];
+        closeSpan.onclick = function() {
+            modal.style.display = "none";
+        };
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        };
+
+        function openModal(movie) {
+            document.getElementById("modalTitle").textContent = movie.title;
+            document.getElementById("modalGenres").innerHTML = 'Genres: <div class="movie-tags">' + movie.fullGenres.split(', ').map(g => `<span class="movie-tag">${g}</span>`).join('') + '</div>';
+            document.getElementById("modalDuration").innerHTML = movie.duration ? 'Duration: ' + movie.duration : '';
+            document.getElementById("modalYear").innerHTML = 'Year: <span class="movie-year">' + movie.year + '</span>';
+            document.getElementById("modalImdb").innerHTML = movie.imdbLink ? `<a href="${movie.imdbLink}" target="_blank">View on IMDb</a>` : '';
+            modal.style.display = "block";
         }
 
         document.getElementById("prevDay").addEventListener("click", () => {
