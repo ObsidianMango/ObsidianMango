@@ -2,18 +2,40 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raining Food & Poop Shooter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Raining Food & Poop Shooter - Mobile Fun Edition</title>
     <style>
-        body { margin: 0; background: black; }
-        canvas { display: block; margin: 0 auto; }
+        body { margin: 0; background: black; overflow: hidden; }
+        canvas { display: block; touch-action: none; }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <canvas id="gameCanvas"></canvas>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+
+        // Set canvas to full screen
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+            ctx.scale(dpr, dpr);
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Get dimensions in CSS pixels
+        let WIDTH = window.innerWidth;
+        let HEIGHT = window.innerHeight;
+
+        // Update dimensions on resize
+        window.addEventListener('resize', () => {
+            WIDTH = window.innerWidth;
+            HEIGHT = window.innerHeight;
+        });
 
         // Emojis
         const FOOD_EMOJIS = ['🍇','🍈','🍉','🍊','🍋','🍌','🍍','🥭','🍎','🍏','🍐','🍑','🍒','🍓','🫐','🥝','🍅','🫒','🥥','🥑','🍆','🥔','🥕','🌽','🌶️','🫑','🥒','🥬','🥦','🧄','🧅','🥜','🫘','🌰','🫚','🫛','🍞','🥐','🥖','🫓','🥨','🥯','🥞','🧇','🧀','🍖','🍗','🥩','🥓','🍔','🍟','🍕','🌭','🥪','🌮','🌯','🫔','🥙','🧆','🥚','🍳','🥘','🍲','🫕','🥣','🥗','🍿','🧈','🧂','🥫','🍱','🍘','🍙','🍚','🍛','🍜','🍝','🍠','🍢','🍣','🍤','🍥','🥮','🍡','🥟','🥠','🥡','🦀','🦞','🦐','🦑','🦪','🍦','🍧','🍨','🍩','🍪','🎂','🍰','🧁','🥧','🍫','🍬','🍭','🍮','🍯','🍼','🥛','☕','🫖','🍵','🍶','🍾','🍷','🍸','🍹','🍺','🍻','🥂','🥃','🫗','🥤','🧋','🧃','🧉','🧊','🥢','🍽️','🍴','🥄','🔪','🫙','🏺'];
@@ -30,10 +52,14 @@
         let points = 0;
 
         // Character
-        let charX = 400 - 25;
-        let charY = 600 - 100;
+        let charX = WIDTH / 2 - 25;
+        let charY = HEIGHT - 100;
         const charSize = 50;
-        let isDragging = false;
+
+        // Touch control
+        let touchX = 0;
+        let touchY = 0;
+        let isTouching = false;
 
         // Foods: {x, y, emoji, speed}
         let foods = [];
@@ -42,79 +68,114 @@
         let poops = [];
 
         // Giant toilet
-        const giantToiletX = 400 - 50;
-        const giantToiletY = 300 - 100;
+        let giantToiletX = WIDTH / 2 - 50;
+        let giantToiletY = HEIGHT / 2 - 100;
         const giantToiletSize = 100;
 
         // Toilet button
-        const toiletButtonX = 400 + 100;
-        const toiletButtonY = 600 - 50;
+        let toiletButtonX = WIDTH / 2 + 100;
+        let toiletButtonY = HEIGHT - 50;
         const toiletButtonSize = 50;
         let showToiletButton = false;
 
-        // Mouse position
-        let mouseX = 0;
-        let mouseY = 0;
-
-        // Event listeners
-        canvas.addEventListener('mousedown', handleMouseDown);
-        canvas.addEventListener('mousemove', handleMouseMove);
-        canvas.addEventListener('mouseup', handleMouseUp);
-        canvas.addEventListener('click', handleClick);
-
-        function handleMouseDown(e) {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left;
-            mouseY = e.clientY - rect.top;
-
-            // Check if clicking on character to drag
-            if (mouseX > charX && mouseX < charX + charSize && mouseY > charY && mouseY < charY + charSize) {
-                isDragging = true;
+        // Fun additions
+        let eatParticles = []; // For fun eat effects
+        function createParticles(x, y) {
+            for (let i = 0; i < 10; i++) {
+                eatParticles.push({
+                    x: x + 25,
+                    y: y + 25,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: (Math.random() - 0.5) * 5,
+                    life: 20,
+                    color: `hsl(${Math.random() * 360}, 100%, 50%)`
+                });
             }
         }
 
-        function handleMouseMove(e) {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left;
-            mouseY = e.clientY - rect.top;
-
-            if (isDragging) {
-                charX = mouseX - charSize / 2;
-                charY = mouseY - charSize / 2;
-                // Clamp
-                charX = Math.max(0, Math.min(800 - charSize, charX));
-                charY = Math.max(0, Math.min(600 - charSize, charY));
-            }
+        function updateParticles() {
+            eatParticles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life--;
+            });
+            eatParticles = eatParticles.filter(p => p.life > 0);
         }
 
-        function handleMouseUp() {
-            isDragging = false;
+        function drawParticles() {
+            eatParticles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
         }
 
-        function handleClick(e) {
-            const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
+        // Event listeners for touch (swipe control)
+        canvas.addEventListener('touchstart', handleTouchStart);
+        canvas.addEventListener('touchmove', handleTouchMove);
+        canvas.addEventListener('touchend', handleTouchEnd);
 
+        function getTouchPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.touches[0].clientX - rect.left,
+                y: e.touches[0].clientY - rect.top
+            };
+        }
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const pos = getTouchPos(e);
+            touchX = pos.x;
+            touchY = pos.y;
+            isTouching = true;
+
+            // Check for toilet button tap in mode 1
             if (mode === 1 && showToiletButton &&
-                clickX > toiletButtonX && clickX < toiletButtonX + toiletButtonSize &&
-                clickY > toiletButtonY && clickY < toiletButtonY + toiletButtonSize) {
+                pos.x > toiletButtonX && pos.x < toiletButtonX + toiletButtonSize &&
+                pos.y > toiletButtonY && pos.y < toiletButtonY + toiletButtonSize) {
                 mode = 2;
                 foodMeter = maxFood;
                 showToiletButton = false;
-            } else if (mode === 2 && poopShots > 0) {
-                // Shoot poop
-                poops.push({x: charX + charSize / 2, y: charY, speed: 5});
+                // Vibrate for fun
+                if (navigator.vibrate) navigator.vibrate(50);
+            }
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            const pos = getTouchPos(e);
+            touchX = pos.x;
+            touchY = pos.y;
+
+            // Swipe to move character
+            charX = touchX - charSize / 2;
+            charY = touchY - charSize / 2;
+            charX = Math.max(0, Math.min(WIDTH - charSize, charX));
+            charY = Math.max(0, Math.min(HEIGHT - charSize, charY));
+        }
+
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            isTouching = false;
+
+            // In mode 2, tap to shoot (if not swiping, but since touchend, perhaps shoot on tap)
+            if (mode === 2 && poopShots > 0) {
+                // Shoot poop towards the direction, but for simplicity, shoot up
+                poops.push({x: charX + charSize / 2, y: charY, speed: 10}); // Faster for fun
                 poopShots--;
                 foodMeter -= 10;
+                // Vibrate
+                if (navigator.vibrate) navigator.vibrate(30);
             }
         }
 
         function spawnFood() {
-            if (Math.random() < 0.05) { // Approx 1 per 20 frames
-                const x = Math.random() * (800 - 50);
+            if (Math.random() < 0.1) { // Increased spawn rate for more fun
+                const x = Math.random() * (WIDTH - 50);
                 const emoji = FOOD_EMOJIS[Math.floor(Math.random() * FOOD_EMOJIS.length)];
-                const speed = 2 + Math.random() * 3;
+                const speed = 3 + Math.random() * 4; // Faster fall for excitement
                 foods.push({x, y: 0, emoji, speed});
             }
         }
@@ -123,18 +184,22 @@
             foods.forEach(food => {
                 food.y += food.speed;
             });
-            foods = foods.filter(food => food.y <= 600);
+            foods = foods.filter(food => food.y <= HEIGHT);
 
             // Collisions
             foods = foods.filter(food => {
                 if (food.x < charX + charSize && food.x + 50 > charX &&
                     food.y < charY + charSize && food.y + 50 > charY) {
-                    foodMeter += 10;
+                    foodMeter += 5; // Smaller increments for more eating
+                    points += 5; // Add points for eating
+                    createParticles(food.x, food.y); // Fun particles
                     if (foodMeter >= maxFood) {
                         foodMeter = maxFood;
                         showToiletButton = true;
                     }
-                    return false; // Remove
+                    // Vibrate on eat
+                    if (navigator.vibrate) navigator.vibrate(20);
+                    return false;
                 }
                 return true;
             });
@@ -142,16 +207,27 @@
 
         function updatePoops() {
             poops.forEach(poop => {
-                poop.y -= poop.speed;
+                // Shoot towards giant toilet for more fun
+                const dx = giantToiletX + giantToiletSize / 2 - poop.x;
+                const dy = giantToiletY + giantToiletSize / 2 - poop.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 0) {
+                    poop.x += (dx / dist) * poop.speed;
+                    poop.y += (dy / dist) * poop.speed;
+                }
             });
-            poops = poops.filter(poop => poop.y >= 0);
+            poops = poops.filter(poop => {
+                return poop.y >= 0 && poop.y <= HEIGHT && poop.x >= 0 && poop.x <= WIDTH;
+            });
 
             // Collisions with giant toilet
             poops = poops.filter(poop => {
                 if (poop.x < giantToiletX + giantToiletSize && poop.x + 30 > giantToiletX &&
                     poop.y < giantToiletY + giantToiletSize && poop.y + 30 > giantToiletY) {
-                    points += 10;
-                    return false; // Remove
+                    points += 20; // More points for fun
+                    createParticles(poop.x, poop.y); // Particles on hit
+                    if (navigator.vibrate) navigator.vibrate(50);
+                    return false;
                 }
                 return true;
             });
@@ -165,24 +241,36 @@
         }
 
         function drawEmoji(emoji, size, x, y, color = '#FFFFFF') {
-            ctx.font = `${size}px Arial`;
+            ctx.font = `${size}px serif`; // Use serif for better emoji rendering
             ctx.fillStyle = color;
-            ctx.fillText(emoji, x, y + size); // Adjust y for baseline
+            ctx.fillText(emoji, x, y + size);
         }
 
         function drawMeter() {
+            const meterX = WIDTH / 2 - 100;
+            const meterY = HEIGHT - 50;
             ctx.fillStyle = 'green';
-            ctx.fillRect(400 - 100, 600 - 50, (foodMeter / maxFood) * 200, 20);
+            ctx.fillRect(meterX, meterY, (foodMeter / maxFood) * 200, 20);
             ctx.strokeStyle = 'white';
-            ctx.strokeRect(400 - 100, 600 - 50, 200, 20);
+            ctx.strokeRect(meterX, meterY, 200, 20);
 
             ctx.font = '24px Arial';
             ctx.fillStyle = 'white';
-            ctx.fillText('Food Meter', 400 - 100, 600 - 60);
+            ctx.fillText('Food Meter', meterX, meterY - 10);
+        }
+
+        // Update positions that depend on WIDTH/HEIGHT
+        function updatePositions() {
+            charY = HEIGHT - 100; // Reset if resized
+            giantToiletX = WIDTH / 2 - 50;
+            giantToiletY = HEIGHT / 2 - 100;
+            toiletButtonX = WIDTH / 2 + 100;
+            toiletButtonY = HEIGHT - 50;
         }
 
         function gameLoop() {
-            ctx.clearRect(0, 0, 800, 600);
+            updatePositions();
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
             if (mode === 1) {
                 spawnFood();
@@ -204,12 +292,17 @@
 
                 drawEmoji(GIANT_TOILET_EMOJI, giantToiletSize, giantToiletX, giantToiletY, 'red');
 
-                ctx.font = '48px Arial';
-                ctx.fillStyle = 'white';
-                ctx.fillText(`Points: ${points}`, 10, 50);
-
                 drawMeter();
             }
+
+            // Always show points
+            ctx.font = '48px Arial';
+            ctx.fillStyle = 'white';
+            ctx.fillText(`Points: ${points}`, 10, 50);
+
+            // Particles
+            updateParticles();
+            drawParticles();
 
             requestAnimationFrame(gameLoop);
         }
