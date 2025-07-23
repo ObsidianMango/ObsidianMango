@@ -3,66 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Optimized Diamond Ocean Waves Simulation</title>
+    <title>Canvas-Optimized Diamond Ocean Waves Simulation</title>
     <style>
         body {
             margin: 0;
             background-color: #000;
             overflow: hidden;
         }
-        #container {
-            display: grid;
+        canvas {
+            display: block;
             width: 100vw;
             height: 100vh;
-            justify-items: center;
-            align-items: center;
-        }
-        span {
-            transition: font-size 0.2s ease, opacity 0.2s ease; /* Smoother transition for better perf */
-            color: #00bfff;
         }
     </style>
 </head>
 <body>
-    <div id="container"></div>
+    <canvas id="canvas"></canvas>
     <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Handle device pixel ratio for sharpness
+        const dpr = window.devicePixelRatio || 1;
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+            ctx.scale(dpr, dpr);
+        }
+        resizeCanvas();
+
         // Detect mobile for optimizations
         const isMobile = /Mobi|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
         
-        // Reduce grid density on mobile for better performance
-        const baseCols = isMobile ? 30 : 60;
-        const cellSize = isMobile ? 20 : 12; // Larger cells on mobile to reduce element count
+        // Grid parameters: Larger cells on mobile for fewer draw calls
+        const cellSize = isMobile ? 25 : 15;
         
-        // Dynamically calculate cols and rows based on screen size
-        let cols = Math.floor(window.innerWidth / cellSize);
-        let rows = Math.floor(window.innerHeight / cellSize);
-        
-        const container = document.getElementById('container');
-        container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-        container.style.gridGap = isMobile ? '4px' : '2px';
-        
-        // Create grid of diamond emojis (fewer on mobile)
-        for (let i = 0; i < cols * rows; i++) {
-            const span = document.createElement('span');
-            span.textContent = '💎';
-            container.appendChild(span);
-        }
-
         // Animation parameters
         let time = 0;
-        const waveSpeed = isMobile ? 0.03 : 0.05; // Slower speed on mobile to reduce computation
+        const waveSpeed = isMobile ? 0.03 : 0.05;
         const waveFrequency = 0.2;
-        const amplitude = isMobile ? 8 : 10; // Slightly less variation on mobile
+        const amplitude = isMobile ? 8 : 10;
+        const baseSize = isMobile ? 12 : 10;
 
-        // Simplified wave function for performance: Reduce to 2 waves instead of 3
+        // Simplified wave function
         function getWaveHeight(x, y, t) {
-            // Wave 1: Horizontal waves
             let wave1 = Math.sin(waveFrequency * x + t) * Math.cos(0.5 * waveFrequency * y);
-            
-            // Wave 2: Diagonal waves
             let wave2 = Math.sin(0.8 * waveFrequency * (x + y) - 1.2 * t);
-            
-            // Superposition and normalization (skipped circular for perf)
             let combined = wave1 + wave2;
             return (combined + 2) / 4; // Normalize to [0,1]
         }
@@ -73,15 +59,27 @@
         function animate(currentTime) {
             if (currentTime - lastUpdate > updateInterval) {
                 time += waveSpeed;
-                const spans = container.children;
+                
+                // Clear canvas
+                ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+                
+                // Calculate grid dynamically
+                const cols = Math.floor(window.innerWidth / cellSize);
+                const rows = Math.floor(window.innerHeight / cellSize);
                 
                 for (let y = 0; y < rows; y++) {
                     for (let x = 0; x < cols; x++) {
-                        const index = y * cols + x;
                         const height = getWaveHeight(x, y, time);
-                        const size = (isMobile ? 10 : 8) + amplitude * height;
-                        spans[index].style.fontSize = `${size}px`;
-                        spans[index].style.opacity = 0.6 + 0.4 * height;
+                        const size = baseSize + amplitude * height;
+                        
+                        ctx.font = `${size}px sans-serif`; // Emojis render well
+                        ctx.fillStyle = `rgba(0, 191, 255, ${0.6 + 0.4 * height})`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        
+                        const posX = x * cellSize + cellSize / 2;
+                        const posY = y * cellSize + cellSize / 2;
+                        ctx.fillText('💎', posX, posY);
                     }
                 }
                 lastUpdate = currentTime;
@@ -92,21 +90,11 @@
 
         animate(0);
 
-        // Handle resize: Recalculate grid (debounced for perf)
+        // Handle resize (debounced)
         let resizeTimeout;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                cols = Math.floor(window.innerWidth / cellSize);
-                rows = Math.floor(window.innerHeight / cellSize);
-                container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-                container.innerHTML = ''; // Clear and recreate spans
-                for (let i = 0; i < cols * rows; i++) {
-                    const span = document.createElement('span');
-                    span.textContent = '💎';
-                    container.appendChild(span);
-                }
-            }, 300); // Debounce resize
+            resizeTimeout = setTimeout(resizeCanvas, 300);
         });
     </script>
 </body>
