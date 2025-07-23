@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes"> <!-- For better iOS experience -->
-    <title>Instant Reactive Rolling Diamond Ocean Waves</title>
+    <title>Optimized Instant Reactive Diamond Ocean Waves</title>
     <style>
         body {
             margin: 0;
@@ -37,41 +37,41 @@
         // Detect mobile for optimizations
         const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 768;
         
-        // Grid parameters: Adjusted for balance between detail and performance
-        const cellSize = isMobile ? 20 : 12; // Slightly smaller than before for more diamonds, but test perf
+        // Grid parameters: Increased cellSize on mobile to reduce draw calls and improve FPS/response time
+        const cellSize = isMobile ? 25 : 15; // Larger cells for fewer computations and draws
         
-        // Animation parameters - increased speeds for more responsiveness
+        // Animation parameters - tuned for responsiveness
         let time = 0;
-        const waveSpeed = isMobile ? 0.05 : 0.07; // Faster waves on mobile for dynamic feel
-        const waveFrequency = 0.25; // Slightly higher frequency for more activity
-        const amplitude = isMobile ? 14 : 16; // Further increased for stronger natural waves
-        const baseSize = isMobile ? 8 : 6; // Further decreased base for higher contrast in rolling
+        const waveSpeed = isMobile ? 0.05 : 0.07;
+        const waveFrequency = 0.25;
+        const amplitude = isMobile ? 14 : 16;
+        const baseSize = isMobile ? 8 : 6;
 
-        // Ripple parameters - adjusted for smoother, longer-lasting natural flow
+        // Ripple parameters
         const ripples = [];
-        const rippleFrequency = 0.6; // Higher for tighter waves
-        const rippleSpeed = 0.15; // Faster propagation
-        const rippleDecay = 0.02; // Slower decay for longer rippling
-        const rippleMaxDuration = 6; // Longer duration to let it ripple around
-        const minDragDistance = 1; // Grid units between ripple additions during swipe
+        const rippleFrequency = 0.6;
+        const rippleSpeed = 0.15;
+        const rippleDecay = 0.02;
+        const rippleMaxDuration = 6;
+        const minDragDistance = 2; // Increased to reduce ripple count during fast swipes
+        const maxRipples = 30; // Limit active ripples to prevent perf degradation
 
-        // Track last ripple position for swipe (per touch, but simplified to single touch)
+        // Track last ripple position for swipe
         let lastGridX = null;
         let lastGridY = null;
-        let isSwiping = false; // Flag to detect if swipe occurred
+        let isSwiping = false;
 
-        // Enhanced base wave function with more pronounced rolling components
+        // Simplified base wave function with pronounced rolling (removed one for perf)
         function getBaseWaveHeight(x, y, t) {
             let wave1 = Math.sin(waveFrequency * x + t) * Math.cos(0.5 * waveFrequency * y);
             let wave2 = Math.sin(0.8 * waveFrequency * (x + y) - 1.2 * t);
-            let wave3 = Math.sin(waveFrequency * 1.2 * x - 1.5 * t); // Horizontal rolling left-to-right
-            let wave4 = Math.sin(waveFrequency * 0.7 * y - 0.9 * t); // Vertical rolling top-to-bottom
-            let wave5 = 0.5 * Math.sin(waveFrequency * 0.9 * (x - y) + 0.8 * t); // Diagonal for added natural variation
-            let combined = wave1 + wave2 + 1.2 * wave3 + 1.2 * wave4 + wave5; // Increased weights for more visible rolling
-            return (combined + 6) / 12; // Normalize to [0,1] with more components
+            let wave3 = Math.sin(waveFrequency * 1.2 * x - 1.5 * t); // Horizontal
+            let wave4 = Math.sin(waveFrequency * 0.7 * y - 0.9 * t); // Vertical
+            let combined = wave1 + wave2 + 1.2 * wave3 + 1.2 * wave4;
+            return (combined + 5) / 10; // Adjusted normalization
         }
 
-        // Add ripple contributions with smoother attenuation
+        // Ripple height with limit enforcement
         function getRippleHeight(gridX, gridY, t) {
             let rippleHeight = 0;
             for (let i = ripples.length - 1; i >= 0; i--) {
@@ -85,35 +85,37 @@
                 const dy = gridY - ripple.gridY;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 const phase = rippleFrequency * dist - rippleSpeed * age;
-                const attenuation = Math.exp(-rippleDecay * age) * Math.exp(-0.05 * dist); // Slower distance decay for wider, smoother spread
-                rippleHeight += Math.sin(phase) * attenuation * 1.2; // Slightly reduced amplification for natural feel
+                const attenuation = Math.exp(-rippleDecay * age) * Math.exp(-0.05 * dist);
+                rippleHeight += Math.sin(phase) * attenuation * 1.2;
+            }
+            // Enforce max ripples
+            if (ripples.length > maxRipples) {
+                ripples.shift();
             }
             return rippleHeight;
         }
 
-        // Combined height with softer clamping
+        // Combined height
         function getWaveHeight(gridX, gridY, t) {
             let base = getBaseWaveHeight(gridX, gridY, t);
             let ripple = getRippleHeight(gridX, gridY, t);
-            let combined = base + 0.5 * ripple; // Reduced ripple scale for smoother integration
-            return Math.min(1.2, Math.max(-0.2, combined)); // Softer clamp to allow slight over/under for natural variation
+            let combined = base + 0.5 * ripple;
+            return Math.min(1.2, Math.max(-0.2, combined));
         }
 
-        // No throttling - update every frame for maximum responsiveness (leverages rAF's natural 60/120Hz on Pro Max)
+        // Animate function
         function animate() {
             time += waveSpeed;
             
-            // Clear canvas
             ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
             
-            // Calculate grid dynamically
             const cols = Math.floor(window.innerWidth / cellSize);
             const rows = Math.floor(window.innerHeight / cellSize);
             
             for (let y = 0; y < rows; y++) {
                 for (let x = 0; x < cols; x++) {
                     const height = getWaveHeight(x, y, time);
-                    const normalizedHeight = (height + 0.2) / 1.4; // Normalize back to approx [0,1] after soft clamp
+                    const normalizedHeight = (height + 0.2) / 1.4;
                     const size = baseSize + amplitude * normalizedHeight;
                     
                     ctx.font = `${size}px sans-serif`;
@@ -132,25 +134,21 @@
 
         animate();
 
-        // Interactive tap and swipe handling (simplified for single touch)
-        const rect = canvas.getBoundingClientRect(); // Cache if not resizing often, but for accuracy, get inside
-
+        // Touch handlers
         canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // Prevent scrolling/zoom on iOS
-            const touch = e.touches[0]; // Start with first touch
+            e.preventDefault();
+            const touch = e.touches[0];
             const touchX = touch.clientX - canvas.getBoundingClientRect().left;
             const touchY = touch.clientY - canvas.getBoundingClientRect().top;
             
             const gridX = Math.floor(touchX / cellSize);
             const gridY = Math.floor(touchY / cellSize);
             
-            // Add initial ripple for tap/start of swipe
-            ripples.push({ gridX, gridY, startTime: time });
+            ripples.push({ gridX, gridY, startTime: time - 0.1 }); // Slight backdate for instant feel
             
-            // Set last position for swipe detection
             lastGridX = gridX;
             lastGridY = gridY;
-            isSwiping = false; // Reset swipe flag
+            isSwiping = false;
         }, { passive: false });
 
         canvas.addEventListener('touchmove', (e) => {
@@ -168,27 +166,24 @@
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 
                 if (dist >= minDragDistance) {
-                    // Add ripple along the swipe path
-                    ripples.push({ gridX, gridY, startTime: time });
+                    ripples.push({ gridX, gridY, startTime: time - 0.1 });
                     lastGridX = gridX;
                     lastGridY = gridY;
-                    isSwiping = true; // Mark as swiping
+                    isSwiping = true;
                 }
             }
         }, { passive: false });
 
         canvas.addEventListener('touchend', (e) => {
             if (lastGridX !== null && lastGridY !== null && isSwiping) {
-                // Add a final ripple on finger lift for instant reaction during swipe
-                ripples.push({ gridX: lastGridX, gridY: lastGridY, startTime: time });
+                ripples.push({ gridX: lastGridX, gridY: lastGridY, startTime: time - 0.1 });
             }
-            // Reset last position and flag
             lastGridX = null;
             lastGridY = null;
             isSwiping = false;
         }, { passive: false });
 
-        // Handle resize (debounced)
+        // Handle resize
         let resizeTimeout;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
