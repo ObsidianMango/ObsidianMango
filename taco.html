@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Permit Patrol: The Free-Market Gauntlet</title>
+    <style>
+        body { margin: 0; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { border: 1px solid #000; background: #fff; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game variables
+        let cash = 0;
+        let freedomScore = 0;
+        let timeLeft = 60; // seconds
+        let gameOver = false;
+        let customers = [];
+        let inspectors = [];
+        let items = ['🌮', '🌭', '☕️']; // Available items to serve
+        let ordinances = [
+            'Need a $500 hot-sauce license!',
+            'Cart must be 2 ft farther from curb!',
+            'Carbon tax: pay up!'
+        ];
+        
+        // Player cart position (mango in sunglasses - simplified as circle with shades)
+        const cart = { x: 400, y: 500, width: 100, height: 50 };
+        
+        // Buttons for items (click to serve)
+        const itemButtons = items.map((item, i) => ({ x: 20 + i * 100, y: 550, width: 80, height: 40, label: item }));
+        
+        // Comply/Nullify buttons (appear when inspector active)
+        let activeInspector = null;
+        const complyButton = { x: 200, y: 300, width: 100, height: 40, label: 'Comply' };
+        const nullifyButton = { x: 400, y: 300, width: 100, height: 40, label: 'Nullify' };
+        
+        // Draw functions
+        function drawBackground() {
+            ctx.fillStyle = '#808080'; // Street
+            ctx.fillRect(0, 400, 800, 200);
+            ctx.fillStyle = '#d3d3d3'; // Sidewalk
+            ctx.fillRect(0, 350, 800, 50);
+            ctx.fillStyle = '#87ceeb'; // Sky
+            ctx.fillRect(0, 0, 800, 350);
+        }
+        
+        function drawCart() {
+            ctx.fillStyle = '#ff4500'; // Cart body
+            ctx.fillRect(cart.x - cart.width/2, cart.y - cart.height/2, cart.width, cart.height);
+            ctx.fillStyle = '#ffd700'; // Mango head
+            ctx.beginPath();
+            ctx.arc(cart.x, cart.y - 40, 20, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#000'; // Sunglasses
+            ctx.fillRect(cart.x - 15, cart.y - 45, 30, 5);
+        }
+        
+        function drawCustomers() {
+            customers.forEach(c => {
+                ctx.fillStyle = '#00f'; // Stick figure body
+                ctx.fillRect(c.x, c.y, 10, 30);
+                ctx.font = '20px Arial';
+                ctx.fillText(c.want, c.x, c.y - 10); // Wanted item
+            });
+        }
+        
+        function drawInspectors() {
+            inspectors.forEach(i => {
+                ctx.fillStyle = '#f00'; // Inspector body
+                ctx.fillRect(i.x, i.y, 20, 40);
+                ctx.font = '16px Arial';
+                ctx.fillText(i.ordinance, i.x, i.y - 10);
+            });
+        }
+        
+        function drawHUD() {
+            ctx.font = '20px Arial';
+            ctx.fillStyle = '#000';
+            ctx.fillText(`Cash: $${cash}`, 10, 30);
+            ctx.fillText(`Time: ${timeLeft}s`, 10, 60);
+            ctx.fillText(`Freedom: ${freedomScore}`, 10, 90);
+            
+            // Item buttons
+            itemButtons.forEach(btn => {
+                ctx.fillStyle = '#ddd';
+                ctx.fillRect(btn.x, btn.y, btn.width, btn.height);
+                ctx.fillStyle = '#000';
+                ctx.fillText(btn.label, btn.x + 20, btn.y + 25);
+            });
+            
+            // Inspector buttons if active
+            if (activeInspector) {
+                ctx.fillStyle = '#ddd';
+                ctx.fillRect(complyButton.x, complyButton.y, complyButton.width, complyButton.height);
+                ctx.fillText(complyButton.label, complyButton.x + 10, complyButton.y + 25);
+                ctx.fillRect(nullifyButton.x, nullifyButton.y, nullifyButton.width, nullifyButton.height);
+                ctx.fillText(nullifyButton.label, nullifyButton.x + 10, nullifyButton.y + 25);
+            }
+        }
+        
+        function update() {
+            if (gameOver) return;
+            
+            // Spawn customers randomly
+            if (Math.random() < 0.02) { // ~every 2s
+                customers.push({
+                    x: Math.random() < 0.5 ? 0 : 800,
+                    y: 380 + Math.random() * 20,
+                    want: items[Math.floor(Math.random() * items.length)],
+                    speed: Math.random() < 0.5 ? 2 : -2 // Approach from left or right
+                });
+            }
+            
+            // Move customers
+            customers = customers.filter(c => {
+                c.x += c.speed;
+                if (c.x > 800 || c.x < 0) return false; // Off-screen, lost customer
+                return true;
+            });
+            
+            // Spawn inspectors randomly
+            if (Math.random() < 0.01 && !activeInspector) { // ~every 5s, only one at a time
+                const ordinance = ordinances[Math.floor(Math.random() * ordinances.length)];
+                inspectors.push({ x: 400, y: 200, ordinance });
+                activeInspector = inspectors[inspectors.length - 1];
+            }
+            
+            // Timer
+            timeLeft -= 1/60; // Assuming 60fps
+            if (timeLeft <= 0) {
+                gameOver = true;
+                alert(`Round Over! Net Profit: $${cash}\nFreedom Score: ${freedomScore}\nTaxes/Fines Paid: $${-freedomScore * 10}`); // Placeholder snarky message
+            }
+        }
+        
+        function draw() {
+            ctx.clearRect(0, 0, 800, 600);
+            drawBackground();
+            drawCart();
+            drawCustomers();
+            drawInspectors();
+            drawHUD();
+        }
+        
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Mouse click handler
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            
+            // Check item buttons for serving customers
+            itemButtons.forEach((btn, i) => {
+                if (mx > btn.x && mx < btn.x + btn.width && my > btn.y && my < btn.y + btn.height) {
+                    // Find nearest customer wanting this item
+                    const served = customers.find(c => c.want === items[i] && Math.abs(c.x - cart.x) < 100);
+                    if (served) {
+                        cash += 10; // Earn cash
+                        customers = customers.filter(c => c !== served);
+                    }
+                }
+            });
+            
+            // Inspector buttons
+            if (activeInspector) {
+                if (mx > complyButton.x && mx < complyButton.x + complyButton.width && my > complyButton.y && my < complyButton.y + complyButton.height) {
+                    cash -= 50; // Pay to comply
+                    freedomScore -= 1; // Lose freedom
+                    inspectors = [];
+                    activeInspector = null;
+                } else if (mx > nullifyButton.x && mx < nullifyButton.x + nullifyButton.width && my > nullifyButton.y && my < nullifyButton.y + nullifyButton.height) {
+                    if (Math.random() < 0.5) { // 50% success
+                        freedomScore += 2; // Win freedom
+                        inspectors = [];
+                        activeInspector = null;
+                    } else {
+                        cash -= 100; // Double fine
+                    }
+                }
+            }
+        });
+        
+        gameLoop(); // Start the game
+    </script>
+</body>
+</html>
