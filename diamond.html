@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Interactive Canvas Diamond Ocean Waves</title>
+    <meta name="apple-mobile-web-app-capable" content="yes"> <!-- For better iOS experience -->
+    <title>Highly Responsive Interactive Diamond Ocean Waves</title>
     <style>
         body {
             margin: 0;
@@ -36,29 +37,29 @@
         // Detect mobile for optimizations
         const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 768;
         
-        // Grid parameters: Larger cells on mobile for fewer draw calls
-        const cellSize = isMobile ? 25 : 15;
+        // Grid parameters: Adjusted for balance between detail and performance
+        const cellSize = isMobile ? 20 : 12; // Slightly smaller than before for more diamonds, but test perf
         
-        // Animation parameters
+        // Animation parameters - increased speeds for more responsiveness
         let time = 0;
-        const waveSpeed = isMobile ? 0.03 : 0.05;
-        const waveFrequency = 0.2;
-        const amplitude = isMobile ? 8 : 10;
+        const waveSpeed = isMobile ? 0.05 : 0.07; // Faster waves on mobile for dynamic feel
+        const waveFrequency = 0.25; // Slightly higher frequency for more activity
+        const amplitude = isMobile ? 10 : 12;
         const baseSize = isMobile ? 12 : 10;
 
-        // Ripple parameters for interactivity
-        const ripples = []; // Array of {gridX, gridY, startTime}
-        const rippleFrequency = 0.5;
-        const rippleSpeed = 0.1;
-        const rippleDecay = 0.05;
-        const rippleMaxDuration = 5; // Seconds before removing
+        // Ripple parameters - made stronger and faster for immediate response
+        const ripples = [];
+        const rippleFrequency = 0.6; // Higher for tighter waves
+        const rippleSpeed = 0.15; // Faster propagation
+        const rippleDecay = 0.04; // Slower decay for longer visibility
+        const rippleMaxDuration = 4; // Shorter duration to keep array small
 
         // Simplified base wave function
         function getBaseWaveHeight(x, y, t) {
             let wave1 = Math.sin(waveFrequency * x + t) * Math.cos(0.5 * waveFrequency * y);
             let wave2 = Math.sin(0.8 * waveFrequency * (x + y) - 1.2 * t);
             let combined = wave1 + wave2;
-            return (combined + 2) / 4; // Normalize to [0,1]
+            return (combined + 2) / 4;
         }
 
         // Add ripple contributions
@@ -75,8 +76,8 @@
                 const dy = gridY - ripple.gridY;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 const phase = rippleFrequency * dist - rippleSpeed * age;
-                const attenuation = Math.exp(-rippleDecay * age) * Math.exp(-0.1 * dist); // Decay with time and distance
-                rippleHeight += Math.sin(phase) * attenuation;
+                const attenuation = Math.exp(-rippleDecay * age) * Math.exp(-0.08 * dist); // Adjusted for stronger ripples
+                rippleHeight += Math.sin(phase) * attenuation * 1.5; // Amplified impact
             }
             return rippleHeight;
         }
@@ -85,60 +86,59 @@
         function getWaveHeight(gridX, gridY, t) {
             let base = getBaseWaveHeight(gridX, gridY, t);
             let ripple = getRippleHeight(gridX, gridY, t);
-            return Math.min(1, Math.max(0, base + 0.5 * ripple)); // Clamp to [0,1] and scale ripple impact
+            return Math.min(1, Math.max(0, base + 0.7 * ripple)); // Increased ripple scale for more response
         }
 
-        let lastUpdate = 0;
-        const updateInterval = isMobile ? 50 : 16; // ~20fps on mobile, ~60fps on desktop
-
-        function animate(currentTime) {
-            if (currentTime - lastUpdate > updateInterval) {
-                time += waveSpeed;
-                
-                // Clear canvas
-                ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-                
-                // Calculate grid dynamically
-                const cols = Math.floor(window.innerWidth / cellSize);
-                const rows = Math.floor(window.innerHeight / cellSize);
-                
-                for (let y = 0; y < rows; y++) {
-                    for (let x = 0; x < cols; x++) {
-                        const height = getWaveHeight(x, y, time);
-                        const size = baseSize + amplitude * height;
-                        
-                        ctx.font = `${size}px sans-serif`;
-                        ctx.fillStyle = `rgba(0, 191, 255, ${0.6 + 0.4 * height})`;
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        
-                        const posX = x * cellSize + cellSize / 2;
-                        const posY = y * cellSize + cellSize / 2;
-                        ctx.fillText('💎', posX, posY);
-                    }
+        // No throttling - update every frame for maximum responsiveness (leverages rAF's natural 60/120Hz on Pro Max)
+        function animate() {
+            time += waveSpeed;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+            
+            // Calculate grid dynamically
+            const cols = Math.floor(window.innerWidth / cellSize);
+            const rows = Math.floor(window.innerHeight / cellSize);
+            
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    const height = getWaveHeight(x, y, time);
+                    const size = baseSize + amplitude * height;
+                    
+                    ctx.font = `${size}px sans-serif`;
+                    ctx.fillStyle = `rgba(0, 191, 255, ${0.6 + 0.4 * height})`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    const posX = x * cellSize + cellSize / 2;
+                    const posY = y * cellSize + cellSize / 2;
+                    ctx.fillText('💎', posX, posY);
                 }
-                lastUpdate = currentTime;
             }
             
             requestAnimationFrame(animate);
         }
 
-        animate(0);
+        animate();
 
-        // Interactive tap handling for mobile (touch events)
+        // Interactive tap handling with multi-touch support
         canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // Prevent scrolling/zoom on iPhone
-            const touch = e.touches[0];
+            e.preventDefault(); // Prevent scrolling/zoom on iOS
             const rect = canvas.getBoundingClientRect();
-            const touchX = touch.clientX - rect.left;
-            const touchY = touch.clientY - rect.top;
             
-            // Convert to grid coordinates
-            const gridX = Math.floor(touchX / cellSize);
-            const gridY = Math.floor(touchY / cellSize);
-            
-            // Add ripple
-            ripples.push({ gridX, gridY, startTime: time });
+            // Support multiple touches for simultaneous ripples
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                const touchX = touch.clientX - rect.left;
+                const touchY = touch.clientY - rect.top;
+                
+                // Convert to grid coordinates
+                const gridX = Math.floor(touchX / cellSize);
+                const gridY = Math.floor(touchY / cellSize);
+                
+                // Add ripple
+                ripples.push({ gridX, gridY, startTime: time });
+            }
         }, { passive: false });
 
         // Handle resize (debounced)
