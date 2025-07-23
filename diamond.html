@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Diamond Ocean Waves Simulation</title>
+    <title>Optimized Diamond Ocean Waves Simulation</title>
     <style>
         body {
             margin: 0;
@@ -12,27 +12,36 @@
         }
         #container {
             display: grid;
-            grid-template-columns: repeat(60, 1fr);
-            grid-gap: 2px;
             width: 100vw;
             height: 100vh;
             justify-items: center;
             align-items: center;
         }
         span {
-            transition: font-size 0.1s ease;
-            color: #00bfff; /* Deep sky blue for ocean feel */
+            transition: font-size 0.2s ease, opacity 0.2s ease; /* Smoother transition for better perf */
+            color: #00bfff;
         }
     </style>
 </head>
 <body>
     <div id="container"></div>
     <script>
-        const cols = 60;
-        const rows = Math.floor(window.innerHeight / (window.innerWidth / cols));
-        const container = document.getElementById('container');
+        // Detect mobile for optimizations
+        const isMobile = /Mobi|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
         
-        // Create grid of diamond emojis
+        // Reduce grid density on mobile for better performance
+        const baseCols = isMobile ? 30 : 60;
+        const cellSize = isMobile ? 20 : 12; // Larger cells on mobile to reduce element count
+        
+        // Dynamically calculate cols and rows based on screen size
+        let cols = Math.floor(window.innerWidth / cellSize);
+        let rows = Math.floor(window.innerHeight / cellSize);
+        
+        const container = document.getElementById('container');
+        container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        container.style.gridGap = isMobile ? '4px' : '2px';
+        
+        // Create grid of diamond emojis (fewer on mobile)
         for (let i = 0; i < cols * rows; i++) {
             const span = document.createElement('span');
             span.textContent = '💎';
@@ -41,12 +50,11 @@
 
         // Animation parameters
         let time = 0;
-        const waveSpeed = 0.05; // Speed of wave propagation
-        const waveFrequency = 0.2; // Spatial frequency
-        const amplitude = 10; // Max font size variation
+        const waveSpeed = isMobile ? 0.03 : 0.05; // Slower speed on mobile to reduce computation
+        const waveFrequency = 0.2;
+        const amplitude = isMobile ? 8 : 10; // Slightly less variation on mobile
 
-        // Advanced math: Superposition of multiple sine waves for realistic ocean effect
-        // Using 2D wave function with directional components (like Gerstner waves simplified)
+        // Simplified wave function for performance: Reduce to 2 waves instead of 3
         function getWaveHeight(x, y, t) {
             // Wave 1: Horizontal waves
             let wave1 = Math.sin(waveFrequency * x + t) * Math.cos(0.5 * waveFrequency * y);
@@ -54,35 +62,52 @@
             // Wave 2: Diagonal waves
             let wave2 = Math.sin(0.8 * waveFrequency * (x + y) - 1.2 * t);
             
-            // Wave 3: Circular ripples for added complexity
-            let dist = Math.sqrt((x - cols/2)**2 + (y - rows/2)**2);
-            let wave3 = Math.sin(0.3 * waveFrequency * dist - 0.8 * t);
-            
-            // Superposition and normalization
-            let combined = wave1 + wave2 + 0.5 * wave3;
-            return (combined + 3) / 6; // Normalize to [0,1]
+            // Superposition and normalization (skipped circular for perf)
+            let combined = wave1 + wave2;
+            return (combined + 2) / 4; // Normalize to [0,1]
         }
 
-        function animate() {
-            time += waveSpeed;
-            const spans = container.children;
-            
-            for (let y = 0; y < rows; y++) {
-                for (let x = 0; x < cols; x++) {
-                    const index = y * cols + x;
-                    const height = getWaveHeight(x, y, time);
-                    const size = 8 + amplitude * height; // Base size 8px + variation
-                    spans[index].style.fontSize = `${size}px`;
-                    
-                    // Optional: Vary opacity or color for depth
-                    spans[index].style.opacity = 0.6 + 0.4 * height;
+        let lastUpdate = 0;
+        const updateInterval = isMobile ? 50 : 16; // ~20fps on mobile, ~60fps on desktop
+
+        function animate(currentTime) {
+            if (currentTime - lastUpdate > updateInterval) {
+                time += waveSpeed;
+                const spans = container.children;
+                
+                for (let y = 0; y < rows; y++) {
+                    for (let x = 0; x < cols; x++) {
+                        const index = y * cols + x;
+                        const height = getWaveHeight(x, y, time);
+                        const size = (isMobile ? 10 : 8) + amplitude * height;
+                        spans[index].style.fontSize = `${size}px`;
+                        spans[index].style.opacity = 0.6 + 0.4 * height;
+                    }
                 }
+                lastUpdate = currentTime;
             }
             
             requestAnimationFrame(animate);
         }
 
-        animate();
+        animate(0);
+
+        // Handle resize: Recalculate grid (debounced for perf)
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                cols = Math.floor(window.innerWidth / cellSize);
+                rows = Math.floor(window.innerHeight / cellSize);
+                container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+                container.innerHTML = ''; // Clear and recreate spans
+                for (let i = 0; i < cols * rows; i++) {
+                    const span = document.createElement('span');
+                    span.textContent = '💎';
+                    container.appendChild(span);
+                }
+            }, 300); // Debounce resize
+        });
     </script>
 </body>
 </html>
