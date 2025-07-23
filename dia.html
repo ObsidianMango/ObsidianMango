@@ -32,6 +32,7 @@
             justify-content: center;
             z-index: 1000;
             transition: background 0.3s;
+            touch-action: auto;
         }
         .menu-button:hover {
             background: rgba(0, 0, 0, 0.5);
@@ -53,6 +54,7 @@
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
             color: #fff;
             font-family: Arial, sans-serif;
+            touch-action: auto;
         }
         .menu.show {
             display: flex;
@@ -164,26 +166,29 @@
         // Grid parameters
         const cellSize = isMobile ? 30 : 20;
         
-        // Animation parameters
-        let time = 0;
-        let waveSpeed = isMobile ? 0.05 : 0.07;
-        let waveFrequency = 0.3;
-        let amplitude = isMobile ? 18 : 20;
-        let baseSize = isMobile ? 6 : 4;
-        let rippleFrequency = 0.6;
-        let rippleSpeed = 0.6;
+        // Config object for parameters
+        const config = {
+            time: 0,
+            waveSpeed: isMobile ? 0.05 : 0.07,
+            waveFrequency: 0.3,
+            amplitude: isMobile ? 18 : 20,
+            baseSize: isMobile ? 6 : 4,
+            rippleFrequency: 0.6,
+            rippleSpeed: 0.6,
+            currentEmoji: '💎'
+        };
+        
         const rippleDecay = 0;
         const rippleMaxDuration = Infinity;
         const minDragDistance = 2;
         const maxRipples = 50;
-        let currentEmoji = '💎';
 
         const ripples = [];
         let lastGridX = null;
         let lastGridY = null;
         let isDragging = false;
 
-        // Emoji list (a selection of emojis; adding all is impractical as there are thousands)
+        // Emoji list (expanded selection; all emojis would be thousands and impractical)
         const emojis = [
             '💎', '🌊', '⭐', '🔥', '🌙', '☀️', '⚡️', '❄️', '🌟', '💧',
             '🍎', '🍊', '🍋', '🍇', '🍉', '🍓', '🍒', '🍑', '🍍', '🥥',
@@ -198,9 +203,9 @@
             const button = document.createElement('button');
             button.className = 'emoji-button';
             button.textContent = emoji;
-            if (emoji === currentEmoji) button.classList.add('selected');
+            if (emoji === config.currentEmoji) button.classList.add('selected');
             button.onclick = () => {
-                currentEmoji = emoji;
+                config.currentEmoji = emoji;
                 document.querySelectorAll('.emoji-button').forEach(btn => btn.classList.remove('selected'));
                 button.classList.add('selected');
             };
@@ -212,16 +217,14 @@
             document.getElementById('menu').classList.toggle('show');
         }
 
-        // Slider updates
-        function setupSlider(id, valueId, variable) {
+        // Slider setup
+        function setupSlider(id, valueId, key) {
             const slider = document.getElementById(id);
             const valueDisplay = document.getElementById(valueId);
-            // Set initial values
-            slider.value = window[variable];
-            valueDisplay.textContent = window[variable];
-            // Add listener
+            slider.value = config[key];
+            valueDisplay.textContent = config[key];
             slider.addEventListener('input', () => {
-                window[variable] = parseFloat(slider.value);
+                config[key] = parseFloat(slider.value);
                 valueDisplay.textContent = slider.value;
             });
         }
@@ -235,10 +238,10 @@
 
         // Wave functions
         function getBaseWaveHeight(x, y, t) {
-            let wave1 = Math.sin(waveFrequency * x + t) * Math.cos(0.5 * waveFrequency * y);
-            let wave2 = Math.sin(0.8 * waveFrequency * (x + y) - 1.2 * t);
-            let wave3 = Math.sin(waveFrequency * 1.2 * x - 1.5 * t);
-            let wave4 = Math.sin(waveFrequency * 0.7 * y - 0.9 * t);
+            let wave1 = Math.sin(config.waveFrequency * x + t) * Math.cos(0.5 * config.waveFrequency * y);
+            let wave2 = Math.sin(0.8 * config.waveFrequency * (x + y) - 1.2 * t);
+            let wave3 = Math.sin(config.waveFrequency * 1.2 * x - 1.5 * t);
+            let wave4 = Math.sin(config.waveFrequency * 0.7 * y - 0.9 * t);
             let combined = 1.5 * wave1 + 1.5 * wave2 + 1.8 * wave3 + 1.8 * wave4;
             return (combined + 6) / 12;
         }
@@ -255,7 +258,7 @@
                 const dx = gridX - ripple.gridX;
                 const dy = gridY - ripple.gridY;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                const phase = rippleFrequency * dist - rippleSpeed * age;
+                const phase = config.rippleFrequency * dist - config.rippleSpeed * age;
                 const timeAtten = Math.exp(-rippleDecay * age);
                 const distAtten = Math.exp(-0.02 * dist);
                 const attenuation = timeAtten * distAtten;
@@ -281,23 +284,23 @@
             const rows = Math.floor(window.innerHeight / cellSize);
             for (let y = 0; y < rows; y++) {
                 for (let x = 0; x < cols; x++) {
-                    const height = getWaveHeight(x, y, time);
+                    const height = getWaveHeight(x, y, config.time);
                     const normalizedHeight = (height + 0.4) / 1.8;
-                    const size = baseSize + amplitude * normalizedHeight;
-                    ctx.font = `${size}px sans-serif`;
+                    const size = config.baseSize + config.amplitude * normalizedHeight;
+                    ctx.font = `${size}px system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Emoji', sans-serif`;
                     ctx.fillStyle = `rgba(0, 191, 255, ${0.6 + 0.4 * normalizedHeight})`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     const posX = x * cellSize + cellSize / 2;
                     const posY = y * cellSize + cellSize / 2;
-                    ctx.fillText(currentEmoji, posX, posY);
+                    ctx.fillText(config.currentEmoji, posX, posY);
                 }
             }
         }
 
         // Animate loop
         function animate() {
-            time += waveSpeed;
+            config.time += config.waveSpeed;
             draw();
             requestAnimationFrame(animate);
         }
@@ -307,14 +310,14 @@
         // Input handlers (touch and mouse)
         function handleStart(e) {
             e.preventDefault();
-            const clientX = e.clientX || e.touches[0].clientX;
-            const clientY = e.clientY || e.touches[0].clientY;
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
             const rect = canvas.getBoundingClientRect();
             const inputX = clientX - rect.left;
             const inputY = clientY - rect.top;
             const gridX = Math.floor(inputX / cellSize);
             const gridY = Math.floor(inputY / cellSize);
-            ripples.push({ gridX, gridY, startTime: time });
+            ripples.push({ gridX, gridY, startTime: config.time });
             draw();
             lastGridX = gridX;
             lastGridY = gridY;
@@ -324,8 +327,8 @@
         function handleMove(e) {
             if (!isDragging) return;
             e.preventDefault();
-            const clientX = e.clientX || e.touches[0].clientX;
-            const clientY = e.clientY || e.touches[0].clientY;
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
             const rect = canvas.getBoundingClientRect();
             const inputX = clientX - rect.left;
             const inputY = clientY - rect.top;
@@ -336,7 +339,7 @@
                 const dy = gridY - lastGridY;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 if (dist >= minDragDistance) {
-                    ripples.push({ gridX, gridY, startTime: time });
+                    ripples.push({ gridX, gridY, startTime: config.time });
                     lastGridX = gridX;
                     lastGridY = gridY;
                     draw();
@@ -344,10 +347,10 @@
             }
         }
 
-        function handleEnd(e) {
+        function handleEnd() {
             if (isDragging) {
                 if (lastGridX !== null && lastGridY !== null) {
-                    ripples.push({ gridX: lastGridX, gridY: lastGridY, startTime: time });
+                    ripples.push({ gridX: lastGridX, gridY: lastGridY, startTime: config.time });
                     draw();
                 }
                 lastGridX = null;
