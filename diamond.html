@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes"> <!-- For better iOS experience -->
-    <title>Highly Responsive Interactive Diamond Ocean Waves</title>
+    <title>Swipe-Interactive Diamond Ocean Waves</title>
     <style>
         body {
             margin: 0;
@@ -53,6 +53,11 @@
         const rippleSpeed = 0.15; // Faster propagation
         const rippleDecay = 0.04; // Slower decay for longer visibility
         const rippleMaxDuration = 4; // Shorter duration to keep array small
+        const minDragDistance = 1; // Grid units between ripple additions during swipe
+
+        // Track last ripple position for swipe (per touch, but simplified to single touch)
+        let lastGridX = null;
+        let lastGridY = null;
 
         // Simplified base wave function
         function getBaseWaveHeight(x, y, t) {
@@ -121,24 +126,53 @@
 
         animate();
 
-        // Interactive tap handling with multi-touch support
+        // Interactive tap and swipe handling (simplified for single touch)
+        const rect = canvas.getBoundingClientRect(); // Cache if not resizing often, but for accuracy, get inside
+
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault(); // Prevent scrolling/zoom on iOS
-            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0]; // Start with first touch
+            const touchX = touch.clientX - canvas.getBoundingClientRect().left;
+            const touchY = touch.clientY - canvas.getBoundingClientRect().top;
             
-            // Support multiple touches for simultaneous ripples
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                const touch = e.changedTouches[i];
-                const touchX = touch.clientX - rect.left;
-                const touchY = touch.clientY - rect.top;
+            const gridX = Math.floor(touchX / cellSize);
+            const gridY = Math.floor(touchY / cellSize);
+            
+            // Add initial ripple for tap/start of swipe
+            ripples.push({ gridX, gridY, startTime: time });
+            
+            // Set last position for swipe detection
+            lastGridX = gridX;
+            lastGridY = gridY;
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const touchX = touch.clientX - canvas.getBoundingClientRect().left;
+            const touchY = touch.clientY - canvas.getBoundingClientRect().top;
+            
+            const gridX = Math.floor(touchX / cellSize);
+            const gridY = Math.floor(touchY / cellSize);
+            
+            if (lastGridX !== null && lastGridY !== null) {
+                const dx = gridX - lastGridX;
+                const dy = gridY - lastGridY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
                 
-                // Convert to grid coordinates
-                const gridX = Math.floor(touchX / cellSize);
-                const gridY = Math.floor(touchY / cellSize);
-                
-                // Add ripple
-                ripples.push({ gridX, gridY, startTime: time });
+                if (dist >= minDragDistance) {
+                    // Add ripple along the swipe path
+                    ripples.push({ gridX, gridY, startTime: time });
+                    lastGridX = gridX;
+                    lastGridY = gridY;
+                }
             }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            // Reset last position
+            lastGridX = null;
+            lastGridY = null;
         }, { passive: false });
 
         // Handle resize (debounced)
