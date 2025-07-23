@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raining Food & Poop Shooter</title>
+    <style>
+        body { margin: 0; background: black; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Emojis
+        const FOOD_EMOJIS = ['🍎', '🍌', '🍔', '🍕', '🍦', '🍉', '🍇', '🍓'];
+        const CHARACTER_EMOJI = '😋';
+        const POOP_EMOJI = '💩';
+        const TOILET_EMOJI = '🚽';
+        const GIANT_TOILET_EMOJI = '🚽';
+
+        // Game variables
+        let mode = 1; // 1: Eating, 2: Pooping
+        let foodMeter = 0;
+        const maxFood = 100;
+        let poopShots = 10;
+        let points = 0;
+
+        // Character
+        let charX = 400 - 25;
+        let charY = 600 - 100;
+        const charSize = 50;
+        let isDragging = false;
+
+        // Foods: {x, y, emoji, speed}
+        let foods = [];
+
+        // Poops: {x, y, speed}
+        let poops = [];
+
+        // Giant toilet
+        const giantToiletX = 400 - 50;
+        const giantToiletY = 300 - 100;
+        const giantToiletSize = 100;
+
+        // Toilet button
+        const toiletButtonX = 400 + 100;
+        const toiletButtonY = 600 - 50;
+        const toiletButtonSize = 50;
+        let showToiletButton = false;
+
+        // Mouse position
+        let mouseX = 0;
+        let mouseY = 0;
+
+        // Event listeners
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('click', handleClick);
+
+        function handleMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+
+            // Check if clicking on character to drag
+            if (mouseX > charX && mouseX < charX + charSize && mouseY > charY && mouseY < charY + charSize) {
+                isDragging = true;
+            }
+        }
+
+        function handleMouseMove(e) {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+
+            if (isDragging) {
+                charX = mouseX - charSize / 2;
+                charY = mouseY - charSize / 2;
+                // Clamp
+                charX = Math.max(0, Math.min(800 - charSize, charX));
+                charY = Math.max(0, Math.min(600 - charSize, charY));
+            }
+        }
+
+        function handleMouseUp() {
+            isDragging = false;
+        }
+
+        function handleClick(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            if (mode === 1 && showToiletButton &&
+                clickX > toiletButtonX && clickX < toiletButtonX + toiletButtonSize &&
+                clickY > toiletButtonY && clickY < toiletButtonY + toiletButtonSize) {
+                mode = 2;
+                foodMeter = maxFood;
+                showToiletButton = false;
+            } else if (mode === 2 && poopShots > 0) {
+                // Shoot poop
+                poops.push({x: charX + charSize / 2, y: charY, speed: 5});
+                poopShots--;
+                foodMeter -= 10;
+            }
+        }
+
+        function spawnFood() {
+            if (Math.random() < 0.05) { // Approx 1 per 20 frames
+                const x = Math.random() * (800 - 50);
+                const emoji = FOOD_EMOJIS[Math.floor(Math.random() * FOOD_EMOJIS.length)];
+                const speed = 2 + Math.random() * 3;
+                foods.push({x, y: 0, emoji, speed});
+            }
+        }
+
+        function updateFoods() {
+            foods.forEach(food => {
+                food.y += food.speed;
+            });
+            foods = foods.filter(food => food.y <= 600);
+
+            // Collisions
+            foods = foods.filter(food => {
+                if (food.x < charX + charSize && food.x + 50 > charX &&
+                    food.y < charY + charSize && food.y + 50 > charY) {
+                    foodMeter += 10;
+                    if (foodMeter >= maxFood) {
+                        foodMeter = maxFood;
+                        showToiletButton = true;
+                    }
+                    return false; // Remove
+                }
+                return true;
+            });
+        }
+
+        function updatePoops() {
+            poops.forEach(poop => {
+                poop.y -= poop.speed;
+            });
+            poops = poops.filter(poop => poop.y >= 0);
+
+            // Collisions with giant toilet
+            poops = poops.filter(poop => {
+                if (poop.x < giantToiletX + giantToiletSize && poop.x + 30 > giantToiletX &&
+                    poop.y < giantToiletY + giantToiletSize && poop.y + 30 > giantToiletY) {
+                    points += 10;
+                    return false; // Remove
+                }
+                return true;
+            });
+
+            if (poopShots <= 0) {
+                mode = 1;
+                foodMeter = 0;
+                showToiletButton = false;
+                poopShots = 10;
+            }
+        }
+
+        function drawEmoji(emoji, size, x, y, color = '#FFFFFF') {
+            ctx.font = `${size}px Arial`;
+            ctx.fillStyle = color;
+            ctx.fillText(emoji, x, y + size); // Adjust y for baseline
+        }
+
+        function drawMeter() {
+            ctx.fillStyle = 'green';
+            ctx.fillRect(400 - 100, 600 - 50, (foodMeter / maxFood) * 200, 20);
+            ctx.strokeStyle = 'white';
+            ctx.strokeRect(400 - 100, 600 - 50, 200, 20);
+
+            ctx.font = '24px Arial';
+            ctx.fillStyle = 'white';
+            ctx.fillText('Food Meter', 400 - 100, 600 - 60);
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, 800, 600);
+
+            if (mode === 1) {
+                spawnFood();
+                updateFoods();
+                foods.forEach(food => drawEmoji(food.emoji, 50, food.x, food.y));
+
+                drawEmoji(CHARACTER_EMOJI, charSize, charX, charY);
+
+                drawMeter();
+
+                if (showToiletButton) {
+                    drawEmoji(TOILET_EMOJI, toiletButtonSize, toiletButtonX, toiletButtonY, 'lime');
+                }
+            } else if (mode === 2) {
+                updatePoops();
+                poops.forEach(poop => drawEmoji(POOP_EMOJI, 30, poop.x, poop.y));
+
+                drawEmoji(CHARACTER_EMOJI, charSize, charX, charY);
+
+                drawEmoji(GIANT_TOILET_EMOJI, giantToiletSize, giantToiletX, giantToiletY, 'red');
+
+                ctx.font = '48px Arial';
+                ctx.fillStyle = 'white';
+                ctx.fillText(`Points: ${points}`, 10, 50);
+
+                drawMeter();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
