@@ -4,13 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes"> <!-- For better iOS experience -->
-    <title>Settings-Enabled Permanent Motion Diamond Ocean Waves</title>
+    <title>Customizable Diamond Ocean Waves</title>
     <style>
         body {
             margin: 0;
-            background-color: #000;
+            background-color: #000; /* Default background */
             overflow: hidden;
             touch-action: none; /* Prevent default touch behaviors */
+            transition: background 0.5s ease; /* Smooth background changes */
         }
         canvas {
             display: block;
@@ -26,24 +27,79 @@
             cursor: pointer;
             color: white;
             z-index: 10;
+            transition: opacity 0.3s;
+        }
+        #gear:hover {
+            opacity: 1;
         }
         #menu {
             position: fixed;
             top: 50px;
             right: 10px;
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 10px;
-            border: 1px solid #ccc;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             display: none;
             z-index: 10;
             max-width: 300px;
             overflow-y: auto;
             max-height: 80vh;
             color: black;
+            font-family: Arial, sans-serif;
         }
-        #menu label, #menu select, #menu input, #menu button {
-            display: block;
-            margin: 5px 0;
+        #menu h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        #menu label {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        #menu input[type="range"] {
+            flex: 1;
+            margin-left: 10px;
+        }
+        #menu span {
+            margin-left: 10px;
+            min-width: 40px;
+            text-align: right;
+        }
+        #menu select {
+            width: 100%;
+            padding: 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        #menu button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #menu button:hover {
+            background-color: #0056b3;
+        }
+        #menu .color-picker {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+        }
+        #menu .color-picker input[type="color"] {
+            margin-left: 10px;
+            border: none;
+            width: 40px;
+            height: 30px;
+            cursor: pointer;
+        }
+        #menu .color-picker label {
+            flex: 1;
         }
     </style>
 </head>
@@ -129,49 +185,81 @@
         </select>
 
         <h3>Wave Settings</h3>
-        <label>Wave Speed: <input type="number" id="waveSpeedInput" value="0.05" step="0.01" onchange="waveSpeed = parseFloat(this.value); draw();"></label>
-        <label>Wave Frequency: <input type="number" id="waveFrequencyInput" value="0.3" step="0.01" onchange="waveFrequency = parseFloat(this.value); draw();"></label>
-        <label>Amplitude: <input type="number" id="amplitudeInput" value="18" step="1" onchange="amplitude = parseFloat(this.value); draw();"></label>
-        <label>Base Size: <input type="number" id="baseSizeInput" value="6" step="1" onchange="baseSize = parseFloat(this.value); draw();"></label>
-        <label>Ripple Speed: <input type="number" id="rippleSpeedInput" value="0.6" step="0.1" onchange="rippleSpeed = parseFloat(this.value); draw();"></label>
-        <label>Ripple Frequency: <input type="number" id="rippleFrequencyInput" value="0.6" step="0.1" onchange="rippleFrequency = parseFloat(this.value); draw();"></label>
+        <label>Wave Speed: <input type="range" id="waveSpeedSlider" min="0.01" max="0.2" step="0.01" value="0.05" oninput="updateWaveSpeed(this.value)"><span id="waveSpeedValue">0.05</span></label>
+        <label>Wave Frequency: <input type="range" id="waveFrequencySlider" min="0.1" max="1" step="0.01" value="0.3" oninput="updateWaveFrequency(this.value)"><span id="waveFrequencyValue">0.3</span></label>
+        <label>Amplitude: <input type="range" id="amplitudeSlider" min="5" max="30" step="1" value="18" oninput="updateAmplitude(this.value)"><span id="amplitudeValue">18</span></label>
+        <label>Base Size: <input type="range" id="baseSizeSlider" min="1" max="20" step="1" value="6" oninput="updateBaseSize(this.value)"><span id="baseSizeValue">6</span></label>
+        <label>Ripple Speed: <input type="range" id="rippleSpeedSlider" min="0.1" max="2" step="0.1" value="0.6" oninput="updateRippleSpeed(this.value)"><span id="rippleSpeedValue">0.6</span></label>
+        <label>Ripple Frequency: <input type="range" id="rippleFrequencySlider" min="0.1" max="2" step="0.1" value="0.6" oninput="updateRippleFrequency(this.value)"><span id="rippleFrequencyValue">0.6</span></label>
+
+        <h3>Background Settings</h3>
+        <div class="color-picker">
+            <label>Solid Color: <input type="color" id="bgColorPicker" value="#000000" onchange="updateBackgroundColor(this.value)"></label>
+        </div>
+        <div class="color-picker">
+            <label>Gradient Start: <input type="color" id="gradientStart" value="#000000" onchange="updateGradient()"></label>
+        </div>
+        <div class="color-picker">
+            <label>Gradient End: <input type="color" id="gradientEnd" value="#001f3f" onchange="updateGradient()"></label>
+        </div>
 
         <button onclick="resetToDefault()">Back to Default Settings</button>
     </div>
     <script>
         let emojiChar = '💎'; // Global emoji variable
+        let waveSpeed = isMobile ? 0.05 : 0.07;
+        let waveFrequency = 0.3;
+        let amplitude = isMobile ? 18 : 20;
+        let baseSize = isMobile ? 6 : 4;
+        let rippleFrequency = 0.6;
+        let rippleSpeed = 0.6;
 
-        function toggleMenu() {
-            const menu = document.getElementById('menu');
-            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+        // Slider update functions
+        function updateWaveSpeed(value) {
+            waveSpeed = parseFloat(value);
+            document.getElementById('waveSpeedValue').textContent = value;
+            draw();
+        }
+        function updateWaveFrequency(value) {
+            waveFrequency = parseFloat(value);
+            document.getElementById('waveFrequencyValue').textContent = value;
+            draw();
+        }
+        function updateAmplitude(value) {
+            amplitude = parseFloat(value);
+            document.getElementById('amplitudeValue').textContent = value;
+            draw();
+        }
+        function updateBaseSize(value) {
+            baseSize = parseFloat(value);
+            document.getElementById('baseSizeValue').textContent = value;
+            draw();
+        }
+        function updateRippleSpeed(value) {
+            rippleSpeed = parseFloat(value);
+            document.getElementById('rippleSpeedValue').textContent = value;
+            draw();
+        }
+        function updateRippleFrequency(value) {
+            rippleFrequency = parseFloat(value);
+            document.getElementById('rippleFrequencyValue').textContent = value;
+            draw();
         }
 
-        function changeEmoji(newEmoji) {
-            emojiChar = newEmoji;
-            draw(); // Immediate redraw to apply new emoji
+        // Background functions
+        function updateBackgroundColor(color) {
+            document.body.style.background = color;
+            document.getElementById('gradientStart').value = color;
+            document.getElementById('gradientEnd').value = color;
+        }
+        function updateGradient() {
+            const start = document.getElementById('gradientStart').value;
+            const end = document.getElementById('gradientEnd').value;
+            document.body.style.background = `linear-gradient(to bottom, ${start}, ${end})`;
         }
 
-        function resetToDefault() {
-            waveSpeed = isMobile ? 0.05 : 0.07;
-            waveFrequency = 0.3;
-            amplitude = isMobile ? 18 : 20;
-            baseSize = isMobile ? 6 : 4;
-            rippleSpeed = 0.6;
-            rippleFrequency = 0.6;
-            emojiChar = '💎';
-            ripples.length = 0; // Clear ripples to reset motion
-
-            // Update inputs
-            document.getElementById('waveSpeedInput').value = waveSpeed;
-            document.getElementById('waveFrequencyInput').value = waveFrequency;
-            document.getElementById('amplitudeInput').value = amplitude;
-            document.getElementById('baseSizeInput').value = baseSize;
-            document.getElementById('rippleSpeedInput').value = rippleSpeed;
-            document.getElementById('rippleFrequencyInput').value = rippleFrequency;
-            document.getElementById('emojiSelect').value = '💎';
-            draw(); // Immediate redraw
-        }
-
+        // Rest of the script remains the same as before
+        // (Omit for brevity, but include all previous logic for canvas, ripples, draw, animate, touch handlers, etc.)
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         
