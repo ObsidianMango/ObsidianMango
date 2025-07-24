@@ -2,142 +2,215 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Permit Patrol: The Free-Market Gauntlet</title>
     <style>
         body { margin: 0; background: #f0f0f0; display: flex; justify-content: center; align-items: center; height: 100vh; }
-        canvas { border: 1px solid #000; background: #fff; }
+        canvas { border: 1px solid #000; background: #fff; max-width: 100%; max-height: 100%; }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <canvas id="gameCanvas"></canvas>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        
+
+        // Responsive canvas sizing
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const aspectRatio = 800 / 600;
+            let width = window.innerWidth * 0.9;
+            let height = width / aspectRatio;
+            if (height > window.innerHeight * 0.9) {
+                height = window.innerHeight * 0.9;
+                width = height * aspectRatio;
+            }
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = `${width}px`;
+            canvas.style.height = `${height}px`;
+            ctx.scale(dpr, dpr);
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
         // Game variables
         let cash = 0;
         let freedomScore = 0;
-        let timeLeft = 60; // seconds
+        let timeLeft = 60;
         let gameOver = false;
         let customers = [];
         let inspectors = [];
-        let items = ['🌮', '🌭', '☕️']; // Available items to serve
-        let ordinances = [
+        const items = ['🌮', '🌭', '☕️'];
+        const ordinances = [
             'Need a $500 hot-sauce license!',
             'Cart must be 2 ft farther from curb!',
             'Carbon tax: pay up!'
         ];
-        
-        // Player cart position (mango in sunglasses - simplified as circle with shades)
-        const cart = { x: 400, y: 500, width: 100, height: 50 };
-        
-        // Buttons for items (click to serve)
-        const itemButtons = items.map((item, i) => ({ x: 20 + i * 100, y: 550, width: 80, height: 40, label: item }));
-        
-        // Comply/Nullify buttons (appear when inspector active)
+        const emojiHeads = ['😊', '😀', '😎', '🥳']; // Random for customers
+
+        // Player cart
+        const cart = { x: 400, y: 500, width: 120, height: 60 };
+
+        // Larger buttons for items
+        const itemButtons = items.map((item, i) => ({
+            x: 20 + i * 180, y: 510, width: 160, height: 80, label: item
+        }));
+
+        // Larger Comply/Nullify buttons
         let activeInspector = null;
-        const complyButton = { x: 200, y: 300, width: 100, height: 40, label: 'Comply' };
-        const nullifyButton = { x: 400, y: 300, width: 100, height: 40, label: 'Nullify' };
-        
+        const complyButton = { x: 150, y: 250, width: 200, height: 80, label: 'Comply' };
+        const nullifyButton = { x: 450, y: 250, width: 200, height: 80, label: 'Nullify' };
+
         // Draw functions
         function drawBackground() {
-            ctx.fillStyle = '#808080'; // Street
+            ctx.fillStyle = '#808080';
             ctx.fillRect(0, 400, 800, 200);
-            ctx.fillStyle = '#d3d3d3'; // Sidewalk
+            ctx.fillStyle = '#d3d3d3';
             ctx.fillRect(0, 350, 800, 50);
-            ctx.fillStyle = '#87ceeb'; // Sky
+            ctx.fillStyle = '#87ceeb';
             ctx.fillRect(0, 0, 800, 350);
         }
-        
+
         function drawCart() {
-            ctx.fillStyle = '#ff4500'; // Cart body
+            // Cart body
+            ctx.fillStyle = '#ff4500';
             ctx.fillRect(cart.x - cart.width/2, cart.y - cart.height/2, cart.width, cart.height);
-            ctx.fillStyle = '#ffd700'; // Mango head
+            
+            // Wheels
+            ctx.fillStyle = '#000';
             ctx.beginPath();
-            ctx.arc(cart.x, cart.y - 40, 20, 0, Math.PI * 2);
+            ctx.arc(cart.x - cart.width/2 + 20, cart.y + cart.height/2, 10, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = '#000'; // Sunglasses
-            ctx.fillRect(cart.x - 15, cart.y - 45, 30, 5);
+            ctx.beginPath();
+            ctx.arc(cart.x + cart.width/2 - 20, cart.y + cart.height/2, 10, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Umbrella
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            ctx.moveTo(cart.x - 30, cart.y - cart.height/2 - 50);
+            ctx.lineTo(cart.x + 30, cart.y - cart.height/2 - 50);
+            ctx.lineTo(cart.x, cart.y - cart.height/2 - 100);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#808080'; // Pole
+            ctx.fillRect(cart.x - 2, cart.y - cart.height/2 - 50, 4, 50);
+            
+            // Sign
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(cart.x - 40, cart.y - cart.height/2 - 20, 80, 15);
+            ctx.fillStyle = '#000';
+            ctx.font = '12px Arial';
+            ctx.fillText('Tacos!', cart.x - 30, cart.y - cart.height/2 - 10);
+            
+            // Mango character (bigger, with arms)
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.arc(cart.x, cart.y - 60, 25, 0, Math.PI * 2); // Head
+            ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.fillRect(cart.x - 20, cart.y - 65, 40, 5); // Sunglasses
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(cart.x - 40, cart.y - 40, 20, 5); // Left arm
+            ctx.fillRect(cart.x + 20, cart.y - 40, 20, 5); // Right arm
         }
-        
+
         function drawCustomers() {
             customers.forEach(c => {
-                ctx.fillStyle = '#00f'; // Stick figure body
-                ctx.fillRect(c.x, c.y, 10, 30);
+                // Body
+                ctx.fillStyle = '#00f';
+                ctx.fillRect(c.x, c.y + 10, 10, 30); // Lower body
+                
+                // Emoji head
+                ctx.font = '24px Arial';
+                ctx.fillText(c.head, c.x - 5, c.y + 10);
+                
+                // Wanted item
                 ctx.font = '20px Arial';
-                ctx.fillText(c.want, c.x, c.y - 10); // Wanted item
+                ctx.fillText(c.want, c.x, c.y - 10);
             });
         }
-        
+
         function drawInspectors() {
             inspectors.forEach(i => {
-                ctx.fillStyle = '#f00'; // Inspector body
-                ctx.fillRect(i.x, i.y, 20, 40);
+                // Body
+                ctx.fillStyle = '#f00';
+                ctx.fillRect(i.x, i.y + 20, 20, 40); // Lower body
+                
+                // Emoji head
+                ctx.font = '30px Arial';
+                ctx.fillText('👮‍♂️', i.x - 5, i.y + 20);
+                
+                // Ordinance
                 ctx.font = '16px Arial';
                 ctx.fillText(i.ordinance, i.x, i.y - 10);
             });
         }
-        
+
         function drawHUD() {
             ctx.font = '20px Arial';
             ctx.fillStyle = '#000';
             ctx.fillText(`Cash: $${cash}`, 10, 30);
             ctx.fillText(`Time: ${timeLeft}s`, 10, 60);
             ctx.fillText(`Freedom: ${freedomScore}`, 10, 90);
-            
+
             // Item buttons
             itemButtons.forEach(btn => {
                 ctx.fillStyle = '#ddd';
                 ctx.fillRect(btn.x, btn.y, btn.width, btn.height);
                 ctx.fillStyle = '#000';
-                ctx.fillText(btn.label, btn.x + 20, btn.y + 25);
+                ctx.font = '30px Arial';
+                ctx.fillText(btn.label, btn.x + 60, btn.y + 50);
             });
-            
-            // Inspector buttons if active
+
+            // Inspector buttons
             if (activeInspector) {
                 ctx.fillStyle = '#ddd';
                 ctx.fillRect(complyButton.x, complyButton.y, complyButton.width, complyButton.height);
-                ctx.fillText(complyButton.label, complyButton.x + 10, complyButton.y + 25);
+                ctx.fillText(complyButton.label, complyButton.x + 30, complyButton.y + 50);
                 ctx.fillRect(nullifyButton.x, nullifyButton.y, nullifyButton.width, nullifyButton.height);
-                ctx.fillText(nullifyButton.label, nullifyButton.x + 10, nullifyButton.y + 25);
+                ctx.fillText(nullifyButton.label, nullifyButton.x + 30, nullifyButton.y + 50);
             }
         }
-        
+
         function update() {
             if (gameOver) return;
-            
-            // Spawn customers randomly
-            if (Math.random() < 0.02) { // ~every 2s
+
+            // Spawn customers more frequently
+            if (Math.random() < 0.05) { // Up from 0.02
+                const head = emojiHeads[Math.floor(Math.random() * emojiHeads.length)];
                 customers.push({
                     x: Math.random() < 0.5 ? 0 : 800,
                     y: 380 + Math.random() * 20,
                     want: items[Math.floor(Math.random() * items.length)],
-                    speed: Math.random() < 0.5 ? 2 : -2 // Approach from left or right
+                    speed: Math.random() < 0.5 ? 2 : -2,
+                    head: head
                 });
             }
-            
+
             // Move customers
             customers = customers.filter(c => {
                 c.x += c.speed;
-                if (c.x > 800 || c.x < 0) return false; // Off-screen, lost customer
+                if (c.x > 800 || c.x < 0) return false;
                 return true;
             });
-            
-            // Spawn inspectors randomly
-            if (Math.random() < 0.01 && !activeInspector) { // ~every 5s, only one at a time
+
+            // Spawn inspectors
+            if (Math.random() < 0.01 && !activeInspector) {
                 const ordinance = ordinances[Math.floor(Math.random() * ordinances.length)];
                 inspectors.push({ x: 400, y: 200, ordinance });
                 activeInspector = inspectors[inspectors.length - 1];
             }
-            
+
             // Timer
-            timeLeft -= 1/60; // Assuming 60fps
+            timeLeft -= 1/60;
             if (timeLeft <= 0) {
                 gameOver = true;
-                alert(`Round Over! Net Profit: $${cash}\nFreedom Score: ${freedomScore}\nTaxes/Fines Paid: $${-freedomScore * 10}`); // Placeholder snarky message
+                alert(`Round Over! Net Profit: $${cash}\nFreedom Score: ${freedomScore}\nTaxes/Fines Paid: $${-freedomScore * 10}`);
             }
         }
-        
+
         function draw() {
             ctx.clearRect(0, 0, 800, 600);
             drawBackground();
@@ -146,52 +219,66 @@
             drawInspectors();
             drawHUD();
         }
-        
+
         // Game loop
         function gameLoop() {
             update();
             draw();
             requestAnimationFrame(gameLoop);
         }
-        
-        // Mouse click handler
-        canvas.addEventListener('click', (e) => {
+
+        // Handle touch/click
+        function handleInput(x, y) {
             const rect = canvas.getBoundingClientRect();
-            const mx = e.clientX - rect.left;
-            const my = e.clientY - rect.top;
-            
-            // Check item buttons for serving customers
+            const scaleX = 800 / rect.width;
+            const scaleY = 600 / rect.height;
+            const mx = x * scaleX;
+            const my = y * scaleY;
+
+            // Item buttons
             itemButtons.forEach((btn, i) => {
                 if (mx > btn.x && mx < btn.x + btn.width && my > btn.y && my < btn.y + btn.height) {
-                    // Find nearest customer wanting this item
                     const served = customers.find(c => c.want === items[i] && Math.abs(c.x - cart.x) < 100);
                     if (served) {
-                        cash += 10; // Earn cash
+                        cash += 20; // Up from 10
                         customers = customers.filter(c => c !== served);
                     }
                 }
             });
-            
+
             // Inspector buttons
             if (activeInspector) {
                 if (mx > complyButton.x && mx < complyButton.x + complyButton.width && my > complyButton.y && my < complyButton.y + complyButton.height) {
-                    cash -= 50; // Pay to comply
-                    freedomScore -= 1; // Lose freedom
+                    cash -= 20; // Down from 50
+                    freedomScore -= 1;
                     inspectors = [];
                     activeInspector = null;
                 } else if (mx > nullifyButton.x && mx < nullifyButton.x + nullifyButton.width && my > nullifyButton.y && my < nullifyButton.y + nullifyButton.height) {
-                    if (Math.random() < 0.5) { // 50% success
-                        freedomScore += 2; // Win freedom
+                    if (Math.random() < 0.7) { // 70% success, up from 50%
+                        freedomScore += 2;
                         inspectors = [];
                         activeInspector = null;
                     } else {
-                        cash -= 100; // Double fine
+                        cash -= 40; // Down from 100
                     }
                 }
             }
+        }
+
+        // Mouse and touch events
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            handleInput(e.clientX - rect.left, e.clientY - rect.top);
         });
-        
-        gameLoop(); // Start the game
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            handleInput(touch.clientX - rect.left, touch.clientY - rect.top);
+        });
+
+        gameLoop();
     </script>
 </body>
 </html>
