@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>UPC Logger - OG AZX Style</title>
+  <title>UPC Logger - Scan & OG Image Style</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://fonts.googleapis.com/css?family=Inter:400,600&display=swap" rel="stylesheet">
   <style>
@@ -101,6 +101,23 @@
       transition: border-color .2s;
     }
     input:focus { border-color: var(--primary); }
+    .scan-btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 0 17px;
+      border-radius: 7px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 1.4em;
+      margin-left: 0;
+      margin-right: 0;
+      transition: background .19s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px; height: 44px;
+    }
     .submit-btn {
       background: var(--primary);
       color: #fff;
@@ -197,7 +214,7 @@
 </head>
 <body>
   <button class="theme-switch" id="themeSwitchBtn">🌙 Dark</button>
-  <header>UPC Logger (OG Style)</header>
+  <header>UPC Logger (Scan + OG Image)</header>
   <div class="mode-switch">
     <button class="mode-btn active" onclick="setMode('price')">UPC + Price</button>
     <button class="mode-btn" onclick="setMode('log')">UPC Log Only</button>
@@ -206,6 +223,7 @@
   <form class="input-area" id="inputArea" onsubmit="addEntry();return false;">
     <div class="input-row">
       <input type="text" id="upcInput" placeholder="Enter or scan UPC" pattern="[0-9]*" inputmode="numeric" autocomplete="off" required>
+      <button class="scan-btn" type="button" onclick="startZXingScan()" title="Scan barcode with camera">📷</button>
     </div>
     <div class="input-row" id="priceRow">
       <input type="number" id="priceInput" placeholder="Enter price ($)" min="0" step="0.01" autocomplete="off">
@@ -218,6 +236,35 @@
   <ul class="log-list" id="logList"></ul>
   <!-- JsBarcode for barcode display -->
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <!-- ZXing-js for camera scan -->
+  <script type="module">
+    import { BrowserMultiFormatReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.5.10/+esm";
+    window.startZXingScan = async function() {
+      const codeReader = new BrowserMultiFormatReader();
+      const previewElem = document.createElement("video");
+      previewElem.style = "width: 97vw; max-width: 420px; border-radius: 10px; margin-bottom:8px;";
+      const overlay = document.createElement('div');
+      overlay.style = 'position:fixed;z-index:99;inset:0;background:rgba(10,15,20,0.97);display:flex;flex-direction:column;justify-content:center;align-items:center;';
+      overlay.innerHTML = `<div style="color:#fff;margin-bottom:12px;font-size:1.2em;">Scan barcode<br><button id="closeScan" style="margin-top:16px;background:#fff;color:#232c3a;border:none;padding:7px 16px;border-radius:7px;font-weight:600;cursor:pointer;">Cancel</button></div>`;
+      overlay.appendChild(previewElem);
+      document.body.appendChild(overlay);
+      document.getElementById('closeScan').onclick = () => {
+        codeReader.reset();
+        overlay.remove();
+      };
+      try {
+        const result = await codeReader.decodeOnceFromVideoDevice(undefined, previewElem);
+        document.getElementById('upcInput').value = result.text;
+        codeReader.reset();
+        overlay.remove();
+        // Optionally, focus price or auto-add
+        document.getElementById('priceInput').focus();
+      } catch(e) {
+        codeReader.reset();
+        overlay.remove();
+      }
+    };
+  </script>
   <script>
     // === THEME SWITCHER (Remembers last theme) ===
     const themeBtn = document.getElementById('themeSwitchBtn');
@@ -246,13 +293,9 @@
       renderLog();
     }
 
-    // === AZX-STYLE IMAGE GENERATION ===
+    // === OG AZX-STYLE IMAGE GENERATION ===
     function generateImageUrl(upc) {
-      // Always tries to pull the image directly, doesn't "test" it
       return `https://images.upcitemdb.com/upc/${upc}.jpg`;
-      // If you want to try barcodelookup as secondary, uncomment below:
-      // return `https://images.barcodelookup.com/${upc}.jpg`;
-      // Or if you want to try both (and fallback to the other if first fails), more logic is needed
     }
 
     function addEntry() {
