@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>UPC Logger (No API Key, Real Product Images, Mobile, Dark Mode)</title>
+  <title>UPC Logger - OG AZX Style</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://fonts.googleapis.com/css?family=Inter:400,600&display=swap" rel="stylesheet">
   <style>
@@ -109,11 +109,9 @@
       border-radius: 7px;
       font-weight: 600;
       cursor: pointer;
-      width: 44px;
-      min-width: 44px;
-      font-size: 1.2em;
-      margin-left: 0;
-      margin-right: 0;
+      width: 100%;
+      font-size: 1.1em;
+      margin-top: 6px;
       transition: background .19s;
     }
     .log-list {
@@ -199,16 +197,15 @@
 </head>
 <body>
   <button class="theme-switch" id="themeSwitchBtn">🌙 Dark</button>
-  <header>UPC Logger</header>
+  <header>UPC Logger (OG Style)</header>
   <div class="mode-switch">
     <button class="mode-btn active" onclick="setMode('price')">UPC + Price</button>
     <button class="mode-btn" onclick="setMode('log')">UPC Log Only</button>
     <button class="mode-btn" onclick="setMode('desc')">UPC + Price + Desc</button>
   </div>
-  <div class="input-area" id="inputArea">
+  <form class="input-area" id="inputArea" onsubmit="addEntry();return false;">
     <div class="input-row">
-      <input type="text" id="upcInput" placeholder="Scan or enter UPC" pattern="[0-9]*" inputmode="numeric" autocomplete="off">
-      <button class="submit-btn" onclick="startZXingScan()" title="Scan barcode with camera">📷</button>
+      <input type="text" id="upcInput" placeholder="Enter or scan UPC" pattern="[0-9]*" inputmode="numeric" autocomplete="off" required>
     </div>
     <div class="input-row" id="priceRow">
       <input type="number" id="priceInput" placeholder="Enter price ($)" min="0" step="0.01" autocomplete="off">
@@ -216,38 +213,11 @@
     <div class="input-row" id="descRow" style="display:none">
       <input type="text" id="descInput" placeholder="Description (optional)" maxlength="64" autocomplete="off">
     </div>
-    <button class="submit-btn" style="width:100%;margin-top:5px;font-size:1.04em;" onclick="addEntry()">Add Entry</button>
-  </div>
+    <button class="submit-btn" type="submit">Add Entry</button>
+  </form>
   <ul class="log-list" id="logList"></ul>
   <!-- JsBarcode for barcode display -->
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-  <!-- ZXing-js for fast/robust camera scanning (ESM import) -->
-  <script type="module">
-    import { BrowserMultiFormatReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.5.10/+esm";
-    window.startZXingScan = async function() {
-      const codeReader = new BrowserMultiFormatReader();
-      const previewElem = document.createElement("video");
-      previewElem.style = "width: 97vw; max-width: 420px; border-radius: 10px; margin-bottom:8px;";
-      const overlay = document.createElement('div');
-      overlay.style = 'position:fixed;z-index:99;inset:0;background:rgba(10,15,20,0.97);display:flex;flex-direction:column;justify-content:center;align-items:center;';
-      overlay.innerHTML = `<div style="color:#fff;margin-bottom:12px;font-size:1.2em;">Scan barcode<br><button id="closeScan" style="margin-top:16px;background:#fff;color:#232c3a;border:none;padding:7px 16px;border-radius:7px;font-weight:600;cursor:pointer;">Cancel</button></div>`;
-      overlay.appendChild(previewElem);
-      document.body.appendChild(overlay);
-      document.getElementById('closeScan').onclick = () => {
-        codeReader.reset();
-        overlay.remove();
-      };
-      try {
-        const result = await codeReader.decodeOnceFromVideoDevice(undefined, previewElem);
-        document.getElementById('upcInput').value = result.text;
-        codeReader.reset();
-        overlay.remove();
-      } catch(e) {
-        codeReader.reset();
-        overlay.remove();
-      }
-    };
-  </script>
   <script>
     // === THEME SWITCHER (Remembers last theme) ===
     const themeBtn = document.getElementById('themeSwitchBtn');
@@ -276,37 +246,22 @@
       renderLog();
     }
 
-    // === UPC IMAGE LOOKUP (public endpoints, no API key, fallback if 404) ===
-    async function fetchProductImage(upc) {
-      // Try UPCitemdb image first
-      let img1 = `https://images.upcitemdb.com/upc/${upc}.jpg`;
-      let img2 = `https://images.barcodelookup.com/${upc}.jpg`;
-
-      async function testImg(url) {
-        return new Promise(resolve => {
-          const img = new window.Image();
-          img.onload = () => resolve(url);
-          img.onerror = () => resolve(null);
-          img.src = url + '?r=' + Math.random(); // avoid cache
-        });
-      }
-
-      let foundImg = await testImg(img1);
-      if (!foundImg) foundImg = await testImg(img2);
-      if (!foundImg) {
-        // Fallback pattern
-        foundImg = `https://source.unsplash.com/collection/2131631/80x80?sig=${upc}`;
-      }
-      return foundImg;
+    // === AZX-STYLE IMAGE GENERATION ===
+    function generateImageUrl(upc) {
+      // Always tries to pull the image directly, doesn't "test" it
+      return `https://images.upcitemdb.com/upc/${upc}.jpg`;
+      // If you want to try barcodelookup as secondary, uncomment below:
+      // return `https://images.barcodelookup.com/${upc}.jpg`;
+      // Or if you want to try both (and fallback to the other if first fails), more logic is needed
     }
 
-    async function addEntry() {
+    function addEntry() {
       const upc = document.getElementById('upcInput').value.trim();
       const price = document.getElementById('priceInput').value;
       const desc = document.getElementById('descInput').value.trim();
-      if (!upc) return alert('Scan or enter a UPC.');
+      if (!upc) return alert('Enter a UPC.');
       if (mode === 'price' && !price) return alert('Enter price.');
-      let imageUrl = await fetchProductImage(upc);
+      const imageUrl = generateImageUrl(upc);
       log.unshift({ upc, price, desc, imageUrl });
       document.getElementById('upcInput').value = '';
       document.getElementById('priceInput').value = '';
@@ -320,13 +275,14 @@
       for (const entry of log) {
         const li = document.createElement('li');
         li.className = 'log-entry';
-        if (entry.imageUrl) {
-          const img = document.createElement('img');
-          img.src = entry.imageUrl;
-          img.className = 'product-img';
-          img.alt = 'product image';
-          li.appendChild(img);
-        }
+
+        // OG style: always display the image, even if it 404s (browser will show broken img icon)
+        const img = document.createElement('img');
+        img.src = entry.imageUrl;
+        img.className = 'product-img';
+        img.alt = 'product image';
+        li.appendChild(img);
+
         const details = document.createElement('div');
         details.className = 'entry-details';
         // Barcode rendering
@@ -335,7 +291,6 @@
         try {
           JsBarcode(svg, entry.upc, { format: "upc", lineColor: "#ddd", width: 2, height: 40, displayValue: false });
         } catch(e) {
-          // fallback for short UPC/EAN
           JsBarcode(svg, entry.upc, { format: "CODE128", lineColor: "#ddd", width: 2, height: 40, displayValue: false });
         }
         details.appendChild(svg);
