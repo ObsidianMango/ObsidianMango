@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>UPC Logger</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:400,600">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #fafafa;
+      margin: 0;
+      padding: 0;
+      color: #222;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      padding: 16px 0;
+      font-weight: 600;
+      font-size: 1.4rem;
+      letter-spacing: 1px;
+    }
+    .mode-switch {
+      margin-bottom: 16px;
+      display: flex;
+      gap: 8px;
+    }
+    .mode-btn {
+      background: #ececec;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .mode-btn.active {
+      background: #2563eb;
+      color: #fff;
+    }
+    .input-area {
+      background: #fff;
+      border-radius: 10px;
+      padding: 18px 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      margin-bottom: 20px;
+      width: 96vw;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .input-row {
+      display: flex;
+      gap: 12px;
+    }
+    input[type="text"], input[type="number"] {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+    .submit-btn {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 10px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.18s;
+      margin-top: 4px;
+    }
+    .log-list {
+      width: 98vw;
+      max-width: 430px;
+      list-style: none;
+      padding: 0;
+      margin: 0 auto 32px auto;
+    }
+    .log-entry {
+      background: #fff;
+      margin-bottom: 11px;
+      padding: 13px 12px;
+      border-radius: 10px;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      align-items: flex-start;
+    }
+    .barcode-canvas {
+      height: 46px;
+      width: 160px;
+      display: block;
+      background: #f8f8f8;
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+    .entry-price {
+      color: #2563eb;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .entry-desc {
+      color: #666;
+      font-size: 0.96rem;
+      margin-top: -2px;
+    }
+    @media (max-width: 540px) {
+      .input-area, .log-list { max-width: 99vw; }
+    }
+  </style>
+</head>
+<body>
+  <header>UPC Logger</header>
+  <div class="mode-switch">
+    <button class="mode-btn active" onclick="setMode('price')">UPC + Price</button>
+    <button class="mode-btn" onclick="setMode('log')">UPC Log Only</button>
+    <button class="mode-btn" onclick="setMode('desc')">UPC + Price + Desc</button>
+  </div>
+  <div class="input-area" id="inputArea">
+    <div class="input-row">
+      <input type="text" id="upcInput" placeholder="Scan or enter UPC" pattern="[0-9]*" inputmode="numeric">
+      <button class="submit-btn" onclick="startScan()">📷</button>
+    </div>
+    <div class="input-row" id="priceRow">
+      <input type="number" id="priceInput" placeholder="Enter price ($)" min="0" step="0.01">
+    </div>
+    <div class="input-row" id="descRow" style="display:none">
+      <input type="text" id="descInput" placeholder="Description (optional)">
+    </div>
+    <button class="submit-btn" onclick="addEntry()">Add Entry</button>
+  </div>
+  <ul class="log-list" id="logList"></ul>
+  
+  <!-- JsBarcode CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <!-- QuaggaJS CDN (Camera scanning, demo only) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <script>
+    let mode = 'price';
+    let log = [];
+
+    function setMode(newMode) {
+      mode = newMode;
+      document.querySelectorAll('.mode-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', ['price','log','desc'][i] === mode);
+      });
+      document.getElementById('priceRow').style.display = (mode !== 'log') ? 'flex' : 'none';
+      document.getElementById('descRow').style.display = (mode === 'desc') ? 'flex' : 'none';
+      renderLog();
+    }
+
+    function addEntry() {
+      const upc = document.getElementById('upcInput').value.trim();
+      const price = document.getElementById('priceInput').value;
+      const desc = document.getElementById('descInput').value.trim();
+      if (!upc) return alert('Scan or enter a UPC.');
+      if (mode === 'price' && !price) return alert('Enter price.');
+      log.unshift({ upc, price, desc });
+      document.getElementById('upcInput').value = '';
+      document.getElementById('priceInput').value = '';
+      document.getElementById('descInput').value = '';
+      renderLog();
+    }
+
+    function renderLog() {
+      const list = document.getElementById('logList');
+      list.innerHTML = '';
+      for (const entry of log) {
+        const li = document.createElement('li');
+        li.className = 'log-entry';
+
+        // Barcode rendering
+        const svg = document.createElement('svg');
+        svg.className = 'barcode-canvas';
+        JsBarcode(svg, entry.upc, { format: "upc", lineColor: "#222", width: 2, height: 44, displayValue: false });
+        li.appendChild(svg);
+
+        // Digits
+        li.appendChild(document.createTextNode(entry.upc));
+
+        if (mode !== 'log') {
+          const price = document.createElement('span');
+          price.className = 'entry-price';
+          price.textContent = '$' + (parseFloat(entry.price).toFixed(2) || '0.00');
+          li.appendChild(price);
+        }
+        if (mode === 'desc' && entry.desc) {
+          const desc = document.createElement('span');
+          desc.className = 'entry-desc';
+          desc.textContent = entry.desc;
+          li.appendChild(desc);
+        }
+        list.appendChild(li);
+      }
+    }
+
+    // Camera scan with QuaggaJS (demo)
+    function startScan() {
+      if (!navigator.mediaDevices) return alert('Camera not supported');
+      const overlay = document.createElement('div');
+      overlay.style = 'position:fixed;z-index:99;inset:0;background:rgba(0,0,0,0.88);display:flex;flex-direction:column;justify-content:center;align-items:center;';
+      overlay.innerHTML = `<div style="color:#fff;margin-bottom:10px;">Scan barcode<br><button id="closeScan" style="margin-top:16px;background:#fff;color:#222;border:none;padding:7px 16px;border-radius:7px;font-weight:600;">Cancel</button></div><div id="scanner" style="width:98vw;max-width:400px;height:250px;background:#111;"></div>`;
+      document.body.appendChild(overlay);
+      document.getElementById('closeScan').onclick = () => {
+        Quagga.stop(); overlay.remove();
+      };
+      Quagga.init({
+        inputStream : { name: "Live", type: "LiveStream", target: document.getElementById('scanner') },
+        decoder : { readers : ["upc_reader", "upc_e_reader", "ean_reader", "ean_8_reader"] }
+      }, function(err) {
+        if (err) { alert('Error: ' + err); overlay.remove(); return; }
+        Quagga.start();
+      });
+      Quagga.onDetected = function(data) {
+        document.getElementById('upcInput').value = data.codeResult.code;
+        Quagga.stop(); overlay.remove();
+      };
+    }
+  </script>
+</body>
+</html>
