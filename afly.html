@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>✈️ Sky — Catapult Bomb + Bomb‑Cam</title>
+<title>✈️ Sky — Catapult Bomb + Bomb-Cam</title>
 <style>
   html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block;touch-action:manipulation}
@@ -18,8 +18,8 @@
   .hint{position:fixed;top:8px;left:10px;color:#ddd;font-size:12px;opacity:.7}
   .gear{position:fixed;left:50%;transform:translateX(-50%);bottom:10px;color:#ddd;font-size:12px;opacity:.75}
   .hud{position:fixed;top:8px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;letter-spacing:.08em;background:rgba(0,0,0,.25);padding:6px 10px;border-radius:10px;backdrop-filter:blur(4px)}
-  /* SMALL, TOP-CENTER bomb buttons (no interference) */
-  .bombPanel{position:fixed;left:50%;top:52px;transform:translateX(-50%);display:flex;gap:8px;pointer-events:auto;z-index:2}
+  /* SMALL bomb buttons at bottom center (thumb reach, away from sticks) */
+  .bombPanel{position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);display:flex;gap:10px;pointer-events:auto;z-index:2}
   .bomb{width:56px;height:56px;border:0;border-radius:50%;font-weight:800;letter-spacing:.08em;color:#fff;font-size:11px;line-height:1;touch-action:manipulation}
   .bomb.drop{background:linear-gradient(180deg,#ff4b4b,#c71e1e);box-shadow:0 6px 18px rgba(255,75,75,.35)}
   .bomb.follow{background:linear-gradient(180deg,#4b8bff,#1e42c7);box-shadow:0 6px 18px rgba(75,139,255,.35)}
@@ -29,13 +29,13 @@
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <div class="hint">3‑finger tap: pause · B/SPACE: drop · F: bomb‑cam · Double‑tap screen: drop</div>
+  <div class="hint">3-finger tap: pause · B/SPACE: drop · F: bomb-cam · Double-tap: drop</div>
   <div class="perf" id="fps">—</div>
   <div class="hud" id="hud">Score 0 · Towns 0/0</div>
   <div class="stick-wrap" id="joy"><div class="stick" id="stick"></div></div>
   <div class="throttle" id="throttle"><div class="label">THROTTLE</div><div class="rail"></div><div class="nub" id="nub"></div></div>
   <div class="gear" id="gearLabel">—</div>
-  <div class="bombPanel">
+  <div class="bombPanel" id="bombPanel">
     <button class="bomb drop" id="dropBtn" aria-label="Drop bomb">DROP</button>
     <button class="bomb follow" id="followBtn" aria-label="Drop & follow bomb">CAM</button>
   </div>
@@ -173,13 +173,12 @@ addEventListener('keydown', (e)=>{
 dropBtn.addEventListener('click', ()=> dropBomb(false), {passive:true});
 followBtn.addEventListener('click', ()=> dropBomb(true), {passive:true});
 
-/* ---------- Double‑tap anywhere to drop (prevent iOS zoom) ---------- */
+/* ---------- Double-tap anywhere to drop (prevent iOS zoom) ---------- */
 let lastTapT = 0;
 function onCanvasTouchStart(e){
   const now = performance.now();
   if(now - lastTapT < 280){
-    // double tap
-    e.preventDefault(); // block double‑tap zoom
+    e.preventDefault(); // block double-tap zoom
     dropBomb(false);
     lastTapT = 0;
   }else{
@@ -352,7 +351,7 @@ function removeTown(ix,iz){
   townGroups.delete(k);
 }
 
-/* ---------- Bombs, Catapult Launch, Explosions, Bomb‑Cam ---------- */
+/* ---------- Bombs, Catapult Launch, Explosions, Bomb-Cam ---------- */
 const bombs = [];
 const explosions = [];
 const bombGeo = new THREE.SphereGeometry(0.35,12,12);
@@ -366,13 +365,23 @@ const camDesiredLook = new THREE.Vector3();
 
 function dropBomb(follow){
   if(bombCooldown>0 || paused) return;
-  const b = new THREE.Mesh(bombGeo, bombMat);
-  const nose = new THREE.Vector3(0,-0.2,-5.0).applyMatrix4(ship.matrixWorld);
-  b.position.copy(nose);
 
-  const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(ship.quaternion).normalize();
-  const up = new THREE.Vector3(0,1,0);
-  const right = new THREE.Vector3().crossVectors(fwd, up).normalize();
+  // ensure world matrices are fresh
+  ship.updateMatrixWorld(true);
+
+  const b = new THREE.Mesh(bombGeo, bombMat);
+
+  // Spawn at the ship's NOSE (local -Z) in world space
+  const noseLocal = new THREE.Vector3(0,-0.2,-5.0);
+  const noseWorld = noseLocal.clone().applyMatrix4(ship.matrixWorld);
+  b.position.copy(noseWorld);
+
+  // True FORWARD of ship: getWorldDirection gives local -Z in world (the actual nose direction)
+  const fwd = new THREE.Vector3();
+  ship.getWorldDirection(fwd); // forward
+
+  const upWorld = new THREE.Vector3(0,1,0);
+  const right = new THREE.Vector3().crossVectors(fwd, upWorld).normalize(); // right-hand
 
   // Launch OUT THE FRONT (catapult arc)
   const launchSpeed = 90 + state.speed*0.6;
@@ -380,7 +389,7 @@ function dropBomb(follow){
   const initialVel = new THREE.Vector3()
     .addScaledVector(fwd, launchSpeed)
     .addScaledVector(right, sideJitter)
-    .addScaledVector(up, -3.5)
+    .addScaledVector(upWorld, -3.5)
     .addScaledVector(state.vel, 0.25);
 
   b.userData = {vel:initialVel, alive:true};
@@ -589,7 +598,7 @@ function tick(){
   camDesiredPos.set(0,70,20); camDesiredLook.set(0,60,0);
   requestAnimationFrame(tick);
   setTimeout(()=>{ const r=throttleRect(); setThrottleFrom(r.top + (1-throttle)*r.height*0.8 + 20); },0);
-  // Prevent UI buttons from blocking controls area; they already sit top-center.
+  // Prevent UI buttons from hijacking gestures beyond their bounds
   ['touchmove','gesturestart'].forEach(evt=>addEventListener(evt,e=>{
     if(e.target.closest('.stick-wrap,.throttle,.bombPanel')) e.preventDefault();
   }, {passive:false}));
