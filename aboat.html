@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Low-Poly Ocean • Boat vs Waves</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Boat vs Waves (low‑poly)</title>
 <style>
   html,body{margin:0;height:100%;background:#0a0f16;overflow:hidden;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
-  #ui{position:fixed;inset:0;/* removed pointer-events:none (was blocking all clicks) */}
+  #ui{position:fixed;inset:0}
   .hud{position:absolute;left:12px;top:10px;color:#e6f0ff;font-weight:600;font-size:14px;line-height:1.35;white-space:pre;
        background:#111a28;border:1px solid #21314d;border-radius:8px;padding:8px 10px}
   .centerMsg{position:absolute;left:50%;top:12%;transform:translateX(-50%);color:#e6f0ff;font-size:20px;text-align:center;text-shadow:0 2px 6px rgba(0,0,0,.6)}
@@ -38,29 +38,31 @@
     </div>
     <div class="stick" id="stick"><div class="nub" id="nub"></div></div>
   </div>
-  <div class="foot">Boat: steer into big waves. <span class="tiny">W/S throttle • A/D steer • Space brake • Shift boost • R reset • Drag stick on mobile</span></div>
+  <div class="foot">W/S throttle • A/D steer • Space brake • Shift boost • R reset • Drag stick on mobile</div>
 </div>
 
-<!-- Switched to non-module UMD build (ES modules can be blocked/sandboxed in Sites/embeds) -->
+<!-- Use THREE UMD build (works in embeds); keep version pinned -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <script>
 (function(){
-  // WebGL check (fail gracefully instead of blank screen)
+  // Fail clearly if WebGL is missing (prevents blank page)
   const canvas = document.getElementById('c');
   const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
   if(!gl){
-    document.getElementById('centerMsg').textContent = 'WebGL not supported on this device/browser.';
+    document.getElementById('centerMsg').textContent = 'WebGL is unavailable in this browser/env.';
     return;
   }
 
+  // ---------------- Core constants ----------------
   const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
-  const WORLD_SIZE = 1000, OCEAN_RES = 180;
+  const WORLD_SIZE = 1000, OCEAN_RES = 120; // lowered res for reliability
   const SKY_COLOR = 0x0a0f16, SUN_COLOR = 0xf7f2d8, AMBIENT = 0x223044;
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, alpha:false, preserveDrawingBuffer:false });
-  renderer.setClearColor(SKY_COLOR, 1);
+  // ---------------- Renderer/scene/camera ----------------
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, alpha:false });
   renderer.setPixelRatio(DPR);
+  renderer.setClearColor(SKY_COLOR, 1);
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(SKY_COLOR, 180, 650);
@@ -68,19 +70,22 @@
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
   camera.position.set(0, 7, 14);
 
-  const ambient = new THREE.HemisphereLight(AMBIENT, 0x09111a, 0.9);
-  scene.add(ambient);
+  scene.add(new THREE.HemisphereLight(AMBIENT, 0x09111a, 0.9));
   const sun = new THREE.DirectionalLight(SUN_COLOR, 1.1);
   sun.position.set(-30, 60, -10);
   scene.add(sun);
 
-  // ---- Ocean shader ----
+  // ---------------- Ocean shader ----------------
+  // IMPORTANT FIX: WebGL1 needs vec2 array as an Array of THREE.Vector2 (was Float32Array before; that can noop).
   const oceanUniforms = {
     uTime: { value: 0 },
-    uA:    { value: new Float32Array([0.35, 0.15, 0.10, 0.07]) },
-    uL:    { value: new Float32Array([22.0, 12.0, 9.0, 6.0]) },
-    uS:    { value: new Float32Array([1.0, 1.0, 1.0, 1.0]) },
-    uD:    { value: new Float32Array([ 1,0,  -0.7,0.35,  0.2,1,  -0.55,-0.2 ]) },
+    uA:    { value: new Float32Array([0.24, 0.12, 0.08, 0.06]) }, // amplitudes
+    uL:    { value: new Float32Array([22.0, 12.0, 9.0, 6.0]) },   // wavelengths
+    uS:    { value: new Float32Array([0.9, 0.9, 0.9, 0.9]) },     // steepness
+    uD:    { value: [ new THREE.Vector2( 1.0,  0.0),
+                      new THREE.Vector2(-0.7,  0.35),
+                      new THREE.Vector2( 0.2,  1.0),
+                      new THREE.Vector2(-0.55, -0.2) ] },         // directions (vec2[4])
     uColorDeep: { value: new THREE.Color(0x0e304f) },
     uColorShal: { value: new THREE.Color(0x2b86b9) },
     uLightDir:  { value: new THREE.Vector3().copy(sun.position).normalize() },
@@ -98,6 +103,7 @@
     uniform vec2  uD[4];
     varying vec3 vPos;
     varying vec3 vNorm;
+
     vec3 gerstner(vec2 xz, float t){
       vec3 p = vec3(xz.x, 0.0, xz.y);
       for(int i=0;i<4;i++){
@@ -113,7 +119,7 @@
       return p;
     }
     vec3 normalFromGerstner(vec2 xz, float t){
-      float e = 0.1;
+      float e = 0.12;
       vec3 px = gerstner(xz + vec2(e,0.0), t);
       vec3 mx = gerstner(xz - vec2(e,0.0), t);
       vec3 pz = gerstner(xz + vec2(0.0,e), t);
@@ -157,13 +163,19 @@
       gl_FragColor = vec4(col, 1.0);
     }
   `;
-  const oceanMat = new THREE.ShaderMaterial({ uniforms:oceanUniforms, vertexShader:oceanVertex, fragmentShader:oceanFragment, fog:true });
+
+  const oceanMat = new THREE.ShaderMaterial({
+    uniforms:oceanUniforms,
+    vertexShader:oceanVertex,
+    fragmentShader:oceanFragment,
+    fog:true
+  });
   const oceanGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, OCEAN_RES, OCEAN_RES);
   oceanGeo.rotateX(-Math.PI/2);
   const ocean = new THREE.Mesh(oceanGeo, oceanMat);
   scene.add(ocean);
 
-  // ---- Boat ----
+  // ---------------- Boat ----------------
   function makeBoat(){
     const g = new THREE.Group();
     const hull = new THREE.Mesh(
@@ -173,18 +185,21 @@
     hull.rotation.z = Math.PI;
     hull.rotation.y = Math.PI/6;
     g.add(hull);
+
     const cab = new THREE.Mesh(
       new THREE.BoxGeometry(1.4, 0.9, 1.2),
       new THREE.MeshStandardMaterial({ color:0xfff1cf, roughness:0.9, metalness:0.02, flatShading:true })
     );
     cab.position.set(0, 0.6, -0.6);
     g.add(cab);
+
     const ant = new THREE.Mesh(
       new THREE.CylinderGeometry(0.03,0.03,0.8,6),
       new THREE.MeshStandardMaterial({ color:0xd0d7e4, roughness:0.4, metalness:0.5, flatShading:true })
     );
     ant.position.set(-0.2,1.0,-0.9);
     g.add(ant);
+
     const flag = new THREE.Mesh(
       new THREE.PlaneGeometry(0.5,0.3,1,1),
       new THREE.MeshStandardMaterial({ color:0x2b86b9, side:THREE.DoubleSide, flatShading:true })
@@ -192,12 +207,14 @@
     flag.position.set(-0.2,1.2,-0.9);
     flag.rotation.y = Math.PI/2;
     g.add(flag);
+
     g.position.set(0, 2, 0);
     return g;
   }
-  const boat = makeBoat(); scene.add(boat);
+  const boat = makeBoat();
+  scene.add(boat);
 
-  // ---- State ----
+  // ---------------- Sim & input ----------------
   const MAX_BOAT_SPEED=55, ACCEL=18, BRAKE_DECEL=40, TURN_RATE=70, DRAG=0.995, LATERAL_DRAG=0.86, BOOST=1.35;
   const FLOAT_HEIGHT=1.2, ROLL_STABILITY=0.75, PITCH_STABILITY=0.65, CAPSIZE_ROLL_DEG=78, RECOVER_TIME=1500;
   const SWELL_MIN=0.2, SWELL_MAX=1.0, BIG_WAVE_THRESHOLD=0.72;
@@ -205,61 +222,62 @@
   let speed=0, heading=0, roll=0, pitch=0, flipTimer=0, alive=true, elapsed=0, best=0;
   let swellLevel=0.4, swellTarget=0.6, swellTimer=0, shiftBoost=1.0;
 
-  // ---- Input ----
-  const keys=new Set();
-  addEventListener('keydown',e=>{ keys.add(e.code); if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','KeyW','KeyA','KeyS','KeyD','KeyR'].includes(e.code)) e.preventDefault();});
+  const keys = new Set();
+  addEventListener('keydown',e=>{
+    keys.add(e.code);
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','KeyW','KeyA','KeyS','KeyD','KeyR'].includes(e.code)) e.preventDefault();
+  });
   addEventListener('keyup',e=>keys.delete(e.code));
 
+  // On-screen controls
   const stick = document.getElementById('stick');
   const nub   = document.getElementById('nub');
   let stickActive=false, stickDX=0, stickDY=0;
+  const setNub = (x,y)=>{ nub.style.transform=`translate(${x-23}px,${y-23}px)`; };
   function stickPosFromEvt(e){
-    const rect = stick.getBoundingClientRect();
-    const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
-    const t = (e.touches && e.touches[0]) || e;
-    let x = t.clientX - cx, y = t.clientY - cy;
-    const max = rect.width/2 - 12, mag = Math.hypot(x,y);
-    if(mag>max){ x*=max/mag; y*=max/mag; }
+    const rect=stick.getBoundingClientRect();
+    const t=(e.touches&&e.touches[0])||e;
+    let x=t.clientX-(rect.left+rect.width/2), y=t.clientY-(rect.top+rect.height/2);
+    const max=rect.width/2-12, m=Math.hypot(x,y);
+    if(m>max){ x*=max/m; y*=max/m; }
     return {x,y,max};
   }
-  const setNub = (x,y)=>{ nub.style.transform=`translate(${x-23}px,${y-23}px)`; };
-  const startStick = e=>{ stickActive=true; const p=stickPosFromEvt(e); stickDX=p.x/p.max; stickDY=p.y/p.max; setNub(p.x,p.y); e.preventDefault(); };
-  const moveStick  = e=>{ if(!stickActive) return; const p=stickPosFromEvt(e); stickDX=p.x/p.max; stickDY=p.y/p.max; setNub(p.x,p.y); e.preventDefault(); };
-  const endStick   = ()=>{ stickActive=false; stickDX=0; stickDY=0; setNub(0,0); };
+  const startStick=e=>{ stickActive=true; const p=stickPosFromEvt(e); stickDX=p.x/p.max; stickDY=p.y/p.max; setNub(p.x,p.y); e.preventDefault(); };
+  const moveStick =e=>{ if(!stickActive) return; const p=stickPosFromEvt(e); stickDX=p.x/p.max; stickDY=p.y/p.max; setNub(p.x,p.y); e.preventDefault(); };
+  const endStick  =()=>{ stickActive=false; stickDX=0; stickDY=0; setNub(0,0); };
   stick.addEventListener('pointerdown', startStick);
   addEventListener('pointermove', moveStick);
   addEventListener('pointerup', endStick);
   stick.addEventListener('touchstart', startStick, {passive:false});
   addEventListener('touchmove', moveStick, {passive:false});
   addEventListener('touchend', endStick, {passive:true});
+
   document.getElementById('throttleUp').addEventListener('click', ()=> speed=Math.min(MAX_BOAT_SPEED, speed+8));
   document.getElementById('throttleDown').addEventListener('click', ()=> speed=Math.max(0, speed-8));
   document.getElementById('brake').addEventListener('click', ()=> speed=Math.max(0, speed-20));
-  document.getElementById('reset').addEventListener('click', ()=> resetRun());
+  document.getElementById('reset').addEventListener('click', resetRun);
 
-  // ---- Wave sampling (JS mirror of shader) ----
+  // Wave sampling to match shader
   function sampleHeightOnly(x,z,t){
     const A=oceanUniforms.uA.value, L=oceanUniforms.uL.value, S=oceanUniforms.uS.value, D=oceanUniforms.uD.value;
-    let py=0;
+    let h=0;
     for(let i=0;i<4;i++){
-      const k = Math.PI*2 / L[i];
-      const c = Math.sqrt(9.8/k);
-      const dx=D[i*2], dz=D[i*2+1], len=Math.hypot(dx,dz)||1, ux=dx/len, uz=dz/len;
-      const th = (ux*x + uz*z)*k - c*t;
-      py += A[i]*Math.sin(th);
+      const k=2*Math.PI/L[i], c=Math.sqrt(9.8/k);
+      const dir=D[i]; const ux=dir.x, uz=dir.y;
+      const th=(ux*x + uz*z)*k - c*t;
+      h += A[i]*Math.sin(th);
     }
-    return py;
+    return h;
   }
   function sampleWaveHeightAndNormal(x,z,t){
-    let py = sampleHeightOnly(x,z,t);
+    const y=sampleHeightOnly(x,z,t);
     const eps=0.15;
-    const dx = sampleHeightOnly(x+eps,z,t)-sampleHeightOnly(x-eps,z,t);
-    const dz = sampleHeightOnly(x,z+eps,t)-sampleHeightOnly(x,z-eps,t);
-    const n = new THREE.Vector3(-dx/(2*eps), 1, -dz/(2*eps)).normalize();
-    return { y: py, normal: n };
+    const dx=sampleHeightOnly(x+eps,z,t)-sampleHeightOnly(x-eps,z,t);
+    const dz=sampleHeightOnly(x,z+eps,t)-sampleHeightOnly(x,z-eps,t);
+    const n=new THREE.Vector3(-dx/(2*eps),1,-dz/(2*eps)).normalize();
+    return { y, normal:n };
   }
 
-  // ---- Swell morphing ----
   function updateSwell(dt){
     swellTimer -= dt;
     if(swellTimer<=0){
@@ -272,15 +290,13 @@
       oceanUniforms.uA.value[i] = baseA[i]*(1.0 + extra*(i===0?2.2:(i===1?1.6:1.2)));
       oceanUniforms.uS.value[i] = 0.7 + 0.25*swellLevel;
     }
-    const t = oceanUniforms.uTime.value*0.05;
-    oceanUniforms.uD.value[0]=Math.cos(t);
-    oceanUniforms.uD.value[1]=Math.sin(t);
+    const t=oceanUniforms.uTime.value*0.05, c=Math.cos(t), s=Math.sin(t);
+    oceanUniforms.uD.value[0].set(c,s); // rotate main swell (keeps it fresh)
   }
 
-  // ---- HUD / helpers ----
-  const hud=document.getElementById('hudText');
-  const centerMsg=document.getElementById('centerMsg');
-  function showCenter(msg){ centerMsg.textContent=msg; }
+  const camOffset = new THREE.Vector3(0,6.2,12.5), camLook=new THREE.Vector3();
+  const hud=document.getElementById('hudText'), centerMsg=document.getElementById('centerMsg');
+
   function updateHUD(){
     const swellText = swellLevel > BIG_WAVE_THRESHOLD ? 'BIG' : (swellLevel>0.45?'moderate':'calm');
     hud.textContent =
@@ -290,36 +306,31 @@ Swell: ${swellText}
 Time: ${elapsed.toFixed(1)}s
 High score: ${best.toFixed(1)}s`;
   }
+  function showCenter(msg){ centerMsg.textContent=msg; }
   function resetRun(){
     alive=true; flipTimer=0; elapsed=0; speed=12; heading=0; roll=0; pitch=0;
     boat.position.set(0,2,0); showCenter('');
   }
 
-  // ---- Camera follow ----
-  const camOffset = new THREE.Vector3(0,6.2,12.5);
-  const camLook = new THREE.Vector3();
-
-  // ---- Main loop ----
-  let then = performance.now();
+  // ---------------- Main loop ----------------
+  let then=performance.now();
   resetRun();
   function frame(nowMS){
-    const dt = Math.min(0.033, (nowMS-then)/1000); then=nowMS;
+    const dt=Math.min(0.033,(nowMS-then)/1000); then=nowMS;
 
     oceanUniforms.uTime.value += dt * (1.0 + 0.6*swellLevel);
     updateSwell(dt);
 
-    // input
     let steer=0, throttle=0;
     if(keys.has('KeyA')||keys.has('ArrowLeft')) steer-=1;
     if(keys.has('KeyD')||keys.has('ArrowRight')) steer+=1;
     if(keys.has('KeyW')||keys.has('ArrowUp')) throttle+=1;
     if(keys.has('KeyS')||keys.has('ArrowDown')) throttle-=1;
     if(keys.has('Space')) speed=Math.max(0, speed - BRAKE_DECEL*dt);
-    shiftBoost = keys.has('ShiftLeft') ? BOOST : 1.0;
-    steer += stickDX;
-    throttle += -stickDY;
+    const boost = keys.has('ShiftLeft') ? BOOST : 1.0;
+    steer += stickDX; throttle += -stickDY;
 
-    if(throttle>0) speed=Math.min(MAX_BOAT_SPEED, speed + ACCEL*dt*throttle*shiftBoost);
+    if(throttle>0) speed=Math.min(MAX_BOAT_SPEED, speed + ACCEL*dt*throttle*boost);
     if(throttle<0) speed=Math.max(0, speed + ACCEL*dt*throttle);
     speed *= (DRAG - 0.0007*swellLevel);
 
@@ -328,58 +339,54 @@ High score: ${best.toFixed(1)}s`;
       const turn = TURN_RATE * (0.4 + 0.6*Math.min(1, speed/MAX_BOAT_SPEED)) * (0.9 - 0.25*swellLevel);
       heading += steer * turn * dt;
 
-      const rad = THREE.MathUtils.degToRad(heading);
-      let vx = Math.sin(rad) * speed, vz = Math.cos(rad) * speed;
-      const headVec = new THREE.Vector2(Math.sin(rad), Math.cos(rad));
-      const velVec  = new THREE.Vector2(vx, vz);
-      const forwardMag = velVec.dot(headVec);
-      const lateral = velVec.clone().sub(headVec.clone().multiplyScalar(forwardMag)).multiplyScalar(1-LATERAL_DRAG);
+      const rad=THREE.MathUtils.degToRad(heading);
+      let vx=Math.sin(rad)*speed, vz=Math.cos(rad)*speed;
+
+      const headVec=new THREE.Vector2(Math.sin(rad),Math.cos(rad));
+      const velVec=new THREE.Vector2(vx,vz);
+      const forwardMag=velVec.dot(headVec);
+      const lateral=velVec.clone().sub(headVec.clone().multiplyScalar(forwardMag)).multiplyScalar(1-LATERAL_DRAG);
       velVec.sub(lateral);
       vx=velVec.x; vz=velVec.y;
 
       boat.position.x += vx * dt * 0.5;
       boat.position.z += vz * dt * 0.5;
 
-      const t = oceanUniforms.uTime.value;
-      const fwd = new THREE.Vector2(Math.sin(rad), Math.cos(rad));
-      const right = new THREE.Vector2(fwd.y, -fwd.x);
-      const bow = sampleWaveHeightAndNormal(boat.position.x + fwd.x*1.6, boat.position.z + fwd.y*1.6, t);
-      const stern = sampleWaveHeightAndNormal(boat.position.x - fwd.x*1.2, boat.position.z - fwd.y*1.2, t);
-      const port = sampleWaveHeightAndNormal(boat.position.x - right.x*0.9, boat.position.z - right.y*0.9, t);
-      const starb = sampleWaveHeightAndNormal(boat.position.x + right.x*0.9, boat.position.z + right.y*0.9, t);
+      const t=oceanUniforms.uTime.value;
+      const fwd=new THREE.Vector2(Math.sin(rad),Math.cos(rad));
+      const right=new THREE.Vector2(fwd.y,-fwd.x);
+      const bow=sampleWaveHeightAndNormal(boat.position.x + fwd.x*1.6, boat.position.z + fwd.y*1.6, t);
+      const stern=sampleWaveHeightAndNormal(boat.position.x - fwd.x*1.2, boat.position.z - fwd.y*1.2, t);
+      const port=sampleWaveHeightAndNormal(boat.position.x - right.x*0.9, boat.position.z - right.y*0.9, t);
+      const starb=sampleWaveHeightAndNormal(boat.position.x + right.x*0.9, boat.position.z + right.y*0.9, t);
 
       boat.position.y = (bow.y+stern.y+port.y+starb.y)/4 + FLOAT_HEIGHT;
 
-      const targetPitch = Math.atan2(bow.y - stern.y, 2.8) * (0.9 + 0.4*swellLevel);
-      const targetRoll  = Math.atan2(starb.y - port.y, 1.8) * (1.0 + 0.6*swellLevel);
-      const pitchRate = 4.0 - 1.3*swellLevel;
-      const rollRate  = 4.5 - 1.0*swellLevel;
+      const targetPitch=Math.atan2(bow.y - stern.y, 2.8)*(0.9+0.4*swellLevel);
+      const targetRoll =Math.atan2(starb.y - port.y, 1.8)*(1.0+0.6*swellLevel);
+      const pitchRate=4.0-1.3*swellLevel, rollRate=4.5-1.0*swellLevel;
 
-      pitch += (targetPitch - pitch) * Math.min(1, dt*pitchRate) - pitch*dt*(1-PITCH_STABILITY);
-      roll  += (targetRoll  - roll ) * Math.min(1, dt*rollRate ) - roll *dt*(1-ROLL_STABILITY);
+      pitch += (targetPitch - pitch)*Math.min(1, dt*pitchRate) - pitch*dt*(1-PITCH_STABILITY);
+      roll  += (targetRoll  - roll )*Math.min(1, dt*rollRate ) - roll *dt*(1-ROLL_STABILITY);
 
-      const waveDir = new THREE.Vector2(oceanUniforms.uD.value[0], oceanUniforms.uD.value[1]).normalize();
-      const sideOn  = Math.abs(waveDir.angle() - fwd.angle());
-      const sideFactor = Math.sin(sideOn);
-      const rollDeg = THREE.MathUtils.radToDeg(Math.abs(roll));
-      const danger = rollDeg + (swellLevel*25*sideFactor);
-      if(danger > CAPSIZE_ROLL_DEG){
-        alive=false;
-        flipTimer=performance.now()+RECOVER_TIME;
-        best=Math.max(best, elapsed);
-        centerMsg.textContent='💥 Capsized!\nTap RESET or press R';
+      const waveDir=oceanUniforms.uD.value[0].clone().normalize();
+      const sideOn=Math.abs(waveDir.angle() - fwd.angle());
+      const danger = THREE.MathUtils.radToDeg(Math.abs(roll)) + (swellLevel*25*Math.sin(sideOn));
+      if(danger>CAPSIZE_ROLL_DEG){
+        alive=false; flipTimer=performance.now()+RECOVER_TIME; best=Math.max(best,elapsed);
+        showCenter('💥 Capsized!  Press R or tap RESET');
       }
 
       boat.rotation.set(pitch, rad, roll);
 
-      const offs = camOffset.clone().applyAxisAngle(new THREE.Vector3(0,1,0), rad);
-      const desiredCam = boat.position.clone().add(offs);
+      const offs=camOffset.clone().applyAxisAngle(new THREE.Vector3(0,1,0), rad);
+      const desiredCam=boat.position.clone().add(offs);
       camera.position.lerp(desiredCam, 1 - Math.pow(0.0001, dt));
       camLook.lerp(boat.position.clone().add(new THREE.Vector3(0,1.0,0)), 1 - Math.pow(0.0001, dt));
       camera.lookAt(camLook);
     } else {
       boat.rotation.z += 0.6*dt;
-      if(performance.now() > flipTimer && keys.has('KeyR')) resetRun();
+      if(performance.now()>flipTimer && keys.has('KeyR')) resetRun();
     }
     if(keys.has('KeyR') && alive) resetRun();
 
@@ -389,8 +396,8 @@ High score: ${best.toFixed(1)}s`;
   }
 
   function onResize(){
-    const w = innerWidth, h = innerHeight;
-    renderer.setSize(w, h, false);
+    const w=innerWidth, h=innerHeight;
+    renderer.setSize(w,h,false);
     camera.aspect = w/h;
     camera.updateProjectionMatrix();
   }
