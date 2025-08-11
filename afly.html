@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>SkySea — Centered Chase Cam</title>
+<title>SkySea — Centered Chase Cam (Fixed Orientation + Visible Gear)</title>
 <style>
   html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
   /* Canvas fills the true visible viewport on iOS (no URL-bar jump). */
@@ -59,7 +59,7 @@ if (window.visualViewport) visualViewport.addEventListener('resize', sizeRendere
 scene.add(new THREE.HemisphereLight(0x99c6ff, 0x223344, 0.85));
 const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(200,400,100); scene.add(dir);
 
-/* ============== Ship with gear/floats ============== */
+/* ============== Ship with gear/floats (longer gear) ============== */
 function buildShip(){
   const g = new THREE.Group();
   const matA = new THREE.MeshStandardMaterial({color:0x7bd3ff, metalness:0.2, roughness:0.5, flatShading:true});
@@ -72,11 +72,20 @@ function buildShip(){
   const fin  = new THREE.Mesh(new THREE.ConeGeometry(1.2,3.2,4), matB); fin.position.set(0,0,5.8); fin.rotation.x=Math.PI; g.add(fin);
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.6,16,16), new THREE.MeshBasicMaterial({color:0x88ddff})); glow.position.set(0,0,-4.8); g.add(glow);
 
-  // Gear
+  // Landing gear (longer, lower, with tip lights)
   const gearGroup = new THREE.Group();
-  const legG = new THREE.CylinderGeometry(0.12,0.12,2,8);
-  const footG = new THREE.BoxGeometry(0.8,0.2,1.2);
-  function mkLeg(x){ const leg=new THREE.Mesh(legG,matC); leg.position.set(x,-2,0.6); const foot=new THREE.Mesh(footG,matC); foot.position.set(0,-1.2,0.1); leg.add(foot); return leg; }
+  const legG = new THREE.CylinderGeometry(0.12,0.12,3.0,8); // lengthened (was 2)
+  function mkLeg(x){
+    const leg = new THREE.Mesh(legG, matC);
+    leg.position.set(x,-2.4,0.6); // slightly lower
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.22,1.4), matC);
+    foot.position.set(0,-1.6,0.15);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.1,10,10), new THREE.MeshBasicMaterial({color:0xffee66}));
+    tip.position.set(0,-1.6,0.6);
+    foot.add(tip);
+    leg.add(foot);
+    return leg;
+  }
   gearGroup.add(mkLeg(-2.2), mkLeg(2.2), mkLeg(0));
   gearGroup.visible=false; g.add(gearGroup);
 
@@ -237,9 +246,10 @@ const state={
 };
 const tmpV=new THREE.Vector3();
 
-// Centered chase-cam in ship local frame
-const camLocalOffset = new THREE.Vector3(0, 8, 20);
-const camLookLocal   = new THREE.Vector3(0, 2, 0);
+// Camera BEHIND the ship, looking forward.
+// NOTE: Ship faces its local -Z. Using negative Z here places camera behind it.
+const camLocalOffset = new THREE.Vector3(0, 8, -20);
+const camLookLocal   = new THREE.Vector3(0, 2, -6);
 const worldPos = new THREE.Vector3();
 const worldLook = new THREE.Vector3();
 
@@ -295,7 +305,7 @@ function stepShip(dt){
   const lookFwd = tmpV.copy(state.pos).add(state.vel.clone().multiplyScalar(0.12));
   ship.lookAt(lookFwd); ship.rotateZ(state.roll);
 
-  // ---- Centered chase cam tied to ship local frame ----
+  // ---- Centered chase cam tied to ship local frame (behind & forward-looking) ----
   ship.updateMatrixWorld(true);
   worldPos.copy(camLocalOffset).applyMatrix4(ship.matrixWorld);
   worldLook.copy(camLookLocal).applyMatrix4(ship.matrixWorld);
