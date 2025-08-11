@@ -3,10 +3,11 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>SkySea — Chase Cam (Never Under) + Free‑Look + Waves</title>
+<title>SkySea — Centered Chase Cam (Fixed Orientation + Visible Gear)</title>
 <style>
   html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block;touch-action:none}
+  /* Canvas fills the true visible viewport on iOS (no URL-bar jump). */
+  #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block}
 
   #ui{position:fixed;inset:0;pointer-events:none}
   .stick-wrap{position:absolute;left:2.5vw;bottom:4vh;width:26vw;height:26vw;max-width:210px;max-height:210px;border-radius:50%;background:radial-gradient(rgba(255,255,255,.08),rgba(255,255,255,.03) 60%,transparent 61%);backdrop-filter:blur(2px);pointer-events:auto;touch-action:none}
@@ -23,7 +24,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <div class="hint">Swipe canvas: free‑look • Double‑tap: reset • 3‑finger: pause</div>
+  <div class="hint">Tap with 3 fingers: pause</div>
   <div class="perf" id="fps">—</div>
   <div class="stick-wrap" id="joy"><div class="stick" id="stick"></div></div>
   <div class="throttle" id="throttle"><div class="label">THROTTLE</div><div class="rail"></div><div class="nub" id="nub"></div></div>
@@ -34,7 +35,7 @@
 import * as THREE from "https://unpkg.com/three@0.165.0/build/three.module.js";
 import { ImprovedNoise } from "https://unpkg.com/three@0.165.0/examples/jsm/math/ImprovedNoise.js";
 
-/* ---------- Renderer / Scene ---------- */
+/* ============== Renderer / Scene ============== */
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:false, powerPreference:'high-performance', alpha:false});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -45,6 +46,7 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x99bbdd, 0.0010);
 
 const camera = new THREE.PerspectiveCamera(65, 1, 0.6, 20000);
+
 function sizeRendererToCanvas(){
   const w = canvas.clientWidth, h = canvas.clientHeight;
   renderer.setSize(w, h, false);
@@ -57,53 +59,67 @@ if (window.visualViewport) visualViewport.addEventListener('resize', sizeRendere
 scene.add(new THREE.HemisphereLight(0x99c6ff, 0x223344, 0.85));
 const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(200,400,100); scene.add(dir);
 
-/* ---------- Ship ---------- */
+/* ============== Ship with gear/floats (longer gear) ============== */
 function buildShip(){
   const g = new THREE.Group();
   const matA = new THREE.MeshStandardMaterial({color:0x7bd3ff, metalness:0.2, roughness:0.5, flatShading:true});
   const matB = new THREE.MeshStandardMaterial({color:0x125e84, metalness:0.4, roughness:0.4, flatShading:true});
   const matC = new THREE.MeshStandardMaterial({color:0xffffff, metalness:0.1, roughness:0.2, emissive:0x224455, emissiveIntensity:0.08, flatShading:true});
+
   const hull = new THREE.Mesh(new THREE.CapsuleGeometry(3.4,6.0,6,14), matA); hull.rotation.x=Math.PI/2; g.add(hull);
   const keel = new THREE.Mesh(new THREE.BoxGeometry(1.2,0.6,7), matB); keel.position.set(0,-1.4,0); g.add(keel);
   const wing = new THREE.Mesh(new THREE.BoxGeometry(10,0.3,2.0), matB); wing.position.set(0,0.2,-0.5); g.add(wing);
   const fin  = new THREE.Mesh(new THREE.ConeGeometry(1.2,3.2,4), matB); fin.position.set(0,0,5.8); fin.rotation.x=Math.PI; g.add(fin);
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.6,16,16), new THREE.MeshBasicMaterial({color:0x88ddff})); glow.position.set(0,0,-4.8); g.add(glow);
-  // Gear
+
+  // Landing gear (longer, lower, with tip lights)
   const gearGroup = new THREE.Group();
-  const legG = new THREE.CylinderGeometry(0.12,0.12,3.0,8);
+  const legG = new THREE.CylinderGeometry(0.12,0.12,3.0,8); // lengthened (was 2)
   function mkLeg(x){
-    const leg = new THREE.Mesh(legG, matC); leg.position.set(x,-2.4,0.6);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.22,1.4), matC); foot.position.set(0,-1.6,0.15);
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.1,10,10), new THREE.MeshBasicMaterial({color:0xffee66})); tip.position.set(0,-1.6,0.6);
-    foot.add(tip); leg.add(foot); return leg;
+    const leg = new THREE.Mesh(legG, matC);
+    leg.position.set(x,-2.4,0.6); // slightly lower
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.22,1.4), matC);
+    foot.position.set(0,-1.6,0.15);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.1,10,10), new THREE.MeshBasicMaterial({color:0xffee66}));
+    tip.position.set(0,-1.6,0.6);
+    foot.add(tip);
+    leg.add(foot);
+    return leg;
   }
-  gearGroup.add(mkLeg(-2.2), mkLeg(2.2), mkLeg(0)); gearGroup.visible=false; g.add(gearGroup);
+  gearGroup.add(mkLeg(-2.2), mkLeg(2.2), mkLeg(0));
+  gearGroup.visible=false; g.add(gearGroup);
+
   // Floats
   const floatGroup = new THREE.Group();
   const pont = new THREE.CapsuleGeometry(0.6,3.2,4,8);
   const left = new THREE.Mesh(pont, matC); left.rotation.z=Math.PI/2; left.position.set(-5.2,-1.0,0.2);
-  const right = left.clone(); right.position.x*=-1; floatGroup.add(left,right); floatGroup.visible=false; g.add(floatGroup);
+  const right = left.clone(); right.position.x*=-1;
+  floatGroup.add(left,right); floatGroup.visible=false; g.add(floatGroup);
+
   g.userData = {gearGroup, floatGroup};
   g.traverse(o=>{o.castShadow=false;o.receiveShadow=false});
   return g;
 }
-const ship = buildShip(); scene.add(ship);
+const ship = buildShip();
+scene.add(ship);
 
-/* ---------- Controls ---------- */
+/* ============== Controls ============== */
 const joyWrap = document.getElementById('joy'), stick = document.getElementById('stick');
 const throttleEl = document.getElementById('throttle'), nub = document.getElementById('nub');
 const gearLabel = document.getElementById('gearLabel');
 
-let joyActive=false, joyDx=0, joyDy=0; let throttle=0.45;
+let joyActive=false, joyDx=0, joyDy=0;
+let throttle=0.45; // 0..1
+
 const joyRect = ()=> joyWrap.getBoundingClientRect();
-joyWrap.addEventListener('pointerdown', e=>{ joyActive=true; stick.style.transition='none'; e.preventDefault(); });
+joyWrap.addEventListener('pointerdown', ()=>{ joyActive=true; stick.style.transition='none'; });
 addEventListener('pointermove', e=>{
   if(!joyActive) return;
   const r=joyRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
   const dx=e.clientX-cx, dy=e.clientY-cy, max=r.width*0.35;
   const d=Math.min(Math.hypot(dx,dy),max), a=Math.atan2(dy,dx);
   joyDx=Math.cos(a)*d/max; joyDy=Math.sin(a)*d/max;
-  stick.style.transform=`translate(${joyDx*max}px,${joyDy*max}px)`; e.preventDefault();
+  stick.style.transform=`translate(${joyDx*max}px,${joyDy*max}px)`;
 },{passive:false});
 addEventListener('pointerup', ()=>{ joyActive=false; joyDx=joyDy=0; stick.style.transition='transform 120ms ease-out'; stick.style.transform='translate(0,0)'; });
 
@@ -113,22 +129,39 @@ function setThrottleFrom(y){
   const clamped=Math.max(r.top+pad, Math.min(y, r.bottom-pad));
   throttle = 1 - (clamped-(r.top+pad))/((r.height-pad*2));
   throttle = Math.max(0, Math.min(1, throttle));
-  const track=r.height*0.8, yPos=r.top+(1-throttle)*track+(r.height-track)/2-20; nub.style.top=(yPos-r.top)+'px';
+  const track=r.height*0.8, yPos=r.top+(1-throttle)*track+(r.height-track)/2-20;
+  nub.style.top=(yPos-r.top)+'px';
 }
-throttleEl.addEventListener('pointerdown', e=>{ throttleEl.setPointerCapture(e.pointerId); setThrottleFrom(e.clientY); e.preventDefault(); });
-throttleEl.addEventListener('pointermove', e=>{ if(e.pressure===0) return; setThrottleFrom(e.clientY); e.preventDefault(); }, {passive:false});
+throttleEl.addEventListener('pointerdown', e=>{ throttleEl.setPointerCapture(e.pointerId); setThrottleFrom(e.clientY); });
+throttleEl.addEventListener('pointermove', e=>{ if(e.pressure===0) return; setThrottleFrom(e.clientY); });
 
-/* Pause: 3‑finger */
+/* Pause: 3-finger tap */
 let paused=false, touchCount=0, touchTimer=0;
 addEventListener('touchstart', e=>{ touchCount=e.touches.length; clearTimeout(touchTimer); touchTimer=setTimeout(()=>{ if(touchCount>=3) paused=!paused; },120); }, {passive:true});
 
-/* ---------- Terrain ---------- */
+/* ============== Terrain (chunked) ============== */
 const seed=12345, noise=new ImprovedNoise();
 function n2(x,y,scale=1){ return noise.noise(x/scale, y/scale, seed)*0.5+0.5; }
-const CHUNK_SIZE=240, RES=48, LOAD_RADIUS=5; const pool=[], chunks=new Map();
+
+const CHUNK_SIZE=240, RES=48, LOAD_RADIUS=5;
+const pool=[], chunks=new Map();
+
 const terrainMat=new THREE.MeshStandardMaterial({flatShading:true,vertexColors:true,metalness:0,roughness:1});
-function sampleHeight(wx,wz){ const h=(n2(wx*0.6,wz*0.6,1400)*0.55 + n2(wx,wz,320)*0.35 + n2(wx*3.7,wz*3.7,90)*0.10)*1.15 - 0.35; return h*120; }
-function sampleClimate(wx,wz){ const temp=n2(wx+10000,wz-5000,1800), wet=n2(wx-7000,wz+3000,1000); const hRaw=((n2(wx*0.6,wz*0.6,1400)*0.55 + n2(wx,wz,320)*0.35 + n2(wx*3.7,wz*3.7,90)*0.10)*1.15)-0.35; return {temp,wet,hRaw}; }
+
+function sampleHeight(wx,wz){
+  const continent=n2(wx*0.6, wz*0.6, 1400);
+  const ridges   =n2(wx, wz, 320);
+  const detail   =n2(wx*3.7, wz*3.7, 90);
+  let h = continent*0.55 + ridges*0.35 + detail*0.10;
+  h = (h*1.15) - 0.35;
+  return h*120;
+}
+function sampleClimate(wx,wz){
+  const temp=n2(wx+10000, wz-5000, 1800);
+  const wet =n2(wx-7000,  wz+3000, 1000);
+  const hRaw=((n2(wx*0.6,wz*0.6,1400)*0.55 + n2(wx,wz,320)*0.35 + n2(wx*3.7,wz*3.7,90)*0.10)*1.15)-0.35;
+  return {temp,wet,hRaw};
+}
 function biomeColor(h,t,w){
   if(h<0.47) return new THREE.Color().setHSL(0.58,0.45,0.45);
   if(h<0.50) return new THREE.Color(0xbedee8);
@@ -139,155 +172,156 @@ function biomeColor(h,t,w){
   if(w>0.55) return new THREE.Color(0x2e8f4f);
   return new THREE.Color(0x77b55a);
 }
+
 function makeChunk(ix,iz){
-  let geom=pool.pop(); if(!geom){ geom=new THREE.PlaneGeometry(CHUNK_SIZE,CHUNK_SIZE,RES,RES); geom.rotateX(-Math.PI/2); }
-  const pos=geom.attributes.position.array; const color=new Float32Array((RES+1)*(RES+1)*3);
-  const X0=ix*CHUNK_SIZE, Z0=iz*CHUNK_SIZE; const col=new THREE.Color();
-  for(let z=0; z<=RES; z++) for(let x=0; x<=RES; x++){
-    const i=(z*(RES+1)+x), p=i*3; const wx=X0+(x/RES-0.5)*CHUNK_SIZE, wz=Z0+(z/RES-0.5)*CHUNK_SIZE;
-    pos[p+1]=sampleHeight(wx,wz); const {temp,wet,hRaw}=sampleClimate(wx,wz); const c=biomeColor(hRaw+0.35,temp,wet);
-    color[p]=c.r;color[p+1]=c.g;color[p+2]=c.b;
+  let geom=pool.pop();
+  if(!geom){ geom=new THREE.PlaneGeometry(CHUNK_SIZE,CHUNK_SIZE,RES,RES); geom.rotateX(-Math.PI/2); }
+  const pos=geom.attributes.position.array;
+  const color=new Float32Array((RES+1)*(RES+1)*3);
+  const worldX0=ix*CHUNK_SIZE, worldZ0=iz*CHUNK_SIZE;
+  const col=new THREE.Color();
+
+  for(let z=0; z<=RES; z++){
+    for(let x=0; x<=RES; x++){
+      const i=(z*(RES+1)+x), p=i*3;
+      const wx=worldX0+(x/RES-0.5)*CHUNK_SIZE;
+      const wz=worldZ0+(z/RES-0.5)*CHUNK_SIZE;
+      const elev=sampleHeight(wx,wz);
+      pos[p+1]=elev;
+      const {temp,wet,hRaw}=sampleClimate(wx,wz);
+      const c=biomeColor(hRaw+0.35,temp,wet);
+      color[p]=c.r;color[p+1]=c.g;color[p+2]=c.b;
+    }
   }
-  geom.setAttribute('color', new THREE.BufferAttribute(color,3)); geom.computeVertexNormals();
-  const mesh=new THREE.Mesh(geom,terrainMat); mesh.position.set(X0,0,Z0); mesh.matrixAutoUpdate=false; mesh.updateMatrix(); mesh.userData={ix,iz}; return mesh;
+  geom.setAttribute('color', new THREE.BufferAttribute(color,3));
+  geom.computeVertexNormals();
+
+  const mesh=new THREE.Mesh(geom,terrainMat);
+  mesh.position.set(worldX0,0,worldZ0);
+  mesh.matrixAutoUpdate=false; mesh.updateMatrix();
+  mesh.userData={ix,iz};
+  return mesh;
 }
-const key=(ix,iz)=>ix+','+iz; const toCreate=[];
+const key=(ix,iz)=>ix+','+iz;
+
+const toCreate=[];
 function queueChunk(ix,iz,priority=0){ toCreate.push({ix,iz,priority}); }
-function pumpCreate(budgetMs=9){ toCreate.sort((a,b)=> b.priority-a.priority); const s=performance.now(); while(toCreate.length&&(performance.now()-s)<budgetMs){ const {ix,iz}=toCreate.shift(); const k=key(ix,iz); if(chunks.has(k)) continue; const m=makeChunk(ix,iz); scene.add(m); chunks.set(k,m);} }
-function updateChunks(px,pz,forward){
-  const cx=Math.floor(px/CHUNK_SIZE), cz=Math.floor(pz/CHUNK_SIZE);
-  for(let dz=-LOAD_RADIUS; dz<=LOAD_RADIUS; dz++) for(let dx=-LOAD_RADIUS; dx<=LOAD_RADIUS; dx++){
-    const ix=cx+dx, iz=cz+dz, k=key(ix,iz); if(chunks.has(k)) continue;
-    const rel=new THREE.Vector3(ix*CHUNK_SIZE-px,0,iz*CHUNK_SIZE-pz); const prio=rel.normalize().dot(forward||new THREE.Vector3(0,0,-1))*100 - rel.length()/1000;
-    queueChunk(ix,iz,prio);
+function pumpCreate(budgetMs=9){
+  toCreate.sort((a,b)=> b.priority - a.priority);
+  const start=performance.now();
+  while(toCreate.length && (performance.now()-start)<budgetMs){
+    const {ix,iz}=toCreate.shift();
+    const k=key(ix,iz);
+    if(chunks.has(k)) continue;
+    const m=makeChunk(ix,iz); scene.add(m); chunks.set(k,m);
   }
-  for(const [k,m] of chunks){ const {ix,iz}=m.userData; if(Math.abs(ix-cx)>LOAD_RADIUS+1||Math.abs(iz-cz)>LOAD_RADIUS+1){ scene.remove(m); m.geometry.attributes.color?.dispose?.(); pool.push(m.geometry); chunks.delete(k);} }
+}
+function updateChunks(px,pz,forward){
+  const cx=Math.floor(px/CHUNK_SIZE);
+  const cz=Math.floor(pz/CHUNK_SIZE);
+  for(let dz=-LOAD_RADIUS; dz<=LOAD_RADIUS; dz++){
+    for(let dx=-LOAD_RADIUS; dx<=LOAD_RADIUS; dx++){
+      const ix=cx+dx, iz=cz+dz, k=key(ix,iz);
+      if(chunks.has(k)) continue;
+      const center=new THREE.Vector3(ix*CHUNK_SIZE,0,iz*CHUNK_SIZE);
+      const rel=center.sub(new THREE.Vector3(px,0,pz));
+      const prio = rel.normalize().dot(forward||new THREE.Vector3(0,0,-1))*100 - rel.length()/1000;
+      queueChunk(ix,iz, prio);
+    }
+  }
+  for(const [k,m] of chunks){
+    const {ix,iz}=m.userData;
+    if(Math.abs(ix-cx)>LOAD_RADIUS+1 || Math.abs(iz-cz)>LOAD_RADIUS+1){
+      scene.remove(m); m.geometry.attributes.color?.dispose?.(); pool.push(m.geometry); chunks.delete(k);
+    }
+  }
 }
 
-/* ---------- Ocean (waves) ---------- */
-let ocean, uTime;
-(function buildOcean(){
-  const geom=new THREE.PlaneGeometry(3000,3000,96,96); geom.rotateX(-Math.PI/2);
-  const uniforms={uTime:(uTime={value:0}),uColorDeep:{value:new THREE.Color(0x1a5c78)},uColorShallow:{value:new THREE.Color(0x4bb3d3)},uFogColor:{value:scene.fog.color},uFogDensity:{value:scene.fog.density}};
-  const vert=`uniform float uTime;varying vec3 vWorldPos;varying vec3 vNormalW;void main(){vec3 p=position;float t=uTime*0.6;p.y+=sin(p.x*0.02+t)*0.6+sin(p.z*0.018-t*1.2)*0.45+sin((p.x*0.012+p.z*0.014)+t*0.7)*0.35;vec4 wp=modelMatrix*vec4(p,1.0);vWorldPos=wp.xyz;vec3 dx=dFdx(vWorldPos),dz=dFdy(vWorldPos);vNormalW=normalize(cross(dz,dx));gl_Position=projectionMatrix*viewMatrix*wp;}`;
-  const frag=`uniform vec3 uColorDeep,uColorShallow,uFogColor;uniform float uFogDensity;varying vec3 vWorldPos,vNormalW;void main(){float depth=clamp(exp(-abs(vWorldPos.y)*0.15),0.0,1.0);vec3 base=mix(uColorDeep,uColorShallow,depth);vec3 N=normalize(vNormalW);vec3 V=normalize(cameraPosition-vWorldPos);float fres=pow(1.0-max(dot(N,V),0.0),3.0);vec3 col=base+fres*0.25;float d=length(cameraPosition-vWorldPos);float fog=1.0-exp(-uFogDensity*uFogDensity*d*d);gl_FragColor=vec4(mix(col,uFogColor,fog),1.0);} `;
-  const mat=new THREE.ShaderMaterial({uniforms,vertexShader:vert,fragmentShader:frag,fog:true});
-  ocean=new THREE.Mesh(geom,mat); ocean.position.y=0; ocean.frustumCulled=false; scene.add(ocean);
-})();
-function updateOceanFollow(pos){ const tile=400; ocean.position.x=Math.round(pos.x/tile)*tile; ocean.position.z=Math.round(pos.z/tile)*tile; }
-
-/* ---------- Flight + Landing ---------- */
-const state={speed:0,heading:0,pitch:0,roll:0,pos:new THREE.Vector3(0,60,0),vel:new THREE.Vector3(0,0,-1),onGround:false,onWater:false,gearDown:false,floatDown:false};
+/* ============== Flight, Landing, Centered Camera ============== */
+const state={
+  speed:0, heading:0, pitch:0, roll:0,
+  pos:new THREE.Vector3(0,60,0),
+  vel:new THREE.Vector3(0,0,-1),
+  onGround:false, onWater:false, gearDown:false, floatDown:false
+};
 const tmpV=new THREE.Vector3();
 
-/* ---------- Stable chase cam (heading‑only, never under) + free‑look ---------- */
-const CAM_BACK=20, CAM_UP=8, CAM_LOOK=6, CAM_MIN_UP=2.0; // min meters above ship
+// Camera BEHIND the ship, looking forward.
+// NOTE: Ship faces its local -Z. Using negative Z here places camera behind it.
+const camLocalOffset = new THREE.Vector3(0, 8, -20);
+const camLookLocal   = new THREE.Vector3(0, 2, -6);
+const worldPos = new THREE.Vector3();
+const worldLook = new THREE.Vector3();
 
-let camYaw=0, camPitch=0, camIdle=0, isCamDrag=false, lastX=0,lastY=0, lastTap=0;
-const YAW_S=0.006, PIT_S=0.005, PIT_MIN=-0.25, PIT_MAX=0.55; // tighter pitch to stop underside
+const gearLabelEl = document.getElementById('gearLabel');
 
-canvas.addEventListener('pointerdown', e=>{
-  if(e.target.closest('.stick-wrap,.throttle')) return;
-  const now=performance.now(); if(now-lastTap<280){ camYaw=0; camPitch=0; } lastTap=now;
-  isCamDrag=true; lastX=e.clientX; lastY=e.clientY; e.preventDefault();
-},{passive:false});
-canvas.addEventListener('pointermove', e=>{
-  if(!isCamDrag) return;
-  const dx=e.clientX-lastX, dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
-  camYaw+=dx*YAW_S; camPitch=THREE.MathUtils.clamp(camPitch+dy*PIT_S,PIT_MIN,PIT_MAX); camIdle=0; e.preventDefault();
-},{passive:false});
-addEventListener('pointerup', ()=>{ isCamDrag=false; });
-
-const camPosW=new THREE.Vector3(), camLookW=new THREE.Vector3(), upV=new THREE.Vector3(0,1,0);
-function placeCamera(dt){
-  // horizontal basis from heading only
-  const sh=Math.sin(state.heading), ch=Math.cos(state.heading);
-  const fwd=new THREE.Vector3(sh,0,-ch); const right=new THREE.Vector3(ch,0,sh);
-
-  // base offset (behind & up)
-  let offset = fwd.clone().multiplyScalar(-CAM_BACK).addScaledVector(upV, CAM_UP);
-
-  // free‑look yaw around world up, pitch around right
-  const qYaw=new THREE.Quaternion().setFromAxisAngle(upV,camYaw);
-  const qPit=new THREE.Quaternion().setFromAxisAngle(right,camPitch);
-  offset.applyQuaternion(qYaw).applyQuaternion(qPit);
-
-  // HARD CLAMP: never let camera go below ship by more than −(CAM_MIN_UP)
-  if(offset.y < CAM_MIN_UP) offset.y = CAM_MIN_UP;
-
-  camPosW.copy(state.pos).add(offset);
-  camLookW.copy(state.pos).add( fwd.clone().applyQuaternion(qYaw).applyQuaternion(qPit).multiplyScalar(CAM_LOOK) );
-
-  camera.position.lerp(camPosW, 0.14);
-  camera.lookAt(camLookW);
-
-  // auto‑center
-  if(!isCamDrag){
-    camIdle += dt;
-    const k=THREE.MathUtils.clamp(1+camIdle*1.5,1,4);
-    camYaw=THREE.MathUtils.damp(camYaw,0,k,dt);
-    camPitch=THREE.MathUtils.damp(camPitch,0,k,dt);
-  } else camIdle=0;
-}
-
-/* ---------- Step ---------- */
-const gearLabelEl=document.getElementById('gearLabel');
 function stepShip(dt){
   const turn=joyDx, lift=-joyDy;
-  const targetSpd=THREE.MathUtils.lerp(0,180,throttle);
-  state.speed=THREE.MathUtils.damp(state.speed,targetSpd,2.5,dt);
 
-  const groundY=sampleHeight(state.pos.x,state.pos.z);
-  const alt=state.pos.y - Math.max(0,groundY);
-  state.onWater = groundY<0 && state.pos.y<=1.2;
-  state.onGround= groundY>=0 && (state.pos.y-groundY)<=1.2;
+  // throttle 0..1 → 0..180 m/s
+  const targetSpd = THREE.MathUtils.lerp(0, 180, throttle);
+  state.speed = THREE.MathUtils.damp(state.speed, targetSpd, 2.5, dt);
 
-  state.gearDown = (!state.onWater)&&(alt<12||state.speed<25);
-  state.floatDown= state.onWater || (groundY<0 && (alt<14||state.speed<25));
-  ship.userData.gearGroup.visible=state.gearDown; ship.userData.floatGroup.visible=state.floatDown;
+  const groundY = sampleHeight(state.pos.x, state.pos.z);
+  const altitude = state.pos.y - Math.max(0, groundY);
+  state.onWater = groundY < 0 && state.pos.y <= 1.2;
+  state.onGround = groundY >= 0 && (state.pos.y - groundY) <= 1.2;
 
-  state.heading+=turn*dt*THREE.MathUtils.lerp(0.9,2.0,Math.max(throttle,0.15));
-  const pitchTarget=lift*0.45*(state.onGround||state.onWater?0.2:1.0);
-  state.pitch=THREE.MathUtils.damp(state.pitch,pitchTarget,6,dt);
-  state.roll =THREE.MathUtils.damp(state.roll,-turn*0.6,6,dt);
+  state.gearDown = (!state.onWater) && (altitude < 12 || state.speed < 25);
+  state.floatDown = state.onWater || (groundY<0 && (altitude < 14 || state.speed < 25));
 
-  const ch=Math.cos(state.heading), sh=Math.sin(state.heading), cp=Math.cos(state.pitch), sp=Math.sin(state.pitch);
-  state.vel.set(sh*cp,sp,-ch*cp).multiplyScalar(state.speed);
+  ship.userData.gearGroup.visible = state.gearDown;
+  ship.userData.floatGroup.visible = state.floatDown;
+
+  state.heading += turn * dt * THREE.MathUtils.lerp(0.9, 2.0, Math.max(throttle,0.15));
+  const pitchTarget = lift*0.45 * (state.onGround||state.onWater ? 0.2 : 1.0);
+  state.pitch = THREE.MathUtils.damp(state.pitch, pitchTarget, 6, dt);
+  state.roll  = THREE.MathUtils.damp(state.roll, -turn*0.6, 6, dt);
+
+  const ch=Math.cos(state.heading), sh=Math.sin(state.heading);
+  const cp=Math.cos(state.pitch),  sp=Math.sin(state.pitch);
+  state.vel.set(sh*cp, sp, -ch*cp).multiplyScalar(state.speed);
 
   if(!(state.onGround||state.onWater)){
-    const liftF=THREE.MathUtils.clamp(cp*state.speed*0.002,0,1.2);
-    state.vel.y+=(liftF-0.25)*9.8*dt;
+    const liftFactor = THREE.MathUtils.clamp(cp*state.speed*0.002, 0, 1.2);
+    state.vel.y += (liftFactor - 0.25) * 9.8 * dt;
   }
-  state.pos.addScaledVector(state.vel,dt);
+  state.pos.addScaledVector(state.vel, dt);
 
   if(state.onGround){
-    state.pos.y=Math.max(state.pos.y,groundY+1.0);
-    state.speed=THREE.MathUtils.damp(state.speed,0,6,dt);
-    state.pos.y=THREE.MathUtils.damp(state.pos.y,groundY+1.0,8,dt);
+    state.pos.y = Math.max(state.pos.y, groundY+1.0);
+    state.speed = THREE.MathUtils.damp(state.speed, 0, 6, dt);
+    state.pos.y = THREE.MathUtils.damp(state.pos.y, groundY+1.0, 8, dt);
   } else if(state.onWater){
-    state.pos.y=Math.max(state.pos.y,0.9);
-    state.pos.y+=Math.sin(performance.now()*0.003+(state.pos.x+state.pos.z)*0.01)*0.03;
-    state.speed=THREE.MathUtils.damp(state.speed,0,4,dt);
-  } else if(state.pos.y<2){
-    state.pos.y=THREE.MathUtils.damp(state.pos.y,2,3,dt);
+    state.pos.y = Math.max(state.pos.y, 0.9);
+    state.pos.y += Math.sin(performance.now()*0.003 + (state.pos.x+state.pos.z)*0.01)*0.03;
+    state.speed = THREE.MathUtils.damp(state.speed, 0, 4, dt);
+  } else {
+    if(state.pos.y < 2) state.pos.y = THREE.MathUtils.damp(state.pos.y, 2, 3, dt);
   }
 
-  // orient ship visually
+  // Orient ship
   ship.position.copy(state.pos);
-  const lookFwd=tmpV.copy(state.pos).add(state.vel.clone().multiplyScalar(0.12));
+  const lookFwd = tmpV.copy(state.pos).add(state.vel.clone().multiplyScalar(0.12));
   ship.lookAt(lookFwd); ship.rotateZ(state.roll);
 
-  // camera + world
-  placeCamera(dt);
-  const forward=new THREE.Vector3(Math.sin(state.heading),0,-Math.cos(state.heading));
-  updateChunks(state.pos.x,state.pos.z,forward);
+  // ---- Centered chase cam tied to ship local frame (behind & forward-looking) ----
+  ship.updateMatrixWorld(true);
+  worldPos.copy(camLocalOffset).applyMatrix4(ship.matrixWorld);
+  worldLook.copy(camLookLocal).applyMatrix4(ship.matrixWorld);
+  camera.position.lerp(worldPos, 0.12);
+  camera.lookAt(worldLook);
 
-  updateOceanFollow(state.pos); uTime.value+=dt;
-  gearLabelEl.textContent=state.onWater?'FLOATS':(state.gearDown?'GEAR':'—');
+  // Stream world; prioritize forward
+  const forward = new THREE.Vector3(0,0,-1).applyQuaternion(ship.quaternion);
+  updateChunks(state.pos.x, state.pos.z, forward);
+
+  gearLabelEl.textContent = state.onWater ? 'FLOATS' : (state.gearDown ? 'GEAR' : '—');
 }
 
-/* ---------- Loop / FPS ---------- */
-const fpsEl=document.getElementById('fps'); let fpsAcc=0,fpsCount=0,fpsT=0; let last=performance.now()/1000;
+/* ============== Loop / FPS ============== */
+const fpsEl=document.getElementById('fps'); let fpsAcc=0,fpsCount=0,fpsT=0;
+let last=performance.now()/1000;
 function tick(){
   const now=performance.now()/1000; const dt=Math.min(now-last,1/30); last=now;
   pumpCreate(9);
@@ -296,7 +330,7 @@ function tick(){
   requestAnimationFrame(tick);
 }
 
-/* ---------- Init ---------- */
+/* ============== Init ============== */
 (function init(){
   updateChunks(0,0,new THREE.Vector3(0,0,-1));
   requestAnimationFrame(tick);
