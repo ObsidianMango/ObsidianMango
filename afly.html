@@ -3,9 +3,12 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>SkySea — Procedural Flyer (Landing+Fixes)</title>
+<title>SkySea — Centered Chase Cam</title>
 <style>
-  html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  /* Canvas fills the true visible viewport on iOS (no URL-bar jump). */
+  #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block}
+
   #ui{position:fixed;inset:0;pointer-events:none}
   .stick-wrap{position:absolute;left:2.5vw;bottom:4vh;width:26vw;height:26vw;max-width:210px;max-height:210px;border-radius:50%;background:radial-gradient(rgba(255,255,255,.08),rgba(255,255,255,.03) 60%,transparent 61%);backdrop-filter:blur(2px);pointer-events:auto;touch-action:none}
   .stick{position:absolute;inset:0;margin:auto;width:32%;height:32%;border-radius:50%;background:radial-gradient(rgba(255,255,255,.25),rgba(255,255,255,.1));box-shadow:0 0 10px rgba(255,255,255,.25) inset}
@@ -32,24 +35,31 @@
 import * as THREE from "https://unpkg.com/three@0.165.0/build/three.module.js";
 import { ImprovedNoise } from "https://unpkg.com/three@0.165.0/examples/jsm/math/ImprovedNoise.js";
 
+/* ============== Renderer / Scene ============== */
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:false, powerPreference:'high-performance', alpha:false});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.setSize(innerWidth, innerHeight, false);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x99bbdd, 0.0010); // a touch thicker for nicer horizon
+scene.fog = new THREE.FogExp2(0x99bbdd, 0.0010);
 
-const camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.6, 20000);
-camera.position.set(0, 12, 22);
+const camera = new THREE.PerspectiveCamera(65, 1, 0.6, 20000);
 
-const hemi = new THREE.HemisphereLight(0x99c6ff, 0x223344, 0.85);
-const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(200,400,100);
-scene.add(hemi, dir);
+function sizeRendererToCanvas(){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+}
+sizeRendererToCanvas();
+addEventListener('resize', sizeRendererToCanvas);
+if (window.visualViewport) visualViewport.addEventListener('resize', sizeRendererToCanvas);
 
-/* ============= Ship with retractable gear/floats ============= */
+scene.add(new THREE.HemisphereLight(0x99c6ff, 0x223344, 0.85));
+const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(200,400,100); scene.add(dir);
+
+/* ============== Ship with gear/floats ============== */
 function buildShip(){
   const g = new THREE.Group();
   const matA = new THREE.MeshStandardMaterial({color:0x7bd3ff, metalness:0.2, roughness:0.5, flatShading:true});
@@ -62,7 +72,7 @@ function buildShip(){
   const fin  = new THREE.Mesh(new THREE.ConeGeometry(1.2,3.2,4), matB); fin.position.set(0,0,5.8); fin.rotation.x=Math.PI; g.add(fin);
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.6,16,16), new THREE.MeshBasicMaterial({color:0x88ddff})); glow.position.set(0,0,-4.8); g.add(glow);
 
-  // Retractable gear
+  // Gear
   const gearGroup = new THREE.Group();
   const legG = new THREE.CylinderGeometry(0.12,0.12,2,8);
   const footG = new THREE.BoxGeometry(0.8,0.2,1.2);
@@ -84,34 +94,32 @@ function buildShip(){
 const ship = buildShip();
 scene.add(ship);
 
-/* =================== Controls =================== */
-const joyWrap = document.getElementById('joy');
-const stick = document.getElementById('stick');
-const throttleEl = document.getElementById('throttle');
-const nub = document.getElementById('nub');
+/* ============== Controls ============== */
+const joyWrap = document.getElementById('joy'), stick = document.getElementById('stick');
+const throttleEl = document.getElementById('throttle'), nub = document.getElementById('nub');
 const gearLabel = document.getElementById('gearLabel');
 
 let joyActive=false, joyDx=0, joyDy=0;
 let throttle=0.45; // 0..1
 
 const joyRect = ()=> joyWrap.getBoundingClientRect();
-joyWrap.addEventListener('pointerdown', e=>{ joyActive=true; stick.style.transition='none'; });
+joyWrap.addEventListener('pointerdown', ()=>{ joyActive=true; stick.style.transition='none'; });
 addEventListener('pointermove', e=>{
   if(!joyActive) return;
-  const r = joyRect(); const cx=r.left+r.width/2, cy=r.top+r.height/2;
+  const r=joyRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
   const dx=e.clientX-cx, dy=e.clientY-cy, max=r.width*0.35;
-  const d = Math.min(Math.hypot(dx,dy), max), a=Math.atan2(dy,dx);
-  joyDx = Math.cos(a)*d/max; joyDy = Math.sin(a)*d/max;
+  const d=Math.min(Math.hypot(dx,dy),max), a=Math.atan2(dy,dx);
+  joyDx=Math.cos(a)*d/max; joyDy=Math.sin(a)*d/max;
   stick.style.transform=`translate(${joyDx*max}px,${joyDy*max}px)`;
 },{passive:false});
 addEventListener('pointerup', ()=>{ joyActive=false; joyDx=joyDy=0; stick.style.transition='transform 120ms ease-out'; stick.style.transform='translate(0,0)'; });
 
 function throttleRect(){ return throttleEl.getBoundingClientRect(); }
 function setThrottleFrom(y){
-  const r = throttleRect(), pad=r.height*0.1;
-  const clamped = Math.max(r.top+pad, Math.min(y, r.bottom-pad));
-  const t = 1 - (clamped-(r.top+pad))/((r.height-pad*2));
-  throttle = Math.max(0, Math.min(1, t));
+  const r=throttleRect(), pad=r.height*0.1;
+  const clamped=Math.max(r.top+pad, Math.min(y, r.bottom-pad));
+  throttle = 1 - (clamped-(r.top+pad))/((r.height-pad*2));
+  throttle = Math.max(0, Math.min(1, throttle));
   const track=r.height*0.8, yPos=r.top+(1-throttle)*track+(r.height-track)/2-20;
   nub.style.top=(yPos-r.top)+'px';
 }
@@ -122,16 +130,29 @@ throttleEl.addEventListener('pointermove', e=>{ if(e.pressure===0) return; setTh
 let paused=false, touchCount=0, touchTimer=0;
 addEventListener('touchstart', e=>{ touchCount=e.touches.length; clearTimeout(touchTimer); touchTimer=setTimeout(()=>{ if(touchCount>=3) paused=!paused; },120); }, {passive:true});
 
-/* =================== Terrain =================== */
+/* ============== Terrain (chunked) ============== */
 const seed=12345, noise=new ImprovedNoise();
 function n2(x,y,scale=1){ return noise.noise(x/scale, y/scale, seed)*0.5+0.5; }
 
-const CHUNK_SIZE=240, RES=48, HALF=CHUNK_SIZE/2;
-let LOAD_RADIUS=4; // a bit larger
+const CHUNK_SIZE=240, RES=48, LOAD_RADIUS=5;
 const pool=[], chunks=new Map();
 
 const terrainMat=new THREE.MeshStandardMaterial({flatShading:true,vertexColors:true,metalness:0,roughness:1});
 
+function sampleHeight(wx,wz){
+  const continent=n2(wx*0.6, wz*0.6, 1400);
+  const ridges   =n2(wx, wz, 320);
+  const detail   =n2(wx*3.7, wz*3.7, 90);
+  let h = continent*0.55 + ridges*0.35 + detail*0.10;
+  h = (h*1.15) - 0.35;
+  return h*120;
+}
+function sampleClimate(wx,wz){
+  const temp=n2(wx+10000, wz-5000, 1800);
+  const wet =n2(wx-7000,  wz+3000, 1000);
+  const hRaw=((n2(wx*0.6,wz*0.6,1400)*0.55 + n2(wx,wz,320)*0.35 + n2(wx*3.7,wz*3.7,90)*0.10)*1.15)-0.35;
+  return {temp,wet,hRaw};
+}
 function biomeColor(h,t,w){
   if(h<0.47) return new THREE.Color().setHSL(0.58,0.45,0.45);
   if(h<0.50) return new THREE.Color(0xbedee8);
@@ -141,23 +162,6 @@ function biomeColor(h,t,w){
   if(w>0.7 && t>0.5) return new THREE.Color(0x1c6b3a);
   if(w>0.55) return new THREE.Color(0x2e8f4f);
   return new THREE.Color(0x77b55a);
-}
-
-/* Height sampler used both for mesh and for landing physics */
-function sampleHeight(wx,wz){
-  const continent=n2(wx*0.6, wz*0.6, 1400);
-  const ridges   =n2(wx, wz, 320);
-  const detail   =n2(wx*3.7, wz*3.7, 90);
-  let h = continent*0.55 + ridges*0.35 + detail*0.10;
-  h = (h*1.15) - 0.35;         // ocean around 0
-  const elev = h*120;          // meters
-  return elev;
-}
-function sampleClimate(wx,wz){
-  const temp=n2(wx+10000, wz-5000, 1800);
-  const wet =n2(wx-7000,  wz+3000, 1000);
-  const hRaw=((n2(wx*0.6,wz*0.6,1400)*0.55 + n2(wx,wz,320)*0.35 + n2(wx*3.7,wz*3.7,90)*0.10)*1.15)-0.35;
-  return {temp,wet,hRaw};
 }
 
 function makeChunk(ix,iz){
@@ -173,10 +177,8 @@ function makeChunk(ix,iz){
       const i=(z*(RES+1)+x), p=i*3;
       const wx=worldX0+(x/RES-0.5)*CHUNK_SIZE;
       const wz=worldZ0+(z/RES-0.5)*CHUNK_SIZE;
-
       const elev=sampleHeight(wx,wz);
       pos[p+1]=elev;
-
       const {temp,wet,hRaw}=sampleClimate(wx,wz);
       const c=biomeColor(hRaw+0.35,temp,wet);
       color[p]=c.r;color[p+1]=c.g;color[p+2]=c.b;
@@ -195,8 +197,7 @@ const key=(ix,iz)=>ix+','+iz;
 
 const toCreate=[];
 function queueChunk(ix,iz,priority=0){ toCreate.push({ix,iz,priority}); }
-function pumpCreate(budgetMs=7, forward){
-  // sort by distance in forward direction (reduces front gaps)
+function pumpCreate(budgetMs=9){
   toCreate.sort((a,b)=> b.priority - a.priority);
   const start=performance.now();
   while(toCreate.length && (performance.now()-start)<budgetMs){
@@ -206,19 +207,16 @@ function pumpCreate(budgetMs=7, forward){
     const m=makeChunk(ix,iz); scene.add(m); chunks.set(k,m);
   }
 }
-
 function updateChunks(px,pz,forward){
   const cx=Math.floor(px/CHUNK_SIZE);
   const cz=Math.floor(pz/CHUNK_SIZE);
-
   for(let dz=-LOAD_RADIUS; dz<=LOAD_RADIUS; dz++){
     for(let dx=-LOAD_RADIUS; dx<=LOAD_RADIUS; dx++){
       const ix=cx+dx, iz=cz+dz, k=key(ix,iz);
       if(chunks.has(k)) continue;
-      // forward priority (dot with forward vector)
       const center=new THREE.Vector3(ix*CHUNK_SIZE,0,iz*CHUNK_SIZE);
       const rel=center.sub(new THREE.Vector3(px,0,pz));
-      const prio = rel.normalize().dot(forward)*100 - rel.length()/1000;
+      const prio = rel.normalize().dot(forward||new THREE.Vector3(0,0,-1))*100 - rel.length()/1000;
       queueChunk(ix,iz, prio);
     }
   }
@@ -230,115 +228,103 @@ function updateChunks(px,pz,forward){
   }
 }
 
-/* =================== Flight + Landing =================== */
+/* ============== Flight, Landing, Centered Camera ============== */
 const state={
-  speed: 0,
-  heading: 0, pitch:0, roll:0,
+  speed:0, heading:0, pitch:0, roll:0,
   pos:new THREE.Vector3(0,60,0),
   vel:new THREE.Vector3(0,0,-1),
   onGround:false, onWater:false, gearDown:false, floatDown:false
 };
-const tmpV=new THREE.Vector3(), camBoom=new THREE.Vector3();
+const tmpV=new THREE.Vector3();
+
+// Centered chase-cam in ship local frame
+const camLocalOffset = new THREE.Vector3(0, 8, 20);
+const camLookLocal   = new THREE.Vector3(0, 2, 0);
+const worldPos = new THREE.Vector3();
+const worldLook = new THREE.Vector3();
+
+const gearLabelEl = document.getElementById('gearLabel');
 
 function stepShip(dt){
   const turn=joyDx, lift=-joyDy;
 
-  const minS=0, maxS=180;
-  const targetSpd=THREE.MathUtils.lerp(minS,maxS,throttle);
-  state.speed=THREE.MathUtils.damp(state.speed, targetSpd, 2.5, dt);
+  // throttle 0..1 → 0..180 m/s
+  const targetSpd = THREE.MathUtils.lerp(0, 180, throttle);
+  state.speed = THREE.MathUtils.damp(state.speed, targetSpd, 2.5, dt);
 
-  // Landing gear/floats auto-deploy based on altitude and speed
   const groundY = sampleHeight(state.pos.x, state.pos.z);
-  const altitude = state.pos.y - Math.max(0, groundY); // water is y=0
+  const altitude = state.pos.y - Math.max(0, groundY);
   state.onWater = groundY < 0 && state.pos.y <= 1.2;
   state.onGround = groundY >= 0 && (state.pos.y - groundY) <= 1.2;
 
   state.gearDown = (!state.onWater) && (altitude < 12 || state.speed < 25);
-  state.floatDown = state.onWater || groundY<0 && (altitude < 14 || state.speed < 25);
+  state.floatDown = state.onWater || (groundY<0 && (altitude < 14 || state.speed < 25));
 
   ship.userData.gearGroup.visible = state.gearDown;
   ship.userData.floatGroup.visible = state.floatDown;
 
-  // Heading/pitch/roll
   state.heading += turn * dt * THREE.MathUtils.lerp(0.9, 2.0, Math.max(throttle,0.15));
   const pitchTarget = lift*0.45 * (state.onGround||state.onWater ? 0.2 : 1.0);
   state.pitch = THREE.MathUtils.damp(state.pitch, pitchTarget, 6, dt);
   state.roll  = THREE.MathUtils.damp(state.roll, -turn*0.6, 6, dt);
 
-  // Forward dir
   const ch=Math.cos(state.heading), sh=Math.sin(state.heading);
   const cp=Math.cos(state.pitch),  sp=Math.sin(state.pitch);
   state.vel.set(sh*cp, sp, -ch*cp).multiplyScalar(state.speed);
 
-  // Gravity & lift (very simple)
   if(!(state.onGround||state.onWater)){
     const liftFactor = THREE.MathUtils.clamp(cp*state.speed*0.002, 0, 1.2);
-    state.vel.y += (liftFactor - 0.25) * 9.8 * dt; // net up/down
+    state.vel.y += (liftFactor - 0.25) * 9.8 * dt;
   }
-
-  // Integrate
   state.pos.addScaledVector(state.vel, dt);
 
-  // Ground/water contact & friction
   if(state.onGround){
-    const gy = groundY;
-    state.pos.y = Math.max(state.pos.y, gy+1.0);
-    // friction & roll-out
+    state.pos.y = Math.max(state.pos.y, groundY+1.0);
     state.speed = THREE.MathUtils.damp(state.speed, 0, 6, dt);
-    // small suspension bounce
-    state.pos.y = THREE.MathUtils.damp(state.pos.y, gy+1.0, 8, dt);
+    state.pos.y = THREE.MathUtils.damp(state.pos.y, groundY+1.0, 8, dt);
   } else if(state.onWater){
     state.pos.y = Math.max(state.pos.y, 0.9);
-    // bob
     state.pos.y += Math.sin(performance.now()*0.003 + (state.pos.x+state.pos.z)*0.01)*0.03;
-    // more drag
     state.speed = THREE.MathUtils.damp(state.speed, 0, 4, dt);
   } else {
-    // soft floor below sea level
     if(state.pos.y < 2) state.pos.y = THREE.MathUtils.damp(state.pos.y, 2, 3, dt);
   }
 
   // Orient ship
   ship.position.copy(state.pos);
-  const look = tmpV.copy(state.pos).add(state.vel.clone().multiplyScalar(0.12));
-  ship.lookAt(look); ship.rotateZ(state.roll);
+  const lookFwd = tmpV.copy(state.pos).add(state.vel.clone().multiplyScalar(0.12));
+  ship.lookAt(lookFwd); ship.rotateZ(state.roll);
 
-  // Camera boom (higher, less nose-down, softer)
-  const forward = state.vel.clone().normalize();
-  const boomBack = 20, boomUp = 10;
-  camBoom.copy(state.pos).addScaledVector(forward, -boomBack).add(new THREE.Vector3(0, boomUp, 0));
-  camera.position.lerp(camBoom, 0.08);
-  camera.lookAt(state.pos.x, state.pos.y+2.0, state.pos.z);
+  // ---- Centered chase cam tied to ship local frame ----
+  ship.updateMatrixWorld(true);
+  worldPos.copy(camLocalOffset).applyMatrix4(ship.matrixWorld);
+  worldLook.copy(camLookLocal).applyMatrix4(ship.matrixWorld);
+  camera.position.lerp(worldPos, 0.12);
+  camera.lookAt(worldLook);
 
-  // Stream world with forward priority
+  // Stream world; prioritize forward
+  const forward = new THREE.Vector3(0,0,-1).applyQuaternion(ship.quaternion);
   updateChunks(state.pos.x, state.pos.z, forward);
 
-  // HUD
-  gearLabel.textContent = state.onWater ? 'FLOATS' : (state.gearDown ? 'GEAR' : '—');
+  gearLabelEl.textContent = state.onWater ? 'FLOATS' : (state.gearDown ? 'GEAR' : '—');
 }
 
-/* =================== Resize / FPS =================== */
-function onResize(){ renderer.setSize(innerWidth,innerHeight,false); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); }
-addEventListener('resize', onResize);
-
+/* ============== Loop / FPS ============== */
 const fpsEl=document.getElementById('fps'); let fpsAcc=0,fpsCount=0,fpsT=0;
-
-/* =================== Main =================== */
 let last=performance.now()/1000;
 function tick(){
-  const now=performance.now()/1000; let dt=Math.min(now-last,1/30); last=now;
-  pumpCreate(7);
+  const now=performance.now()/1000; const dt=Math.min(now-last,1/30); last=now;
+  pumpCreate(9);
   if(!paused){ stepShip(dt); renderer.render(scene,camera); }
   fpsAcc+=1/dt; fpsCount++; if(now-fpsT>0.5){ fpsEl.textContent=(fpsAcc/fpsCount|0)+' fps'; fpsAcc=0; fpsCount=0; fpsT=now; }
   requestAnimationFrame(tick);
 }
+
+/* ============== Init ============== */
 (function init(){
-  // prime terrain
   updateChunks(0,0,new THREE.Vector3(0,0,-1));
   requestAnimationFrame(tick);
-  // place throttle nub initially
   setTimeout(()=>{ const r=throttleRect(); setThrottleFrom(r.top + (1-throttle)*r.height*0.8 + 20); },0);
-  // prevent scroll on controls
   ['touchmove','gesturestart'].forEach(evt=>addEventListener(evt,e=>{ if(e.target.closest('.stick-wrap,.throttle')) e.preventDefault(); }, {passive:false}));
 })();
 </script>
