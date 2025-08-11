@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Low-Poly Ocean • Boat vs Waves</title>
+<style>
+  html,body{margin:0;height:100%;background:#0a0f16;overflow:hidden;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  #ui{position:fixed;inset:0;pointer-events:none}
+  .hud{position:absolute;left:12px;top:10px;color:#e6f0ff;font-weight:600;font-size:14px;line-height:1.35;white-space:pre}
+  .centerMsg{position:absolute;left:50%;top:12%;transform:translateX(-50%);color:#e6f0ff;font-size:20px;text-align:center;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+  .badge{display:inline-block;background:#111a28;border:1px solid #21314d;border-radius:8px;padding:8px 10px}
+  .controls{position:absolute;right:12px;bottom:12px;gap:8px;display:flex;flex-direction:column;align-items:flex-end}
+  .btnRow{display:flex;gap:8px}
+  .btn{pointer-events:auto;user-select:none;min-width:54px;height:54px;border-radius:12px;border:1px solid #243651;background:#0f1a2a;color:#d7e5ff;
+       display:flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:.02em;touch-action:none}
+  .btn:active{transform:scale(.97)}
+  .stick{width:120px;height:120px;border-radius:16px;border:1px solid #243651;background:#0f1a2a;position:relative;touch-action:none}
+  .nub{position:absolute;width:46px;height:46px;border-radius:50%;left:37px;top:37px;background:#1b2a44;border:1px solid #2a4068;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+  .foot{position:absolute;left:12px;bottom:12px;color:#8aa6d9;font-size:12px;opacity:.8}
+  .tiny{font-size:11px;color:#9db4e6}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="ui" aria-hidden="true">
+  <div class="hud badge" id="hudText">Speed: 0 kn
+Heading: 0°
+Swell: calm
+Time: 0.0s
+High score: 0.0s</div>
+
+  <div class="centerMsg" id="centerMsg"></div>
+
+  <!-- Mobile-friendly controls (desktop: use WASD / arrows / Space / Shift / R) -->
+  <div class="controls">
+    <div class="btnRow">
+      <div class="btn" id="throttleDown">–</div>
+      <div class="btn" id="throttleUp">+</div>
+    </div>
+    <div class="btnRow">
+      <div class="btn" id="brake">Brake</div>
+      <div class="btn" id="reset">Reset</div>
+    </div>
+    <div class="stick" id="stick"><div class="nub" id="nub"></div></div>
+  </div>
+
+  <div class="foot">Boat: steer into big waves to avoid capsizing. <span class="tiny">W/S throttle • A/D steer • Space brake • Shift boost • R reset • Drag stick on mobile</span></div>
+</div>
+
+<script type="module">
+import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
+
+////////////////////////////////////////////////////////////////////////////////
+// CONFIG
+////////////////////////////////////////////////////////////////////////////////
+const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+const WORLD_SIZE = 1000;          // Ocean tile size (repeats visually via moving waves)
+const OCEAN_RES = 180;            // Segments per side (keep modest for mobile)
+const SKY_COLOR = 0x0a0f16;
+const SUN_COLOR = 0xf7f2d8;
+const AMBIENT = 0x223044;
+
+const MAX_BOAT_SPEED = 55;        // knots (visual)
+const ACCEL = 18;                 // knots/sec
+const BRAKE_DECEL = 40;           // knots/sec
+const TURN_RATE = 70;             // deg/sec at full rudder
+const DRAG = 0.995;               // forward drag
+const LATERAL_DRAG = 0.86;        // how much side-slip is damped
+const BOOST = 1.35;               // hold Shift to burst
+
+const FLOAT_HEIGHT = 1.2;         // boat sits ~ above wave
+const ROLL_STABILITY = 0.75;      // baseline roll counterforce
+const PITCH_STABILITY = 0.65;     // baseline pitch counterforce
+const CAPSIZE_ROLL_DEG = 78;      // roll beyond this → you flip
+const RECOVER_TIME = 1500;        // ms to show "capsized" then reset
+
+// Dynamic swell: periodically morph amplitudes & directions
+const SWELL_MIN = 0.2;
+const SWELL_MAX = 1.0;
+const BIG_WAVE_THRESHOLD = 0.72;  // UI "big" cue
+
+////////////////////////////////////////////////////////////////////////////////
+// SCENE SETUP
+////////////////////////////////////////////////////////////////////////////////
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:"high-performance", alpha:false });
+renderer.setClearColor(SKY_COLOR, 1);
+renderer.setPixelRatio(DPR);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(SKY_COLOR, 180, 650);
+
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
+camera.position.set(0, 7, 14);
+
+const ambient = new THREE.HemisphereLight(AMBIENT, 0x09111a, 0.9);
+scene.add(ambient);
+
+const sun = new THREE.DirectionalLight(SUN_COLOR, 1.1);
+sun.position.set(-30, 60, -10);
+sun.castShadow = false;
+scene.add(sun);
+
+////////////////////////////////////////////////////////////////////////////////
+// OCEAN SHADER (Low-poly Gerstner)
+////////////////////////////////////////////////////////////////////////////////
+const waveParams = {
+  // 4-component swell; will be morphed over time
+  A: new Float32Array([0.35, 0.15, 0.10, 0.07]),   // amplitudes
+  L: new Float32Array([22.0, 12.0, 9.0, 6.0]),     // wavelengths
+  S: new Float32Array([1.0, 1.0, 1.0, 1.0]),       // steepness (0..1)
+  D: new Float32Array([ 1, 0,  -0.7, 0.35,  0.2, 1,  -0.55,-0.2 ]) // dirs (x,z) *4
+};
+
+const oceanUniforms = {
+  uTime: { value: 0 },
+  uA:    { value: waveParams.A },
+  uL:    { value: waveParams.L },
+  uS:    { value: waveParams.S },
+  uD:    { value: waveParams.D },
+  uColorDeep: { value: new THREE.Color(0x0e304f) },
+  uColorShal: { value: new THREE.Color(0x2b86b9) },
+  uLightDir:  { value: new THREE.Vector3().copy(sun.position).normalize() },
+  uFogColor:  { value: new THREE.Color(scene.fog.color) },
+  uFogNear:   { value: scene.fog.near },
+  uFogFar:    { value: scene.fog.far }
+};
+
+// Vertex/fragment (flat-shaded look by snapping normals)
+const oceanVertex = `
+  precision highp float;
+  uniform float uTime;
+  uniform float uA[4];
+  uniform float uL[4];
+  uniform float uS[4];
+  uniform vec2  uD[4];
+
+  varying vec3 vPos;
+  varying vec3 vNorm;
+
+  // Gerstner wave
+  vec3 gerstner(vec2 xz, float t){
+    vec3 p = vec3(xz.x, 0.0, xz.y);
+    for(int i=0;i<4;i++){
+      float k = 6.28318530718 / uL[i];
+      float c = sqrt(9.8/k);
+      vec2  dir = normalize(uD[i]);
+      float theta = dot(dir, xz) * k - c * t;
+      float a = uA[i];
+      float s = uS[i];
+      p.x += dir.x * (s*a) * cos(theta);
+      p.z += dir.y * (s*a) * cos(theta);
+      p.y += a * sin(theta);
+    }
+    return p;
+  }
+
+  // Numerical normal from partials (low-cost)
+  vec3 normalFromGerstner(vec2 xz, float t){
+    float eps = 0.1;
+    vec3 px = gerstner(xz + vec2(eps,0.0), t);
+    vec3 mx = gerstner(xz - vec2(eps,0.0), t);
+    vec3 pz = gerstner(xz + vec2(0.0,eps), t);
+    vec3 mz = gerstner(xz - vec2(0.0,eps), t);
+    vec3 dx = px - mx;
+    vec3 dz = pz - mz;
+    vec3 n = normalize(cross(dz, dx)); // swapped for a nicer facing normal
+    // Flat-ish look by quantizing normal
+    n = normalize(floor(n * 12.0) / 12.0);
+    return n;
+  }
+
+  void main(){
+    vec2 xz = position.xz;
+    vec3 displaced = gerstner(xz, uTime);
+    vec4 wp = modelMatrix * vec4(displaced, 1.0);
+    vPos = wp.xyz;
+    // normal in world space
+    vec3 n = normalFromGerstner(xz, uTime);
+    vNorm = normalize(mat3(modelMatrix) * n);
+    gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 1.0);
+  }
+`;
+
+const oceanFragment = `
+  precision highp float;
+  varying vec3 vPos;
+  varying vec3 vNorm;
+  uniform vec3 uLightDir;
+  uniform vec3 uColorDeep;
+  uniform vec3 uColorShal;
+  uniform vec3 uFogColor;
+  uniform float uFogNear;
+  uniform float uFogFar;
+
+  void main(){
+    float NdotL = max(dot(normalize(vNorm), normalize(uLightDir)), 0.0);
+    float shade = 0.25 + 0.75 * NdotL;
+    float h = vPos.y;
+    vec3 base = mix(uColorDeep, uColorShal, smoothstep(-1.5, 1.5, h));
+    vec3 col = base * shade;
+
+    // simple horizon fade
+    float dist = length(vPos.xz);
+    float fog = smoothstep(uFogNear, uFogFar, dist);
+    col = mix(col, uFogColor, fog);
+
+    // low-poly look: slight posterize
+    col = floor(col * 14.0) / 14.0;
+
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+const oceanMat = new THREE.ShaderMaterial({
+  uniforms: oceanUniforms,
+  vertexShader: oceanVertex,
+  fragmentShader: oceanFragment,
+  fog: true
+});
+const oceanGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, OCEAN_RES, OCEAN_RES);
+oceanGeo.rotateX(-Math.PI/2);
+const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+ocean.receiveShadow = false;
+scene.add(ocean);
+
+////////////////////////////////////////////////////////////////////////////////
+// BOAT (low-poly) + simple buoyancy/attitude from wave gradients
+////////////////////////////////////////////////////////////////////////////////
+function makeBoat(){
+  const g = new THREE.Group();
+
+  // Hull: wedgey prism
+  const hull = new THREE.Mesh(
+    new THREE.ConeGeometry(1.8, 5.0, 6, 1, false),
+    new THREE.MeshStandardMaterial({ color:0xc84f2a, roughness:0.7, metalness:0.05, flatShading:true })
+  );
+  hull.rotation.z = Math.PI;   // tip forward
+  hull.rotation.y = Math.PI/6;
+  hull.castShadow = false;
+  g.add(hull);
+
+  // Cabin block
+  const cab = new THREE.Mesh(
+    new THREE.BoxGeometry(1.4, 0.9, 1.2),
+    new THREE.MeshStandardMaterial({ color:0xfff1cf, roughness:0.9, metalness:0.02, flatShading:true })
+  );
+  cab.position.set(0, 0.6, -0.6);
+  g.add(cab);
+
+  // Antenna
+  const ant = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03,0.03,0.8,6),
+    new THREE.MeshStandardMaterial({ color:0xd0d7e4, roughness:0.4, metalness:0.5, flatShading:true })
+  );
+  ant.position.set(-0.2,1.0,-0.9);
+  g.add(ant);
+
+  // Flag
+  const flag = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5,0.3,1,1),
+    new THREE.MeshStandardMaterial({ color:0x2b86b9, side:THREE.DoubleSide, flatShading:true })
+  );
+  flag.position.set(-0.2,1.2,-0.9);
+  flag.rotation.y = Math.PI/2;
+  g.add(flag);
+
+  g.position.set(0, 2, 0);
+  return g;
+}
+const boat = makeBoat();
+scene.add(boat);
+
+// Physics-ish state
+let speed = 0;            // knots (visual)
+let heading = 0;          // degrees (0 = +Z)
+let roll = 0;             // side tilt (radians)
+let pitch = 0;            // fore-aft tilt (radians)
+let flipTimer = 0;
+let alive = true;
+let elapsed = 0;
+let best = 0;
+let swellLevel = 0.4;     // 0..1
+let shiftBoost = 1.0;
+
+////////////////////////////////////////////////////////////////////////////////
+// INPUT
+////////////////////////////////////////////////////////////////////////////////
+const keys = new Set();
+window.addEventListener('keydown', (e)=>{
+  keys.add(e.code);
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','ShiftLeft','KeyW','KeyA','KeyS','KeyD','KeyR'].includes(e.code)) e.preventDefault();
+});
+window.addEventListener('keyup', (e)=>{ keys.delete(e.code); });
+
+const stick = document.getElementById('stick');
+const nub   = document.getElementById('nub');
+let stickActive = false, stickDX = 0, stickDY = 0;
+
+function stickPosFromEvt(e){
+  const rect = stick.getBoundingClientRect();
+  let cx = rect.left + rect.width/2;
+  let cy = rect.top + rect.height/2;
+  let x = 0, y = 0;
+  if('touches' in e){
+    const t = e.touches[0];
+    x = t.clientX - cx; y = t.clientY - cy;
+  } else {
+    x = e.clientX - cx; y = e.clientY - cy;
+  }
+  const max = rect.width/2 - 12;
+  const mag = Math.hypot(x,y);
+  if(mag>max){ x*=max/mag; y*=max/mag; }
+  return {x,y,max};
+}
+function setNub(x,y){ nub.style.transform = `translate(${x}px,${y}px)`; }
+
+function startStick(e){ stickActive = true; const p = stickPosFromEvt(e); stickDX=p.x/p.max; stickDY=p.y/p.max; setNub(p.x-23,p.y-23); }
+function moveStick(e){ if(!stickActive) return; const p = stickPosFromEvt(e); stickDX=p.x/p.max; stickDY=p.y/p.max; setNub(p.x-23,p.y-23); }
+function endStick(){ stickActive=false; stickDX=0; stickDY=0; setNub(0,0); }
+
+['pointerdown','touchstart'].forEach(ev=>stick.addEventListener(ev, startStick, {passive:false}));
+['pointermove','touchmove'].forEach(ev=>window.addEventListener(ev, moveStick, {passive:false}));
+['pointerup','pointercancel','touchend','touchcancel'].forEach(ev=>window.addEventListener(ev, endStick, {passive:true}));
+
+// Buttons
+const btnUp = document.getElementById('throttleUp');
+const btnDn = document.getElementById('throttleDown');
+const btnBr = document.getElementById('brake');
+const btnRe = document.getElementById('reset');
+
+btnUp.addEventListener('pointerdown', ()=>{ speed = Math.min(MAX_BOAT_SPEED, speed + 8); });
+btnDn.addEventListener('pointerdown', ()=>{ speed = Math.max(0, speed - 8); });
+btnBr.addEventListener('pointerdown', ()=>{ speed = Math.max(0, speed - 20); });
+btnRe.addEventListener('pointerdown', resetRun);
+
+////////////////////////////////////////////////////////////////////////////////
+// WAVE SAMPLING (JS) — must mirror shader logic
+////////////////////////////////////////////////////////////////////////////////
+function sampleWaveHeightAndNormal(x, z, t){
+  const A = oceanUniforms.uA.value, L = oceanUniforms.uL.value, S = oceanUniforms.uS.value, D = oceanUniforms.uD.value;
+  let px = x, py = 0, pz = z;
+  for(let i=0;i<4;i++){
+    const k = Math.PI*2 / L[i];
+    const c = Math.sqrt(9.8 / k);
+    const dirx = D[i*2+0], dirz = D[i*2+1];
+    const len = Math.hypot(dirx, dirz) || 1;
+    const dx = dirx/len, dz = dirz/len;
+    const theta = (dx*x + dz*z) * k - c*t;
+    const a = A[i], s = S[i];
+    px += dx*(s*a)*Math.cos(theta);
+    pz += dz*(s*a)*Math.cos(theta);
+    py += a*Math.sin(theta);
+  }
+  // Approx normal
+  const eps = 0.15;
+  const hX1 = sampleHeightOnly(x+eps,z,t), hX2 = sampleHeightOnly(x-eps,z,t);
+  const hZ1 = sampleHeightOnly(x,z+eps,t), hZ2 = sampleHeightOnly(x,z-eps,t);
+  const dx = hX1 - hX2;
+  const dz = hZ1 - hZ2;
+  const n = new THREE.Vector3(-dx/(2*eps), 1, -dz/(2*eps)).normalize();
+  return { y: py, normal: n };
+}
+function sampleHeightOnly(x,z,t){
+  const A = oceanUniforms.uA.value, L = oceanUniforms.uL.value, S = oceanUniforms.uS.value, D = oceanUniforms.uD.value;
+  let py = 0;
+  for(let i=0;i<4;i++){
+    const k = Math.PI*2 / L[i];
+    const c = Math.sqrt(9.8 / k);
+    const dirx = D[i*2+0], dirz = D[i*2+1];
+    const len = Math.hypot(dirx, dirz) || 1;
+    const dx = dirx/len, dz = dirz/len;
+    const theta = (dx*x + dz*z) * k - c*t;
+    const a = A[i];
+    py += a*Math.sin(theta);
+  }
+  return py;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// SWELL MORPHING (big/small waves over time)
+////////////////////////////////////////////////////////////////////////////////
+let swellTarget = 0.6;
+let swellTimer = 0;
+function updateSwell(dt){
+  swellTimer -= dt;
+  if(swellTimer <= 0){
+    swellTimer = 6 + Math.random()*7;
+    swellTarget = SWELL_MIN + Math.random()*(SWELL_MAX - SWELL_MIN);
+  }
+  // ease towards target
+  swellLevel += (swellTarget - swellLevel) * Math.min(1, dt*0.5);
+
+  // map swellLevel to amplitudes/steepness
+  const baseA = [0.18, 0.10, 0.07, 0.05];
+  const extra = swellLevel*0.5;
+  for(let i=0;i<4;i++){
+    waveParams.A[i] = baseA[i]*(1.0 + extra*(i===0?2.2:(i===1?1.6:1.2)));
+    waveParams.S[i] = 0.7 + 0.25*swellLevel;
+  }
+  // rotate primary direction slowly
+  const t = oceanUniforms.uTime.value*0.05;
+  const dirMain = new THREE.Vector2(Math.cos(t), Math.sin(t));
+  oceanUniforms.uD.value[0] = dirMain.x;
+  oceanUniforms.uD.value[1] = dirMain.y;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+let then = performance.now();
+function resetRun(){
+  alive = true;
+  flipTimer = 0;
+  elapsed = 0;
+  speed = 12;
+  heading = 0;
+  roll = 0; pitch = 0;
+  boat.position.set(0, 2, 0);
+  showCenter('');
+}
+function showCenter(msg){ document.getElementById('centerMsg').textContent = msg; }
+
+const hud = document.getElementById('hudText');
+
+function updateHUD(){
+  const swellText = swellLevel > BIG_WAVE_THRESHOLD ? 'BIG' : (swellLevel>0.45?'moderate':'calm');
+  hud.textContent =
+`Speed: ${speed.toFixed(0)} kn
+Heading: ${((heading%360)+360)%360|0}°
+Swell: ${swellText}
+Time: ${elapsed.toFixed(1)}s
+High score: ${best.toFixed(1)}s`;
+}
+
+// Camera follow (soft)
+const camOffset = new THREE.Vector3(0, 6.2, 12.5);
+const camLook = new THREE.Vector3();
+
+function loop(nowMS){
+  const now = nowMS;
+  const dt = Math.min(0.033, (now - then)/1000);
+  then = now;
+
+  // time
+  oceanUniforms.uTime.value += dt * (1.0 + 0.6*swellLevel);
+  updateSwell(dt);
+
+  // INPUT
+  let steer = 0;
+  let throttle = 0;
+  if(keys.has('KeyA')||keys.has('ArrowLeft')) steer -= 1;
+  if(keys.has('KeyD')||keys.has('ArrowRight')) steer += 1;
+  if(keys.has('KeyW')||keys.has('ArrowUp')) throttle += 1;
+  if(keys.has('KeyS')||keys.has('ArrowDown')) throttle -= 1;
+  if(keys.has('Space')) speed = Math.max(0, speed - BRAKE_DECEL*dt);
+  shiftBoost = keys.has('ShiftLeft') ? BOOST : 1.0;
+
+  // stick adds to input
+  steer += stickDX;
+  throttle += -stickDY;
+
+  // THROTTLE
+  if(throttle>0) speed = Math.min(MAX_BOAT_SPEED, speed + ACCEL*dt*throttle*shiftBoost);
+  if(throttle<0) speed = Math.max(0, speed + ACCEL*dt*throttle);
+  // passive drag
+  speed *= (DRAG - 0.0007*swellLevel);
+
+  if(alive){
+    elapsed += dt;
+
+    // turn rate depends on speed and swell (harder to turn in big seas)
+    const turn = TURN_RATE * (0.4 + 0.6*Math.min(1, speed/MAX_BOAT_SPEED)) * (0.9 - 0.25*swellLevel);
+    heading += steer * turn * dt;
+
+    // forward velocity vector (Z forward at 0°)
+    const rad = THREE.MathUtils.degToRad(heading);
+    let vx = Math.sin(rad) * speed;
+    let vz = Math.cos(rad) * speed;
+
+    // side-slip damping
+    const headVec = new THREE.Vector2(Math.sin(rad), Math.cos(rad));
+    const velVec  = new THREE.Vector2(vx, vz);
+    const forwardMag = velVec.dot(headVec);
+    const lateralMag = velVec.clone().sub(headVec.clone().multiplyScalar(forwardMag));
+    velVec.sub(lateralMag.multiplyScalar(1 - LATERAL_DRAG)); // reduce side slip
+    vx = velVec.x; vz = velVec.y;
+
+    // move boat (x,z)
+    boat.position.x += vx * dt * 0.5; // scaling visual speed to world
+    boat.position.z += vz * dt * 0.5;
+
+    // sample wave at hull points (bow/stern/port/starboard) for attitude
+    const t = oceanUniforms.uTime.value;
+    const fwd = new THREE.Vector2(Math.sin(rad), Math.cos(rad));
+    const right = new THREE.Vector2(fwd.y, -fwd.x);
+
+    const bow = sampleWaveHeightAndNormal(boat.position.x + fwd.x*1.6, boat.position.z + fwd.y*1.6, t);
+    const stern = sampleWaveHeightAndNormal(boat.position.x - fwd.x*1.2, boat.position.z - fwd.y*1.2, t);
+    const port = sampleWaveHeightAndNormal(boat.position.x - right.x*0.9, boat.position.z - right.y*0.9, t);
+    const starb = sampleWaveHeightAndNormal(boat.position.x + right.x*0.9, boat.position.z + right.y*0.9, t);
+
+    const waterY = (bow.y + stern.y + port.y + starb.y)/4;
+    boat.position.y = waterY + FLOAT_HEIGHT;
+
+    // desired pitch/roll from height differences
+    const targetPitch = Math.atan2(bow.y - stern.y, 2.8) * (0.9 + 0.4*swellLevel);
+    const targetRoll  = Math.atan2(starb.y - port.y, 1.8) * (1.0 + 0.6*swellLevel);
+
+    // stabilize against abrupt changes (heavier in big waves)
+    const pitchRate = 4.0 - 1.3*swellLevel;
+    const rollRate  = 4.5 - 1.0*swellLevel;
+
+    pitch += (targetPitch - pitch) * Math.min(1, dt*pitchRate) - pitch*dt*(1-PITCH_STABILITY);
+    roll  += (targetRoll  - roll ) * Math.min(1, dt*rollRate ) - roll *dt*(1-ROLL_STABILITY);
+
+    // Capsize check: if taking a big wave broadside AND roll spikes
+    const waveDir = new THREE.Vector2(oceanUniforms.uD.value[0], oceanUniforms.uD.value[1]).normalize();
+    const sideOn  = Math.abs(waveDir.angle() - fwd.angle());
+    const sideFactor = Math.sin(sideOn); // ~1 when 90°
+    const rollDeg = THREE.MathUtils.radToDeg(Math.abs(roll));
+    const danger = rollDeg + (swellLevel*25*sideFactor);
+
+    if(danger > CAPSIZE_ROLL_DEG){
+      alive = false;
+      flipTimer = now + RECOVER_TIME;
+      best = Math.max(best, elapsed);
+      showCenter('💥 Capsized!\nTap/Click RESET or press R');
+    }
+
+    // boat yaw/pitch/roll → quaternion
+    boat.rotation.set(pitch, rad, roll);
+
+    // Camera follow
+    const camTarget = new THREE.Vector3(0,0,0);
+    camTarget.copy(boat.position);
+    const offs = camOffset.clone().applyAxisAngle(new THREE.Vector3(0,1,0), rad);
+    const desiredCam = boat.position.clone().add(offs);
+    camera.position.lerp(desiredCam, 1 - Math.pow(0.0001, dt)); // smooth
+    camLook.lerp(boat.position.clone().add(new THREE.Vector3(0,1.0,0)), 1 - Math.pow(0.0001, dt));
+    camera.lookAt(camLook);
+  } else {
+    // After capsize, let boat tumble a bit visually
+    boat.rotation.z += 0.6*dt;
+    if(now > flipTimer) {
+      // wait for user reset; keep drifting
+      if(keys.has('KeyR')) resetRun();
+    }
+  }
+
+  // Keyboard quick reset
+  if(keys.has('KeyR') && alive) resetRun();
+
+  updateHUD();
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+resetRun();
+requestAnimationFrame(loop);
+
+////////////////////////////////////////////////////////////////////////////////
+// RESIZE
+////////////////////////////////////////////////////////////////////////////////
+function onResize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', onResize, {passive:true});
+onResize();
+
+// Helper: UI buttons keyboard parity
+window.addEventListener('keydown', (e)=>{
+  if(e.code==='KeyR') { resetRun(); }
+});
+</script>
+</body>
+</html>
