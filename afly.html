@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>SkySea — Free-Look + Waves (Fixed Camera)</title>
+<title>SkySea — Stable Chase Cam + Free-Look + Waves</title>
 <style>
   html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block}
+  #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block;touch-action:none} /* prevent iOS nav/scroll on canvas */
 
   #ui{position:fixed;inset:0;pointer-events:none}
   .stick-wrap{position:absolute;left:2.5vw;bottom:4vh;width:26vw;height:26vw;max-width:210px;max-height:210px;border-radius:50%;background:radial-gradient(rgba(255,255,255,.08),rgba(255,255,255,.03) 60%,transparent 61%);backdrop-filter:blur(2px);pointer-events:auto;touch-action:none}
@@ -23,7 +23,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <div class="hint">Tap/Swipe screen: free-look • Double-tap: reset • 3-finger: pause</div>
+  <div class="hint">Swipe/tap canvas: free-look • Double-tap: reset • 3-finger: pause</div>
   <div class="perf" id="fps">—</div>
   <div class="stick-wrap" id="joy"><div class="stick" id="stick"></div></div>
   <div class="throttle" id="throttle"><div class="label">THROTTLE</div><div class="rail"></div><div class="nub" id="nub"></div></div>
@@ -57,7 +57,7 @@ if (window.visualViewport) visualViewport.addEventListener('resize', sizeRendere
 scene.add(new THREE.HemisphereLight(0x99c6ff, 0x223344, 0.85));
 const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(200,400,100); scene.add(dir);
 
-/* ---------- Ship with gear/floats ---------- */
+/* ---------- Ship ---------- */
 function buildShip(){
   const g = new THREE.Group();
   const matA = new THREE.MeshStandardMaterial({color:0x7bd3ff, metalness:0.2, roughness:0.5, flatShading:true});
@@ -70,26 +70,25 @@ function buildShip(){
   const fin  = new THREE.Mesh(new THREE.ConeGeometry(1.2,3.2,4), matB); fin.position.set(0,0,5.8); fin.rotation.x=Math.PI; g.add(fin);
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.6,16,16), new THREE.MeshBasicMaterial({color:0x88ddff})); glow.position.set(0,0,-4.8); g.add(glow);
 
-  // Gear (longer, visible)
+  // Visible landing gear + floats
   const gearGroup = new THREE.Group();
   const legG = new THREE.CylinderGeometry(0.12,0.12,3.0,8);
   function mkLeg(x){
+    const matC = new THREE.MeshStandardMaterial({color:0xffffff, metalness:0.1, roughness:0.2, flatShading:true});
     const leg = new THREE.Mesh(legG, matC);
     leg.position.set(x,-2.4,0.6);
     const foot = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.22,1.4), matC);
     foot.position.set(0,-1.6,0.15);
     const tip = new THREE.Mesh(new THREE.SphereGeometry(0.1,10,10), new THREE.MeshBasicMaterial({color:0xffee66}));
     tip.position.set(0,-1.6,0.6);
-    foot.add(tip);
-    leg.add(foot);
-    return leg;
+    foot.add(tip); leg.add(foot); return leg;
   }
   gearGroup.add(mkLeg(-2.2), mkLeg(2.2), mkLeg(0)); gearGroup.visible=false; g.add(gearGroup);
 
-  // Floats
   const floatGroup = new THREE.Group();
   const pont = new THREE.CapsuleGeometry(0.6,3.2,4,8);
-  const left = new THREE.Mesh(pont, matC); left.rotation.z=Math.PI/2; left.position.set(-5.2,-1.0,0.2);
+  const left = new THREE.Mesh(pont, new THREE.MeshStandardMaterial({color:0xffffff, metalness:0.1, roughness:0.2, flatShading:true}));
+  left.rotation.z=Math.PI/2; left.position.set(-5.2,-1.0,0.2);
   const right = left.clone(); right.position.x*=-1;
   floatGroup.add(left,right); floatGroup.visible=false; g.add(floatGroup);
 
@@ -109,7 +108,7 @@ let joyActive=false, joyDx=0, joyDy=0;
 let throttle=0.45; // 0..1
 
 const joyRect = ()=> joyWrap.getBoundingClientRect();
-joyWrap.addEventListener('pointerdown', ()=>{ joyActive=true; stick.style.transition='none'; });
+joyWrap.addEventListener('pointerdown', e=>{ joyActive=true; stick.style.transition='none'; e.preventDefault(); });
 addEventListener('pointermove', e=>{
   if(!joyActive) return;
   const r=joyRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
@@ -117,6 +116,7 @@ addEventListener('pointermove', e=>{
   const d=Math.min(Math.hypot(dx,dy),max), a=Math.atan2(dy,dx);
   joyDx=Math.cos(a)*d/max; joyDy=Math.sin(a)*d/max;
   stick.style.transform=`translate(${joyDx*max}px,${joyDy*max}px)`;
+  e.preventDefault();
 },{passive:false});
 addEventListener('pointerup', ()=>{ joyActive=false; joyDx=joyDy=0; stick.style.transition='transform 120ms ease-out'; stick.style.transform='translate(0,0)'; });
 
@@ -129,14 +129,14 @@ function setThrottleFrom(y){
   const track=r.height*0.8, yPos=r.top+(1-throttle)*track+(r.height-track)/2-20;
   nub.style.top=(yPos-r.top)+'px';
 }
-throttleEl.addEventListener('pointerdown', e=>{ throttleEl.setPointerCapture(e.pointerId); setThrottleFrom(e.clientY); });
-throttleEl.addEventListener('pointermove', e=>{ if(e.pressure===0) return; setThrottleFrom(e.clientY); });
+throttleEl.addEventListener('pointerdown', e=>{ throttleEl.setPointerCapture(e.pointerId); setThrottleFrom(e.clientY); e.preventDefault(); });
+throttleEl.addEventListener('pointermove', e=>{ if(e.pressure===0) return; setThrottleFrom(e.clientY); e.preventDefault(); }, {passive:false});
 
 /* Pause: 3-finger tap */
 let paused=false, touchCount=0, touchTimer=0;
 addEventListener('touchstart', e=>{ touchCount=e.touches.length; clearTimeout(touchTimer); touchTimer=setTimeout(()=>{ if(touchCount>=3) paused=!paused; },120); }, {passive:true});
 
-/* ---------- Terrain (chunked) ---------- */
+/* ---------- Terrain ---------- */
 const seed=12345, noise=new ImprovedNoise();
 function n2(x,y,scale=1){ return noise.noise(x/scale, y/scale, seed)*0.5+0.5; }
 
@@ -176,7 +176,6 @@ function makeChunk(ix,iz){
   const pos=geom.attributes.position.array;
   const color=new Float32Array((RES+1)*(RES+1)*3);
   const worldX0=ix*CHUNK_SIZE, worldZ0=iz*CHUNK_SIZE;
-  const col=new THREE.Color();
 
   for(let z=0; z<=RES; z++){
     for(let x=0; x<=RES; x++){
@@ -237,60 +236,49 @@ function updateChunks(px,pz,forward){
 /* ---------- Ocean (animated waves) ---------- */
 let ocean, uTime;
 (function buildOcean(){
-  const size = 3000, segs = 96;
-  const geom = new THREE.PlaneGeometry(size, size, segs, segs);
+  const size=3000, segs=96;
+  const geom=new THREE.PlaneGeometry(size,size,segs,segs);
   geom.rotateX(-Math.PI/2);
 
-  const uniforms = {
-    uTime: (uTime = {value: 0}),
-    uColorDeep: {value: new THREE.Color(0x1a5c78)},
-    uColorShallow: {value: new THREE.Color(0x4bb3d3)},
-    uFogColor: {value: scene.fog.color},
-    uFogDensity: {value: scene.fog.density},
-  };
+  const uniforms={ uTime:(uTime={value:0}),
+    uColorDeep:{value:new THREE.Color(0x1a5c78)},
+    uColorShallow:{value:new THREE.Color(0x4bb3d3)},
+    uFogColor:{value:scene.fog.color},
+    uFogDensity:{value:scene.fog.density} };
 
-  const vert = `
+  const vert=`
     uniform float uTime;
     varying vec3 vWorldPos;
     varying vec3 vNormalW;
     void main(){
       vec3 pos = position;
       float t = uTime*0.6;
-      float w1 = sin(pos.x*0.02 + t)*0.6;
-      float w2 = sin(pos.z*0.018 - t*1.2)*0.45;
-      float w3 = sin((pos.x*0.012 + pos.z*0.014) + t*0.7)*0.35;
-      pos.y += (w1+w2+w3);
-      vec4 worldPos = modelMatrix * vec4(pos,1.0);
-      vWorldPos = worldPos.xyz;
-      vec3 dx = dFdx(vWorldPos);
-      vec3 dz = dFdy(vWorldPos);
-      vNormalW = normalize(cross(dz, dx));
-      gl_Position = projectionMatrix * viewMatrix * worldPos;
+      pos.y += sin(pos.x*0.02 + t)*0.6
+             + sin(pos.z*0.018 - t*1.2)*0.45
+             + sin((pos.x*0.012 + pos.z*0.014) + t*0.7)*0.35;
+      vec4 wp = modelMatrix * vec4(pos,1.0);
+      vWorldPos = wp.xyz;
+      vec3 dx = dFdx(vWorldPos), dz = dFdy(vWorldPos);
+      vNormalW = normalize(cross(dz,dx));
+      gl_Position = projectionMatrix * viewMatrix * wp;
     }`;
-  const frag = `
-    uniform vec3 uColorDeep;
-    uniform vec3 uColorShallow;
-    uniform vec3 uFogColor;
+  const frag=`
+    uniform vec3 uColorDeep, uColorShallow, uFogColor;
     uniform float uFogDensity;
-    varying vec3 vWorldPos;
-    varying vec3 vNormalW;
+    varying vec3 vWorldPos, vNormalW;
     void main(){
       float depth = clamp(exp(-abs(vWorldPos.y)*0.15),0.0,1.0);
-      vec3 base = mix(uColorDeep, uColorShallow, depth);
+      vec3 base = mix(uColorDeep,uColorShallow,depth);
       vec3 N = normalize(vNormalW);
       vec3 V = normalize(cameraPosition - vWorldPos);
-      float fres = pow(1.0 - max(dot(N,V), 0.0), 3.0);
+      float fres = pow(1.0 - max(dot(N,V),0.0),3.0);
       vec3 col = base + fres*0.25;
       float dist = length(cameraPosition - vWorldPos);
       float fog = 1.0 - exp(-uFogDensity*uFogDensity*dist*dist);
-      col = mix(col, uFogColor, fog);
-      gl_FragColor = vec4(col, 1.0);
+      gl_FragColor = vec4(mix(col,uFogColor,fog),1.0);
     }`;
-  const mat = new THREE.ShaderMaterial({uniforms, vertexShader:vert, fragmentShader:frag, fog:true});
-  ocean = new THREE.Mesh(geom, mat);
-  ocean.position.y = 0;
-  ocean.frustumCulled = false;
-  scene.add(ocean);
+  const mat=new THREE.ShaderMaterial({uniforms,vertexShader:vert,fragmentShader:frag,fog:true});
+  ocean=new THREE.Mesh(geom,mat); ocean.position.y=0; ocean.frustumCulled=false; scene.add(ocean);
 })();
 function updateOceanFollow(pos){
   const tile=400;
@@ -298,50 +286,81 @@ function updateOceanFollow(pos){
   ocean.position.z = Math.round(pos.z/tile)*tile;
 }
 
-/* ---------- Flight, Landing, Free-Look Camera ---------- */
+/* ---------- Flight + Landing ---------- */
 const state={
   speed:0, heading:0, pitch:0, roll:0,
   pos:new THREE.Vector3(0,60,0),
   vel:new THREE.Vector3(0,0,-1),
   onGround:false, onWater:false, gearDown:false, floatDown:false
 };
-const tmpV = new THREE.Vector3();
+const tmpV=new THREE.Vector3();
 
-// Ship faces local −Z. “Behind” the ship = +Z offset.
-const camBaseLocal = new THREE.Vector3(0, 8, 20);   // behind & above
-const camLookLocal = new THREE.Vector3(0, 2, -6);   // look ahead
+/* ---------- Stable chase camera (heading-only) + free-look ---------- */
+const camBaseBack = 20;  // meters behind
+const camBaseUp   = 8;   // meters above
+const camLookAhead= 6;   // look-ahead distance
 
 // Free-look deltas (radians)
-let camYaw = 0, camPitch = 0;
-let isCamDrag = false, camLastX = 0, camLastY = 0;
-let camIdleTimer = 0, lastTapTime = 0;
-const YAW_SENS=0.006, PIT_SENS=0.005, PIT_MIN=-0.9, PIT_MAX=0.6;
+let camYaw=0, camPitch=0, isCamDrag=false, camLastX=0, camLastY=0, camIdleTimer=0, lastTapTime=0;
+const YAW_SENS=0.006, PIT_SENS=0.005, PIT_MIN=-0.6, PIT_MAX=0.6;
 
-function overUI(e){ return e.target.closest('.stick-wrap,.throttle'); }
-addEventListener('pointerdown', e=>{
-  if(overUI(e)) return;
+canvas.addEventListener('pointerdown', e=>{
+  // ignore if dragging controls
+  if(e.target.closest('.stick-wrap,.throttle')) return;
   const now = performance.now();
-  if(now - lastTapTime < 280){ camYaw=0; camPitch=0; } // double-tap reset
-  lastTapTime = now;
-  isCamDrag = true; camLastX=e.clientX; camLastY=e.clientY;
-});
-addEventListener('pointermove', e=>{
+  if(now-lastTapTime < 280){ camYaw=0; camPitch=0; } // double-tap reset
+  lastTapTime=now;
+  isCamDrag=true; camLastX=e.clientX; camLastY=e.clientY; e.preventDefault();
+}, {passive:false});
+canvas.addEventListener('pointermove', e=>{
   if(!isCamDrag) return;
   const dx=e.clientX-camLastX, dy=e.clientY-camLastY;
   camLastX=e.clientX; camLastY=e.clientY;
   camYaw += dx*YAW_SENS;
   camPitch = THREE.MathUtils.clamp(camPitch + dy*PIT_SENS, PIT_MIN, PIT_MAX);
-  camIdleTimer = 0;
-},{passive:false});
+  camIdleTimer = 0; e.preventDefault();
+}, {passive:false});
 addEventListener('pointerup', ()=>{ isCamDrag=false; });
-addEventListener('pointercancel', ()=>{ isCamDrag=false; });
 
-const worldPos = new THREE.Vector3(), worldLook = new THREE.Vector3(), camOffsetLocal = new THREE.Vector3();
+const camPosW = new THREE.Vector3(), camLookW = new THREE.Vector3();
+function placeCamera(dt){
+  // basis from heading only
+  const sh=Math.sin(state.heading), ch=Math.cos(state.heading);
+  const forward = new THREE.Vector3(sh,0,-ch);     // where ship points horizontally
+  const right   = new THREE.Vector3(ch,0, sh);     // perpendicular
+  const up      = new THREE.Vector3(0,1,0);
 
+  // base chase offset
+  let offset = new THREE.Vector3().copy(forward).multiplyScalar(-camBaseBack).addScaledVector(up, camBaseUp);
+
+  // apply free-look yaw/pitch around ship using heading basis
+  // yaw around world up, pitch around 'right'
+  const qYaw = new THREE.Quaternion().setFromAxisAngle(up, camYaw);
+  const qPit = new THREE.Quaternion().setFromAxisAngle(right, camPitch);
+  offset.applyQuaternion(qYaw).applyQuaternion(qPit);
+
+  camPosW.copy(state.pos).add(offset);
+  const lookAhead = new THREE.Vector3().copy(forward).multiplyScalar(camLookAhead);
+  lookAhead.applyQuaternion(qYaw).applyQuaternion(qPit);
+  camLookW.copy(state.pos).add(lookAhead);
+
+  camera.position.lerp(camPosW, 0.14);
+  camera.lookAt(camLookW);
+
+  // auto-reset
+  if(!isCamDrag){
+    camIdleTimer += dt;
+    const strength = THREE.MathUtils.clamp(1.0 + camIdleTimer*1.5, 1.0, 4.0);
+    camYaw   = THREE.MathUtils.damp(camYaw,   0, strength, dt);
+    camPitch = THREE.MathUtils.damp(camPitch, 0, strength, dt);
+  } else camIdleTimer=0;
+}
+
+/* ---------- Step ---------- */
+const gearLabelEl=document.getElementById('gearLabel');
 function stepShip(dt){
   const turn=joyDx, lift=-joyDy;
 
-  // throttle 0..1 → 0..180 m/s
   const targetSpd = THREE.MathUtils.lerp(0, 180, throttle);
   state.speed = THREE.MathUtils.damp(state.speed, targetSpd, 2.5, dt);
 
@@ -356,11 +375,13 @@ function stepShip(dt){
   ship.userData.gearGroup.visible = state.gearDown;
   ship.userData.floatGroup.visible = state.floatDown;
 
+  // integrate heading/pitch/roll
   state.heading += turn * dt * THREE.MathUtils.lerp(0.9, 2.0, Math.max(throttle,0.15));
   const pitchTarget = lift*0.45 * (state.onGround||state.onWater ? 0.2 : 1.0);
   state.pitch = THREE.MathUtils.damp(state.pitch, pitchTarget, 6, dt);
   state.roll  = THREE.MathUtils.damp(state.roll, -turn*0.6, 6, dt);
 
+  // velocity from heading & pitch
   const ch=Math.cos(state.heading), sh=Math.sin(state.heading);
   const cp=Math.cos(state.pitch),  sp=Math.sin(state.pitch);
   state.vel.set(sh*cp, sp, -ch*cp).multiplyScalar(state.speed);
@@ -379,46 +400,24 @@ function stepShip(dt){
     state.pos.y = Math.max(state.pos.y, 0.9);
     state.pos.y += Math.sin(performance.now()*0.003 + (state.pos.x+state.pos.z)*0.01)*0.03;
     state.speed = THREE.MathUtils.damp(state.speed, 0, 4, dt);
-  } else {
-    if(state.pos.y < 2) state.pos.y = THREE.MathUtils.damp(state.pos.y, 2, 3, dt);
+  } else if(state.pos.y < 2){
+    state.pos.y = THREE.MathUtils.damp(state.pos.y, 2, 3, dt);
   }
 
-  // Orient ship (look forward along velocity)
+  // orient ship toward velocity (visual)
   ship.position.copy(state.pos);
   const lookFwd = tmpV.copy(state.pos).add(state.vel.clone().multiplyScalar(0.12));
   ship.lookAt(lookFwd); ship.rotateZ(state.roll);
 
-  // Free-look around base chase offset
-  const qYaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), camYaw);
-  const qPit = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), camPitch);
-  const q = new THREE.Quaternion().multiply(qYaw).multiply(qPit);
-
-  camOffsetLocal.copy(camBaseLocal).applyQuaternion(q);
-
-  ship.updateMatrixWorld(true);
-  worldPos.copy(camOffsetLocal).applyMatrix4(ship.matrixWorld);
-  worldLook.copy(camLookLocal).applyQuaternion(q).applyMatrix4(ship.matrixWorld);
-
-  camera.position.lerp(worldPos, 0.12);
-  camera.lookAt(worldLook);
-
-  // Auto-reset yaw/pitch when not dragging
-  if(!isCamDrag){
-    camIdleTimer += dt;
-    const strength = THREE.MathUtils.clamp(1.0 + camIdleTimer*1.5, 1.0, 4.0);
-    camYaw   = THREE.MathUtils.damp(camYaw,   0, strength, dt);
-    camPitch = THREE.MathUtils.damp(camPitch, 0, strength, dt);
-  } else camIdleTimer = 0;
-
-  // Stream world forward
-  const forward = new THREE.Vector3(0,0,-1).applyQuaternion(ship.quaternion);
+  // camera (stable heading-frame) & world streaming
+  placeCamera(dt);
+  const forward = new THREE.Vector3(Math.sin(state.heading),0,-Math.cos(state.heading));
   updateChunks(state.pos.x, state.pos.z, forward);
 
-  // Ocean follow + time
-  updateOceanFollow(state.pos);
-  uTime.value += dt;
+  // ocean
+  updateOceanFollow(state.pos); uTime.value += dt;
 
-  gearLabel.textContent = state.onWater ? 'FLOATS' : (state.gearDown ? 'GEAR' : '—');
+  gearLabelEl.textContent = state.onWater ? 'FLOATS' : (state.gearDown ? 'GEAR' : '—');
 }
 
 /* ---------- Loop / FPS ---------- */
@@ -437,6 +436,7 @@ function tick(){
   updateChunks(0,0,new THREE.Vector3(0,0,-1));
   requestAnimationFrame(tick);
   setTimeout(()=>{ const r=throttleRect(); setThrottleFrom(r.top + (1-throttle)*r.height*0.8 + 20); },0);
+  // block default gestures only when touching controls—canvas already touch-action:none
   ['touchmove','gesturestart'].forEach(evt=>addEventListener(evt,e=>{ if(e.target.closest('.stick-wrap,.throttle')) e.preventDefault(); }, {passive:false}));
 })();
 </script>
