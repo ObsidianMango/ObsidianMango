@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>✈️ Sky — Catapult Bomb + Bomb-Cam</title>
+<title>✈️ Sky — Seamless Chunk + Aimer Edition</title>
 <style>
   html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block;touch-action:manipulation}
@@ -18,18 +18,20 @@
   .hint{position:fixed;top:8px;left:10px;color:#ddd;font-size:12px;opacity:.7}
   .gear{position:fixed;left:50%;transform:translateX(-50%);bottom:10px;color:#ddd;font-size:12px;opacity:.75}
   .hud{position:fixed;top:8px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;letter-spacing:.08em;background:rgba(0,0,0,.25);padding:6px 10px;border-radius:10px;backdrop-filter:blur(4px)}
-  /* SMALL bomb buttons at bottom center (thumb reach, away from sticks) */
+  /* small bomb buttons at bottom center */
   .bombPanel{position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);display:flex;gap:10px;pointer-events:auto;z-index:2}
   .bomb{width:56px;height:56px;border:0;border-radius:50%;font-weight:800;letter-spacing:.08em;color:#fff;font-size:11px;line-height:1;touch-action:manipulation}
   .bomb.drop{background:linear-gradient(180deg,#ff4b4b,#c71e1e);box-shadow:0 6px 18px rgba(255,75,75,.35)}
   .bomb.follow{background:linear-gradient(180deg,#4b8bff,#1e42c7);box-shadow:0 6px 18px rgba(75,139,255,.35)}
   .bomb:active{transform:scale(.96)}
+  /* thin center crosshair */
+  .cross{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:18px;height:18px;border:2px solid rgba(255,255,255,.6);border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.25) inset}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <div class="hint">3-finger tap: pause · B/SPACE: drop · F: bomb-cam · Double-tap: drop</div>
+  <div class="hint">3‑finger tap: pause · B/SPACE: drop · F: bomb‑cam · Double‑tap: drop</div>
   <div class="perf" id="fps">—</div>
   <div class="hud" id="hud">Score 0 · Towns 0/0</div>
   <div class="stick-wrap" id="joy"><div class="stick" id="stick"></div></div>
@@ -39,6 +41,7 @@
     <button class="bomb drop" id="dropBtn" aria-label="Drop bomb">DROP</button>
     <button class="bomb follow" id="followBtn" aria-label="Drop & follow bomb">CAM</button>
   </div>
+  <div class="cross" aria-hidden="true"></div>
 </div>
 
 <script type="module">
@@ -161,7 +164,7 @@ function setThrottleFrom(y){
 throttleEl.addEventListener('pointerdown', e=>{ throttleEl.setPointerCapture(e.pointerId); setThrottleFrom(e.clientY); });
 throttleEl.addEventListener('pointermove', e=>{ if(e.pressure===0) return; setThrottleFrom(e.clientY); });
 
-/* Pause: 3-finger tap */
+/* Pause: 3‑finger tap */
 let paused=false, touchCount=0, touchTimer=0;
 addEventListener('touchstart', e=>{ touchCount=e.touches.length; clearTimeout(touchTimer); touchTimer=setTimeout(()=>{ if(touchCount>=3) paused=!paused; },120); }, {passive:true});
 
@@ -173,29 +176,28 @@ addEventListener('keydown', (e)=>{
 dropBtn.addEventListener('click', ()=> dropBomb(false), {passive:true});
 followBtn.addEventListener('click', ()=> dropBomb(true), {passive:true});
 
-/* ---------- Double-tap anywhere to drop (prevent iOS zoom) ---------- */
+/* Double‑tap anywhere to drop (prevent iOS zoom) */
 let lastTapT = 0;
 function onCanvasTouchStart(e){
   const now = performance.now();
   if(now - lastTapT < 280){
-    e.preventDefault(); // block double-tap zoom
+    e.preventDefault();
     dropBomb(false);
     lastTapT = 0;
-  }else{
-    lastTapT = now;
-  }
+  } else lastTapT = now;
 }
 canvas.addEventListener('touchstart', onCanvasTouchStart, {passive:false});
 
-/* ---------- Terrain (chunked) + Towns ---------- */
+/* ---------- Terrain (chunked) + Seam fix (shared lattice cache) ---------- */
 const seed=12345, noise=new ImprovedNoise();
 function n2(x,y,scale=1){ return noise.noise(x/scale, y/scale, seed)*0.5+0.5; }
 
-const CHUNK_SIZE=240, RES=48, LOAD_RADIUS=5;
-const pool=[], chunks=new Map();
+const CHUNK_SIZE=240, RES=48;
+let LOAD_RADIUS=5;
 
-const terrainMat=new THREE.MeshStandardMaterial({flatShading:true,vertexColors:true,metalness:0,roughness:1});
-
+const STEP = CHUNK_SIZE/RES;
+const heightCache = new Map();
+const latticeKey = (wx,wz)=> `${Math.round(wx/STEP)}:${Math.round(wz/STEP)}`;
 function sampleHeight(wx,wz){
   const continent=n2(wx*0.6, wz*0.6, 1400);
   const ridges   =n2(wx, wz, 320);
@@ -203,6 +205,12 @@ function sampleHeight(wx,wz){
   let h = continent*0.55 + ridges*0.35 + detail*0.10;
   h = (h*1.15) - 0.35;
   return h*120;
+}
+function sampleHeightLattice(wx,wz){
+  const k=latticeKey(wx,wz);
+  let h = heightCache.get(k);
+  if(h===undefined){ h = sampleHeight(wx,wz); heightCache.set(k,h); }
+  return h;
 }
 function sampleClimate(wx,wz){
   const temp=n2(wx+10000, wz-5000, 1800);
@@ -221,18 +229,23 @@ function biomeColor(h,t,w){
   return new THREE.Color(0x77b55a);
 }
 
+const pool=[], chunks=new Map();
+const terrainMat=new THREE.MeshStandardMaterial({flatShading:true,vertexColors:true,metalness:0,roughness:1});
+
 function makeChunk(ix,iz){
   let geom=pool.pop();
   if(!geom){ geom=new THREE.PlaneGeometry(CHUNK_SIZE,CHUNK_SIZE,RES,RES); geom.rotateX(-Math.PI/2); }
   const pos=geom.attributes.position.array;
   const color=new Float32Array((RES+1)*(RES+1)*3);
   const worldX0=ix*CHUNK_SIZE, worldZ0=iz*CHUNK_SIZE;
+
+  const col = new THREE.Color();
   for(let z=0; z<=RES; z++){
     for(let x=0; x<=RES; x++){
       const i=(z*(RES+1)+x), p=i*3;
       const wx=worldX0+(x/RES-0.5)*CHUNK_SIZE;
       const wz=worldZ0+(z/RES-0.5)*CHUNK_SIZE;
-      const elev=sampleHeight(wx,wz);
+      const elev=sampleHeightLattice(wx,wz);          // seam‑safe height
       pos[p+1]=elev;
       const {temp,wet,hRaw}=sampleClimate(wx,wz);
       const c=biomeColor(hRaw+0.35,temp,wet);
@@ -241,6 +254,7 @@ function makeChunk(ix,iz){
   }
   geom.setAttribute('color', new THREE.BufferAttribute(color,3));
   geom.computeVertexNormals();
+
   const mesh=new THREE.Mesh(geom,terrainMat);
   mesh.position.set(worldX0,0,worldZ0);
   mesh.matrixAutoUpdate=false; mesh.updateMatrix();
@@ -248,9 +262,10 @@ function makeChunk(ix,iz){
   return mesh;
 }
 const key=(ix,iz)=>ix+','+iz;
+
 const toCreate=[];
 function queueChunk(ix,iz,priority=0){ toCreate.push({ix,iz,priority}); }
-function pumpCreate(budgetMs=9){
+function pumpCreate(budgetMs=12){  // a bit more time per frame
   toCreate.sort((a,b)=> b.priority - a.priority);
   const start=performance.now();
   while(toCreate.length && (performance.now()-start)<budgetMs){
@@ -260,6 +275,9 @@ function pumpCreate(budgetMs=9){
     const m=makeChunk(ix,iz); scene.add(m); chunks.set(k,m);
     ensureTownFor(ix,iz);
   }
+}
+function updateLoadRadius(alt){
+  LOAD_RADIUS = Math.max(5, Math.min(10, Math.floor(5 + alt/180)));
 }
 function updateChunks(px,pz,forward){
   const cx=Math.floor(px/CHUNK_SIZE);
@@ -304,17 +322,18 @@ function ensureTownFor(ix,iz){
   if(rand()>0.35) return;
   const baseX = ix*CHUNK_SIZE + (rand()-0.5)*CHUNK_SIZE*0.6;
   const baseZ = iz*CHUNK_SIZE + (rand()-0.5)*CHUNK_SIZE*0.6;
-  const h = sampleHeight(baseX, baseZ);
+
+  const h = sampleHeightLattice(baseX, baseZ);
   const slope =
-    Math.abs(sampleHeight(baseX+5,baseZ)-h) +
-    Math.abs(sampleHeight(baseX-5,baseZ)-h) +
-    Math.abs(sampleHeight(baseX,baseZ+5)-h) +
-    Math.abs(sampleHeight(baseX,baseZ-5)-h);
+    Math.abs(sampleHeightLattice(baseX+5,baseZ)-h) +
+    Math.abs(sampleHeightLattice(baseX-5,baseZ)-h) +
+    Math.abs(sampleHeightLattice(baseX,baseZ+5)-h) +
+    Math.abs(sampleHeightLattice(baseX,baseZ-5)-h);
+
   if(h<5 || slope>30) return;
 
   const g = new THREE.Group();
   g.position.set(baseX, h, baseZ);
-
   const plaza = new THREE.Mesh(new THREE.BoxGeometry(16,0.2,16), plazaMat);
   plaza.position.y = -0.1;
   g.add(plaza);
@@ -351,7 +370,7 @@ function removeTown(ix,iz){
   townGroups.delete(k);
 }
 
-/* ---------- Bombs, Catapult Launch, Explosions, Bomb-Cam ---------- */
+/* ---------- Bombs, Catapult Launch, Explosions, Bomb‑Cam ---------- */
 const bombs = [];
 const explosions = [];
 const bombGeo = new THREE.SphereGeometry(0.35,12,12);
@@ -366,24 +385,19 @@ const camDesiredLook = new THREE.Vector3();
 function dropBomb(follow){
   if(bombCooldown>0 || paused) return;
 
-  // ensure world matrices are fresh
   ship.updateMatrixWorld(true);
-
   const b = new THREE.Mesh(bombGeo, bombMat);
 
-  // Spawn at the ship's NOSE (local -Z) in world space
-  const noseLocal = new THREE.Vector3(0,-0.2,-5.0);
-  const noseWorld = noseLocal.clone().applyMatrix4(ship.matrixWorld);
+  // spawn at nose (local -Z) in world space
+  const noseWorld = new THREE.Vector3(0,-0.2,-5.0).applyMatrix4(ship.matrixWorld);
   b.position.copy(noseWorld);
 
-  // True FORWARD of ship: getWorldDirection gives local -Z in world (the actual nose direction)
-  const fwd = new THREE.Vector3();
-  ship.getWorldDirection(fwd); // forward
-
+  // true forward of ship (nose direction)
+  const fwd = new THREE.Vector3(); ship.getWorldDirection(fwd);
   const upWorld = new THREE.Vector3(0,1,0);
-  const right = new THREE.Vector3().crossVectors(fwd, upWorld).normalize(); // right-hand
+  const right = new THREE.Vector3().crossVectors(fwd, upWorld).normalize();
 
-  // Launch OUT THE FRONT (catapult arc)
+  // launch OUT THE FRONT (catapult arc)
   const launchSpeed = 90 + state.speed*0.6;
   const sideJitter  = (Math.random()-0.5)*2.0;
   const initialVel = new THREE.Vector3()
@@ -397,10 +411,7 @@ function dropBomb(follow){
   bombs.push(b);
   bombCooldown = 0.18;
 
-  if(follow){
-    cameraMode='bomb';
-    bombCamTarget=b;
-  }
+  if(follow){ cameraMode='bomb'; bombCamTarget=b; }
 }
 
 function spawnExplosion(x,y,z){
@@ -436,7 +447,7 @@ function stepBombs(dt){
     b.userData.vel.y -= grav*dt;
     b.position.addScaledVector(b.userData.vel, dt);
 
-    const gy = sampleHeight(b.position.x, b.position.z);
+    const gy = sampleHeightLattice(b.position.x, b.position.z);
     if(b.position.y <= gy+0.35){
       b.userData.alive=false;
       scene.remove(b);
@@ -485,6 +496,43 @@ function stepExplosions(dt){
   }
 }
 
+/* ---------- Aimer (predictive impact & nose laser) ---------- */
+const aim = {
+  line: null,
+  ring: null,
+  ringMat: new THREE.MeshBasicMaterial({color:0xffe17a, transparent:true, opacity:0.9}),
+  visible: true,
+};
+{
+  // thin nose "laser"
+  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0,0,-8)]);
+  const mat = new THREE.LineBasicMaterial({color:0x99ddff, transparent:true, opacity:0.7});
+  aim.line = new THREE.Line(geo, mat);
+  ship.add(aim.line); // in ship space, pointing forward (negative Z)
+
+  // ground ring reticle
+  const ringGeo = new THREE.RingGeometry(2.2, 2.8, 32);
+  aim.ring = new THREE.Mesh(ringGeo, aim.ringMat);
+  aim.ring.rotation.x = -Math.PI/2;
+  aim.ring.visible = false;
+  scene.add(aim.ring);
+}
+
+function predictImpact(origin, velocity){
+  // simple projectile stepper against terrain (shares lattice heights)
+  const g = 9.8;
+  const p = origin.clone();
+  const v = velocity.clone();
+  const maxTime = 20.0, dt = 0.05;
+  for(let t=0;t<maxTime;t+=dt){
+    v.y -= g*dt;
+    p.addScaledVector(v, dt);
+    const gy = sampleHeightLattice(p.x, p.z);
+    if(p.y <= gy+0.1) { p.y = gy; return p; }
+  }
+  return null;
+}
+
 /* ---------- Flight & Camera ---------- */
 const state={
   speed:0, heading:0, pitch:0, roll:0,
@@ -506,7 +554,7 @@ function stepShip(dt){
   const targetSpd = THREE.MathUtils.lerp(0, 180, throttle);
   state.speed = THREE.MathUtils.damp(state.speed, targetSpd, 2.5, dt);
 
-  const groundY = sampleHeight(state.pos.x, state.pos.z);
+  const groundY = sampleHeightLattice(state.pos.x, state.pos.z);
   const altitude = state.pos.y - Math.max(0, groundY);
   state.onWater = groundY < 0 && state.pos.y <= 1.2;
   state.onGround = groundY >= 0 && (state.pos.y - groundY) <= 1.2;
@@ -548,6 +596,7 @@ function stepShip(dt){
   const lookFwd = tmpV.copy(state.pos).add(state.vel.clone().multiplyScalar(0.12));
   ship.lookAt(lookFwd); ship.rotateZ(state.roll);
 
+  // chase / bomb cams
   if(cameraMode==='chase'){
     ship.updateMatrixWorld(true);
     worldPos.copy(camLocalOffset).applyMatrix4(ship.matrixWorld);
@@ -563,8 +612,33 @@ function stepShip(dt){
     camDesiredLook.copy(bombCamTarget.position).add(v.clone().normalize().multiplyScalar(2.0));
   }
 
+  // stream world; prioritize forward, and adapt radius with altitude
   const forward = new THREE.Vector3(0,0,-1).applyQuaternion(ship.quaternion);
+  updateLoadRadius(altitude);
   updateChunks(state.pos.x, state.pos.z, forward);
+
+  // AIMER update (predict using current would‑be launch)
+  const noseWorld = new THREE.Vector3(0,-0.2,-5.0).applyMatrix4(ship.matrixWorld);
+  const fwd = new THREE.Vector3(); ship.getWorldDirection(fwd);
+  const upWorld = new THREE.Vector3(0,1,0);
+  const right = new THREE.Vector3().crossVectors(fwd, upWorld).normalize();
+  const launchSpeed = 90 + state.speed*0.6;
+  const predictedVel = new THREE.Vector3()
+    .addScaledVector(fwd, launchSpeed)
+    .addScaledVector(right, 0)       // no jitter for prediction
+    .addScaledVector(upWorld, -3.5)
+    .addScaledVector(state.vel, 0.25);
+  const impact = predictImpact(noseWorld, predictedVel);
+  if(impact){
+    aim.ring.position.copy(impact);
+    aim.ring.visible = true;
+    // subtle pulse with altitude
+    const s = THREE.MathUtils.clamp(1 + (state.pos.y - impact.y)/200, 1, 3.5);
+    aim.ring.scale.setScalar(s);
+    aim.ring.material.opacity = 0.85;
+  } else {
+    aim.ring.visible = false;
+  }
 
   gearLabel.textContent = state.onWater ? 'FLOATS' : (state.gearDown ? 'GEAR' : '—');
 }
@@ -574,7 +648,7 @@ const fpsEl=document.getElementById('fps'); let fpsAcc=0,fpsCount=0,fpsT=0;
 let last=performance.now()/1000;
 function tick(){
   const now=performance.now()/1000; const dt=Math.min(now-last,1/30); last=now;
-  pumpCreate(9);
+  pumpCreate(12);
   if(!paused){
     stepShip(dt);
     stepBombs(dt);
@@ -598,7 +672,7 @@ function tick(){
   camDesiredPos.set(0,70,20); camDesiredLook.set(0,60,0);
   requestAnimationFrame(tick);
   setTimeout(()=>{ const r=throttleRect(); setThrottleFrom(r.top + (1-throttle)*r.height*0.8 + 20); },0);
-  // Prevent UI buttons from hijacking gestures beyond their bounds
+  // keep controls responsive; prevent gestures leaking
   ['touchmove','gesturestart'].forEach(evt=>addEventListener(evt,e=>{
     if(e.target.closest('.stick-wrap,.throttle,.bombPanel')) e.preventDefault();
   }, {passive:false}));
