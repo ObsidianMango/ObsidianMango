@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>✈️ Sky — Seamless Terrain + Bomb Aimer + Camera Modes</title>
+<title>✈️ Sky — Seamless Terrain + Bomb Aimer (ground only) + Camera Modes</title>
 <style>
   html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block;touch-action:manipulation}
@@ -29,7 +29,7 @@
   .hud{position:fixed;top:8px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;letter-spacing:.08em;background:rgba(0,0,0,.25);
     padding:6px 10px;border-radius:10px;backdrop-filter:blur(4px)}
 
-  /* bomb buttons bottom center */
+  /* bomb buttons bottom center (thumb reach) */
   .bombPanel{position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);display:flex;gap:10px;pointer-events:auto;z-index:2}
   .bomb{width:56px;height:56px;border:0;border-radius:50%;font-weight:800;letter-spacing:.08em;color:#fff;font-size:11px;line-height:1;touch-action:manipulation}
   .bomb.drop{background:linear-gradient(180deg,#ff4b4b,#c71e1e);box-shadow:0 6px 18px rgba(255,75,75,.35)}
@@ -39,10 +39,6 @@
   /* camera mode button (top-right) */
   .camBtn{position:fixed;top:10px;right:62px;pointer-events:auto;z-index:3;border:0;border-radius:14px;padding:8px 12px;
     background:linear-gradient(180deg,#9aeb8f,#3fae36);color:#0b1b0a;font-weight:800;letter-spacing:.08em;font-size:12px}
-
-  /* thin center crosshair (visual only) */
-  .cross{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:18px;height:18px;border:2px solid rgba(255,255,255,.6);
-    border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.25) inset}
 </style>
 </head>
 <body>
@@ -59,7 +55,6 @@
     <button class="bomb follow" id="followBtn" aria-label="Drop & follow bomb">CAM</button>
   </div>
   <button class="camBtn" id="camBtn" aria-label="Cycle camera">CAM: Chase</button>
-  <div class="cross" aria-hidden="true"></div>
 </div>
 
 <script type="module">
@@ -447,7 +442,7 @@ function dropBomb(follow){
   bombs.push(b);
   bombCooldown = 0.18;
 
-  if(follow){ cameraMode='bomb'; bombCamTarget=b; }
+  if(follow){ cameraMode='bomb'; bombCamTarget=b; updateCamBtn(); }
 }
 
 function spawnExplosion(x,y,z){
@@ -489,7 +484,7 @@ function stepBombs(dt){
       scene.remove(b);
       bombs.splice(i,1);
       spawnExplosion(b.position.x, gy+0.5, b.position.z);
-      if(cameraMode==='bomb' && bombCamTarget===b){ cameraMode='chase'; bombCamTarget=null; }
+      if(cameraMode==='bomb' && bombCamTarget===b){ cameraMode='chase'; bombCamTarget=null; updateCamBtn(); }
 
       const radius=8.0;
       for(const [,t] of townGroups){
@@ -532,7 +527,7 @@ function stepExplosions(dt){
   }
 }
 
-/* ---------- Aimer (predictive impact ring only) ---------- */
+/* ---------- Aimer (predictive impact ring only; no HUD crosshair, no nose laser) ---------- */
 const aim = {
   ring: null,
   ringMat: new THREE.MeshBasicMaterial({color:0xffe17a, transparent:true, opacity:0.9})
@@ -570,7 +565,6 @@ function cycleCameraMode(){
   if(cameraMode==='chase') cameraMode='fpv';
   else if(cameraMode==='fpv') cameraMode='orbit';
   else if(cameraMode==='orbit') cameraMode='chase';
-  // (bomb cam is temporary and returns to prior when explosion happens)
   updateCamBtn();
 }
 function updateCamBtn(){
@@ -582,7 +576,6 @@ let orbitActive=false, orbitLastX=0, orbitLastY=0;
 let orbitAz=0, orbitEl=0.45, orbitR=32;
 function onFreeCamDown(e){
   if(cameraMode!=='orbit') return;
-  // ignore if started on UI controls
   if(e.target.closest('.stick-wrap,.throttle,.bombPanel,.camBtn')) return;
   orbitActive=true; orbitLastX=e.clientX|| (e.touches?.[0]?.clientX||0); orbitLastY=e.clientY|| (e.touches?.[0]?.clientY||0);
 }
@@ -623,7 +616,7 @@ let cameraInitialized=false;
 
 const chaseOffset = new THREE.Vector3(0, 8, -20);
 const chaseLook   = new THREE.Vector3(0, 2, -6);
-const fpvOffset   = new THREE.Vector3(0, 1.4, -2.2); // just in front of cockpit/nose
+const fpvOffset   = new THREE.Vector3(0, 2.0, -2.2); // slightly higher FPV per request
 
 function stepShip(dt){
   const turn=joyDx, lift=-joyDy;
@@ -686,7 +679,6 @@ function stepShip(dt){
     camDesiredPos.copy(worldPos);
     camDesiredLook.copy(worldPos).add(fwd.multiplyScalar(10));
   } else if(cameraMode==='orbit'){
-    // orbit around ship position
     const r=orbitR, az=orbitAz, el=orbitEl;
     const ox = state.pos.x + r*Math.cos(el)*Math.cos(az);
     const oy = state.pos.y + r*Math.sin(el);
