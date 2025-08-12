@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>Low‑Poly Ocean — Works Without Bundler</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Low‑Poly Ocean — Boat, Waves, Shark Attack (r149 global THREE)</title>
 <style>
-  html,body{margin:0;height:100%;background:#6db5ff}
+  html,body{margin:0;height:100%;background:#7ec0ff;overflow:hidden}
   canvas{position:fixed;inset:0}
   .hud{position:fixed;left:12px;bottom:12px;color:#fff;font:600 12px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
   .pill{background:rgba(0,0,0,.35);padding:8px 10px;border-radius:10px;backdrop-filter:blur(6px)}
   #stick{position:fixed;left:14px;bottom:70px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);touch-action:none}
   #thumb{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.5)}
-  #spear{position:fixed;right:14px;bottom:26px;width:120px;height:120px;border:none;border-radius:50%;background:rgba(220,40,40,.88);color:#fff;font:800 18px system-ui,-apple-system;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px rgba(0,0,0,.35);touch-action:none}
+  #spear{position:fixed;right:14px;bottom:26px;width:120px;height:120px;border-radius:50%;border:none;background:rgba(220,40,40,.9);color:#fff;font:800 18px system-ui,-apple-system;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px rgba(0,0,0,.35);touch-action:none}
   #spear.cool{background:rgba(110,110,110,.6)}
   .tag{position:fixed;right:14px;top:14px;color:#fff;background:rgba(0,0,0,.35);padding:6px 10px;border-radius:8px;font:600 12px system-ui}
 </style>
@@ -23,72 +23,71 @@
 <button id="spear" aria-label="Throw Spear">SPEAR</button>
 <div class="tag pill" id="status">Calm seas</div>
 
-<!-- One-module setup: no bare specifiers, no import maps, works from a file:// page -->
-<script type="module">
-import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+<!-- Lock to r149: global THREE works, no ES modules needed -->
+<script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+<script>
+/* ===== Core setup (mobile friendly) ===== */
+const DPR_CAP=1.5;
+const canvas=document.getElementById('app');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:false,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,DPR_CAP));
+renderer.setSize(innerWidth,innerHeight,false);
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
 
-/* ===== Core setup ===== */
-const DPR_CAP = 1.5;
-const canvas = document.getElementById('app');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:false, powerPreference:'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, DPR_CAP));
-renderer.setSize(innerWidth, innerHeight, false);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene=new THREE.Scene();
+scene.fog=new THREE.FogExp2(0x7fbfff,0.0008);
 
-const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x7fbfff, 0.0008);
-
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 4000);
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,4000);
 camera.position.set(0,2.3,7);
 
 scene.add(new THREE.HemisphereLight(0xBBD8FF,0x1d3557,0.95));
-const sunLight = new THREE.DirectionalLight(0xffffff,0.65);
+const sunLight=new THREE.DirectionalLight(0xffffff,0.65);
 sunLight.position.set(500,800,400);
 scene.add(sunLight);
 
-/* ===== Sky dome (no Sky.js dependency) ===== */
-const skyGeo = new THREE.SphereGeometry(5000, 16, 12);
-const skyMat = new THREE.ShaderMaterial({
-  side: THREE.BackSide,
-  uniforms: {
-    topColor:    { value: new THREE.Color(0x8ec9ff) },
-    bottomColor: { value: new THREE.Color(0xbfe3ff) },
-    offset:      { value: 33.0 },
-    exponent:    { value: 0.65 }
+/* ===== Gradient sky dome (no black sky) ===== */
+const skyGeo=new THREE.SphereGeometry(5000,16,12);
+const skyMat=new THREE.ShaderMaterial({
+  side:THREE.BackSide,
+  uniforms:{
+    topColor:{value:new THREE.Color(0x8ec9ff)},
+    bottomColor:{value:new THREE.Color(0xbfe3ff)},
+    offset:{value:33.0}, exponent:{value:0.65}
   },
-  vertexShader: `varying vec3 vPos; void main(){ vec4 p=modelMatrix*vec4(position,1.0); vPos=p.xyz; gl_Position=projectionMatrix*viewMatrix*p; }`,
-  fragmentShader: `uniform vec3 topColor; uniform vec3 bottomColor; uniform float offset; uniform float exponent;
-    varying vec3 vPos; void main(){ float h = normalize(vPos + vec3(0.0, offset, 0.0)).y;
-    float f = max(pow(max(h,0.0), exponent), 0.0); gl_FragColor = vec4(mix(bottomColor, topColor, f), 1.0); }`
+  vertexShader:`varying vec3 vPos; void main(){ vec4 p=modelMatrix*vec4(position,1.0); vPos=p.xyz; gl_Position=projectionMatrix*viewMatrix*p; }`,
+  fragmentShader:`uniform vec3 topColor; uniform vec3 bottomColor; uniform float offset; uniform float exponent;
+  varying vec3 vPos; void main(){ float h=normalize(vPos+vec3(0.0,offset,0.0)).y; float f=max(pow(max(h,0.0),exponent),0.0);
+  gl_FragColor=vec4(mix(bottomColor,topColor,f),1.0); }`
 });
-scene.add(new THREE.Mesh(skyGeo, skyMat));
+scene.add(new THREE.Mesh(skyGeo,skyMat));
 
-/* ===== Low‑poly ocean (CPU-displaced mesh, flat-shaded) ===== */
-const O_SIZE = 1400, SEG = 120;
-const oceanGeo = new THREE.PlaneGeometry(O_SIZE, O_SIZE, SEG, SEG);
+/* ===== Low‑poly ocean (CPU mesh displacement, flat shading) ===== */
+const O_SIZE=1400, SEG=120;
+const oceanGeo=new THREE.PlaneGeometry(O_SIZE,O_SIZE,SEG,SEG);
 oceanGeo.rotateX(-Math.PI/2);
-const oceanMat = new THREE.MeshStandardMaterial({ color:0x2b76a8, roughness:0.92, metalness:0.0, flatShading:true });
-const ocean = new THREE.Mesh(oceanGeo, oceanMat); ocean.frustumCulled=false; scene.add(ocean);
+const oceanMat=new THREE.MeshStandardMaterial({color:0x2b76a8,roughness:0.92,metalness:0.0,flatShading:true});
+const ocean=new THREE.Mesh(oceanGeo,oceanMat); ocean.frustumCulled=false; scene.add(ocean);
 
-const pos = oceanGeo.attributes.position;
-const baseXZ = new Float32Array(pos.count*2);
+const pos=oceanGeo.attributes.position;
+const baseXZ=new Float32Array(pos.count*2);
 for(let i=0;i<pos.count;i++){ baseXZ[i*2]=pos.getX(i); baseXZ[i*2+1]=pos.getZ(i); }
-const waves = [
-  {amp:1.1,  freq:0.012, dir:new THREE.Vector2( 1.0, 0.3).normalize(), speed:0.50},
-  {amp:0.55, freq:0.017, dir:new THREE.Vector2(-0.6, 1.0).normalize(), speed:0.22},
-  {amp:0.30, freq:0.014, dir:new THREE.Vector2( 0.2,-1.0).normalize(), speed:0.12},
+
+const waves=[
+  {amp:1.1,freq:0.012,dir:new THREE.Vector2( 1.0, 0.3).normalize(),speed:0.50},
+  {amp:0.6,freq:0.017,dir:new THREE.Vector2(-0.6, 1.0).normalize(),speed:0.22},
+  {amp:0.3,freq:0.014,dir:new THREE.Vector2( 0.2,-1.0).normalize(),speed:0.12},
 ];
 let tWave=0, normalsTick=0;
 function waveHeight(x,z,t){ let y=0; for(const w of waves){ y+=Math.sin((x*w.dir.x+z*w.dir.y)*w.freq + t*w.speed)*w.amp; } return y; }
 function updateOcean(dt){
-  tWave += dt;
+  tWave+=dt;
   for(let i=0;i<pos.count;i++){ const x=baseXZ[i*2], z=baseXZ[i*2+1]; pos.setY(i, waveHeight(x,z,tWave)); }
-  pos.needsUpdate = true;
+  pos.needsUpdate=true;
   if((normalsTick=(normalsTick+1)%2)===0){ oceanGeo.computeVertexNormals(); oceanGeo.normalizeNormals(); }
 }
 
-/* ===== Boat (controllable) ===== */
+/* ===== Boat (controllable, smoother controls) ===== */
 function makeBoat(){
   const hull=new THREE.Mesh(new THREE.ConeGeometry(0.7,2.4,6), new THREE.MeshStandardMaterial({color:0x8a4928,roughness:0.9,flatShading:true}));
   hull.rotation.x=Math.PI/2; hull.position.y=0.25;
@@ -100,19 +99,66 @@ function makeBoat(){
   sail.position.set(0.15,0.7,-0.1); sail.rotation.z=Math.PI/2;
   const g=new THREE.Group(); g.add(hull,deck,mast,sail); g.userData={heading:0,speed:0}; return g;
 }
-const boat = makeBoat(); scene.add(boat);
+const boat=makeBoat(); scene.add(boat);
 
-/* Camera follow (3rd-person) */
 let camYaw=0;
 let camDist=7.2;
 let targetDist=7.2;
 
-/* ===== Seagulls ===== */
-const birdGeom = new THREE.ConeGeometry(0.12,0.5,3); birdGeom.rotateX(Math.PI/2);
-const birdMat  = new THREE.MeshStandardMaterial({color:0xffffff,flatShading:true,roughness:.6});
-const BIRDS=22;
-const gulls = new THREE.InstancedMesh(birdGeom,birdMat,BIRDS); gulls.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(gulls);
-const birdData = Array.from({length:BIRDS},()=>({a:Math.random()*Math.PI*2,r:18+Math.random()*70,h:7+Math.random()*10,spd:.12+Math.random()*.22,wob:Math.random()*6.28}));
+/* ===== Joystick & spear UI ===== */
+const statusEl=document.getElementById('status');
+const spearBtn=document.getElementById('spear');
+let spearCooldown=0;
+
+const stick=document.getElementById('stick');
+const thumb=document.getElementById('thumb');
+let stickActive=false;
+let stickCenter={x:0,y:0};
+const stickVec={x:0,y:0};
+
+stick.addEventListener('pointerdown',e=>{
+  stickActive=true; stick.setPointerCapture(e.pointerId);
+  const r=stick.getBoundingClientRect(); stickCenter={x:r.left+r.width/2,y:r.top+r.height/2};
+});
+stick.addEventListener('pointerup',()=>{
+  stickActive=false; stickVec.x=stickVec.y=0; thumb.style.transform='translate(-50%,-50%)';
+});
+stick.addEventListener('pointermove',e=>{
+  if(!stickActive) return;
+  const dx=e.clientX-stickCenter.x, dy=e.clientY-stickCenter.y;
+  const max=46, len=Math.hypot(dx,dy), k=len>max?max/len:1, sx=dx*k, sy=dy*k;
+  thumb.style.transform=`translate(${sx}px,${sy}px) translate(-50%,-50%)`;
+  stickVec.x=sx/max; stickVec.y=sy/max;
+},{passive:true});
+
+addEventListener('wheel',e=>{
+  targetDist=THREE.MathUtils.clamp(targetDist + (e.deltaY>0?0.7:-0.7),4.2,12.0);
+},{passive:true});
+
+/* Pinch zoom */
+let pinch=0;
+canvas.addEventListener('touchstart',e=>{
+  if(e.touches.length===2){
+    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+    pinch=Math.hypot(dx,dy);
+  }
+},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+  if(e.touches.length===2){
+    e.preventDefault();
+    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
+    const d=Math.hypot(dx,dy);
+    targetDist=THREE.MathUtils.clamp(targetDist-(d-pinch)*0.01,4.2,12.0);
+    pinch=d;
+  }
+},{passive:false});
+
+/* ===== Seagulls (instanced) ===== */
+const birdGeom=new THREE.ConeGeometry(0.12,0.5,3); birdGeom.rotateX(Math.PI/2);
+const birdMat=new THREE.MeshStandardMaterial({color:0xffffff,flatShading:true,roughness:.6});
+const BIRDS=18;
+const gulls=new THREE.InstancedMesh(birdGeom,birdMat,BIRDS); gulls.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(gulls);
+const birdData=Array.from({length:BIRDS},()=>({a:Math.random()*Math.PI*2,r:18+Math.random()*60,h:7+Math.random()*10,spd:.12+Math.random()*.2,wob:Math.random()*6.28}));
 function updateBirds(t){
   const m=new THREE.Matrix4();
   for(let i=0;i<BIRDS;i++){
@@ -138,10 +184,10 @@ function makeCloud(){
   w.position.set((Math.random()-.5)*500,34+Math.random()*28,(Math.random()-.5)*500);
   w.scale.setScalar(4+Math.random()*4); w.userData.vel=.18+Math.random()*.35; scene.add(w); return w;
 }
-const clouds = Array.from({length:10}, makeCloud);
+const clouds=Array.from({length:10},makeCloud);
 function updateClouds(dt){ for(const c of clouds){ c.position.x+=dt*c.userData.vel; if(c.position.x>boat.position.x+260) c.position.x=boat.position.x-260; } }
 
-/* ===== Fish schools ===== */
+/* ===== Fish schools (instanced) ===== */
 const fishGeom=new THREE.CapsuleGeometry(0.06,0.18,1,5);
 const fishMat=new THREE.MeshStandardMaterial({color:0x66c2ff,roughness:.7,flatShading:true});
 const FISH_PER_SCHOOL=70, MAX_SCHOOLS=5;
@@ -165,26 +211,31 @@ function updateFish(dt,t){
   while(fishSchools.length>MAX_SCHOOLS){ const s=fishSchools.shift(); scene.remove(s.mesh); }
 }
 
-/* ===== Sharks & dolphins ===== */
-function makeFin(){
-  const fin=new THREE.Mesh(new THREE.ConeGeometry(0.28,0.7,4), new THREE.MeshStandardMaterial({color:0x222a33,roughness:.95,flatShading:true}));
-  fin.position.y=0.05; const g=new THREE.Group(); g.add(fin);
+/* ===== Shark model (fin + body) with attack/spear/sink ===== */
+function makeShark(){
+  const mat=new THREE.MeshStandardMaterial({color:0x394a59,roughness:0.9,flatShading:true});
+  const fin=new THREE.Mesh(new THREE.ConeGeometry(0.28,0.7,4), mat);
+  fin.position.y=0.05;
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.25,1.4,2,6), mat);
+  body.position.set(0,-0.5,0); body.rotation.z=Math.PI/2; // mostly hidden below surface
+  const g=new THREE.Group(); g.add(body,fin);
   g.position.set((Math.random()-0.5)*80,0,(Math.random()-0.5)*80);
-  g.userData={dir:new THREE.Vector2(Math.random()-0.5,Math.random()-0.5).normalize(),speed:1+Math.random()*0.6};
+  g.userData={dir:new THREE.Vector2(Math.random()-0.5,Math.random()-0.5).normalize(),speed:1.2,state:'cruise',t:0};
   scene.add(g); return g;
 }
-const fins=[...Array(6)].map(makeFin);
+const sharks=[...Array(5)].map(makeShark);
 let activeAttack=null;
 
+/* ===== Dolphins (occasional jump) ===== */
 function makeDolphin(){
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.18,0.7,2,6), new THREE.MeshStandardMaterial({color:0x9ec6df,roughness:0.6,flatShading:true}));
-  const snout= new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,0.25,5), body.material); snout.rotation.z=Math.PI/2; snout.position.set(0.45,0,0);
-  const fin  = new THREE.Mesh(new THREE.ConeGeometry(0.08,0.2,4), body.material); fin.rotation.x=Math.PI; fin.position.set(0,0.1,0);
-  const d=new THREE.Group(); d.add(body,snout,fin); d.visible=false; scene.add(d);
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.18,0.7,2,6), new THREE.MeshStandardMaterial({color:0x9ec6df,roughness:0.6,flatShading:true}));
+  const snout=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,0.25,5), body.material); snout.rotation.z=Math.PI/2; snout.position.set(0.45,0,0);
+  const dfin=new THREE.Mesh(new THREE.ConeGeometry(0.08,0.2,4), body.material); dfin.rotation.x=Math.PI; dfin.position.set(0,0.1,0);
+  const d=new THREE.Group(); d.add(body,snout,dfin); d.visible=false; scene.add(d);
   d.userData={active:false,t:0,dur:2,start:new THREE.Vector3(),end:new THREE.Vector3()};
   return d;
 }
-const dolphins=[...Array(4)].map(makeDolphin);
+const dolphins=[...Array(3)].map(makeDolphin);
 let dolphinCooldown=2;
 function trySpawnDolphin(dt){
   dolphinCooldown-=dt; if(dolphinCooldown>0) return;
@@ -208,66 +259,27 @@ function updateDolphins(dt){
   }
 }
 
-/* ===== UI: joystick + spear ===== */
-const statusEl=document.getElementById('status');
-const spearBtn=document.getElementById('spear');
-let spearCooldown=0;
-
-const stick=document.getElementById('stick');
-const thumb=document.getElementById('thumb');
-let stickActive=false;
-let stickCenter={x:0,y:0};
-const stickVec={x:0,y:0};
-
-stick.addEventListener('pointerdown',e=>{
-  stickActive=true; stick.setPointerCapture(e.pointerId);
-  const r=stick.getBoundingClientRect(); stickCenter={x:r.left+r.width/2,y:r.top+r.height/2};
-});
-stick.addEventListener('pointerup',()=>{
-  stickActive=false; stickVec.x=stickVec.y=0; thumb.style.transform='translate(-50%,-50%)';
-});
-stick.addEventListener('pointermove',e=>{
-  if(!stickActive) return;
-  const dx=e.clientX-stickCenter.x, dy=e.clientY-stickCenter.y;
-  const max=46, len=Math.hypot(dx,dy), k=len>max?max/len:1, sx=dx*k, sy=dy*k;
-  thumb.style.transform=`translate(${sx}px,${sy}px) translate(-50%,-50%)`;
-  stickVec.x=sx/max; stickVec.y=sy/max;
-}, {passive:true});
-
-addEventListener('wheel',e=>{
-  targetDist = THREE.MathUtils.clamp(targetDist + (e.deltaY>0?0.7:-0.7), 4.2, 12.0);
-}, {passive:true});
-
-/* Pinch zoom */
-let pinch=0;
-canvas.addEventListener('touchstart',e=>{
-  if(e.touches.length===2){
-    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
-    pinch=Math.hypot(dx,dy);
-  }
-},{passive:false});
-canvas.addEventListener('touchmove',e=>{
-  if(e.touches.length===2){
-    e.preventDefault();
-    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
-    const d=Math.hypot(dx,dy);
-    targetDist = THREE.MathUtils.clamp(targetDist - (d-pinch)*0.01, 4.2, 12.0);
-    pinch=d;
-  }
-},{passive:false});
-
-/* Spear action */
+/* ===== Spear action ===== */
 spearBtn.addEventListener('pointerdown',()=>{
   if(spearCooldown>0) return;
   spearCooldown=0.6; spearBtn.classList.add('cool');
   if(activeAttack && activeAttack.phase==='charge'){
-    const fin=activeAttack.fin, dist=fin.position.distanceTo(boat.position);
-    if(dist<3.2){ statusEl.textContent='Shark repelled!'; activeAttack=null; splash(fin.position); }
-    else{ statusEl.textContent='Missed'; }
-  } else { statusEl.textContent='Throw... (no target)'; }
+    const s=activeAttack.shark, dist=s.position.distanceTo(boat.position);
+    if(dist<3.5){
+      statusEl.textContent='Shark speared!';
+      s.userData.state='dying';
+      s.userData.t=0;
+      activeAttack=null;
+      splash(s.position);
+    } else {
+      statusEl.textContent='Missed';
+    }
+  } else {
+    statusEl.textContent='Throw... (no target)';
+  }
 });
 
-/* Splash rings */
+/* ===== Splash rings ===== */
 const splashRings=[];
 function splash(pos){
   const geo=new THREE.RingGeometry(0.01,0.02,16);
@@ -289,8 +301,8 @@ function updateBoat(dt){
   const v=new THREE.Vector2(stickVec.x,-stickVec.y);
   const targetSpeed=Math.min(1,v.length())*4.0;
   const targetHeading=v.length()>0.05?Math.atan2(v.x,v.y):boat.userData.heading;
-  boat.userData.speed=THREE.MathUtils.damp(boat.userData.speed,targetSpeed,4.0,dt);
-  boat.userData.heading=THREE.MathUtils.damp(boat.userData.heading,targetHeading,6.0,dt);
+  boat.userData.speed=THREE.MathUtils.damp(boat.userData.speed,targetSpeed,6.0,dt);
+  boat.userData.heading=THREE.MathUtils.damp(boat.userData.heading,targetHeading,10.0,dt);
 
   const dx=Math.sin(boat.userData.heading)*boat.userData.speed*dt;
   const dz=Math.cos(boat.userData.heading)*boat.userData.speed*dt;
@@ -301,37 +313,54 @@ function updateBoat(dt){
 }
 function followCam(dt){
   const look=new THREE.Vector3(boat.position.x,boat.position.y+0.6,boat.position.z);
-  camYaw=THREE.MathUtils.damp(camYaw,boat.userData.heading,2.5,dt);
+  camYaw=THREE.MathUtils.damp(camYaw,boat.userData.heading,3.0,dt);
   camera.position.x=look.x+Math.sin(camYaw)*camDist;
   camera.position.z=look.z+Math.cos(camYaw)*camDist;
-  camera.position.y=THREE.MathUtils.damp(camera.position.y,look.y+2.0,2.5,dt);
+  camera.position.y=THREE.MathUtils.damp(camera.position.y,look.y+2.0,3.0,dt);
   camera.lookAt(look);
   camDist=THREE.MathUtils.damp(camDist,targetDist,4.0,dt);
 }
 
-function updateFins(dt){
-  for(const f of fins){
-    if(activeAttack && f===activeAttack.fin) continue;
-    const u=f.userData;
-    f.position.x+=u.dir.x*u.speed*dt; f.position.z+=u.dir.y*u.speed*dt;
-    const R=100;
-    if(f.position.x>boat.position.x+R) f.position.x=boat.position.x-R;
-    if(f.position.x<boat.position.x-R) f.position.x=boat.position.x+R;
-    if(f.position.z>boat.position.z+R) f.position.z=boat.position.z-R;
-    if(f.position.z<boat.position.z-R) f.position.z=boat.position.z+R;
-    f.rotation.y=Math.atan2(u.dir.x,u.dir.y);
+function updateSharks(dt){
+  for(const s of sharks){
+    const u=s.userData;
+    if(u.state==='cruise'){
+      s.position.x+=u.dir.x*u.speed*dt; s.position.z+=u.dir.y*u.speed*dt;
+      const R=100;
+      if(s.position.x>boat.position.x+R) s.position.x=boat.position.x-R;
+      if(s.position.x<boat.position.x-R) s.position.x=boat.position.x+R;
+      if(s.position.z>boat.position.z+R) s.position.z=boat.position.z-R;
+      if(s.position.z<boat.position.z-R) s.position.z=boat.position.z+R;
+      s.rotation.y=Math.atan2(u.dir.x,u.dir.y);
+    } else if(u.state==='dying'){
+      u.t+=dt;
+      s.position.y -= 0.6*dt;            // sink
+      s.rotation.z += 0.8*dt;            // roll
+      s.scale.multiplyScalar(1-0.2*dt);  // shrink a bit as it sinks
+      if(u.t>3){                          // remove after sink
+        scene.remove(s); sharks.splice(sharks.indexOf(s),1);
+      }
+    }
   }
 }
+
+/* Shark attack logic (5–18% on travel checks) */
+let activeTimer=0;
 function checkEncounter(){
   if(travelDist<nextCheckDist) return;
   travelDist=0; nextCheckDist=10+Math.random()*8;
   if(activeAttack) return;
-  const p=0.05+Math.random()*0.13; // 5–18%
-  if(Math.random()<p){
-    let closest=null, dmin=1e9;
-    for(const f of fins){ const d=f.position.distanceTo(boat.position); if(d<dmin){ dmin=d; closest=f; } }
-    if(closest){ activeAttack={fin:closest,phase:'approach',t:0}; statusEl.textContent='Shark spotted!'; }
+  const p=0.05+Math.random()*0.13;
+  if(Math.random()<p && sharks.length){
+    // choose nearest shark
+    let nearest=null, dmin=1e9;
+    for(const s of sharks){ const d=s.position.distanceTo(boat.position); if(d<dmin){ dmin=d; nearest=s; } }
+    if(nearest){
+      activeAttack={shark:nearest,phase:'stalk',t:0};
+      statusEl.textContent='Shark spotted!';
+    }
   } else {
+    // fish instead
     const ang=Math.random()*Math.PI*2, r=6+Math.random()*10;
     spawnSchool(new THREE.Vector3(boat.position.x+Math.cos(ang)*r,0,boat.position.z+Math.sin(ang)*r));
     statusEl.textContent='School of fish!';
@@ -339,22 +368,25 @@ function checkEncounter(){
 }
 function updateAttack(dt){
   if(!activeAttack) return;
-  const fin=activeAttack.fin;
-  if(activeAttack.phase==='approach'){
+  const s=activeAttack.shark;
+  if(!s.parent){ activeAttack=null; return; } // shark removed
+  if(activeAttack.phase==='stalk'){
     activeAttack.t+=dt;
-    const rel=new THREE.Vector2(boat.position.x-fin.position.x, boat.position.z-fin.position.z);
-    const dir=rel.normalize();
-    fin.position.x+=dir.x*1.8*dt; fin.position.z+=dir.y*1.8*dt;
-    fin.rotation.y=Math.atan2(dir.x,dir.y);
-    if(activeAttack.t>2.2 || fin.position.distanceTo(boat.position)<6){ activeAttack.phase='charge'; activeAttack.t=0; statusEl.textContent='Shark charging! SPEAR!'; }
-  } else {
+    const toBoat=new THREE.Vector2(boat.position.x-s.position.x, boat.position.z-s.position.z).normalize();
+    s.position.x+=toBoat.x*1.2*dt; s.position.z+=toBoat.y*1.2*dt;
+    s.rotation.y=Math.atan2(toBoat.x,toBoat.y);
+    if(activeAttack.t>2.0 || s.position.distanceTo(boat.position)<6){
+      activeAttack.phase='charge'; activeAttack.t=0; statusEl.textContent='Shark charging! SPEAR!';
+    }
+  } else if(activeAttack.phase==='charge'){
     activeAttack.t+=dt;
-    const rel=new THREE.Vector2(boat.position.x-fin.position.x, boat.position.z-fin.position.z).normalize();
-    fin.position.x+=rel.x*4.5*dt; fin.position.z+=rel.y*4.5*dt;
-    fin.rotation.y=Math.atan2(rel.x,rel.y);
-    const d=fin.position.distanceTo(boat.position);
-    if(d<1.4){ statusEl.textContent='Boat hit! (cosmetic)'; splash(boat.position); activeAttack=null; }
-    if(activeAttack && activeAttack.t>3.2){ activeAttack=null; statusEl.textContent='Shark broke off.'; }
+    const toBoat=new THREE.Vector2(boat.position.x-s.position.x, boat.position.z-s.position.z).normalize();
+    s.position.x+=toBoat.x*4.2*dt; s.position.z+=toBoat.y*4.2*dt;
+    s.rotation.y=Math.atan2(toBoat.x,toBoat.y);
+    if(s.position.distanceTo(boat.position)<1.6){
+      statusEl.textContent='Boat hit! (cosmetic)'; splash(boat.position); activeAttack=null;
+    }
+    if(activeAttack && activeAttack.t>3.0){ activeAttack=null; statusEl.textContent='Shark broke off.'; }
   }
 }
 
@@ -365,8 +397,10 @@ function animate(){
 
   updateOcean(dt);
   updateBoat(dt); followCam(dt);
-  updateBirds(t); updateClouds(dt); updateFins(dt); checkEncounter(); updateAttack(dt);
-  trySpawnDolphin(dt); updateDolphins(dt); updateFish(dt,t); updateSplashes(dt);
+  updateBirds(t); updateClouds(dt); updateSharks(dt);
+  checkEncounter(); updateAttack(dt);
+  trySpawnDolphin(dt); updateDolphins(dt);
+  updateFish(dt,t); updateSplashes(dt);
 
   renderer.render(scene,camera);
 
@@ -375,17 +409,17 @@ function animate(){
 }
 animate();
 
-/* seeds */
+/* Seeds */
 for(let i=0;i<3;i++){ const a=Math.random()*Math.PI*2, r=6+Math.random()*10; spawnSchool(new THREE.Vector3(Math.cos(a)*r,0,Math.sin(a)*r)); }
 
-/* resize */
-addEventListener('resize', ()=>{
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, DPR_CAP));
-  renderer.setSize(innerWidth, innerHeight, false);
+/* Resize */
+addEventListener('resize',()=>{
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,DPR_CAP));
+  renderer.setSize(innerWidth,innerHeight,false);
   camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
-}, {passive:true});
+},{passive:true});
 
-/* vary waves over time */
+/* Wave variety */
 setInterval(()=>{
   waves[0].amp=THREE.MathUtils.lerp(0.7,1.5,Math.random());
   waves[1].amp=THREE.MathUtils.lerp(0.35,0.9,Math.random());
