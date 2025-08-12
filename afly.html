@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>✈️ Sky — Seamless Terrain + Proper Rendering + Bomb Cam + Camera Modes</title>
+<title>✈️ Sky — Lowered Ship Framing + Visible Trajectory</title>
 <style>
   html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block;touch-action:manipulation}
@@ -71,7 +71,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x99bbdd, 0.0010);
 
-const camera = new THREE.PerspectiveCamera(65, 1, 0.3, 20000); // near lowered for FPV
+const camera = new THREE.PerspectiveCamera(65, 1, 0.3, 20000);
 function sizeRendererToCanvas(){
   const w = canvas.clientWidth, h = canvas.clientHeight;
   renderer.setSize(w, h, false);
@@ -182,7 +182,7 @@ throttleEl.addEventListener('pointermove', e=>{ if(e.pressure===0) return; setTh
 let paused=false, touchCount=0, touchTimer=0;
 addEventListener('touchstart', e=>{ touchCount=e.touches.length; clearTimeout(touchTimer); touchTimer=setTimeout(()=>{ if(touchCount>=3) paused=!paused; },120); }, {passive:true});
 
-/* Keyboard + bomb buttons (both launch out the FRONT) */
+/* Keyboard + bomb buttons */
 addEventListener('keydown', (e)=>{
   if(e.code==='Space' || e.code==='KeyB') dropBomb(false);
   if(e.code==='KeyF') dropBomb(true);
@@ -210,7 +210,7 @@ function n2(x,y,scale=1){ return noise.noise(x/scale, y/scale, seed)*0.5+0.5; }
 const CHUNK_SIZE=240, RES=48;
 let LOAD_RADIUS=6;
 
-const DX = CHUNK_SIZE/RES;                 // lattice step (global grid)
+const DX = CHUNK_SIZE/RES;
 const heightCache = new Map();
 const hKey = (gx,gz)=> gx + "," + gz;
 
@@ -259,7 +259,6 @@ const pool=[], chunks=new Map();
 const terrainMat=new THREE.MeshStandardMaterial({flatShading:true,vertexColors:true,metalness:0,roughness:1});
 const key=(ix,iz)=>ix+','+iz;
 
-/* ---------- makeChunk: USE SHARED LATTICE + FORCE GPU UPDATES (no flat tiles) ---------- */
 function makeChunk(ix, iz){
   let geom = pool.pop();
   if(!geom){
@@ -270,25 +269,18 @@ function makeChunk(ix, iz){
   const posAttr = geom.getAttribute('position');
   const posArr = posAttr.array;
   const vertCount = (RES+1)*(RES+1);
-
-  // write colors into a temp array (to reuse attribute if it exists)
   const colArr = new Float32Array(vertCount*3);
-
   const worldX0 = ix*CHUNK_SIZE, worldZ0 = iz*CHUNK_SIZE;
 
   for(let z=0; z<=RES; z++){
     for(let x=0; x<=RES; x++){
       const i = z*(RES+1)+x, p = i*3;
-
-      // Exact global lattice indices for this vertex (continuous across chunks)
       const gx = ix*RES + x;
       const gz = iz*RES + z;
 
-      // World coords only for biome/color
       const wx = worldX0 + (x/RES - 0.5)*CHUNK_SIZE;
       const wz = worldZ0 + (z/RES - 0.5)*CHUNK_SIZE;
 
-      // Height from the integer lattice (matches neighbors perfectly)
       const elev = heightAtIndex(gx, gz);
       posArr[p+1] = elev;
 
@@ -298,7 +290,6 @@ function makeChunk(ix, iz){
     }
   }
 
-  // Install / update color attribute without recreating geometry every time
   const existingColor = geom.getAttribute('color');
   if(!existingColor || existingColor.count !== vertCount){
     geom.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
@@ -307,7 +298,6 @@ function makeChunk(ix, iz){
     existingColor.needsUpdate = true;
   }
 
-  // flag GPU updates for positions and recompute normals (correct lighting)
   posAttr.needsUpdate = true;
   geom.computeVertexNormals();
   geom.getAttribute('normal').needsUpdate = true;
@@ -353,7 +343,6 @@ function updateChunks(px,pz,forward){
     const {ix,iz}=m.userData;
     if(Math.abs(ix-cx)>LOAD_RADIUS+1 || Math.abs(iz-cz)>LOAD_RADIUS+1){
       scene.remove(m);
-      // keep geometry for pooling (avoid disposes that cause visual stalls)
       pool.push(m.geometry);
       chunks.delete(k);
       removeTown(ix,iz);
@@ -448,16 +437,13 @@ function dropBomb(follow){
   ship.updateMatrixWorld(true);
   const b = new THREE.Mesh(bombGeo, bombMat);
 
-  // spawn at the ship's nose (local -Z) in world
   const noseWorld = new THREE.Vector3(0,-0.2,-5.0).applyMatrix4(ship.matrixWorld);
   b.position.copy(noseWorld);
 
-  // forward of ship (nose direction)
   const fwd = new THREE.Vector3(); ship.getWorldDirection(fwd);
   const upWorld = new THREE.Vector3(0,1,0);
   const right = new THREE.Vector3().crossVectors(fwd, upWorld).normalize();
 
-  // launch OUT THE FRONT with a slight downward arc
   const launchSpeed = 90 + state.speed*0.6;
   const sideJitter  = (Math.random()-0.5)*2.0;
   const initialVel = new THREE.Vector3()
@@ -556,7 +542,55 @@ function stepExplosions(dt){
   }
 }
 
-/* ---------- Aimer (predictive impact ring only; no HUD crosshair, no nose laser) ---------- */
+/* ---------- Trajectory preview (visible arc through center) ---------- */
+const traj = {
+  line: null,
+  maxPts: 120,
+  dt: 0.05,
+  mat: new THREE.LineBasicMaterial({color:0x8be7ff, transparent:true, opacity:0.85})
+};
+{
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(traj.maxPts*3), 3));
+  traj.line = new THREE.Line(geo, traj.mat);
+  scene.add(traj.line);
+}
+function updateTrajectory(){
+  ship.updateMatrixWorld(true);
+  const noseWorld = new THREE.Vector3(0,-0.2,-5.0).applyMatrix4(ship.matrixWorld);
+  const fwd = new THREE.Vector3(); ship.getWorldDirection(fwd);
+  const up = new THREE.Vector3(0,1,0);
+
+  const launchSpeed = 90 + state.speed*0.6;
+  const vel = new THREE.Vector3()
+    .addScaledVector(fwd, launchSpeed)
+    .addScaledVector(up, -3.5)
+    .addScaledVector(state.vel, 0.25);
+
+  const g = 9.8;
+  const p = noseWorld.clone();
+  const v = vel.clone();
+
+  const posAttr = traj.line.geometry.getAttribute('position');
+  const arr = posAttr.array;
+  let count=0;
+
+  for(let i=0;i<traj.maxPts;i++){
+    arr[i*3+0]=p.x; arr[i*3+1]=p.y; arr[i*3+2]=p.z;
+    count++;
+    v.y -= g*traj.dt;
+    p.addScaledVector(v, traj.dt);
+    const gy = sampleHeightLattice(p.x,p.z);
+    if(p.y<=gy){ // stop at ground
+      arr[(i+1)*3+0]=p.x; arr[(i+1)*3+1]=gy; arr[(i+1)*3+2]=p.z;
+      count++; break;
+    }
+  }
+  posAttr.needsUpdate = true;
+  traj.line.geometry.setDrawRange(0, count);
+}
+
+/* ---------- Aimer (ground impact ring) ---------- */
 const aim = {
   ring: null,
   ringMat: new THREE.MeshBasicMaterial({color:0xffe17a, transparent:true, opacity:0.9})
@@ -582,13 +616,20 @@ function predictImpact(origin, velocity){
   return null;
 }
 
-/* ---------- Camera Modes ---------- */
-const camStates = {
-  chase:{name:'Chase'},
-  fpv:{name:'FPV'},
-  orbit:{name:'FreeCam'},
-  bomb:{name:'BombCam'}
-};
+/* ---------- Camera Modes (ship framed lower) ---------- */
+const camStates = { chase:{name:'Chase'}, fpv:{name:'FPV'}, orbit:{name:'FreeCam'}, bomb:{name:'BombCam'} };
+const LOOK_UP = 14;        // raises look-at point so ship sits lower in frame
+const CHASE_DOWN = -1.0;   // nudges camera a hair lower to emphasize composition
+
+const chaseOffset = new THREE.Vector3(0, 7.5 + CHASE_DOWN, -20);
+const chaseLook   = new THREE.Vector3(0, 2, -6);
+const fpvOffset   = new THREE.Vector3(0, 2.0, -2.2); // slightly higher FPV per earlier request
+
+const camDesiredPos = new THREE.Vector3();
+const camDesiredLook = new THREE.Vector3();
+
+const camBtn = document.getElementById('camBtn');
+let cameraMode='chase', bombCamTarget=null;
 camBtn.addEventListener('click', cycleCameraMode, {passive:true});
 function cycleCameraMode(){
   if(cameraMode==='chase') cameraMode='fpv';
@@ -596,11 +637,9 @@ function cycleCameraMode(){
   else if(cameraMode==='orbit') cameraMode='chase';
   updateCamBtn();
 }
-function updateCamBtn(){
-  camBtn.textContent = `CAM: ${camStates[cameraMode]?.name||'Chase'}`;
-}
+function updateCamBtn(){ camBtn.textContent = `CAM: ${camStates[cameraMode]?.name||'Chase'}`; }
 
-/* FreeCam (orbit) controls */
+/* FreeCam (orbit) inputs */
 let orbitActive=false, orbitLastX=0, orbitLastY=0;
 let orbitAz=0, orbitEl=0.45, orbitR=32;
 function onFreeCamDown(e){
@@ -618,10 +657,7 @@ function onFreeCamMove(e){
   orbitEl = THREE.MathUtils.clamp(orbitEl - dy*0.003, 0.05, 1.35);
 }
 function onFreeCamUp(){ orbitActive=false; }
-function onWheel(e){
-  if(cameraMode!=='orbit') return;
-  orbitR = THREE.MathUtils.clamp(orbitR + Math.sign(e.deltaY)*2, 12, 80);
-}
+function onWheel(e){ if(cameraMode==='orbit') orbitR = THREE.MathUtils.clamp(orbitR + Math.sign(e.deltaY)*2, 12, 80); }
 canvas.addEventListener('mousedown', onFreeCamDown, {passive:true});
 canvas.addEventListener('mousemove', onFreeCamMove, {passive:true});
 addEventListener('mouseup', onFreeCamUp, {passive:true});
@@ -631,21 +667,15 @@ addEventListener('touchend', onFreeCamUp, {passive:true});
 addEventListener('wheel', onWheel, {passive:true});
 
 /* ---------- Flight & Camera Loop ---------- */
-const state={
-  speed:0, heading:0, pitch:0, roll:0,
-  pos:new THREE.Vector3(0,60,0),
-  vel:new THREE.Vector3(0,0,-1),
-  onGround:false, onWater:false, gearDown:false, floatDown:false,
-  score:0
-};
+const state={ speed:0, heading:0, pitch:0, roll:0, pos:new THREE.Vector3(0,60,0), vel:new THREE.Vector3(0,0,-1),
+  onGround:false, onWater:false, gearDown:false, floatDown:false, score:0 };
 const tmpV=new THREE.Vector3();
 const worldPos = new THREE.Vector3();
 const worldLook = new THREE.Vector3();
 let cameraInitialized=false;
 
-const chaseOffset = new THREE.Vector3(0, 8, -20);
-const chaseLook   = new THREE.Vector3(0, 2, -6);
-const fpvOffset   = new THREE.Vector3(0, 2.0, -2.2); // slightly higher FPV per request
+const gearLabel = document.getElementById('gearLabel');
+const hud = document.getElementById('hud');
 
 function stepShip(dt){
   const turn=joyDx, lift=-joyDy;
@@ -700,20 +730,21 @@ function stepShip(dt){
   if(cameraMode==='chase'){
     worldPos.copy(chaseOffset).applyMatrix4(ship.matrixWorld);
     worldLook.copy(chaseLook).applyMatrix4(ship.matrixWorld);
+    worldLook.y += LOOK_UP;              // raise look so ship sits lower on screen
     camDesiredPos.copy(worldPos);
     camDesiredLook.copy(worldLook);
   } else if(cameraMode==='fpv'){
     worldPos.copy(fpvOffset).applyMatrix4(ship.matrixWorld);
     const fwd = new THREE.Vector3(); ship.getWorldDirection(fwd);
     camDesiredPos.copy(worldPos);
-    camDesiredLook.copy(worldPos).add(fwd.multiplyScalar(10));
+    camDesiredLook.copy(worldPos).add(fwd.multiplyScalar(10)).add(new THREE.Vector3(0, LOOK_UP*0.08, 0)); // slight up-tilt
   } else if(cameraMode==='orbit'){
     const r=orbitR, az=orbitAz, el=orbitEl;
     const ox = state.pos.x + r*Math.cos(el)*Math.cos(az);
     const oy = state.pos.y + r*Math.sin(el);
     const oz = state.pos.z + r*Math.cos(el)*Math.sin(az);
     camDesiredPos.set(ox,oy,oz);
-    camDesiredLook.copy(state.pos).add(new THREE.Vector3(0,2,0));
+    camDesiredLook.copy(state.pos).add(new THREE.Vector3(0, 2+LOOK_UP, 0)); // raise orbit look target too
   } else if(cameraMode==='bomb' && bombCamTarget){
     const v = bombCamTarget.userData.vel.clone();
     if(v.lengthSq()<1e-3) v.set(0,0.1,0);
@@ -728,7 +759,7 @@ function stepShip(dt){
   updateLoadRadius(altitude);
   updateChunks(state.pos.x, state.pos.z, forward);
 
-  // AIMER prediction using current would‑be launch
+  // AIMER ring (impact)
   const noseWorld = new THREE.Vector3(0,-0.2,-5.0).applyMatrix4(ship.matrixWorld);
   const fwd = new THREE.Vector3(); ship.getWorldDirection(fwd);
   const upWorld = new THREE.Vector3(0,1,0);
@@ -749,6 +780,9 @@ function stepShip(dt){
   } else {
     aim.ring.visible = false;
   }
+
+  // Trajectory line update (kept centered via raised look-at)
+  updateTrajectory();
 
   gearLabel.textContent = state.onWater ? 'FLOATS' : (state.gearDown ? 'GEAR' : '—');
 }
@@ -780,7 +814,7 @@ function tick(){
 (function init(){
   updateCamBtn();
   updateChunks(0,0,new THREE.Vector3(0,0,-1));
-  camDesiredPos.set(0,70,20); camDesiredLook.set(0,60,0);
+  camDesiredPos.set(0,70,20); camDesiredLook.set(0,60+LOOK_UP,0);
   requestAnimationFrame(tick);
   setTimeout(()=>{ const r=throttleRect(); setThrottleFrom(r.top + (1-throttle)*r.height*0.8 + 20); },0);
   ['touchmove','gesturestart'].forEach(evt=>addEventListener(evt,e=>{
