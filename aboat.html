@@ -3,27 +3,42 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>Low‑Poly Ocean — Boat, Waves, Shark Attack (r149 global THREE)</title>
+<title>Low‑Poly Ocean — Boat, Waves, Shark Attack (r149, joystick fixed)</title>
 <style>
-  html,body{margin:0;height:100%;background:#7ec0ff;overflow:hidden}
-  canvas{position:fixed;inset:0}
-  .hud{position:fixed;left:12px;bottom:12px;color:#fff;font:600 12px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-  .pill{background:rgba(0,0,0,.35);padding:8px 10px;border-radius:10px;backdrop-filter:blur(6px)}
-  #stick{position:fixed;left:14px;bottom:70px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);touch-action:none}
-  #thumb{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.5)}
-  #spear{position:fixed;right:14px;bottom:26px;width:120px;height:120px;border-radius:50%;border:none;background:rgba(220,40,40,.9);color:#fff;font:800 18px system-ui,-apple-system;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 14px rgba(0,0,0,.35);touch-action:none}
-  #spear.cool{background:rgba(110,110,110,.6)}
-  .tag{position:fixed;right:14px;top:14px;color:#fff;background:rgba(0,0,0,.35);padding:6px 10px;border-radius:8px;font:600 12px system-ui}
+  /* Global/mobile fixes */
+  html, body { margin:0; height:100%; overscroll-behavior:none; touch-action:none; -webkit-user-select:none; user-select:none; background:#7ec0ff; overflow:hidden; }
+  canvas { position:fixed; inset:0; touch-action:none; }
+
+  /* HUD */
+  .hud { position:fixed; left:12px; bottom:12px; color:#fff; font:600 12px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
+  .pill { background:rgba(0,0,0,.35); padding:8px 10px; border-radius:10px; backdrop-filter:blur(6px); }
+
+  /* Joystick (fixed origin/offset) */
+  #stick { position:fixed; left:14px; bottom:70px; width:120px; height:120px; border-radius:50%;
+    background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.2);
+    touch-action:none; transform:translate3d(0,0,0); -webkit-transform:translate3d(0,0,0);
+  }
+  #thumb { position:absolute; left:50%; top:50%; width:54px; height:54px; margin:-27px 0 0 -27px;
+    border-radius:50%; background:rgba(255,255,255,.25); border:1px solid rgba(255,255,255,.5); pointer-events:none;
+  }
+
+  /* Spear button */
+  #spear { position:fixed; right:14px; bottom:26px; width:120px; height:120px; border:none; border-radius:50%;
+    background:rgba(220,40,40,.9); color:#fff; font:800 18px system-ui,-apple-system; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 14px rgba(0,0,0,.35); touch-action:none;
+  }
+  #spear.cool { background:rgba(110,110,110,.6); }
+
+  .tag{ position:fixed; right:14px; top:14px; color:#fff; background:rgba(0,0,0,.35); padding:6px 10px; border-radius:8px; font:600 12px system-ui; }
 </style>
 </head>
 <body>
 <canvas id="app"></canvas>
-<div class="hud pill">Drag circle to steer • Pinch/scroll to zoom</div>
+<div class="hud pill">Drag the circle to steer • Pinch with two fingers to zoom</div>
 <div id="stick"><div id="thumb"></div></div>
 <button id="spear" aria-label="Throw Spear">SPEAR</button>
 <div class="tag pill" id="status">Calm seas</div>
 
-<!-- Lock to r149: global THREE works, no ES modules needed -->
+<!-- Lock to r149 so global THREE works without modules/bundlers -->
 <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
 <script>
 /* ===== Core setup (mobile friendly) ===== */
@@ -42,23 +57,16 @@ const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,4000);
 camera.position.set(0,2.3,7);
 
 scene.add(new THREE.HemisphereLight(0xBBD8FF,0x1d3557,0.95));
-const sunLight=new THREE.DirectionalLight(0xffffff,0.65);
-sunLight.position.set(500,800,400);
-scene.add(sunLight);
+const sunLight=new THREE.DirectionalLight(0xffffff,0.65); sunLight.position.set(500,800,400); scene.add(sunLight);
 
 /* ===== Gradient sky dome (no black sky) ===== */
 const skyGeo=new THREE.SphereGeometry(5000,16,12);
 const skyMat=new THREE.ShaderMaterial({
   side:THREE.BackSide,
-  uniforms:{
-    topColor:{value:new THREE.Color(0x8ec9ff)},
-    bottomColor:{value:new THREE.Color(0xbfe3ff)},
-    offset:{value:33.0}, exponent:{value:0.65}
-  },
+  uniforms:{ topColor:{value:new THREE.Color(0x8ec9ff)}, bottomColor:{value:new THREE.Color(0xbfe3ff)}, offset:{value:33.0}, exponent:{value:0.65} },
   vertexShader:`varying vec3 vPos; void main(){ vec4 p=modelMatrix*vec4(position,1.0); vPos=p.xyz; gl_Position=projectionMatrix*viewMatrix*p; }`,
   fragmentShader:`uniform vec3 topColor; uniform vec3 bottomColor; uniform float offset; uniform float exponent;
-  varying vec3 vPos; void main(){ float h=normalize(vPos+vec3(0.0,offset,0.0)).y; float f=max(pow(max(h,0.0),exponent),0.0);
-  gl_FragColor=vec4(mix(bottomColor,topColor,f),1.0); }`
+  varying vec3 vPos; void main(){ float h=normalize(vPos+vec3(0.0,offset,0.0)).y; float f=max(pow(max(h,0.0),exponent),0.0); gl_FragColor=vec4(mix(bottomColor,topColor,f),1.0); }`
 });
 scene.add(new THREE.Mesh(skyGeo,skyMat));
 
@@ -84,10 +92,11 @@ function updateOcean(dt){
   tWave+=dt;
   for(let i=0;i<pos.count;i++){ const x=baseXZ[i*2], z=baseXZ[i*2+1]; pos.setY(i, waveHeight(x,z,tWave)); }
   pos.needsUpdate=true;
-  if((normalsTick=(normalsTick+1)%2)===0){ oceanGeo.computeVertexNormals(); oceanGeo.normalizeNormals(); }
+  normalsTick=(normalsTick+1)%3; // less frequent for perf
+  if(normalsTick===0){ oceanGeo.computeVertexNormals(); oceanGeo.normalizeNormals(); }
 }
 
-/* ===== Boat (controllable, smoother controls) ===== */
+/* ===== Boat (controllable) ===== */
 function makeBoat(){
   const hull=new THREE.Mesh(new THREE.ConeGeometry(0.7,2.4,6), new THREE.MeshStandardMaterial({color:0x8a4928,roughness:0.9,flatShading:true}));
   hull.rotation.x=Math.PI/2; hull.position.y=0.25;
@@ -105,55 +114,34 @@ let camYaw=0;
 let camDist=7.2;
 let targetDist=7.2;
 
-/* ===== Joystick & spear UI ===== */
-const statusEl=document.getElementById('status');
-const spearBtn=document.getElementById('spear');
-let spearCooldown=0;
-
+/* ===== Joystick (fixed origin/offset) ===== */
 const stick=document.getElementById('stick');
 const thumb=document.getElementById('thumb');
-let stickActive=false;
-let stickCenter={x:0,y:0};
 const stickVec={x:0,y:0};
+let dragging=false;
 
-stick.addEventListener('pointerdown',e=>{
-  stickActive=true; stick.setPointerCapture(e.pointerId);
-  const r=stick.getBoundingClientRect(); stickCenter={x:r.left+r.width/2,y:r.top+r.height/2};
-});
-stick.addEventListener('pointerup',()=>{
-  stickActive=false; stickVec.x=stickVec.y=0; thumb.style.transform='translate(-50%,-50%)';
-});
-stick.addEventListener('pointermove',e=>{
-  if(!stickActive) return;
-  const dx=e.clientX-stickCenter.x, dy=e.clientY-stickCenter.y;
-  const max=46, len=Math.hypot(dx,dy), k=len>max?max/len:1, sx=dx*k, sy=dy*k;
+function updateStick(e){
+  const r=stick.getBoundingClientRect();
+  const cx=r.left+r.width/2, cy=r.top+r.height/2; // recompute each move, fixes origin issues
+  const dx=e.clientX-cx, dy=e.clientY-cy;
+  const max=r.width*0.38; // ~46px
+  const len=Math.hypot(dx,dy);
+  const k=len>max?max/len:1;
+  const sx=dx*k, sy=dy*k;
   thumb.style.transform=`translate(${sx}px,${sy}px) translate(-50%,-50%)`;
   stickVec.x=sx/max; stickVec.y=sy/max;
-},{passive:true});
+}
+stick.addEventListener('pointerdown',(e)=>{ dragging=true; stick.setPointerCapture(e.pointerId); e.preventDefault(); updateStick(e); },{passive:false});
+stick.addEventListener('pointermove',(e)=>{ if(!dragging) return; e.preventDefault(); updateStick(e); },{passive:false});
+stick.addEventListener('pointerup',()=>{ dragging=false; thumb.style.transform='translate(-50%,-50%)'; stickVec.x=0; stickVec.y=0; },{passive:false});
 
-addEventListener('wheel',e=>{
-  targetDist=THREE.MathUtils.clamp(targetDist + (e.deltaY>0?0.7:-0.7),4.2,12.0);
-},{passive:true});
-
-/* Pinch zoom */
+/* Wheel & pinch zoom */
+addEventListener('wheel',e=>{ targetDist=THREE.MathUtils.clamp(targetDist+(e.deltaY>0?0.7:-0.7),4.2,12.0); },{passive:true});
 let pinch=0;
-canvas.addEventListener('touchstart',e=>{
-  if(e.touches.length===2){
-    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
-    pinch=Math.hypot(dx,dy);
-  }
-},{passive:false});
-canvas.addEventListener('touchmove',e=>{
-  if(e.touches.length===2){
-    e.preventDefault();
-    const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY;
-    const d=Math.hypot(dx,dy);
-    targetDist=THREE.MathUtils.clamp(targetDist-(d-pinch)*0.01,4.2,12.0);
-    pinch=d;
-  }
-},{passive:false});
+canvas.addEventListener('touchstart',e=>{ if(e.touches.length===2){ const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY; pinch=Math.hypot(dx,dy); } },{passive:false});
+canvas.addEventListener('touchmove',e=>{ if(e.touches.length===2){ e.preventDefault(); const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY; const d=Math.hypot(dx,dy); targetDist=THREE.MathUtils.clamp(targetDist-(d-pinch)*0.01,4.2,12.0); pinch=d; } },{passive:false});
 
-/* ===== Seagulls (instanced) ===== */
+/* ===== Seagulls ===== */
 const birdGeom=new THREE.ConeGeometry(0.12,0.5,3); birdGeom.rotateX(Math.PI/2);
 const birdMat=new THREE.MeshStandardMaterial({color:0xffffff,flatShading:true,roughness:.6});
 const BIRDS=18;
@@ -187,7 +175,7 @@ function makeCloud(){
 const clouds=Array.from({length:10},makeCloud);
 function updateClouds(dt){ for(const c of clouds){ c.position.x+=dt*c.userData.vel; if(c.position.x>boat.position.x+260) c.position.x=boat.position.x-260; } }
 
-/* ===== Fish schools (instanced) ===== */
+/* ===== Fish schools ===== */
 const fishGeom=new THREE.CapsuleGeometry(0.06,0.18,1,5);
 const fishMat=new THREE.MeshStandardMaterial({color:0x66c2ff,roughness:.7,flatShading:true});
 const FISH_PER_SCHOOL=70, MAX_SCHOOLS=5;
@@ -211,13 +199,11 @@ function updateFish(dt,t){
   while(fishSchools.length>MAX_SCHOOLS){ const s=fishSchools.shift(); scene.remove(s.mesh); }
 }
 
-/* ===== Shark model (fin + body) with attack/spear/sink ===== */
+/* ===== Shark model (fin + body) with attack/spear/sink) ===== */
 function makeShark(){
   const mat=new THREE.MeshStandardMaterial({color:0x394a59,roughness:0.9,flatShading:true});
-  const fin=new THREE.Mesh(new THREE.ConeGeometry(0.28,0.7,4), mat);
-  fin.position.y=0.05;
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.25,1.4,2,6), mat);
-  body.position.set(0,-0.5,0); body.rotation.z=Math.PI/2; // mostly hidden below surface
+  const fin=new THREE.Mesh(new THREE.ConeGeometry(0.28,0.7,4), mat); fin.position.y=0.05;
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.25,1.4,2,6), mat); body.position.set(0,-0.5,0); body.rotation.z=Math.PI/2;
   const g=new THREE.Group(); g.add(body,fin);
   g.position.set((Math.random()-0.5)*80,0,(Math.random()-0.5)*80);
   g.userData={dir:new THREE.Vector2(Math.random()-0.5,Math.random()-0.5).normalize(),speed:1.2,state:'cruise',t:0};
@@ -260,6 +246,9 @@ function updateDolphins(dt){
 }
 
 /* ===== Spear action ===== */
+const statusEl=document.getElementById('status');
+const spearBtn=document.getElementById('spear');
+let spearCooldown=0;
 spearBtn.addEventListener('pointerdown',()=>{
   if(spearCooldown>0) return;
   spearCooldown=0.6; spearBtn.classList.add('cool');
@@ -267,16 +256,9 @@ spearBtn.addEventListener('pointerdown',()=>{
     const s=activeAttack.shark, dist=s.position.distanceTo(boat.position);
     if(dist<3.5){
       statusEl.textContent='Shark speared!';
-      s.userData.state='dying';
-      s.userData.t=0;
-      activeAttack=null;
-      splash(s.position);
-    } else {
-      statusEl.textContent='Missed';
-    }
-  } else {
-    statusEl.textContent='Throw... (no target)';
-  }
+      s.userData.state='dying'; s.userData.t=0; activeAttack=null; splash(s.position);
+    } else { statusEl.textContent='Missed'; }
+  } else { statusEl.textContent='Throw... (no target)'; }
 });
 
 /* ===== Splash rings ===== */
@@ -301,8 +283,10 @@ function updateBoat(dt){
   const v=new THREE.Vector2(stickVec.x,-stickVec.y);
   const targetSpeed=Math.min(1,v.length())*4.0;
   const targetHeading=v.length()>0.05?Math.atan2(v.x,v.y):boat.userData.heading;
-  boat.userData.speed=THREE.MathUtils.damp(boat.userData.speed,targetSpeed,6.0,dt);
-  boat.userData.heading=THREE.MathUtils.damp(boat.userData.heading,targetHeading,10.0,dt);
+
+  // smoother feel
+  boat.userData.speed  = THREE.MathUtils.damp(boat.userData.speed,  targetSpeed,  7.0, dt);
+  boat.userData.heading= THREE.MathUtils.damp(boat.userData.heading,targetHeading,12.0, dt);
 
   const dx=Math.sin(boat.userData.heading)*boat.userData.speed*dt;
   const dz=Math.cos(boat.userData.heading)*boat.userData.speed*dt;
@@ -333,34 +317,24 @@ function updateSharks(dt){
       if(s.position.z<boat.position.z-R) s.position.z=boat.position.z+R;
       s.rotation.y=Math.atan2(u.dir.x,u.dir.y);
     } else if(u.state==='dying'){
-      u.t+=dt;
-      s.position.y -= 0.6*dt;            // sink
-      s.rotation.z += 0.8*dt;            // roll
-      s.scale.multiplyScalar(1-0.2*dt);  // shrink a bit as it sinks
-      if(u.t>3){                          // remove after sink
-        scene.remove(s); sharks.splice(sharks.indexOf(s),1);
-      }
+      u.t+=dt; s.position.y-=0.6*dt; s.rotation.z+=0.8*dt; s.scale.multiplyScalar(1-0.2*dt);
+      if(u.t>3){ scene.remove(s); sharks.splice(sharks.indexOf(s),1); }
     }
   }
 }
 
 /* Shark attack logic (5–18% on travel checks) */
-let activeTimer=0;
 function checkEncounter(){
   if(travelDist<nextCheckDist) return;
   travelDist=0; nextCheckDist=10+Math.random()*8;
   if(activeAttack) return;
-  const p=0.05+Math.random()*0.13;
+
+  const p=0.05+Math.random()*0.13; // 5–18%
   if(Math.random()<p && sharks.length){
-    // choose nearest shark
     let nearest=null, dmin=1e9;
     for(const s of sharks){ const d=s.position.distanceTo(boat.position); if(d<dmin){ dmin=d; nearest=s; } }
-    if(nearest){
-      activeAttack={shark:nearest,phase:'stalk',t:0};
-      statusEl.textContent='Shark spotted!';
-    }
+    if(nearest){ activeAttack={shark:nearest,phase:'stalk',t:0}; statusEl.textContent='Shark spotted!'; }
   } else {
-    // fish instead
     const ang=Math.random()*Math.PI*2, r=6+Math.random()*10;
     spawnSchool(new THREE.Vector3(boat.position.x+Math.cos(ang)*r,0,boat.position.z+Math.sin(ang)*r));
     statusEl.textContent='School of fish!';
@@ -368,29 +342,22 @@ function checkEncounter(){
 }
 function updateAttack(dt){
   if(!activeAttack) return;
-  const s=activeAttack.shark;
-  if(!s.parent){ activeAttack=null; return; } // shark removed
+  const s=activeAttack.shark; if(!s.parent){ activeAttack=null; return; }
   if(activeAttack.phase==='stalk'){
     activeAttack.t+=dt;
     const toBoat=new THREE.Vector2(boat.position.x-s.position.x, boat.position.z-s.position.z).normalize();
-    s.position.x+=toBoat.x*1.2*dt; s.position.z+=toBoat.y*1.2*dt;
-    s.rotation.y=Math.atan2(toBoat.x,toBoat.y);
-    if(activeAttack.t>2.0 || s.position.distanceTo(boat.position)<6){
-      activeAttack.phase='charge'; activeAttack.t=0; statusEl.textContent='Shark charging! SPEAR!';
-    }
+    s.position.x+=toBoat.x*1.2*dt; s.position.z+=toBoat.y*1.2*dt; s.rotation.y=Math.atan2(toBoat.x,toBoat.y);
+    if(activeAttack.t>2.0 || s.position.distanceTo(boat.position)<6){ activeAttack.phase='charge'; activeAttack.t=0; statusEl.textContent='Shark charging! SPEAR!'; }
   } else if(activeAttack.phase==='charge'){
     activeAttack.t+=dt;
     const toBoat=new THREE.Vector2(boat.position.x-s.position.x, boat.position.z-s.position.z).normalize();
-    s.position.x+=toBoat.x*4.2*dt; s.position.z+=toBoat.y*4.2*dt;
-    s.rotation.y=Math.atan2(toBoat.x,toBoat.y);
-    if(s.position.distanceTo(boat.position)<1.6){
-      statusEl.textContent='Boat hit! (cosmetic)'; splash(boat.position); activeAttack=null;
-    }
+    s.position.x+=toBoat.x*4.2*dt; s.position.z+=toBoat.y*4.2*dt; s.rotation.y=Math.atan2(toBoat.x,toBoat.y);
+    if(s.position.distanceTo(boat.position)<1.6){ statusEl.textContent='Boat hit! (cosmetic)'; splash(boat.position); activeAttack=null; }
     if(activeAttack && activeAttack.t>3.0){ activeAttack=null; statusEl.textContent='Shark broke off.'; }
   }
 }
 
-/* ===== Loop ===== */
+/* ===== Main loop ===== */
 let tPrev=performance.now()*0.001;
 function animate(){
   const t=performance.now()*0.001, dt=Math.min(0.05,t-tPrev); tPrev=t;
