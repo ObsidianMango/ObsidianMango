@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>✈️ Sky — Seamless Terrain + Proper Rendering + Bomb Cam + Camera Modes</title>
+<title>✈️ Sky — Seamless Terrain + Bigger Cities + Bigger Booms</title>
 <style>
   html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block;touch-action:manipulation}
@@ -29,14 +29,12 @@
   .hud{position:fixed;top:8px;left:50%;transform:translateX(-50%);color:#fff;font-size:13px;letter-spacing:.08em;background:rgba(0,0,0,.25);
     padding:6px 10px;border-radius:10px;backdrop-filter:blur(4px)}
 
-  /* bomb buttons bottom center (thumb reach) */
   .bombPanel{position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);display:flex;gap:10px;pointer-events:auto;z-index:2}
   .bomb{width:56px;height:56px;border:0;border-radius:50%;font-weight:800;letter-spacing:.08em;color:#fff;font-size:11px;line-height:1;touch-action:manipulation}
   .bomb.drop{background:linear-gradient(180deg,#ff4b4b,#c71e1e);box-shadow:0 6px 18px rgba(255,75,75,.35)}
   .bomb.follow{background:linear-gradient(180deg,#4b8bff,#1e42c7);box-shadow:0 6px 18px rgba(75,139,255,.35)}
   .bomb:active{transform:scale(.96)}
 
-  /* camera mode button (top-right) */
   .camBtn{position:fixed;top:10px;right:62px;pointer-events:auto;z-index:3;border:0;border-radius:14px;padding:8px 12px;
     background:linear-gradient(180deg,#9aeb8f,#3fae36);color:#0b1b0a;font-weight:800;letter-spacing:.08em;font-size:12px}
 </style>
@@ -44,7 +42,7 @@
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <div class="hint">3‑finger: pause · B/SPACE: drop · F: bomb‑cam · Double‑tap anywhere: drop · CAM cycles views; in FreeCam drag to aim, wheel to zoom</div>
+  <div class="hint">3‑finger: pause · B/SPACE: drop · F: bomb‑cam · Double‑tap: drop · CAM cycles views (Chase/FPV/FreeCam)</div>
   <div class="perf" id="fps">—</div>
   <div class="hud" id="hud">Score 0 · Towns 0/0</div>
   <div class="stick-wrap" id="joy"><div class="stick" id="stick"></div></div>
@@ -71,7 +69,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x99bbdd, 0.0010);
 
-const camera = new THREE.PerspectiveCamera(65, 1, 0.3, 20000); // near lowered for FPV
+const camera = new THREE.PerspectiveCamera(65, 1, 0.3, 20000);
 function sizeRendererToCanvas(){
   const w = canvas.clientWidth, h = canvas.clientHeight;
   renderer.setSize(w, h, false);
@@ -136,7 +134,8 @@ function buildShip(){
   const right = left.clone(); right.position.x*=-1;
   floatGroup.add(left,right); floatGroup.visible=false; g.add(floatGroup);
 
-  g.userData = {gearGroup, floatGroup};
+  // keep refs so we can hide "front triangle cone" (and nose glow) in FPV:
+  g.userData = {gearGroup, floatGroup, fin, glow, wing, keel, hull};
   g.traverse(o=>{o.castShadow=false;o.receiveShadow=false});
   return g;
 }
@@ -182,7 +181,7 @@ throttleEl.addEventListener('pointermove', e=>{ if(e.pressure===0) return; setTh
 let paused=false, touchCount=0, touchTimer=0;
 addEventListener('touchstart', e=>{ touchCount=e.touches.length; clearTimeout(touchTimer); touchTimer=setTimeout(()=>{ if(touchCount>=3) paused=!paused; },120); }, {passive:true});
 
-/* Keyboard + bomb buttons (both launch out the FRONT) */
+/* Keyboard + bomb buttons */
 addEventListener('keydown', (e)=>{
   if(e.code==='Space' || e.code==='KeyB') dropBomb(false);
   if(e.code==='KeyF') dropBomb(true);
@@ -210,7 +209,7 @@ function n2(x,y,scale=1){ return noise.noise(x/scale, y/scale, seed)*0.5+0.5; }
 const CHUNK_SIZE=240, RES=48;
 let LOAD_RADIUS=6;
 
-const DX = CHUNK_SIZE/RES;                 // lattice step (global grid)
+const DX = CHUNK_SIZE/RES; // global lattice step
 const heightCache = new Map();
 const hKey = (gx,gz)=> gx + "," + gz;
 
@@ -259,7 +258,6 @@ const pool=[], chunks=new Map();
 const terrainMat=new THREE.MeshStandardMaterial({flatShading:true,vertexColors:true,metalness:0,roughness:1});
 const key=(ix,iz)=>ix+','+iz;
 
-/* ---------- makeChunk: USE SHARED LATTICE + FORCE GPU UPDATES (no flat tiles) ---------- */
 function makeChunk(ix, iz){
   let geom = pool.pop();
   if(!geom){
@@ -270,25 +268,18 @@ function makeChunk(ix, iz){
   const posAttr = geom.getAttribute('position');
   const posArr = posAttr.array;
   const vertCount = (RES+1)*(RES+1);
-
-  // write colors into a temp array (to reuse attribute if it exists)
   const colArr = new Float32Array(vertCount*3);
-
   const worldX0 = ix*CHUNK_SIZE, worldZ0 = iz*CHUNK_SIZE;
 
   for(let z=0; z<=RES; z++){
     for(let x=0; x<=RES; x++){
       const i = z*(RES+1)+x, p = i*3;
-
-      // Exact global lattice indices for this vertex (continuous across chunks)
       const gx = ix*RES + x;
       const gz = iz*RES + z;
 
-      // World coords only for biome/color
       const wx = worldX0 + (x/RES - 0.5)*CHUNK_SIZE;
       const wz = worldZ0 + (z/RES - 0.5)*CHUNK_SIZE;
 
-      // Height from the integer lattice (matches neighbors perfectly)
       const elev = heightAtIndex(gx, gz);
       posArr[p+1] = elev;
 
@@ -298,7 +289,6 @@ function makeChunk(ix, iz){
     }
   }
 
-  // Install / update color attribute without recreating geometry every time
   const existingColor = geom.getAttribute('color');
   if(!existingColor || existingColor.count !== vertCount){
     geom.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
@@ -307,7 +297,6 @@ function makeChunk(ix, iz){
     existingColor.needsUpdate = true;
   }
 
-  // flag GPU updates for positions and recompute normals (correct lighting)
   posAttr.needsUpdate = true;
   geom.computeVertexNormals();
   geom.getAttribute('normal').needsUpdate = true;
@@ -353,7 +342,6 @@ function updateChunks(px,pz,forward){
     const {ix,iz}=m.userData;
     if(Math.abs(ix-cx)>LOAD_RADIUS+1 || Math.abs(iz-cz)>LOAD_RADIUS+1){
       scene.remove(m);
-      // keep geometry for pooling (avoid disposes that cause visual stalls)
       pool.push(m.geometry);
       chunks.delete(k);
       removeTown(ix,iz);
@@ -361,9 +349,10 @@ function updateChunks(px,pz,forward){
   }
 }
 
-/* ---------- Towns ---------- */
+/* ---------- Towns (twice as big) ---------- */
 const townGroups = new Map();
 let totalBuildings=0, destroyedBuildings=0;
+const CITY_SCALE = 2.0; // 2x bigger cities
 
 function rngFor(ix,iz){
   let s = (ix*73856093) ^ (iz*19349663) ^ 0x9e3779b9;
@@ -394,24 +383,26 @@ function ensureTownFor(ix,iz){
 
   const g = new THREE.Group();
   g.position.set(baseX, h, baseZ);
-  const plaza = new THREE.Mesh(new THREE.BoxGeometry(16,0.2,16), plazaMat);
+
+  const plaza = new THREE.Mesh(new THREE.BoxGeometry(16*CITY_SCALE,0.2,16*CITY_SCALE), plazaMat);
   plaza.position.y = -0.1;
   g.add(plaza);
 
   const buildings=[];
-  const rows=4, cols=4, spacing=3.8;
+  const rows=4, cols=4, spacing=3.8*CITY_SCALE; // spread out with scale
   for(let r=0;r<rows;r++){
     for(let c=0;c<cols;c++){
       if(rand()<0.12) continue;
-      const bx = (c-(cols-1)/2)*spacing + (rand()-0.5)*0.4;
-      const bz = (r-(rows-1)/2)*spacing + (rand()-0.5)*0.4;
-      const baseH = 1.0 + Math.floor(rand()*3);
+      const bx = (c-(cols-1)/2)*spacing + (rand()-0.5)*0.6;
+      const bz = (r-(rows-1)/2)*spacing + (rand()-0.5)*0.6;
+      const baseH = (1.0 + Math.floor(rand()*3))*CITY_SCALE;
       const house = new THREE.Mesh(houseGeo, wallMat);
-      house.scale.set(1.8, baseH, 1.8);
+      house.scale.set(1.8*CITY_SCALE, baseH, 1.8*CITY_SCALE);
       house.position.set(bx, baseH/2, bz);
       const roof = new THREE.Mesh(roofGeo, roofMat);
+      roof.scale.set(CITY_SCALE, CITY_SCALE, CITY_SCALE);
       roof.rotation.y = Math.PI*0.25;
-      roof.position.set(bx, baseH+0.3, bz);
+      roof.position.set(bx, baseH+0.3*CITY_SCALE, bz);
       g.add(house, roof);
       buildings.push({pos:new THREE.Vector3(bx,0,bz), alive:true, meshes:[house,roof]});
     }
@@ -430,14 +421,14 @@ function removeTown(ix,iz){
   townGroups.delete(k);
 }
 
-/* ---------- Bombs, Explosions, Bomb‑Cam ---------- */
+/* ---------- Bombs, Explosions, Bomb‑Cam (bigger booms) ---------- */
 const bombs = [];
 const explosions = [];
 const bombGeo = new THREE.SphereGeometry(0.35,12,12);
 const bombMat = new THREE.MeshStandardMaterial({color:0x333333, metalness:0.4, roughness:0.6});
 let bombCooldown=0;
 
-let cameraMode='chase';          // 'chase' | 'fpv' | 'orbit' | 'bomb'
+let cameraMode='chase'; // 'chase' | 'fpv' | 'orbit' | 'bomb'
 let bombCamTarget=null;
 const camDesiredPos = new THREE.Vector3();
 const camDesiredLook = new THREE.Vector3();
@@ -448,16 +439,13 @@ function dropBomb(follow){
   ship.updateMatrixWorld(true);
   const b = new THREE.Mesh(bombGeo, bombMat);
 
-  // spawn at the ship's nose (local -Z) in world
   const noseWorld = new THREE.Vector3(0,-0.2,-5.0).applyMatrix4(ship.matrixWorld);
   b.position.copy(noseWorld);
 
-  // forward of ship (nose direction)
   const fwd = new THREE.Vector3(); ship.getWorldDirection(fwd);
   const upWorld = new THREE.Vector3(0,1,0);
   const right = new THREE.Vector3().crossVectors(fwd, upWorld).normalize();
 
-  // launch OUT THE FRONT with a slight downward arc
   const launchSpeed = 90 + state.speed*0.6;
   const sideJitter  = (Math.random()-0.5)*2.0;
   const initialVel = new THREE.Vector3()
@@ -475,7 +463,7 @@ function dropBomb(follow){
 }
 
 function spawnExplosion(x,y,z){
-  const count=140;
+  const count=260; // bigger
   const geo=new THREE.BufferGeometry();
   const pos=new Float32Array(count*3);
   const vel=new Float32Array(count*3);
@@ -484,15 +472,16 @@ function spawnExplosion(x,y,z){
     const sr=Math.sqrt(1-u*u);
     const dir=new THREE.Vector3(sr*Math.cos(a), u, sr*Math.sin(a));
     pos[i*3+0]=x; pos[i*3+1]=y; pos[i*3+2]=z;
-    vel[i*3+0]=dir.x*(2.5+Math.random()*4);
-    vel[i*3+1]=dir.y*(3.5+Math.random()*5);
-    vel[i*3+2]=dir.z*(2.5+Math.random()*4);
+    const boost = 1.6;
+    vel[i*3+0]=dir.x*(3.5+Math.random()*6)*boost;
+    vel[i*3+1]=dir.y*(4.5+Math.random()*6)*boost;
+    vel[i*3+2]=dir.z*(3.5+Math.random()*6)*boost;
   }
   geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
   geo.setAttribute('velocity', new THREE.BufferAttribute(vel,3));
-  const mat=new THREE.PointsMaterial({size:0.25, color:0xffaa55, transparent:true, opacity:1});
+  const mat=new THREE.PointsMaterial({size:0.45, color:0xffbb66, transparent:true, opacity:1}); // larger sparks
   const p=new THREE.Points(geo,mat);
-  p.userData={life:1.2};
+  p.userData={life:1.6};
   scene.add(p);
   explosions.push(p);
 }
@@ -515,13 +504,14 @@ function stepBombs(dt){
       spawnExplosion(b.position.x, gy+0.5, b.position.z);
       if(cameraMode==='bomb' && bombCamTarget===b){ cameraMode='chase'; bombCamTarget=null; updateCamBtn(); }
 
-      const radius=8.0;
+      const radius=12.0; // slightly larger damage radius to match bigger city scale
+      const impactPos = new THREE.Vector3(b.position.x, gy, b.position.z);
       for(const [,t] of townGroups){
         const wp = new THREE.Vector3();
         for(const bld of t.buildings){
           if(!bld.alive) continue;
           wp.copy(bld.pos).applyMatrix4(t.group.matrixWorld);
-          if(wp.distanceToSquared(new THREE.Vector3(b.position.x, gy, b.position.z)) < radius*radius){
+          if(wp.distanceToSquared(impactPos) < radius*radius){
             bld.alive=false;
             for(const m of bld.meshes) m.visible=false;
             state.score += 10;
@@ -547,7 +537,7 @@ function stepExplosions(dt){
       pos.array[j*3+2] += vel.array[j*3+2]*dt;
     }
     pos.needsUpdate = true;
-    p.material.opacity = Math.max(life/1.2,0);
+    p.material.opacity = Math.max(life/1.6,0);
     if(life<=0){
       scene.remove(p);
       p.geometry.dispose(); p.material.dispose();
@@ -604,7 +594,7 @@ function updateTrajectory(){
   traj.line.geometry.setDrawRange(0, count);
 }
 
-/* ---------- Aimer (predictive impact ring only; no HUD crosshair, no nose laser) ---------- */
+/* ---------- Aimer (predictive impact ring) ---------- */
 const aim = {
   ring: null,
   ringMat: new THREE.MeshBasicMaterial({color:0xffe17a, transparent:true, opacity:0.9})
@@ -630,22 +620,15 @@ function predictImpact(origin, velocity){
   return null;
 }
 
-/* ---------- Camera Modes (keep ship lower in frame) ---------- */
-const camStates = {
-  chase:{name:'Chase'},
-  fpv:{name:'FPV'},
-  orbit:{name:'FreeCam'},
-  bomb:{name:'BombCam'}
-};
+/* ---------- Camera Modes (ship slightly higher; FPV hides nose cone) ---------- */
+const camStates = { chase:{name:'Chase'}, fpv:{name:'FPV'}, orbit:{name:'FreeCam'}, bomb:{name:'BombCam'} };
 function cycleCameraMode(){
   if(cameraMode==='chase') cameraMode='fpv';
   else if(cameraMode==='fpv') cameraMode='orbit';
   else if(cameraMode==='orbit') cameraMode='chase';
   updateCamBtn();
 }
-function updateCamBtn(){
-  camBtn.textContent = `CAM: ${camStates[cameraMode]?.name||'Chase'}`;
-}
+function updateCamBtn(){ camBtn.textContent = `CAM: ${camStates[cameraMode]?.name||'Chase'}`; }
 camBtn.addEventListener('click', cycleCameraMode, {passive:true});
 
 /* FreeCam (orbit) controls */
@@ -691,11 +674,20 @@ const worldPos = new THREE.Vector3();
 const worldLook = new THREE.Vector3();
 let cameraInitialized=false;
 
-/* Composition tweaks: raise look-at so ship sits lower, nearer bottom */
-const COMPOSE_LOOK_UP = 12;               // pixels-equivalent in world Y to bias framing up
-const chaseOffset = new THREE.Vector3(0, 8, -20);
+/* Framing: slightly higher than previous (ship a bit higher on screen) */
+const COMPOSE_LOOK_UP = 8;                // was 12; lower bias => ship sits higher now
+const chaseOffset = new THREE.Vector3(0, 9, -20); // slightly higher camera
 const chaseLook   = new THREE.Vector3(0, 2, -6);
-const fpvOffset   = new THREE.Vector3(0, 2.0, -2.2); // slightly higher FPV per request
+const fpvOffset   = new THREE.Vector3(0, 2.2, -2.2); // a touch higher FPV
+
+function setFPVObstructionVisible(v){
+  // hide "front triangle cone" & nose glow (and optionally wing/keel) in FPV only
+  ship.userData.fin.visible = v;     // cone
+  ship.userData.glow.visible = v;    // nose light
+  // If you still see blockage, uncomment these:
+  // ship.userData.wing.visible = v;
+  // ship.userData.keel.visible = v;
+}
 
 function stepShip(dt){
   const turn=joyDx, lift=-joyDy;
@@ -745,20 +737,23 @@ function stepShip(dt){
   const lookFwd = tmpV.copy(state.pos).add(state.vel.clone().multiplyScalar(0.12));
   ship.lookAt(lookFwd); ship.rotateZ(state.roll);
 
-  // camera target (except bomb-cam which is set later)
+  // camera target (and FPV mesh visibility)
   ship.updateMatrixWorld(true);
   if(cameraMode==='chase'){
+    setFPVObstructionVisible(true);
     worldPos.copy(chaseOffset).applyMatrix4(ship.matrixWorld);
     worldLook.copy(chaseLook).applyMatrix4(ship.matrixWorld);
-    worldLook.y += COMPOSE_LOOK_UP; // raise look target so ship appears lower on screen
+    worldLook.y += COMPOSE_LOOK_UP;
     camDesiredPos.copy(worldPos);
     camDesiredLook.copy(worldLook);
   } else if(cameraMode==='fpv'){
+    setFPVObstructionVisible(false); // hide cone/glow in FPV
     worldPos.copy(fpvOffset).applyMatrix4(ship.matrixWorld);
     const fwd = new THREE.Vector3(); ship.getWorldDirection(fwd);
     camDesiredPos.copy(worldPos);
-    camDesiredLook.copy(worldPos).add(fwd.multiplyScalar(10)).add(new THREE.Vector3(0, COMPOSE_LOOK_UP*0.08, 0));
+    camDesiredLook.copy(worldPos).add(fwd.multiplyScalar(10)).add(new THREE.Vector3(0, COMPOSE_LOOK_UP*0.06, 0));
   } else if(cameraMode==='orbit'){
+    setFPVObstructionVisible(true);
     const r=orbitR, az=orbitAz, el=orbitEl;
     const ox = state.pos.x + r*Math.cos(el)*Math.cos(az);
     const oy = state.pos.y + r*Math.sin(el);
@@ -766,6 +761,7 @@ function stepShip(dt){
     camDesiredPos.set(ox,oy,oz);
     camDesiredLook.copy(state.pos).add(new THREE.Vector3(0, 2+COMPOSE_LOOK_UP, 0));
   } else if(cameraMode==='bomb' && bombCamTarget){
+    setFPVObstructionVisible(true);
     const v = bombCamTarget.userData.vel.clone();
     if(v.lengthSq()<1e-3) v.set(0,0.1,0);
     const back = v.clone().normalize().multiplyScalar(6.5);
@@ -779,7 +775,7 @@ function stepShip(dt){
   updateLoadRadius(altitude);
   updateChunks(state.pos.x, state.pos.z, forward);
 
-  // AIMER prediction using current would‑be launch
+  // Aimer prediction using current would‑be launch
   const noseWorld = new THREE.Vector3(0,-0.2,-5.0).applyMatrix4(ship.matrixWorld);
   const fwd = new THREE.Vector3(); ship.getWorldDirection(fwd);
   const upWorld = new THREE.Vector3(0,1,0);
@@ -794,16 +790,14 @@ function stepShip(dt){
   if(impact){
     aim.ring.position.copy(impact);
     aim.ring.visible = true;
-    const s = THREE.MathUtils.clamp(1 + (state.pos.y - impact.y)/200, 1, 3.5);
+    const s = THREE.MathUtils.clamp(1 + (state.pos.y - impact.y)/200, 1, 3.8);
     aim.ring.scale.setScalar(s);
-    aim.ring.material.opacity = 0.85;
+    aim.ring.material.opacity = 0.9;
   } else {
     aim.ring.visible = false;
   }
 
-  // Trajectory line update (visual bomb path through center)
   updateTrajectory();
-
   gearLabel.textContent = state.onWater ? 'FLOATS' : (state.gearDown ? 'GEAR' : '—');
 }
 
