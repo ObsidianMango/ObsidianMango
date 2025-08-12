@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-<title>✈️ Sky — Seamless Terrain + Bomb Aimer (ground only) + Camera Modes</title>
+<title>✈️ Sky — Seamless Terrain + Proper Rendering + Bomb Cam + Camera Modes</title>
 <style>
   html,body{height:100%;margin:0;background:#000;overflow:hidden;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   #c{position:fixed;inset:0;width:100dvw;height:100dvh;display:block;touch-action:manipulation}
@@ -203,14 +203,14 @@ function onCanvasTouchStart(e){
 }
 canvas.addEventListener('touchstart', onCanvasTouchStart, {passive:false});
 
-/* ---------- Terrain (chunked) + PERFECT SEAMS via shared lattice ---------- */
+/* ---------- Terrain (chunked) + PERFECT SEAMS via shared integer lattice ---------- */
 const seed=12345, noise=new ImprovedNoise();
 function n2(x,y,scale=1){ return noise.noise(x/scale, y/scale, seed)*0.5+0.5; }
 
 const CHUNK_SIZE=240, RES=48;
 let LOAD_RADIUS=6;
 
-const DX = CHUNK_SIZE/RES;                 // lattice step
+const DX = CHUNK_SIZE/RES;                 // lattice step (global grid)
 const heightCache = new Map();
 const hKey = (gx,gz)=> gx + "," + gz;
 
@@ -259,38 +259,64 @@ const pool=[], chunks=new Map();
 const terrainMat=new THREE.MeshStandardMaterial({flatShading:true,vertexColors:true,metalness:0,roughness:1});
 const key=(ix,iz)=>ix+','+iz;
 
-function makeChunk(ix,iz){
-  let geom=pool.pop();
-  if(!geom){ geom=new THREE.PlaneGeometry(CHUNK_SIZE,CHUNK_SIZE,RES,RES); geom.rotateX(-Math.PI/2); }
-  const pos=geom.attributes.position.array;
-  const color=new Float32Array((RES+1)*(RES+1)*3);
-  const worldX0=ix*CHUNK_SIZE, worldZ0=iz*CHUNK_SIZE;
+/* ---------- makeChunk: USE SHARED LATTICE + FORCE GPU UPDATES (no flat tiles) ---------- */
+function makeChunk(ix, iz){
+  let geom = pool.pop();
+  if(!geom){
+    geom = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, RES, RES);
+    geom.rotateX(-Math.PI/2);
+  }
+
+  const posAttr = geom.getAttribute('position');
+  const posArr = posAttr.array;
+  const vertCount = (RES+1)*(RES+1);
+
+  // write colors into a temp array (to reuse attribute if it exists)
+  const colArr = new Float32Array(vertCount*3);
+
+  const worldX0 = ix*CHUNK_SIZE, worldZ0 = iz*CHUNK_SIZE;
 
   for(let z=0; z<=RES; z++){
     for(let x=0; x<=RES; x++){
-      const i=(z*(RES+1)+x), p=i*3;
-      const wx=worldX0+(x/RES-0.5)*CHUNK_SIZE;
-      const wz=worldZ0+(z/RES-0.5)*CHUNK_SIZE;
+      const i = z*(RES+1)+x, p = i*3;
 
-      // Map world position to global lattice index (shared across chunks)
-      const gx = Math.round(wx/DX);
-      const gz = Math.round(wz/DX);
+      // Exact global lattice indices for this vertex (continuous across chunks)
+      const gx = ix*RES + x;
+      const gz = iz*RES + z;
 
-      const elev=heightAtIndex(gx,gz);
-      pos[p+1]=elev;
+      // World coords only for biome/color
+      const wx = worldX0 + (x/RES - 0.5)*CHUNK_SIZE;
+      const wz = worldZ0 + (z/RES - 0.5)*CHUNK_SIZE;
 
-      const {temp,wet,hRaw}=sampleClimate(wx,wz);
-      const c=biomeColor(hRaw+0.35,temp,wet);
-      color[p]=c.r;color[p+1]=c.g;color[p+2]=c.b;
+      // Height from the integer lattice (matches neighbors perfectly)
+      const elev = heightAtIndex(gx, gz);
+      posArr[p+1] = elev;
+
+      const {temp,wet,hRaw} = sampleClimate(wx, wz);
+      const c = biomeColor(hRaw+0.35, temp, wet);
+      colArr[p+0]=c.r; colArr[p+1]=c.g; colArr[p+2]=c.b;
     }
   }
-  geom.setAttribute('color', new THREE.BufferAttribute(color,3));
-  geom.computeVertexNormals();
 
-  const mesh=new THREE.Mesh(geom,terrainMat);
-  mesh.position.set(worldX0,0,worldZ0);
-  mesh.matrixAutoUpdate=false; mesh.updateMatrix();
-  mesh.userData={ix,iz};
+  // Install / update color attribute without recreating geometry every time
+  const existingColor = geom.getAttribute('color');
+  if(!existingColor || existingColor.count !== vertCount){
+    geom.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
+  } else {
+    existingColor.array.set(colArr);
+    existingColor.needsUpdate = true;
+  }
+
+  // flag GPU updates for positions and recompute normals (correct lighting)
+  posAttr.needsUpdate = true;
+  geom.computeVertexNormals();
+  geom.getAttribute('normal').needsUpdate = true;
+
+  const mesh = new THREE.Mesh(geom, terrainMat);
+  mesh.position.set(worldX0, 0, worldZ0);
+  mesh.matrixAutoUpdate = false;
+  mesh.updateMatrix();
+  mesh.userData = {ix, iz};
   return mesh;
 }
 
@@ -326,7 +352,10 @@ function updateChunks(px,pz,forward){
   for(const [k,m] of chunks){
     const {ix,iz}=m.userData;
     if(Math.abs(ix-cx)>LOAD_RADIUS+1 || Math.abs(iz-cz)>LOAD_RADIUS+1){
-      scene.remove(m); m.geometry.attributes.color?.dispose?.(); pool.push(m.geometry); chunks.delete(k);
+      scene.remove(m);
+      // keep geometry for pooling (avoid disposes that cause visual stalls)
+      pool.push(m.geometry);
+      chunks.delete(k);
       removeTown(ix,iz);
     }
   }
