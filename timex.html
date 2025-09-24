@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Stopwatch+ (Add Time + Laps)</title>
+  <title>Tasty Timer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -28,9 +28,50 @@
       padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(env(safe-area-inset-bottom)+14px) env(safe-area-inset-left);
       display:flex; flex-direction:column; align-items:center; gap:14px; margin:0 auto; max-width:1290px;
     }
-    header{width:100%; padding:8px 18px 0; display:flex; align-items:center; justify-content:space-between; opacity:.9}
-    .title{font-weight:800; letter-spacing:.2px}
-    .badge{color:var(--muted); font-size:13px}
+
+    /* Header with animated spinners */
+    header{
+      width:100%; padding:8px 18px 0;
+      display:flex; align-items:center; justify-content:center; gap:10px; opacity:.95
+    }
+    .spin-line{
+      width:18px; height:18px; position:relative; flex:0 0 18px;
+      opacity:0; transform:scale(.9);
+    }
+    .spin-line::before{
+      content:""; position:absolute; inset:0; margin:auto;
+      width:16px; height:2px; background:currentColor; border-radius:2px;
+      transform-origin:center center;
+    }
+    /* Two faint ticks for extra flair */
+    .spin-line::after{
+      content:""; position:absolute; inset:0; margin:auto;
+      width:10px; height:2px; background:currentColor; border-radius:2px;
+      transform-origin:center center; opacity:.6;
+    }
+    /* Animate only when running */
+    body.is-running .spin-line{
+      opacity:1;
+      animation: popIn .2s ease-out forwards;
+    }
+    body.is-running .spin-line::before{
+      animation: spin 900ms linear infinite;
+    }
+    body.is-running .spin-line::after{
+      animation: spin 900ms linear infinite reverse;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes popIn{from{transform:scale(.6)} to{transform:scale(1)}}
+
+    .title{
+      display:flex; align-items:center; gap:8px; text-align:center;
+      font-weight:800; letter-spacing:.2px; line-height:1.1;
+    }
+    .title .big{
+      font-size: clamp(18px, 4.6vw, 28px);
+      white-space:nowrap;
+    }
+    .badge{color:var(--muted); font-size:13px; margin-left:8px}
 
     .time{
       width:100%; flex:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:4px 16px 0;
@@ -44,9 +85,7 @@
     .controls, .presets, .custom, .laps-wrap{
       width:100%; padding:0 16px; max-width:820px; margin:0 auto;
     }
-    .row{
-      display:grid; gap:10px; margin-bottom:10px;
-    }
+    .row{display:grid; gap:10px; margin-bottom:10px}
     .row-3{grid-template-columns:1fr 1fr 1fr;}
     .row-2{grid-template-columns:1fr 1fr;}
 
@@ -98,9 +137,13 @@
 </head>
 <body>
   <div class="app">
-    <header>
-      <div class="title">Stopwatch+</div>
-      <div class="badge">iPhone 16 Pro Max</div>
+    <header aria-live="polite">
+      <div class="spin-line" aria-hidden="true"></div>
+      <div class="title">
+        <span class="big">🍷 Tasty Timer ⏲️</span>
+        <span class="badge">iPhone 16 Pro Max</span>
+      </div>
+      <div class="spin-line" aria-hidden="true"></div>
     </header>
 
     <section class="time" aria-live="polite" aria-atomic="true">
@@ -217,6 +260,7 @@
       startedAt = performance.now();
       startPauseBtn.textContent = 'Pause';
       startPauseBtn.className = 'pause';
+      document.body.classList.add('is-running'); // activate header spinners
     };
 
     const pause = ()=>{
@@ -225,6 +269,7 @@
       baseElapsed += performance.now() - startedAt;
       startPauseBtn.textContent = 'Start';
       startPauseBtn.className = 'go';
+      document.body.classList.remove('is-running'); // stop header spinners
     };
 
     const reset = ()=>{
@@ -238,6 +283,7 @@
       lapsEl.innerHTML = '<div class="empty">No laps yet</div>';
       lapMeta.textContent = '0 laps';
       render(0);
+      document.body.classList.remove('is-running');
     };
 
     const addMilliseconds = (ms)=>{
@@ -259,7 +305,6 @@
     };
 
     const doLap = ()=>{
-      // compute totals first
       const total = (running ? (performance.now() - startedAt) : 0) + baseElapsed;
       const split = total - lastLapMark;
       lastLapMark = total;
@@ -282,10 +327,7 @@
     // Wire up UI
     startPauseBtn.addEventListener('click', ()=> running ? pause() : start());
     resetBtn.addEventListener('click', reset);
-    lapBtn.addEventListener('click', ()=>{
-      // If first lap before starting, treat current time as baseline (allows marking preloaded time)
-      doLap();
-    });
+    lapBtn.addEventListener('click', doLap);
 
     chips.forEach(chip=>{
       chip.addEventListener('click', ()=>{
@@ -308,7 +350,7 @@
     render(0);
     loop();
 
-    // iOS niceties
+    // iOS viewport nicety
     if (window.visualViewport){
       const app = document.querySelector('.app');
       const onVV = ()=> app.style.minHeight = window.visualViewport.height + 'px';
