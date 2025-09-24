@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Stopwatch+</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <style>
+    :root{
+      --bg:#0b0d10;
+      --fg:#e7e9ee;
+      --muted:#9aa3af;
+      --accent:#4ade80;
+      --accent-2:#60a5fa;
+      --danger:#f87171;
+      --btn:#1a1f27;
+      --btn-border:#2a313c;
+      --ring: rgba(96,165,250,.35);
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font:500 16px/1.4 ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto, Arial;
+      height:100%;
+    }
+    .app{
+      min-height:100svh;
+      padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(env(safe-area-inset-bottom) + 16px) env(safe-area-inset-left);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      max-width:1290px;
+      margin:0 auto;
+    }
+    header{width:100%;padding:8px 20px 0;display:flex;justify-content:space-between;opacity:.9}
+    .title{font-weight:700}
+    .time{flex:1;display:flex;align-items:center;justify-content:center;text-align:center}
+    .time h1{margin:0;font-variant-numeric:tabular-nums;letter-spacing:.5px;font-size:clamp(48px,11.5vw,112px)}
+    .time small{font-size:.6em;color:var(--muted);display:block;margin-top:.25em;font-weight:600}
+    .controls,.presets,.custom{width:100%;padding:0 16px;max-width:820px;margin:0 auto}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+    button,.chip{
+      appearance:none;border:1px solid var(--btn-border);background:var(--btn);color:var(--fg);
+      border-radius:16px;padding:16px;font-weight:700;font-size:18px;line-height:1;width:100%;
+      transition:transform .06s ease, box-shadow .12s ease
+    }
+    button:active{transform:scale(.98)}
+    button.go{background:linear-gradient(180deg,#10b981,#059669);border-color:#10b981}
+    button.pause{background:linear-gradient(180deg,#f59e0b,#d97706);border-color:#f59e0b}
+    button.reset{background:linear-gradient(180deg,#ef4444,#dc2626);border-color:#ef4444}
+    .chips{display:flex;flex-wrap:wrap;gap:10px}
+    .chip{width:auto;padding:12px 14px;font-size:16px;border-radius:12px}
+    .custom .grid{display:grid;gap:10px;grid-template-columns:repeat(4,1fr)}
+    .field{background:#0e141c;border:1px solid #223042;border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+    .label{font-size:12px;color:var(--muted)}
+    input[type="number"]{width:100%;background:transparent;border:0;outline:0;color:var(--fg);font-size:20px;font-weight:700}
+    input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+    .custom .grid button{grid-column:span 4}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header><div class="title">Stopwatch+</div><div style="color:var(--muted);font-size:14px;">iPhone Optimized</div></header>
+    <section class="time" aria-live="polite"><div><h1 id="display">00:00:00.00</h1><small id="since">Ready</small></div></section>
+    <section class="controls">
+      <div class="row">
+        <button id="startPause" class="go">Start</button>
+        <button id="reset" class="reset">Reset</button>
+      </div>
+    </section>
+    <section class="presets">
+      <div class="chips">
+        <button class="chip" data-add="1h">+1 hr</button>
+        <button class="chip" data-add="10m">+10 min</button>
+        <button class="chip" data-add="5m">+5 min</button>
+        <button class="chip" data-add="1m">+1 min</button>
+        <button class="chip" data-add="30s">+30 sec</button>
+        <button class="chip" data-add="10s">+10 sec</button>
+        <button class="chip" data-add="5s">+5 sec</button>
+        <button class="chip" data-add="1s">+1 sec</button>
+      </div>
+    </section>
+    <section class="custom">
+      <div class="grid">
+        <div class="field"><div class="label">Hours</div><input id="hours" type="number" min="0" placeholder="0"></div>
+        <div class="field"><div class="label">Minutes</div><input id="minutes" type="number" min="0" placeholder="0"></div>
+        <div class="field"><div class="label">Seconds</div><input id="seconds" type="number" min="0" placeholder="0"></div>
+        <div class="field"><div class="label">Milliseconds</div><input id="millis" type="number" min="0" placeholder="0"></div>
+        <button id="addCustom">Add Custom Time</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const display=document.getElementById('display');
+    const since=document.getElementById('since');
+    const startPauseBtn=document.getElementById('startPause');
+    const resetBtn=document.getElementById('reset');
+    const addCustomBtn=document.getElementById('addCustom');
+    const chips=[...document.querySelectorAll('.chip')];
+    const hEl=document.getElementById('hours'),mEl=document.getElementById('minutes'),sEl=document.getElementById('seconds'),msEl=document.getElementById('millis');
+    let running=false,base=0,start=0;
+
+    function render(ms){
+      const h=Math.floor(ms/3600000),
+            m=Math.floor((ms%3600000)/60000),
+            s=Math.floor((ms%60000)/1000),
+            c=Math.floor((ms%1000)/10);
+      display.textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(c).padStart(2,'0')}`;
+      since.textContent=running?'Running':'Paused';
+    }
+
+    function tick(){
+      requestAnimationFrame(tick);
+      const elapsed=running?(performance.now()-start)+base:base;
+      render(elapsed);
+    }
+
+    function toggle(){
+      if(running){base+=performance.now()-start;running=false;startPauseBtn.textContent='Start';startPauseBtn.className='go'}
+      else{start=performance.now();running=true;startPauseBtn.textContent='Pause';startPauseBtn.className='pause'}
+    }
+    function reset(){running=false;base=0;start=0;startPauseBtn.textContent='Start';startPauseBtn.className='go';render(0)}
+    function add(ms){if(running){base+=performance.now()-start;start=performance.now()}base+=ms}
+
+    chips.forEach(ch=>ch.onclick=()=>{const t=ch.dataset.add;if(t.endsWith('h'))add(parseInt(t)*3600000);if(t.endsWith('m'))add(parseInt(t)*60000);if(t.endsWith('s'))add(parseInt(t)*1000)});
+    addCustomBtn.onclick=()=>{add((+hEl.value||0)*3600000+(+mEl.value||0)*60000+(+sEl.value||0)*1000+(+msEl.value||0));hEl.value=mEl.value=sEl.value=msEl.value=''}
+    startPauseBtn.onclick=toggle;resetBtn.onclick=reset;
+    render(0);tick();
+  </script>
+</body>
+</html>
