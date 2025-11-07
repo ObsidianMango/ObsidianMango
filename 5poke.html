@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>🔥 Texas Hold’em — One-Page Poker (SB $0.25 / BB $0.50)</title>
+<title>🔥 Texas Hold’em (SB $0.25 / BB $0.50)</title>
 <style>
   :root{
     --bg:#07090d; --ink:#eaf7ff; --muted:#97a7b7;
@@ -37,7 +37,6 @@
   }
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center}
   .center{justify-content:center}
-  .between{justify-content:space-between}
   .players{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:12px}
   .seat{
     background:linear-gradient(180deg,#0b1218,#091117);border:1px solid #172532;border-radius:14px;padding:10px;min-height:150px;position:relative
@@ -83,14 +82,12 @@
   input[type=range]{width:220px}
   .chipline{display:flex;gap:8px;flex-wrap:wrap}
   .tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#0e1b24;border:1px solid #143043;color:#bfeaff;font-weight:800}
-  .sm{font-size:12px}
   .xs{font-size:11px}
+  .hide{display:none !important}
 
-  /* Card suit icons (tiny) */
   .suit{position:absolute;left:6px;top:4px;font-size:12px;opacity:.9}
   .rank{font-size:16px}
 
-  /* iPhone touch targets */
   .btn, .sel {min-height:48px}
 
   @media (min-width:800px){
@@ -102,7 +99,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>🔥 Texas Hold’em — Neon Table</h1>
+    <h1>🔥 Texas Hold’em</h1>
     <div class="topbar">
       <span class="chip">Stacks start: $50</span>
       <span class="chip">Blinds: <strong>$0.25/$0.50</strong></span>
@@ -112,6 +109,7 @@
         <option value="5">5 players</option>
       </select>
       <button class="btn alt" id="newGameBtn">New Game</button>
+      <button class="btn good hide" id="nextHandBtn">Deal Next Hand ↻</button>
     </div>
   </header>
 
@@ -130,7 +128,6 @@
   </div>
 </div>
 
-<!-- HUD -->
 <div class="hud" id="hud">
   <div class="row">
     <div class="bet-controls">
@@ -172,7 +169,7 @@ function log(s){ const el=document.getElementById('log'); const d=document.creat
 function randMs(min=500,max=1400){ return Math.floor(min + Math.random()*(max-min)); }
 
 /* =========================
-   EVALUATION (5-card)
+   EVALUATION
 ========================= */
 function evaluate5(cards){
   const rs = cards.map(c=>c[0]).sort((a,b)=>rv(b)-rv(a));
@@ -248,9 +245,9 @@ function newGame(count=4){
     minRaise:BB,
     toActIdx:0,
     handNo:0,
-    toCloseIdx:null,       // closes round when action returns here AND bets are closed
+    toCloseIdx:null,
     lastAggressor:null,
-    busy:false,            // CPU thinking guard
+    busy:false,
     cpuTimer:null
   };
   startHand();
@@ -258,6 +255,7 @@ function newGame(count=4){
 
 function startHand(){
   if(G.cpuTimer){ clearTimeout(G.cpuTimer); G.cpuTimer=null; G.busy=false; }
+  hideNextHandButton();
   G.handNo++;
   G.pot=0; G.board=[]; G.street="preflop"; G.currentBet=0; G.minRaise=BB;
   G.lastAggressor=null; G.toCloseIdx=null;
@@ -266,19 +264,16 @@ function startHand(){
   });
   G.deck=newDeck();
 
-  // deal 2
   for(let r=0;r<2;r++){ for(const p of G.players){ p.hole.push(G.deck.pop()); } }
 
-  // blinds
   const sbIdx = (G.dealer+1)%G.players.length;
   const bbIdx = (G.dealer+2)%G.players.length;
   postBlind(G.players[sbIdx], SB, "SB");
   postBlind(G.players[bbIdx], BB, "BB");
   G.currentBet = Math.min(BB, G.players[bbIdx].bet);
 
-  // action starts UTG (left of BB)
   G.toActIdx = (bbIdx+1)%G.players.length;
-  G.toCloseIdx = G.toActIdx; // if no raise, round ends once action returns here with all bets closed
+  G.toCloseIdx = G.toActIdx;
   setActing(G.toActIdx);
   updateUI();
   scheduleCPU();
@@ -289,7 +284,6 @@ function postBlind(p, amt, label){
   p.stack-=pay; p.bet+=pay; p.contributed+=pay; G.pot+=pay; p.blindTag=label;
   log(`${p.name} posts ${label} $${pay.toFixed(2)}`);
 }
-function alivePlayers(){ return G.players.filter(p=>p.inHand && !p.folded); }
 function nextIdxFrom(i){
   const n=G.players.length;
   for(let step=1;step<=n;step++){
@@ -319,23 +313,6 @@ function dealBoard(count){
   G.deck.pop(); // burn
   for(let i=0;i<count;i++) G.board.push(G.deck.pop());
 }
-function startNextStreet(){
-  collectBets();
-  if(G.street==="preflop"){ dealBoard(3); G.street="flop"; }
-  else if(G.street==="flop"){ dealBoard(1); G.street="turn"; }
-  else if(G.street==="turn"){ dealBoard(1); G.street="river"; }
-  else if(G.street==="river"){ G.street="showdown"; showdown(false); return; }
-
-  // action from left of dealer (first live)
-  let i=(G.dealer+1)%G.players.length;
-  i=adjustToLive(i);
-  G.toActIdx=i;
-  G.lastAggressor=null;
-  G.toCloseIdx=i;
-  setActing(G.toActIdx);
-  updateUI();
-  scheduleCPU();
-}
 function adjustToLive(i){
   const n=G.players.length;
   for(let k=0;k<n;k++){
@@ -344,6 +321,22 @@ function adjustToLive(i){
     if(p.inHand && !p.folded && !p.allin) return j;
   }
   return i;
+}
+function startNextStreet(){
+  collectBets();
+  if(G.street==="preflop"){ dealBoard(3); G.street="flop"; }
+  else if(G.street==="flop"){ dealBoard(1); G.street="turn"; }
+  else if(G.street==="turn"){ dealBoard(1); G.street="river"; }
+  else if(G.street==="river"){ G.street="showdown"; showdown(false); return; }
+
+  let i=(G.dealer+1)%G.players.length;
+  i=adjustToLive(i);
+  G.toActIdx=i;
+  G.lastAggressor=null;
+  G.toCloseIdx=i;
+  setActing(G.toActIdx);
+  updateUI();
+  scheduleCPU();
 }
 
 /* =========================
@@ -423,7 +416,7 @@ function cpuAct(){
       G.minRaise = Math.max(G.minRaise, raiseAmt);
       G.currentBet = p.bet;
       G.lastAggressor = p.id;
-      G.toCloseIdx = nextIdxFrom(G.toActIdx); // round must close after everyone responds to the raise
+      G.toCloseIdx = nextIdxFrom(G.toActIdx);
       p.status=`Raise to $${p.bet.toFixed(2)}`;
       log(`${p.name} raises to $${p.bet.toFixed(2)}`);
     }
@@ -448,7 +441,6 @@ function setActing(i){
 }
 function endRoundIfReady(nextIdx){
   if(!allBetsClosed()) return false;
-  // A betting round ends ONLY when all bets are closed AND action is about to return to toCloseIdx
   if(nextIdx===G.toCloseIdx){ startNextStreet(); return true; }
   return false;
 }
@@ -509,7 +501,7 @@ function actBetRaise(){
   G.minRaise = Math.max(G.minRaise, raiseAmt);
   G.currentBet = me.bet;
   G.lastAggressor = me.id;
-  G.toCloseIdx = nextIdxFrom(G.toActIdx); // others must respond; round closes when action comes back here
+  G.toCloseIdx = nextIdxFrom(G.toActIdx);
   me.status=`Raise to $${me.bet.toFixed(2)}`;
   log(`You raise to $${me.bet.toFixed(2)}`);
   updateUI();
@@ -535,16 +527,23 @@ function actAllIn(){
 
 /* =========================
    SHOWDOWN & SIDE POTS
+   (Manual next-hand so results stay visible)
 ========================= */
 function showdown(walk){
+  if(G.cpuTimer){ clearTimeout(G.cpuTimer); G.cpuTimer=null; G.busy=false; }
   collectBets();
   const contenders = G.players.filter(p=>p.inHand && !p.folded);
-  if(walk){
-    const w=contenders[0]; w.stack+=G.pot; log(`Everyone folded. ${w.name} wins $${G.pot.toFixed(2)}.`); G.street="showdown"; updateUI(true); return nextHandSoon();
-  }
 
   G.street="showdown";
-  // side-pot builder
+
+  if(walk){
+    const w=contenders[0]; w.stack+=G.pot;
+    log(`Everyone folded. ${w.name} wins $${G.pot.toFixed(2)}.`);
+    updateUI(true);
+    showNextHandButton();
+    return;
+  }
+
   const levels = [...new Set(G.players.map(p=>p.contributed))].filter(x=>x>0).sort((a,b)=>a-b);
   const pots=[]; let prev=0;
   for(const lvl of levels){
@@ -572,11 +571,28 @@ function showdown(walk){
   const uniq=new Set(); results.forEach(r=>r.winners.forEach(w=>uniq.add(w.name)));
   log(`Showdown — Winner(s): ${[...uniq].join(", ")}`);
   updateUI(true);
-  nextHandSoon();
+  showNextHandButton(); // let the player decide when to move on
 }
-function nextHandSoon(){
-  if(G.cpuTimer){ clearTimeout(G.cpuTimer); G.cpuTimer=null; G.busy=false; }
-  setTimeout(()=>{ nextDealer(); startHand(); }, 1600);
+
+/* =========================
+   NEXT HAND CONTROL (manual)
+========================= */
+function showNextHandButton(){
+  const btn=document.getElementById('nextHandBtn');
+  btn.classList.remove('hide');
+  // disable action buttons during showdown
+  disableActionButtons(true);
+}
+function hideNextHandButton(){
+  document.getElementById('nextHandBtn').classList.add('hide');
+  disableActionButtons(false);
+}
+function disableActionButtons(disable){
+  document.getElementById('foldBtn').disabled = disable;
+  document.getElementById('checkCallBtn').disabled = disable;
+  document.getElementById('betRaiseBtn').disabled = disable;
+  document.getElementById('betSlider').disabled = disable;
+  document.getElementById('allInBtn').disabled = disable;
 }
 
 /* =========================
@@ -619,7 +635,6 @@ function renderPlayers(){
     wrap.appendChild(seat);
   });
 
-  // board
   const b=document.getElementById('board'); b.innerHTML="";
   const showCount = (G.street==="preflop")?0 : (G.street==="flop")?3 : (G.street==="turn")?4 : (G.street==="river"||G.street==="showdown")?5:0;
   for(let i=0;i<5;i++){
@@ -673,7 +688,7 @@ function updateUI(forceReveal=false){
 }
 
 /* =========================
-   CPU SCHEDULER (random think time)
+   CPU SCHEDULER
 ========================= */
 function scheduleCPU(){
   if(G.cpuTimer){ clearTimeout(G.cpuTimer); G.cpuTimer=null; G.busy=false; }
@@ -691,6 +706,10 @@ document.getElementById('newGameBtn').addEventListener('click', ()=>{
   const pc=parseInt(document.getElementById('playerCount').value,10);
   newGame(pc);
 });
+document.getElementById('nextHandBtn').addEventListener('click', ()=>{
+  nextDealer();
+  startHand();
+});
 document.getElementById('betSlider').addEventListener('input',(e)=>{
   document.getElementById('betVal').textContent=parseFloat(e.target.value).toFixed(2);
 });
@@ -706,6 +725,7 @@ document.getElementById('allInBtn').addEventListener('click', actAllIn);
   const pc=parseInt(document.getElementById('playerCount').value,10);
   newGame(pc);
 })();
+
 </script>
 </body>
 </html>
