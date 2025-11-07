@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Five-Card Draw Poker — One-Page App</title>
+<style>
+  :root{
+    --bg:#0a0f12; --felt:#0e5f3f; --felt2:#0b4a32; --ink:#e9f2ef; --muted:#98b3aa;
+    --accent:#ffd166; --btn:#1a2230; --danger:#ff6b6b; --good:#2ecc71;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+  .wrap{max-width:1000px;margin-inline:auto;padding:12px 12px 120px}
+  header{display:flex;align-items:center;gap:10px;justify-content:space-between;margin:6px 0 10px}
+  h1{font-size:20px;margin:0}
+  .table{
+    background:
+      radial-gradient(1200px 500px at 50% -350px, rgba(255,255,255,.06), transparent 60%),
+      radial-gradient(900px 450px at 50% 140%, rgba(255,255,255,.06), transparent 60%),
+      conic-gradient(from 90deg at 50% 50%, var(--felt) 0 25%, var(--felt2) 0 50%, var(--felt) 0 75%, var(--felt2) 0 100%);
+    border:2px solid #173a2b; border-radius:16px; padding:10px; position:relative; overflow:hidden;
+  }
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}
+  .chip, .pot{
+    display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px;
+    background:linear-gradient(180deg,#1d2633,#121822); color:#d9f4eb; font-weight:600; font-size:14px; border:1px solid #2b3a4d
+  }
+  .btn{
+    appearance:none;border:0;border-radius:12px;padding:14px 16px;background:var(--btn);color:var(--ink);
+    font-weight:700;font-size:16px;box-shadow:0 1px 0 #0008, inset 0 -2px 0 #0007;touch-action:manipulation
+  }
+  .btn:disabled{opacity:.45}
+  .btn.good{background:linear-gradient(180deg,#1e6e44,#0f4d2f)}
+  .btn.warn{background:linear-gradient(180deg,#7a5417,#4c3713)}
+  .btn.danger{background:linear-gradient(180deg,#7a1e1e,#4a0f0f)}
+  .btn.alt{background:linear-gradient(180deg,#17314b,#0c2034)}
+  .stack{font-size:13px;color:var(--muted)}
+  .players{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:10px}
+  .seat{
+    background:linear-gradient(180deg,#0f1920,#0a1319);border:1px solid #1e2a34;border-radius:14px;padding:8px;position:relative;min-height:132px
+  }
+  .seat.me{outline:2px solid #2f8d61}
+  .seat .name{font-weight:800;font-size:14px;margin:0 0 2px}
+  .seat .status{font-size:12px;color:var(--muted);min-height:16px}
+  .seat .dealer{position:absolute;right:8px;top:8px;background:#fff;color:#000;font-weight:900;border-radius:999px;padding:2px 6px;font-size:12px}
+  .seat .blind{position:absolute;right:8px;top:30px;background:#ffd166;color:#000;border-radius:8px;padding:1px 6px;font-size:11px}
+  .cards{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .card{
+    width:42px;height:60px;border-radius:8px;background:#14333e;border:1px solid #1d4453;display:grid;place-items:center;
+    color:#e6f7ff;font-weight:900;font-family:ui-monospace,Menlo,Consolas,monospace; position:relative; user-select:none
+  }
+  .card.red{color:#ffd2d2}
+  .card.faceup{background:#0d1720;border-color:#385a6b}
+  .card.selectable{outline:2px solid transparent}
+  .card.selected{outline:2px solid var(--accent); transform:translateY(-6px)}
+  .small{font-size:12px}
+  .hud{
+    position:sticky; bottom:0; left:0; right:0; background:linear-gradient(180deg,#0c1218,#090e13);
+    padding:10px;border-top:1px solid #16222c; box-shadow:0 -20px 40px #0008
+  }
+  .hud .row{justify-content:space-between;gap:6px}
+  .bet-controls{display:flex;gap:6px;flex-wrap:wrap}
+  input[type=range]{width:220px}
+  .log{
+    max-height:160px; overflow:auto; padding:8px; background:#091015;border:1px solid #13212a;border-radius:8px;font-size:13px;margin-top:10px
+  }
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#152331;color:#cfe5ff;font-weight:700;font-size:12px}
+  .topbar{display:flex;gap:8px;flex-wrap:wrap}
+  .sel{
+    appearance:none;background:#13202b;color:#e9f2ef;border:1px solid #264155;border-radius:10px;padding:10px;font-weight:700
+  }
+  /* iPhone friendly big touch */
+  .btn, .sel {min-height:48px}
+  .hide{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Five-Card Draw Poker</h1>
+    <div class="topbar">
+      <span class="chip">Stacks start: $50</span>
+      <span class="chip">Blinds: <strong>$0.25/$0.50</strong></span>
+      <select id="playerCount" class="sel" title="Players">
+        <option value="3">3 players</option>
+        <option value="4" selected>4 players</option>
+        <option value="5">5 players</option>
+      </select>
+      <button class="btn alt" id="newGameBtn">New Game</button>
+    </div>
+  </header>
+
+  <div class="table">
+    <div class="row" style="justify-content:center;margin-bottom:8px">
+      <div class="pot">Pot: $<span id="pot">0.00</span></div>
+      <span class="pill" id="phasePill">—</span>
+    </div>
+
+    <div id="players" class="players"></div>
+
+    <div class="log" id="log" aria-live="polite"></div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud">
+  <div class="row">
+    <div class="bet-controls">
+      <button class="btn danger" id="foldBtn">Fold</button>
+      <button class="btn" id="checkCallBtn">Check / Call</button>
+      <button class="btn good" id="betRaiseBtn">Bet / Raise</button>
+      <input type="range" id="betSlider" min="0.5" max="10" step="0.5" value="0.5" />
+      <span class="chip">Bet: $<span id="betVal">0.50</span></span>
+      <button class="btn warn" id="allInBtn">All-in</button>
+    </div>
+    <div>
+      <button class="btn alt" id="drawToggleBtn">Select Discards</button>
+      <button class="btn good hide" id="confirmDiscardsBtn">Confirm Discards</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ======= Core Game State ======= */
+const SB = 0.25, BB = 0.50, START_STACK = 50;
+const PHASES = ["pre-bet","draw","post-bet","showdown"];
+let G = null; // global game state
+
+function newDeck(){
+  const ranks = ["2","3","4","5","6","7","8","9","T","J","Q","K","A"];
+  const suits = ["♣","♦","♥","♠"];
+  const deck=[];
+  for(const r of ranks) for(const s of suits) deck.push(r+s);
+  for(let i=deck.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]];}
+  return deck;
+}
+function rankValue(r){return "23456789TJQKA".indexOf(r);}
+function cardColor(c){return (c.includes("♦")||c.includes("♥")) ? "red" : ""}
+
+/* ======= Hand Evaluation (5-card) =======
+   Returns comparable tuple: [rank, kickers...]
+   rank: 8=StraightFlush,7=Four,6=FullHouse,5=Flush,4=Straight,3=Three,2=TwoPair,1=Pair,0=High
+*/
+function evaluate5(cards){
+  // cards like ["A♠","K♦","Q♦","J♦","T♦"]
+  const rs = cards.map(c=>c[0]).sort((a,b)=>rankValue(b)-rankValue(a));
+  const ss = cards.map(c=>c[1]);
+  const counts={}; rs.forEach(r=>counts[r]=(counts[r]||0)+1);
+  const groups = Object.entries(counts).sort((a,b)=>{
+    if(b[1]!==a[1]) return b[1]-a[1];
+    return rankValue(b[0]) - rankValue(a[0]);
+  });
+  const isFlush = ss.every(s=>s===ss[0]);
+  // Straight (wheel A-2-3-4-5 support)
+  let sortedVals = rs.map(r=>rankValue(r));
+  let isWheel = JSON.stringify(sortedVals.slice().sort((a,b)=>a-b))===JSON.stringify([0,1,2,3,12]); // A,2,3,4,5
+  let straightHigh = -1;
+  if(isWheel){straightHigh=3;} else {
+    const uniq=[...new Set(sortedVals)];
+    if(uniq.length===5 && (uniq[0]-uniq[4]===4)) straightHigh = uniq[0];
+  }
+  const isStraight = straightHigh>=0;
+
+  if(isStraight && isFlush) return [8, straightHigh]; // Straight flush
+  if(groups[0][1]===4){ // Four of a kind
+    const four = rankValue(groups[0][0]);
+    const kicker = rankValue(groups[1][0]);
+    return [7, four, kicker];
+  }
+  if(groups[0][1]===3 && groups[1][1]===2){ // Full House
+    return [6, rankValue(groups[0][0]), rankValue(groups[1][0])];
+  }
+  if(isFlush) return [5, ...rs.map(rankValue)];
+  if(isStraight) return [4, straightHigh];
+  if(groups[0][1]===3){
+    const kickers = rs.filter(r=>r!==groups[0][0]).map(rankValue);
+    return [3, rankValue(groups[0][0]), ...kickers];
+  }
+  if(groups[0][1]===2 && groups[1][1]===2){
+    const pair1 = rankValue(groups[0][0]), pair2 = rankValue(groups[1][0]);
+    const kicker = rankValue(groups[2][0]);
+    return [2, pair1, pair2, kicker];
+  }
+  if(groups[0][1]===2){
+    const pair = rankValue(groups[0][0]);
+    const kickers = rs.filter(r=>r!==groups[0][0]).map(rankValue);
+    return [1, pair, ...kickers];
+  }
+  return [0, ...rs.map(rankValue)];
+}
+function compareHands(a,b){
+  for(let i=0;i<Math.max(a.length,b.length);i++){
+    const av=a[i]??-1, bv=b[i]??-1;
+    if(av>bv) return 1;
+    if(av<bv) return -1;
+  }
+  return 0;
+}
+
+/* ======= Game Setup ======= */
+function newGame(playerCount=4){
+  const players=[];
+  for(let i=0;i<playerCount;i++){
+    players.push({
+      id:i, name: i===0 ? "You" : "CPU "+i, stack:START_STACK, hand:[], folded:false, allin:false,
+      toAct:false, status:"", bet:0, isMe: i===0, draws:[], dealer:false, blindTag:""
+    });
+  }
+  G = {
+    deck:newDeck(),
+    players,
+    pot:0,
+    dealer:0,
+    phase:"pre-bet",
+    currentBet:0,
+    toActIdx:0,
+    minRaise:BB,
+    drawMode:false,
+    handNumber:0
+  };
+  dealNewHand();
+}
+
+/* ======= Hand Flow ======= */
+function nextDealer(){
+  G.dealer = (G.dealer+1)%G.players.length;
+}
+function alivePlayers(){return G.players.filter(p=>!p.folded && p.stack>0 || p.isMe && !p.folded);}
+function advanceIdx(idx){ // next player alive (not folded/all-in)
+  const n=G.players.length;
+  for(let step=1; step<=n; step++){
+    const j=(idx+step)%n;
+    const pj=G.players[j];
+    if(!pj.folded && !pj.allin && pj.stack>0) return j;
+  }
+  return idx;
+}
+function postBlind(player, amt, label){
+  const pay = Math.min(amt, player.stack);
+  player.stack -= pay;
+  player.bet += pay;
+  G.pot += pay;
+  player.blindTag = label;
+  log(`${player.name} posts ${label} $${pay.toFixed(2)}`);
+}
+
+function dealNewHand(){
+  // reset per-hand
+  G.deck = newDeck();
+  G.pot = 0;
+  G.currentBet = 0;
+  G.minRaise = BB;
+  G.phase = "pre-bet";
+  G.handNumber++;
+  G.players.forEach((p,i)=>{
+    p.hand=[]; p.folded=false; p.allin=false; p.bet=0; p.status=""; p.draws=[]; p.dealer = (i===G.dealer); p.blindTag="";
+  });
+  // deal 5 each
+  for(let r=0;r<5;r++){
+    for(const p of G.players){ p.hand.push(G.deck.pop()); }
+  }
+  // blinds
+  const sbIdx = (G.dealer+1)%G.players.length;
+  const bbIdx = (G.dealer+2)%G.players.length;
+  postBlind(G.players[sbIdx], SB, "SB");
+  postBlind(G.players[bbIdx], BB, "BB");
+  G.currentBet = Math.min(BB, G.players[bbIdx].bet);
+  // first to act: player after BB
+  G.toActIdx = (bbIdx+1)%G.players.length;
+  setActing(G.toActIdx);
+  updateUI();
+}
+function setActing(idx){
+  G.players.forEach(p=>p.toAct=false);
+  G.players[idx].toAct=true;
+  showActionHUD(G.players[idx]);
+}
+function allBetsEqualOrAllIn(){
+  const active = G.players.filter(p=>!p.folded);
+  const target = Math.max(...active.map(p=>p.bet));
+  return active.every(p=>p.bet===target || p.allin);
+}
+function collectBetsToPot(){
+  for(const p of G.players){ G.pot += p.bet; p.bet=0; }
+  G.currentBet=0;
+}
+function moveToPhase(phase){
+  G.phase = phase;
+  document.getElementById('phasePill').textContent = phaseDisplay(phase);
+}
+function phaseDisplay(ph){
+  return ph==="pre-bet"?"Pre-Draw Betting": ph==="draw"?"Draw":
+         ph==="post-bet"?"Post-Draw Betting":"Showdown";
+}
+function nextAction(){
+  // If only one left not folded -> award pot
+  const inHand = G.players.filter(p=>!p.folded);
+  if(inHand.length===1){ showdown(true); return; }
+
+  // If betting round done -> next phase
+  if(allBetsEqualOrAllIn()){
+    collectBetsToPot();
+    if(G.phase==="pre-bet"){
+      moveToPhase("draw");
+      startDrawPhase();
+      return;
+    } else if(G.phase==="post-bet"){
+      moveToPhase("showdown");
+      showdown(false);
+      return;
+    }
+  }
+
+  // Otherwise next player
+  G.toActIdx = advanceIdx(G.toActIdx);
+  setActing(G.toActIdx);
+  updateUI();
+  if(!G.players[G.toActIdx].isMe) setTimeout(()=>cpuAct(), 450);
+}
+
+/* ======= Draw Phase ======= */
+function startDrawPhase(){
+  G.drawMode=false;
+  // CPU choose discards
+  for(const p of G.players){
+    if(p.folded) continue;
+    if(p.isMe) { p.status="Select up to 3 to discard."; continue; }
+    const disc = chooseCpuDiscards(p.hand);
+    p.draws = disc;
+  }
+  updateUI();
+  // Enable user to pick discards
+  if(G.players[0].folded){ // if user folded, immediately draw for CPUs
+    resolveAllDraws();
+  } else {
+    // show discard controls
+    document.getElementById('drawToggleBtn').classList.remove('hide');
+    document.getElementById('confirmDiscardsBtn').classList.remove('hide');
+    enableUserDiscardMode(true);
+  }
+}
+function enableUserDiscardMode(on){
+  G.drawMode = !!on;
+  // cards become selectable for me
+  updateUI();
+}
+function confirmUserDiscards(){
+  const me = G.players[0];
+  const discIdx = me.draws;
+  if(discIdx.length>3){ me.draws = me.draws.slice(0,3); }
+  // replace
+  me.draws.sort((a,b)=>b-a).forEach(ix=>{ me.hand.splice(ix,1); me.hand.push(G.deck.pop()); });
+  me.draws=[];
+}
+function resolveAllDraws(){
+  // CPUs draw
+  for(const p of G.players){
+    if(p.folded) continue;
+    if(p.isMe) continue;
+    p.draws.sort((a,b)=>b-a).forEach(ix=>{ p.hand.splice(ix,1); p.hand.push(G.deck.pop()); });
+    p.draws=[];
+  }
+  // proceed to post-bet
+  moveToPhase("post-bet");
+  // first to act is left of dealer (since all bets collected)
+  G.toActIdx = (G.dealer+1)%G.players.length;
+  setActing(G.toActIdx);
+  updateUI();
+  if(!G.players[G.toActIdx].isMe) setTimeout(()=>cpuAct(), 450);
+}
+
+/* ======= CPU Logic ======= */
+function handStrengthScore(cards){
+  const r = evaluate5(cards);
+  // simple scalar score
+  let base = r[0]*100;
+  for(let i=1;i<r.length;i++) base += r[i]/(i+1);
+  return base;
+}
+function chooseCpuDiscards(cards){
+  // basic draw heuristics
+  // Keep pairs and above; for high-card keep 2 highest; avoid breaking straights/flushes
+  // Try all single-card discards up to 3 and pick those improving expected score naïvely? Keep it simple.
+  // Heuristic:
+  const ranks = cards.map(c=>c[0]);
+  const counts={}; ranks.forEach(r=>counts[r]=(counts[r]||0)+1);
+  const pairs = Object.entries(counts).filter(([r,c])=>c>=2).map(([r,c])=>r);
+  let disc = [];
+  if(pairs.length>=1){
+    // keep pair/trips/quads; discard kickers not helping (up to 3)
+    for(let i=0;i<cards.length;i++){
+      if(pairs.includes(cards[i][0])) continue;
+      disc.push(i);
+    }
+    return disc.slice(0,3);
+  } else {
+    // high card: keep two highest by rank; discard others up to 3
+    const sortedIdx = cards.map((c,i)=>({i,val:rankValue(c[0])})).sort((a,b)=>b.val-a.val).map(o=>o.i);
+    const keep = new Set(sortedIdx.slice(0,2));
+    for(let i=0;i<5;i++) if(!keep.has(i)) disc.push(i);
+    return disc.slice(0,3);
+  }
+}
+function cpuBetSizing(p){
+  // bet sizing by phase & strength
+  const strength = handStrengthScore(p.hand);
+  let base = (G.phase==="pre-bet") ? 0.5 : 1.0; // BB multiples
+  if(strength>520) base+=1;
+  if(strength>600) base+=1;
+  if(strength>700) base+=2;
+  let bet = Math.min(p.stack, Math.max(BB, base*BB));
+  return roundCash(bet);
+}
+function cpuDecision(p){
+  const need = G.currentBet - p.bet;
+  const canCheck = (need<=0);
+  const strength = handStrengthScore(p.hand);
+  if(G.phase==="pre-bet"){
+    if(!canCheck && strength<380){ return "fold"; }
+    if(canCheck && strength<360){ return "check"; }
+  } else {
+    if(!canCheck && strength<420){ return "fold"; }
+    if(canCheck && strength<400){ return "check"; }
+  }
+  // Otherwise call or raise
+  const raiseChance = Math.random() < (strength>650 ? 0.7 : strength>550 ? 0.4 : 0.2);
+  if(raiseChance && p.stack > need+BB){
+    return {type:"raise", amt: cpuBetSizing(p)};
+  }
+  return "call";
+}
+function cpuAct(){
+  const p = G.players[G.toActIdx];
+  if(p.folded || p.allin) { nextAction(); return; }
+  if(G.phase==="draw"){ // shouldn't happen — draw is handled elsewhere
+    nextAction(); return;
+  }
+  const need = Math.max(0, G.currentBet - p.bet);
+  const move = cpuDecision(p);
+  if(move==="fold"){
+    p.folded=true; p.status="Folded";
+    log(`${p.name} folds`);
+  } else if(move==="check" && need===0){
+    p.status="Checks"; log(`${p.name} checks`);
+  } else if(move==="call"){
+    const pay = Math.min(need, p.stack);
+    p.stack-=pay; p.bet+=pay; if(pay===p.stack) p.allin=true;
+    p.status= need>0 ? `Calls $${pay.toFixed(2)}` : "Checks";
+    if(need>0) log(`${p.name} calls $${pay.toFixed(2)}`);
+  } else if(typeof move==="object" && move.type==="raise"){
+    // Make sure raise meets minRaise
+    let raiseTo = Math.max(G.currentBet + G.minRaise, move.amt + G.currentBet); // target total bet
+    let add = raiseTo - p.bet;
+    add = Math.min(add, p.stack);
+    if(add<=need){ // fallback to call
+      const pay = Math.min(need, p.stack);
+      p.stack-=pay; p.bet+=pay; if(p.stack===0) p.allin=true;
+      p.status=`Calls $${pay.toFixed(2)}`; log(`${p.name} calls $${pay.toFixed(2)}`);
+    } else {
+      p.stack-=add; p.bet+=add; if(p.stack===0) p.allin=true;
+      const realRaise = (p.bet - G.currentBet);
+      G.minRaise = Math.max(G.minRaise, realRaise);
+      G.currentBet = p.bet;
+      p.status=`Raises to $${p.bet.toFixed(2)}`;
+      log(`${p.name} raises to $${p.bet.toFixed(2)}`);
+    }
+  } else {
+    // default call/check
+    const pay = Math.min(need, p.stack);
+    p.stack-=pay; p.bet+=pay; if(p.stack===0) p.allin=true;
+    p.status= need>0 ? `Calls $${pay.toFixed(2)}` : "Checks";
+    if(need>0) log(`${p.name} calls $${pay.toFixed(2)}`);
+  }
+  updateUI();
+  nextAction();
+}
+
+/* ======= Player Actions ======= */
+function onFold(){
+  const me = G.players[0];
+  if(me.folded || !me.toAct) return;
+  me.folded = true; me.status="Folded";
+  log(`You fold`);
+  updateUI();
+  nextAction();
+}
+function onCheckCall(){
+  const me = G.players[0];
+  if(me.folded || !me.toAct) return;
+  const need = Math.max(0, G.currentBet - me.bet);
+  if(need<=0){
+    me.status="Check";
+    log(`You check`);
+  } else {
+    const pay = Math.min(need, me.stack);
+    me.stack -= pay; me.bet += pay;
+    if(me.stack===0) me.allin=true;
+    me.status=`Call $${pay.toFixed(2)}`;
+    log(`You call $${pay.toFixed(2)}`);
+  }
+  updateUI();
+  nextAction();
+}
+function onBetRaise(){
+  const me = G.players[0];
+  if(me.folded || !me.toAct) return;
+  let want = parseFloat(document.getElementById('betSlider').value);
+  want = roundCash(want);
+  const need = Math.max(0, G.currentBet - me.bet);
+  // total we add (including call) should be at least current + minRaise unless everyone can be all-in
+  let target = (G.currentBet>0) ? (G.currentBet + Math.max(G.minRaise, BB)) : Math.max(BB, want);
+  let add = (G.currentBet>0) ? (target - me.bet) : want;
+  add = Math.max(add, need + BB); // ensure it's a raise, not a call
+  add = Math.min(add, me.stack); // cannot exceed stack
+  if(add<=need){ // convert to call if not enough to raise
+    onCheckCall(); return;
+  }
+  me.stack -= add; me.bet += add;
+  if(me.stack===0) me.allin=true;
+  G.minRaise = Math.max(G.minRaise, me.bet - G.currentBet);
+  G.currentBet = me.bet;
+  me.status = `Raise to $${me.bet.toFixed(2)}`;
+  log(`You raise to $${me.bet.toFixed(2)}`);
+  updateUI();
+  nextAction();
+}
+function onAllIn(){
+  const me = G.players[0];
+  if(me.folded || !me.toAct) return;
+  const add = me.stack;
+  if(add<=0){ onCheckCall(); return; }
+  me.stack=0; me.bet+=add; me.allin=true;
+  if(me.bet>G.currentBet){ G.minRaise = Math.max(G.minRaise, me.bet - G.currentBet); G.currentBet = me.bet; }
+  me.status="All-in";
+  log(`You go ALL-IN ($${(add).toFixed(2)})`);
+  updateUI();
+  nextAction();
+}
+
+/* ======= Showdown & Payout ======= */
+function showdown(walk){
+  moveToPhase("showdown");
+  // if walk (everyone folded), winner is the only remaining
+  const alive = G.players.filter(p=>!p.folded);
+  let winners=[];
+  if(walk){
+    winners=[alive[0]];
+  } else {
+    // compare hands of those not folded
+    const scored = alive.map(p=>({p,score:evaluate5(p.hand)}));
+    scored.sort((a,b)=>-compareHands(a.score,b.score));
+    winners=[scored[0].p];
+    // ties?
+    for(let i=1;i<scored.length;i++){
+      if(compareHands(scored[i].score, scored[0].score)===0) winners.push(scored[i].p);
+      else break;
+    }
+  }
+  const payout = G.pot / winners.length;
+  winners.forEach(w=>w.stack+=payout);
+  const names = winners.map(w=>w.name).join(", ");
+  log(`Showdown — Winner: ${names} (${winners.length>1?"split pot":`+$${payout.toFixed(2)}`})`);
+  updateUI(true);
+  // next hand after short delay
+  setTimeout(()=>{
+    nextDealer();
+    dealNewHand();
+  }, 1400);
+}
+
+/* ======= Utilities ======= */
+function roundCash(x){ return Math.round(x*100)/100; }
+function log(s){
+  const el = document.getElementById('log');
+  const t = document.createElement('div'); t.textContent=s;
+  el.appendChild(t); el.scrollTop=el.scrollHeight;
+}
+
+/* ======= UI Rendering ======= */
+function renderPlayers(){
+  const wrap = document.getElementById('players');
+  wrap.innerHTML="";
+  G.players.forEach(p=>{
+    const seat = document.createElement('div');
+    seat.className='seat'+(p.isMe?' me':'');
+    const name = document.createElement('div');
+    name.className='name'; name.textContent = `${p.name}  `;
+    const stack = document.createElement('div');
+    stack.className='stack'; stack.textContent = `Stack: $${p.stack.toFixed(2)}   Bet: $${p.bet.toFixed(2)}`;
+    const status = document.createElement('div');
+    status.className='status'; status.textContent = (p.toAct?'▶ ':'') + (p.status||'');
+    const cards = document.createElement('div'); cards.className='cards';
+
+    // Dealer/Blind tags
+    if(p.dealer){
+      const d=document.createElement('div'); d.className='dealer'; d.textContent='D'; seat.appendChild(d);
+    }
+    if(p.blindTag){
+      const b=document.createElement('div'); b.className='blind'; b.textContent=p.blindTag; seat.appendChild(b);
+    }
+
+    p.hand.forEach((c,ix)=>{
+      const div=document.createElement('div'); div.className='card faceup '+cardColor(c);
+      div.textContent=c;
+      if(p.isMe && G.phase==="draw" && G.drawMode && !p.folded){
+        div.classList.add('selectable');
+        if(p.draws.includes(ix)) div.classList.add('selected');
+        div.onclick=()=>{
+          const pos = p.draws.indexOf(ix);
+          if(pos>=0){ p.draws.splice(pos,1); }
+          else { if(p.draws.length<3) p.draws.push(ix); }
+          updateUI();
+        };
+      }
+      if(!p.isMe && (G.phase!=="showdown")){
+        // hide CPU cards until showdown
+        div.className='card';
+        div.textContent='🂠';
+      }
+      cards.appendChild(div);
+    });
+
+    seat.appendChild(name); seat.appendChild(stack); seat.appendChild(status); seat.appendChild(cards);
+    if(p.folded){
+      seat.style.opacity = .55;
+    }
+    wrap.appendChild(seat);
+  });
+  document.getElementById('pot').textContent = G.pot.toFixed(2);
+  document.getElementById('phasePill').textContent = phaseDisplay(G.phase);
+}
+
+function showActionHUD(actor){
+  const foldBtn = document.getElementById('foldBtn');
+  const callBtn = document.getElementById('checkCallBtn');
+  const raiseBtn = document.getElementById('betRaiseBtn');
+  const slider = document.getElementById('betSlider');
+  const betVal = document.getElementById('betVal');
+  const allIn = document.getElementById('allInBtn');
+
+  const drawToggle = document.getElementById('drawToggleBtn');
+  const confirmDisc = document.getElementById('confirmDiscardsBtn');
+
+  if(G.phase==="draw"){
+    // betting controls off, draw controls on (for user only)
+    const drawActive = actor && actor.isMe && !actor.folded;
+    foldBtn.disabled = true; callBtn.disabled = true; raiseBtn.disabled = true; allIn.disabled = true; slider.disabled = true;
+    drawToggle.disabled = !drawActive; confirmDisc.disabled = !drawActive;
+    if(drawActive){
+      drawToggle.classList.remove('hide');
+      confirmDisc.classList.remove('hide');
+    } else {
+      drawToggle.classList.add('hide');
+      confirmDisc.classList.add('hide');
+    }
+    return;
+  } else {
+    drawToggle.classList.add('hide');
+    confirmDisc.classList.add('hide');
+  }
+
+  const meTurn = actor && actor.isMe && !actor.folded && !actor.allin;
+  foldBtn.disabled = !meTurn;
+  callBtn.disabled = !meTurn;
+  raiseBtn.disabled = !meTurn;
+  allIn.disabled = !meTurn;
+  slider.disabled = !meTurn;
+
+  const need = Math.max(0, G.currentBet - (actor?actor.bet:0));
+  callBtn.textContent = need<=0 ? "Check" : `Call $${Math.min(need, actor?actor.stack:0).toFixed(2)}`;
+
+  // slider: bet increment (BB steps up to $10 default; capped by stack)
+  const maxBet = actor ? roundCash(Math.max(BB, Math.min(actor.stack, 20))) : 10;
+  slider.max = String(maxBet);
+  if(parseFloat(slider.value)>maxBet) slider.value = String(maxBet);
+  betVal.textContent = parseFloat(slider.value).toFixed(2);
+}
+
+function updateUI(forceShow=false){
+  renderPlayers();
+  document.getElementById('pot').textContent = G.pot.toFixed(2);
+  const actor = G.players.find(p=>p.toAct);
+  showActionHUD(actor);
+  if(forceShow && G.phase==="showdown"){
+    // reveal CPU cards now
+    const seats = document.querySelectorAll('.seat .cards');
+    G.players.forEach((p,pi)=>{
+      const cards = seats[pi].children;
+      for(let i=0;i<cards.length;i++){
+        cards[i].className='card faceup '+cardColor(p.hand[i]);
+        cards[i].textContent=p.hand[i];
+      }
+      const score = evaluate5(p.hand);
+      const label = handLabel(score);
+      const s = document.querySelectorAll('.seat .status')[pi];
+      s.textContent = (p.status? p.status+" • " : "")+ label;
+    });
+  }
+}
+function handLabel(score){
+  const labels=["High Card","Pair","Two Pair","Three of a Kind","Straight","Flush","Full House","Four of a Kind","Straight Flush"];
+  return labels[score[0]];
+}
+
+/* ======= Event Hooks ======= */
+document.getElementById('newGameBtn').addEventListener('click', ()=>{
+  const pc = parseInt(document.getElementById('playerCount').value,10);
+  newGame(pc);
+});
+document.getElementById('betSlider').addEventListener('input', (e)=>{
+  document.getElementById('betVal').textContent = parseFloat(e.target.value).toFixed(2);
+});
+document.getElementById('foldBtn').addEventListener('click', onFold);
+document.getElementById('checkCallBtn').addEventListener('click', onCheckCall);
+document.getElementById('betRaiseBtn').addEventListener('click', onBetRaise);
+document.getElementById('allInBtn').addEventListener('click', onAllIn);
+
+document.getElementById('drawToggleBtn').addEventListener('click', ()=>{
+  if(G.phase!=="draw") return;
+  enableUserDiscardMode(!G.drawMode);
+});
+document.getElementById('confirmDiscardsBtn').addEventListener('click', ()=>{
+  const me = G.players[0];
+  if(G.phase!=="draw" || me.folded) return;
+  confirmUserDiscards();
+  enableUserDiscardMode(false);
+  // CPUs draw too and move on
+  resolveAllDraws();
+  updateUI();
+});
+
+/* ======= Boot ======= */
+(function boot(){
+  const pc = parseInt(document.getElementById('playerCount').value,10);
+  newGame(pc);
+})();
+</script>
+</body>
+</html>
