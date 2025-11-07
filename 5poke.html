@@ -122,9 +122,7 @@
       <span class="pill xs" id="toActPill">—</span>
     </div>
 
-    <div class="board" id="board">
-      <!-- community cards -->
-    </div>
+    <div class="board" id="board"></div>
 
     <div id="players" class="players"></div>
 
@@ -154,7 +152,6 @@
    CONFIG
 ========================= */
 const SB = 0.25, BB = 0.50, START_STACK = 50;
-const STREETS = ["preflop","flop","turn","river","showdown"];
 let G = null;
 
 /* =========================
@@ -172,10 +169,10 @@ function rv(r){return "23456789TJQKA".indexOf(r);}
 function cardColor(c){return (c.includes("♦")||c.includes("♥")) ? "red" : ""}
 function roundCash(x){ return Math.round(x*100)/100; }
 function log(s){ const el=document.getElementById('log'); const d=document.createElement('div'); d.textContent=s; el.appendChild(d); el.scrollTop=el.scrollHeight; }
+function randMs(min=500,max=1400){ return Math.floor(min + Math.random()*(max-min)); }
 
 /* =========================
    EVALUATION (5-card)
-   returns [rank, kickers...]
 ========================= */
 function evaluate5(cards){
   const rs = cards.map(c=>c[0]).sort((a,b)=>rv(b)-rv(a));
@@ -186,42 +183,21 @@ function evaluate5(cards){
     return rv(b[0]) - rv(a[0]);
   });
   const isFlush = ss.every(s=>s===ss[0]);
-  // Straight with wheel
   let vals = rs.map(rv);
-  const uniq=[...new Set(vals)];
+  const uniq=[...new Set(vals)].sort((a,b)=>b-a);
   let straightHigh=-1;
-  const a=uniq.slice().sort((x,y)=>y-x);
-  if(uniq.length>=5){
-    // normal
-    for(let i=0;i<=uniq.length-5;i++){
-      if(a[i]-a[i+4]===4){ straightHigh=a[i]; break; }
-    }
-    // wheel A-2-3-4-5
-    const wheel = [12,3,2,1,0].every(v=>uniq.includes(v));
-    if(wheel) straightHigh=Math.max(straightHigh,3);
-  }
+  for(let i=0;i<=uniq.length-5;i++) if(uniq[i]-uniq[i+4]===4){ straightHigh=uniq[i]; break; }
+  const wheel=[12,3,2,1,0].every(v=>uniq.includes(v)); if(wheel) straightHigh=Math.max(straightHigh,3);
   const isStraight = straightHigh>=0;
 
   if(isStraight && isFlush) return [8, straightHigh];
-  if(groups[0][1]===4){ // quads
-    return [7, rv(groups[0][0]), rv(groups[1][0])];
-  }
-  if(groups[0][1]===3 && groups[1][1]===2){
-    return [6, rv(groups[0][0]), rv(groups[1][0])];
-  }
+  if(groups[0][1]===4) return [7, rv(groups[0][0]), rv(groups[1][0])];
+  if(groups[0][1]===3 && groups[1][1]===2) return [6, rv(groups[0][0]), rv(groups[1][0])];
   if(isFlush) return [5, ...rs.map(rv)];
   if(isStraight) return [4, straightHigh];
-  if(groups[0][1]===3){
-    const kick = rs.filter(r=>r!==groups[0][0]).map(rv);
-    return [3, rv(groups[0][0]), ...kick];
-  }
-  if(groups[0][1]===2 && groups[1][1]===2){
-    return [2, rv(groups[0][0]), rv(groups[1][0]), rv(groups[2][0])];
-  }
-  if(groups[0][1]===2){
-    const kick = rs.filter(r=>r!==groups[0][0]).map(rv);
-    return [1, rv(groups[0][0]), ...kick];
-  }
+  if(groups[0][1]===3){ const kick=rs.filter(r=>r!==groups[0][0]).map(rv); return [3, rv(groups[0][0]), ...kick]; }
+  if(groups[0][1]===2 && groups[1][1]===2) return [2, rv(groups[0][0]), rv(groups[1][0]), rv(groups[2][0])];
+  if(groups[0][1]===2){ const kick=rs.filter(r=>r!==groups[0][0]).map(rv); return [1, rv(groups[0][0]), ...kick]; }
   return [0, ...rs.map(rv)];
 }
 function cmp(a,b){
@@ -231,25 +207,19 @@ function cmp(a,b){
   }
   return 0;
 }
-// Best hand out of 7 (2 hole + up to 5 board)
 function bestOf7(hole, board){
-  const cards = [...hole, ...board];
-  let best=null;
-  for(let i=0;i<cards.length;i++){
-    for(let j=i+1;j<cards.length;j++){
-      for(let k=j+1;k<cards.length;k++){
-        for(let l=k+1;l<cards.length;l++){
+  const cards=[...hole,...board];
+  let bestScore=null;
+  for(let i=0;i<cards.length;i++)
+    for(let j=i+1;j<cards.length;j++)
+      for(let k=j+1;k<cards.length;k++)
+        for(let l=k+1;l<cards.length;l++)
           for(let m=l+1;m<cards.length;m++){
             const pick=[cards[i],cards[j],cards[k],cards[l],cards[m]];
             const sc=evaluate5(pick);
-            if(!best || cmp(sc,best)<0) best=sc; // keep max later
-            else if(cmp(sc,best)>0) best=sc;
+            if(!bestScore || cmp(sc,bestScore)>0) bestScore=sc;
           }
-        }
-      }
-    }
-  }
-  return best;
+  return bestScore;
 }
 function handLabel(score){
   const labels=["High Card","Pair","Two Pair","Three of a Kind","Straight","Flush","Full House","Four of a Kind","Straight Flush"];
@@ -278,12 +248,19 @@ function newGame(count=4){
     minRaise:BB,
     toActIdx:0,
     handNo:0,
+    toCloseIdx:null,       // closes round when action returns here AND bets are closed
+    lastAggressor:null,
+    busy:false,            // CPU thinking guard
+    cpuTimer:null
   };
   startHand();
 }
+
 function startHand(){
+  if(G.cpuTimer){ clearTimeout(G.cpuTimer); G.cpuTimer=null; G.busy=false; }
   G.handNo++;
   G.pot=0; G.board=[]; G.street="preflop"; G.currentBet=0; G.minRaise=BB;
+  G.lastAggressor=null; G.toCloseIdx=null;
   G.players.forEach((p,i)=>{
     p.hole=[]; p.folded=false; p.allin=false; p.bet=0; p.contributed=0; p.inHand=true; p.status=""; p.dealer=(i===G.dealer); p.blindTag="";
   });
@@ -301,9 +278,10 @@ function startHand(){
 
   // action starts UTG (left of BB)
   G.toActIdx = (bbIdx+1)%G.players.length;
+  G.toCloseIdx = G.toActIdx; // if no raise, round ends once action returns here with all bets closed
   setActing(G.toActIdx);
   updateUI();
-  if(!G.players[G.toActIdx].isMe) setTimeout(cpuAct, 500);
+  scheduleCPU();
 }
 function nextDealer(){ G.dealer=(G.dealer+1)%G.players.length; }
 function postBlind(p, amt, label){
@@ -311,7 +289,7 @@ function postBlind(p, amt, label){
   p.stack-=pay; p.bet+=pay; p.contributed+=pay; G.pot+=pay; p.blindTag=label;
   log(`${p.name} posts ${label} $${pay.toFixed(2)}`);
 }
-function alivePlayers(){ return G.players.filter(p=>!p.folded && p.inHand); }
+function alivePlayers(){ return G.players.filter(p=>p.inHand && !p.folded); }
 function nextIdxFrom(i){
   const n=G.players.length;
   for(let step=1;step<=n;step++){
@@ -328,41 +306,35 @@ function allBetsClosed(){
 }
 function collectBets(){
   for(const p of G.players){ G.pot+=p.bet; p.bet=0; }
-  G.currentBet=0;
+  G.currentBet=0; G.minRaise=BB;
 }
 
 /* =========================
    STREET ADVANCE
 ========================= */
-function moveStreet(next){
-  G.street=next;
-  document.getElementById('phasePill').textContent = streetDisplay(next);
-}
 function streetDisplay(s){
   return s==="preflop"?"Preflop": s==="flop"?"Flop": s==="turn"?"Turn": s==="river"?"River":"Showdown";
 }
 function dealBoard(count){
-  // burn one (optional cosmetic)
-  G.deck.pop();
+  G.deck.pop(); // burn
   for(let i=0;i<count;i++) G.board.push(G.deck.pop());
 }
 function startNextStreet(){
   collectBets();
-  if(G.street==="preflop"){
-    dealBoard(3); moveStreet("flop");
-  } else if(G.street==="flop"){
-    dealBoard(1); moveStreet("turn");
-  } else if(G.street==="turn"){
-    dealBoard(1); moveStreet("river");
-  } else if(G.street==="river"){
-    moveStreet("showdown"); showdown(false); return;
-  }
-  // action from left of dealer
-  G.toActIdx = (G.dealer+1)%G.players.length;
-  G.toActIdx = adjustToLive(G.toActIdx);
+  if(G.street==="preflop"){ dealBoard(3); G.street="flop"; }
+  else if(G.street==="flop"){ dealBoard(1); G.street="turn"; }
+  else if(G.street==="turn"){ dealBoard(1); G.street="river"; }
+  else if(G.street==="river"){ G.street="showdown"; showdown(false); return; }
+
+  // action from left of dealer (first live)
+  let i=(G.dealer+1)%G.players.length;
+  i=adjustToLive(i);
+  G.toActIdx=i;
+  G.lastAggressor=null;
+  G.toCloseIdx=i;
   setActing(G.toActIdx);
   updateUI();
-  if(!G.players[G.toActIdx].isMe) setTimeout(cpuAct, 500);
+  scheduleCPU();
 }
 function adjustToLive(i){
   const n=G.players.length;
@@ -378,22 +350,19 @@ function adjustToLive(i){
    CPU LOGIC
 ========================= */
 function preflopStrength(hole){
-  // Very rough: pair>AK>... map to score
   const [a,b]=hole; const ra=rv(a[0]), rb=rv(b[0]);
   const suited = a[1]===b[1];
   const hi=Math.max(ra,rb), lo=Math.min(ra,rb);
   let s = 0;
-  if(ra===rb) s = 600 + ra*10;                       // pairs
-  else if((hi===12 && lo>=9) || (hi===11 && lo===10)) s=520; // AK/AQ/KQ-ish
+  if(ra===rb) s = 600 + ra*10;
+  else if((hi===12 && lo>=9) || (hi===11 && lo===10)) s=520;
   else s = 360 + hi*4 + (suited?12:0);
-  // small bonus for connectivity
   if(Math.abs(ra-rb)===1) s+=10;
   return s;
 }
 function currentStrength(p){
   if(G.street==="preflop") return preflopStrength(p.hole);
   const score = bestOf7(p.hole, G.board);
-  // scale 0..800 roughly
   return score[0]*100 + (score[1]??0)*2 + (score[2]??0);
 }
 function cpuBetSize(p){
@@ -410,19 +379,18 @@ function cpuDecision(p){
   const canCheck = need<=0;
   const s = currentStrength(p);
 
-  // fold thresholds vary by street
   const foldCut = (G.street==="preflop")? 380 : (G.street==="flop"? 420 : (G.street==="turn"? 470 : 520));
   if(!canCheck && s<foldCut) return "fold";
   if(canCheck && s<foldCut-20) return "check";
 
-  // aggressive with strength
-  const raiseProb = (s>730)?0.75 : (s>650)?0.45 : 0.25;
+  const raiseProb = (s>730)?0.75 : (s>650)?0.45 : 0.22;
   if(Math.random() < raiseProb && p.stack > need+BB){
     return {type:"raise", amt: cpuBetSize(p)};
   }
   return canCheck? "check" : "call";
 }
 function cpuAct(){
+  if(G.busy) return;
   const p=G.players[G.toActIdx];
   if(!p || p.folded || p.allin || !p.inHand){ nextAction(); return; }
 
@@ -444,7 +412,6 @@ function cpuAct(){
     let add = target - p.bet;
     add = Math.min(add, p.stack);
     if(add<=need){
-      // fallback to call
       const pay=Math.min(need, p.stack);
       p.stack-=pay; p.bet+=pay; p.contributed+=pay;
       if(p.stack===0) p.allin=true;
@@ -455,11 +422,12 @@ function cpuAct(){
       const raiseAmt = p.bet - G.currentBet;
       G.minRaise = Math.max(G.minRaise, raiseAmt);
       G.currentBet = p.bet;
+      G.lastAggressor = p.id;
+      G.toCloseIdx = nextIdxFrom(G.toActIdx); // round must close after everyone responds to the raise
       p.status=`Raise to $${p.bet.toFixed(2)}`;
       log(`${p.name} raises to $${p.bet.toFixed(2)}`);
     }
   } else {
-    // default call/check
     const pay=Math.min(need, p.stack);
     p.stack-=pay; p.bet+=pay; p.contributed+=pay;
     if(p.stack===0) p.allin=true;
@@ -478,17 +446,23 @@ function setActing(i){
   G.players[i].toAct=true;
   updateHUD();
 }
+function endRoundIfReady(nextIdx){
+  if(!allBetsClosed()) return false;
+  // A betting round ends ONLY when all bets are closed AND action is about to return to toCloseIdx
+  if(nextIdx===G.toCloseIdx){ startNextStreet(); return true; }
+  return false;
+}
 function nextAction(){
   const inPlay = G.players.filter(p=>p.inHand && !p.folded);
   if(inPlay.length===1){ showdown(true); return; }
 
-  if(allBetsClosed()){
-    startNextStreet(); return;
-  }
-  G.toActIdx = nextIdxFrom(G.toActIdx);
+  const nextIdx = nextIdxFrom(G.toActIdx);
+  if(endRoundIfReady(nextIdx)) return;
+
+  G.toActIdx = nextIdx;
   setActing(G.toActIdx);
   updateUI();
-  if(!G.players[G.toActIdx].isMe) setTimeout(cpuAct, 500);
+  scheduleCPU();
 }
 
 /* =========================
@@ -513,7 +487,8 @@ function actCheckCall(){
     me.status=`Call $${pay.toFixed(2)}`;
     log(`You call $${pay.toFixed(2)}`);
   }
-  updateUI(); nextAction();
+  updateUI();
+  nextAction();
 }
 function actBetRaise(){
   const me=G.players[0];
@@ -527,13 +502,18 @@ function actBetRaise(){
   add = Math.min(add, me.stack);
 
   if(add<=need){ actCheckCall(); return; }
+
   me.stack-=add; me.bet+=add; me.contributed+=add;
   if(me.stack===0) me.allin=true;
-  G.minRaise = Math.max(G.minRaise, me.bet - G.currentBet);
+  const raiseAmt = me.bet - G.currentBet;
+  G.minRaise = Math.max(G.minRaise, raiseAmt);
   G.currentBet = me.bet;
+  G.lastAggressor = me.id;
+  G.toCloseIdx = nextIdxFrom(G.toActIdx); // others must respond; round closes when action comes back here
   me.status=`Raise to $${me.bet.toFixed(2)}`;
   log(`You raise to $${me.bet.toFixed(2)}`);
-  updateUI(); nextAction();
+  updateUI();
+  nextAction();
 }
 function actAllIn(){
   const me=G.players[0];
@@ -541,40 +521,41 @@ function actAllIn(){
   const add=me.stack;
   if(add<=0){ actCheckCall(); return; }
   me.stack=0; me.bet+=add; me.contributed+=add; me.allin=true;
-  if(me.bet>G.currentBet){ G.minRaise=Math.max(G.minRaise, me.bet-G.currentBet); G.currentBet=me.bet; }
+  if(me.bet>G.currentBet){
+    const raiseAmt = me.bet-G.currentBet;
+    G.minRaise=Math.max(G.minRaise, raiseAmt);
+    G.currentBet=me.bet;
+    G.lastAggressor = me.id;
+    G.toCloseIdx = nextIdxFrom(G.toActIdx);
+  }
   me.status="All-in";
   log(`You go ALL-IN ($${add.toFixed(2)})`);
   updateUI(); nextAction();
 }
 
 /* =========================
-   SHOWDOWN & POTS (basic side pots)
+   SHOWDOWN & SIDE POTS
 ========================= */
 function showdown(walk){
-  moveStreet("showdown");
   collectBets();
   const contenders = G.players.filter(p=>p.inHand && !p.folded);
-  if(contenders.length===0){ // weird edge
-    updateUI(true); nextHandSoon(); return;
+  if(walk){
+    const w=contenders[0]; w.stack+=G.pot; log(`Everyone folded. ${w.name} wins $${G.pot.toFixed(2)}.`); G.street="showdown"; updateUI(true); return nextHandSoon();
   }
 
-  // Build side pots based on contributed amounts
+  G.street="showdown";
+  // side-pot builder
   const levels = [...new Set(G.players.map(p=>p.contributed))].filter(x=>x>0).sort((a,b)=>a-b);
   const pots=[]; let prev=0;
   for(const lvl of levels){
-    // eligible players: those who contributed >= lvl
     const elig = G.players.filter(p=>p.contributed>=lvl);
     const slice = (lvl - prev) * elig.length;
-    if(slice>0){
-      pots.push({amount:slice, eligible: elig.filter(p=>p.inHand)});
-    }
+    if(slice>0) pots.push({amount:slice, eligible: elig.filter(p=>p.inHand)});
     prev=lvl;
   }
-  // Safety fallback if rounding leaves remainder
   let tot = pots.reduce((s,p)=>s+p.amount,0);
   if(tot < G.pot){ pots.push({amount:G.pot-tot, eligible:contenders}); }
 
-  // Determine winners per pot
   const results=[];
   for(const pot of pots){
     if(pot.eligible.length===0) continue;
@@ -586,23 +567,16 @@ function showdown(walk){
     }
     const share = pot.amount / winners.length;
     winners.forEach(w=> w.stack += share);
-    results.push({amount:pot.amount, winners, label:handLabel(bestOf7(winners[0].hole, G.board))});
+    results.push({amount:pot.amount, winners});
   }
-
-  // Log winners
-  const uniqWinners = new Set();
-  for(const r of results){ r.winners.forEach(w=>uniqWinners.add(w)); }
-  const names = [...uniqWinners].map(w=>w.name).join(", ");
-  log(`Showdown — Winner(s): ${names}`);
-
+  const uniq=new Set(); results.forEach(r=>r.winners.forEach(w=>uniq.add(w.name)));
+  log(`Showdown — Winner(s): ${[...uniq].join(", ")}`);
   updateUI(true);
   nextHandSoon();
 }
 function nextHandSoon(){
-  setTimeout(()=>{
-    nextDealer();
-    startHand();
-  }, 1600);
+  if(G.cpuTimer){ clearTimeout(G.cpuTimer); G.cpuTimer=null; G.busy=false; }
+  setTimeout(()=>{ nextDealer(); startHand(); }, 1600);
 }
 
 /* =========================
@@ -658,7 +632,6 @@ function renderPlayers(){
   const actor=G.players.find(p=>p.toAct);
   document.getElementById('toActPill').textContent = actor? `${actor.name} to act` : '—';
 
-  // My current best label
   const tag=document.getElementById('handTag');
   const me=G.players[0];
   if(G.street==="preflop") tag.textContent = `Hole: ${me.hole.join(' ')}`;
@@ -688,7 +661,6 @@ function updateUI(forceReveal=false){
   renderPlayers();
   updateHUD();
   if(forceReveal && G.street==="showdown"){
-    // statuses with hand labels
     const seats = document.querySelectorAll('.seat');
     G.players.forEach((p,pi)=>{
       const sEl = seats[pi].querySelector('.status');
@@ -698,6 +670,18 @@ function updateUI(forceReveal=false){
       }
     });
   }
+}
+
+/* =========================
+   CPU SCHEDULER (random think time)
+========================= */
+function scheduleCPU(){
+  if(G.cpuTimer){ clearTimeout(G.cpuTimer); G.cpuTimer=null; G.busy=false; }
+  const actor = G.players.find(p=>p.toAct);
+  if(!actor || actor.isMe || actor.folded || !actor.inHand || actor.allin || G.street==="showdown") return;
+  G.busy=true;
+  const ms = randMs(450, 1300);
+  G.cpuTimer = setTimeout(()=>{ G.busy=false; cpuAct(); }, ms);
 }
 
 /* =========================
