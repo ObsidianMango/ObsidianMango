@@ -1,0 +1,205 @@
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+    body {
+        font-family: 'Inter', sans-serif;
+        overflow: hidden; 
+    }
+    /* Custom styles for the interactive elements */
+    .whip-crack {
+        position: absolute;
+        width: 100px;
+        height: 4px;
+        background-color: #a0522d; /* Sienna color for the whip */
+        transform-origin: left center;
+        transition: all 0.05s ease-out;
+        pointer-events: none;
+        opacity: 0;
+        z-index: 20;
+    }
+    .reaction-emoji {
+        position: absolute;
+        font-size: 3rem;
+        transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+        pointer-events: none;
+        transform: translateY(0);
+        opacity: 0;
+        z-index: 10;
+    }
+</style>
+<div id="app" class="h-screen w-screen flex flex-col items-center justify-center bg-yellow-100 relative">
+
+    <!-- Header and Instructions -->
+    <div class="absolute top-4 left-4 right-4 p-4 bg-white/70 backdrop-blur-sm rounded-xl shadow-lg z-30 max-w-lg mx-auto md:max-w-xl">
+        <h1 class="text-2xl font-bold text-gray-800 text-center">Farmer's Whip Simulator</h1>
+        <p class="text-sm text-gray-600 text-center mt-1">Tap or Click anywhere on the screen to crack the whip and see the farm animals react!</p>
+    </div>
+
+    <!-- Farm Scenery Elements (Stylized) -->
+    <div class="absolute inset-0 z-0">
+        <!-- The Sky -->
+        <div class="h-1/2 bg-blue-300"></div>
+        <!-- The Ground -->
+        <div class="h-1/2 bg-green-500 flex items-end justify-center">
+            <!-- Crops -->
+            <div class="w-1/3 h-12 bg-yellow-600/50 rounded-t-full relative bottom-0">
+                <div class="absolute inset-x-0 bottom-0 h-2 bg-yellow-700 rounded-t-lg"></div>
+            </div>
+            <!-- Barn (simple shape) -->
+            <div class="w-24 h-24 bg-red-800 rounded-t-lg shadow-xl mx-16 relative">
+                <div class="absolute -top-6 w-0 h-0 border-l-[48px] border-l-transparent border-r-[48px] border-r-transparent border-b-[24px] border-b-red-800"></div>
+                <div class="w-8 h-12 bg-yellow-400 absolute bottom-0 left-1/2 -translate-x-1/2"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reaction Element Container -->
+    <div id="reactions" class="absolute inset-0 z-10">
+        <!-- Animals that react to the whip crack -->
+        <div id="pig" class="reaction-emoji absolute top-[60vh] left-[20vw] transform translate-y-0 opacity-100">🐷</div>
+        <div id="cow" class="reaction-emoji absolute top-[55vh] right-[15vw] transform translate-y-0 opacity-100">🐮</div>
+        <div id="chicken" class="reaction-emoji absolute top-[70vh] left-[50vw] transform translate-y-0 opacity-100">🐔</div>
+    </div>
+
+    <!-- Whip Line Visual (Will be dynamically positioned) -->
+    <div id="whip-line" class="whip-crack"></div>
+
+</div>
+
+<script>
+    // --- Global Setup ---
+    const app = document.getElementById('app');
+    const whipLine = document.getElementById('whip-line');
+    const reactionsContainer = document.getElementById('reactions');
+    const emojiReactions = ['🐷', '🐮', '🐔', '💨', '💥', '😬', '😲'];
+    const farmAnimals = document.querySelectorAll('#reactions > .reaction-emoji');
+
+    // --- Tone.js Audio Setup (The Whip Crack Sound) ---
+    let crackSynth;
+
+    // Function to initialize Tone.js
+    async function setupAudio() {
+        try {
+            await Tone.start();
+            console.log("Audio Context Started");
+
+            // A short noise burst for a 'crack' effect
+            crackSynth = new Tone.NoiseSynth({
+                noise: { type: "white" },
+                envelope: {
+                    attack: 0.001,
+                    decay: 0.1,
+                    sustain: 0.001,
+                    release: 0.05
+                }
+            }).toDestination();
+        } catch (e) {
+            console.error("Error starting Tone.js:", e);
+            // Fallback: Use a simple vibration for touch if audio fails (mobile)
+            if (navigator.vibrate) {
+                console.log("Using vibration fallback.");
+            }
+        }
+    }
+
+    // Function to play the whip crack sound
+    function playCrackSound() {
+        if (crackSynth) {
+            // Trigger the noise burst for a sharp crack sound
+            crackSynth.triggerAttackRelease(0.1);
+        } else if (navigator.vibrate) {
+            // Mobile vibration fallback
+            navigator.vibrate(50);
+        }
+    }
+
+    // --- Interactive Logic ---
+
+    /**
+     * Handles the visual and audio effects of the whip crack.
+     * @param {number} clientX - X coordinate of the click/tap.
+     * @param {number} clientY - Y coordinate of the click/tap.
+     */
+    function triggerWhipEffect(clientX, clientY) {
+        // 1. Play Sound
+        playCrackSound();
+
+        // 2. Animate Whip Line
+        whipLine.style.left = `${clientX}px`;
+        whipLine.style.top = `${clientY}px`;
+        whipLine.style.opacity = '1';
+
+        // Rotate and stretch the line quickly
+        const rotation = Math.random() * 90 - 45; // Random angle between -45 and 45
+        whipLine.style.transform = `rotate(${rotation}deg) scaleX(3)`;
+
+        // Reset the whip line after a short delay
+        setTimeout(() => {
+            whipLine.style.opacity = '0';
+            whipLine.style.transform = `rotate(${rotation}deg) scaleX(0)`;
+        }, 80); // Very fast animation
+
+        // 3. Trigger Animal Reactions
+        farmAnimals.forEach(animal => {
+            // Give the animal a slight jump reaction
+            animal.style.transition = 'transform 0.2s ease-out';
+            animal.style.transform = 'translateY(-20px)';
+            setTimeout(() => {
+                animal.style.transform = 'translateY(0)';
+            }, 200);
+        });
+
+        // 4. Create Dust/Reaction Emoji at the crack point
+        createFloatingReaction(clientX, clientY);
+    }
+
+    /**
+     * Creates a temporary emoji that floats up from the crack point.
+     * @param {number} x - X coordinate.
+     * @param {number} y - Y coordinate.
+     */
+    function createFloatingReaction(x, y) {
+        const reactionDiv = document.createElement('div');
+        reactionDiv.className = 'reaction-emoji';
+        reactionDiv.textContent = emojiReactions[Math.floor(Math.random() * emojiReactions.length)];
+        reactionDiv.style.left = `${x}px`;
+        reactionDiv.style.top = `${y}px`;
+        reactionDiv.style.opacity = '1';
+        reactionDiv.style.transform = 'translate(-50%, -50%)'; // Center it on click
+
+        reactionsContainer.appendChild(reactionDiv);
+
+        // Animate the float up and fade out
+        requestAnimationFrame(() => {
+            reactionDiv.style.transition = 'transform 0.8s ease-out, opacity 0.8s ease-in';
+            reactionDiv.style.transform = 'translate(-50%, -100px)'; // Float up 100px
+            reactionDiv.style.opacity = '0';
+        });
+
+        // Remove the element after the animation is done
+        setTimeout(() => {
+            reactionDiv.remove();
+        }, 800);
+    }
+
+    // --- Event Listeners ---
+
+    // Use 'pointerdown' to handle both mouse clicks and touch taps
+    app.addEventListener('pointerdown', (event) => {
+        // Ignore clicks on the instruction box
+        if (event.target.closest('.absolute.top-4')) {
+            return;
+        }
+
+        const x = event.clientX;
+        const y = event.clientY;
+
+        triggerWhipEffect(x, y);
+    });
+
+    // Initialize audio context on the first user interaction
+    window.addEventListener('load', setupAudio);
+
+</script>
+
