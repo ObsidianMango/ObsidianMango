@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crisis Committee: Full Rules Edition</title>
+<style>
+    :root {
+        --bg: #121212; --panel: #1e1e1e; --border: #333;
+        --accent: #e74c3c; --accent-hover: #c0392b;
+        --success: #27ae60; --highlight: #f1c40f; --text: #e0e0e0;
+        --card-w: 100px; --card-h: 140px;
+    }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    
+    /* LAYOUT */
+    #top-bar { height: 40px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-size: 0.9rem; }
+    #game-area { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+    
+    /* OPPONENTS */
+    #opponents { height: 120px; display: flex; justify-content: space-around; align-items: center; background: #181818; border-bottom: 1px solid var(--border); }
+    .player-spot { text-align: center; position: relative; width: 80px; transition: 0.3s; }
+    .avatar { width: 50px; height: 50px; background: #333; border-radius: 50%; margin: 0 auto; line-height: 50px; font-size: 24px; border: 2px solid transparent; cursor: default; }
+    .avatar.pointing { border-color: var(--accent); box-shadow: 0 0 10px var(--accent); }
+    .bubble { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); background: white; color: black; padding: 4px 8px; border-radius: 8px; font-size: 0.7rem; white-space: nowrap; display: none; z-index: 10; pointer-events: none; }
+    
+    /* BOARD & REGIONS */
+    #board { flex: 1; padding: 10px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; overflow-y: auto; align-content: start; }
+    .region { background: var(--panel); padding: 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.8rem; position: relative; }
+    .region.collapsed { border-color: var(--accent); opacity: 0.6; }
+    .bar-bg { background: #333; height: 6px; border-radius: 3px; margin-top: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--success); width: 66%; transition: 0.5s; }
+    .bar-fill.crit { background: var(--accent); }
+    
+    /* ACTIVE CRISIS & MAJOR TWIST DISPLAY */
+    #center-display { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 300px; z-index: 5; pointer-events: none; }
+    .card-display { background: rgba(0,0,0,0.9); border: 1px solid var(--highlight); padding: 10px; border-radius: 8px; margin-bottom: 5px; pointer-events: auto; backdrop-filter: blur(4px); }
+    .major-twist-badge { background: #5d2868; color: white; padding: 5px; border-radius: 4px; font-size: 0.7rem; margin-bottom: 5px; border: 1px solid #a569bd; }
+
+    /* LOG */
+    #log { height: 100px; background: #000; font-family: monospace; font-size: 0.75rem; overflow-y: scroll; padding: 5px; border-top: 1px solid var(--border); color: #0f0; }
+
+    /* PLAYER CONTROLS */
+    #player-panel { height: 220px; background: var(--panel); border-top: 1px solid var(--border); display: flex; flex-direction: column; }
+    #hand-container { flex: 1; display: flex; align-items: center; gap: 10px; overflow-x: auto; padding: 10px; }
+    .card { min-width: var(--card-w); height: var(--card-h); background: #ecf0f1; color: #2c3e50; border-radius: 6px; padding: 6px; font-size: 0.65rem; display: flex; flex-direction: column; cursor: pointer; transition: 0.2s; border: 2px solid #bdc3c7; position: relative; user-select: none; }
+    .card:hover { transform: translateY(-10px); }
+    .card.selected { border-color: var(--success); transform: translateY(-15px); box-shadow: 0 0 15px var(--success); }
+    .card.twist { background: #d4ac0d; border-color: #f1c40f; }
+    .c-title { font-weight: bold; margin-bottom: 4px; line-height: 1.1; font-size: 0.7rem; }
+    .c-sym { font-size: 1.1rem; margin: 2px 0; letter-spacing: 2px; }
+    .c-text { flex: 1; overflow: hidden; }
+    .c-type { font-size: 0.6rem; text-transform: uppercase; color: #7f8c8d; margin-top: auto; }
+    
+    /* ACTION BAR */
+    #action-bar { height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; background: #111; }
+    .btn { padding: 8px 20px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; background: var(--accent); color: white; }
+    .btn:disabled { background: #444; cursor: not-allowed; }
+    .btn-sec { background: #3498db; margin-right: 10px; }
+
+    /* MODAL */
+    #modal { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 20px; text-align: center; }
+    .hidden { display: none !important; }
+    .modal-box { background: var(--panel); padding: 20px; border-radius: 10px; border: 1px solid var(--highlight); max-width: 500px; }
+    
+    /* DEBATE MENU */
+    #debate-menu { position: absolute; bottom: 230px; left: 50%; transform: translateX(-50%); background: #222; border: 1px solid #555; padding: 10px; border-radius: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; display: none; width: 300px; }
+    .debate-opt { background: #444; padding: 8px; cursor: pointer; text-align: center; font-size: 0.8rem; border-radius: 4px; }
+    .debate-opt:hover { background: #666; }
+
+</style>
+</head>
+<body>
+
+<div id="top-bar">
+    <div>Round <span id="lbl-round">1</span>/10</div>
+    <div id="lbl-agenda" style="color: var(--highlight)">Agenda: ???</div>
+    <div>Rep: <span id="lbl-rep">0</span> | Blame: <span id="lbl-blame">0</span></div>
+</div>
+
+<div id="game-area">
+    <div id="opponents"></div> <div id="board"></div> <div id="center-display">
+        <div id="major-twists-area"></div>
+        <div id="active-crisis" class="card-display hidden">
+            <div style="color:var(--accent); font-weight:bold" id="ac-name">Crisis Name</div>
+            <div style="font-size:0.8rem; margin:5px 0" id="ac-regions">Regions</div>
+            <div style="font-size:1.2rem" id="ac-req">🧪🧪</div>
+            <div style="font-size:0.75rem; color:#ccc; margin-top:5px" id="ac-text">...</div>
+        </div>
+    </div>
+
+    <div id="debate-menu">
+        <div class="debate-opt" onclick="debateAction('promise')">Promise Help</div>
+        <div class="debate-opt" onclick="debateAction('threaten')">Threaten</div>
+        <div class="debate-opt" onclick="debateAction('joke')">Tell Joke (Remove Blame?)</div>
+        <div class="debate-opt" onclick="debateAction('lie')">Lie about Cards</div>
+    </div>
+</div>
+
+<div id="log"></div>
+
+<div id="player-panel">
+    <div id="hand-container"></div>
+    <div id="action-bar">
+        <div id="status-text">Initializing...</div>
+        <div>
+            <button class="btn btn-sec" id="btn-debate" onclick="toggleDebate()" disabled>🗣️ Talk</button>
+            <button class="btn" id="btn-main" onclick="mainAction()">Start</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal" class="hidden">
+    <div class="modal-box">
+        <h2 id="m-title">Title</h2>
+        <p id="m-msg">Message</p>
+        <div id="m-content"></div>
+        <button class="btn" onclick="closeModal()" style="margin-top:15px">Continue</button>
+    </div>
+</div>
+
+<script>
+/* ================= DATA ================= */
+const SYMBOLS = { Science: '🧪', Money: '💰', Memes: '🐸', Violence: '⚔️', Spin: '🎙️', Bureaucracy: '📋' };
+const REGIONS = [
+    {id:'americas', n:'Americas'}, {id:'europe', n:'Europe'}, {id:'asia', n:'Asia'},
+    {id:'online', n:'Online'}, {id:'space', n:'Outer Space'}, {id:'florida', n:'Florida'}
+];
+
+// FULL CRISIS DECK (20)
+const DECK_CRISIS = [
+    {id:1, n:"The Great Pigeon Strike", r:['europe','americas'], req:{Memes:4, Bureaucracy:2}, s_eff:"Rep+1 if Memes", f_eff:"Blame+1", spec:"Violence=+1 Blame"},
+    {id:2, n:"All Exes Text at Once", r:['online'], req:{Spin:5}, s_eff:"Spin players Rep+2", f_eff:"Discard 1 Plan", spec:"Don't say 'ex' in debate"},
+    {id:3, n:"AI Talent Show", r:['online','asia'], req:{Science:3, Memes:3}, s_eff:"Draw 1 Plan", f_eff:"0 Science players get Blame", spec:"Fail=Twist"},
+    {id:4, n:"Florida Independence", r:['florida'], req:{Spin:3, Violence:2}, alt:{Memes:5}, s_eff:"Most Spin Rep+3", f_eff:"All Blame+1", spec:"Collapse=2 Major Twists"},
+    {id:5, n:"Mysterious Monoliths", r:['americas','europe'], req:{Science:4}, s_eff:"Science players Rep+1", f_eff:"Next Crisis +2 Sci req", spec:"Exact match remove Blame"},
+    {id:6, n:"Space Influencers", r:['space','online'], req:{Memes:3, Science:2}, s_eff:"Most Memes Rep+2", f_eff:"Pass Rep left", spec:"Violence counts as Memes"},
+    {id:7, n:"Economy on Vibes", r:['americas','europe','asia'], req:{Money:5, Spin:2}, s_eff:"Rep per Money", f_eff:"0 Money = 1 Blame", spec:"Memes count as Money-1"},
+    {id:8, n:"Time Zone Desync", r:['americas','europe','asia','online','space','florida'], req:{Bureaucracy:3, Science:3}, s_eff:"Bur players Rep+1", f_eff:"Rand 2 players Blame", spec:"Reverse turn order"},
+    {id:9, n:"Group Chat Leak", r:['online','americas'], req:{Spin:4, Memes:2}, s_eff:"Spin players remove Blame", f_eff:"High Rep gets 2 Blame", spec:"Twists +1 effect"},
+    {id:10, n:"Cryptid Convention", r:['americas','europe'], req:{Science:3, Memes:2}, s_eff:"Draw 1 Plan", f_eff:"No Sci = 1 Blame", spec:"Success=Next Crisis -1 req"},
+    {id:11, n:"Spreadsheet Error", r:['asia','americas'], req:{Money:4, Bureaucracy:2}, s_eff:"Bur players Rep+1", f_eff:"Discard 1 Plan", spec:"Next round Money gives Rep"},
+    {id:12, n:"Toaster Cult", r:['online','europe'], req:{Memes:3, Spin:1}, s_eff:"Most Memes Rep+2", f_eff:"No Memes = 1 Blame", spec:"Science removes Blame"},
+    {id:13, n:"Group Therapy", r:['americas','online'], req:{Spin:3, Memes:2}, s_eff:"Trade Blame for Rep", f_eff:"All Blame+1", spec:"Make table laugh remove Blame"},
+    {id:14, n:"Florida Man Deity", r:['florida','online'], req:{Memes:4, Violence:1}, s_eff:"Most Memes Rep+3", f_eff:"Discard 1 Plan", spec:"Collapse=Blame for all"},
+    {id:15, n:"AI Legal System", r:['europe','online'], req:{Bureaucracy:4, Spin:2}, s_eff:"Spin players Rep+1", f_eff:"Most Memes 2 Blame", spec:"Puns = Blame"},
+    {id:16, n:"Passive Aggressive Stars", r:['space'], req:{Science:3}, s_eff:"Draw 1 Plan", f_eff:"Discard Science", spec:"Collapse=2 Major Twists"},
+    {id:17, n:"Global WiFi Outage", r:['americas','europe','asia','online','space','florida'], req:{Science:4, Bureaucracy:2}, s_eff:"Florida +1 Stab", f_eff:"Florida 'Supporter' gets Rep", spec:"No phones"},
+    {id:18, n:"Lick Monuments", r:['europe','asia'], req:{Memes:3, Science:2}, s_eff:"Science players Rep+2", f_eff:"Only Memes = Blame", spec:"No Science = Auto Fail"},
+    {id:19, n:"Horoscopes Real", r:['americas','europe','asia','online','space','florida'], req:{Spin:4, Memes:2}, s_eff:"Most Spin Rep+3", f_eff:"Rand 2 Blame", spec:"Guess Agenda for Rep"},
+    {id:20, n:"Parallel Universe", r:['asia','space'], req:{Science:3, Spin:3}, s_eff:"Sci+Spin players Rep+2", f_eff:"All Blame+1", spec:"Next reqs +1 harder"}
+];
+
+// PLAN CARDS (30)
+const DECK_PLANS = [
+    {id:1, n:"Inspiring Hashtag", s:['Memes','Spin'], text:"Online Crisis: Rep+1"},
+    {id:2, n:"Blame Interns", s:['Spin','Bureaucracy'], text:"Move 1 Blame to player"},
+    {id:3, n:"Emergency Grant", s:['Money','Money'], text:"Amer/Eur: Rep+1"},
+    {id:4, n:"Questionable Consultant", s:['Money','Spin'], text:"Draw 1, Gain 1 Blame"},
+    {id:5, n:"Long Report", s:['Bureaucracy','Bureaucracy'], text:"Delay outcome (Not implemented)"},
+    {id:6, n:"Riot Unicorns", s:['Violence','Memes'], text:"Success: Rep+2, Fail: Blame+1"},
+    {id:7, n:"Panel of Experts", s:['Science','Science'], text:"Asia/Eur: Draw 1"},
+    {id:8, n:"Press Conference", s:['Spin'], text:"Player loses Rep or gains Blame"},
+    {id:9, n:"Tax Incentives", s:['Money','Bureaucracy'], text:"Success: Rep+1"},
+    {id:10, n:"Leak Email", s:['Memes','Spin'], text:"Move 1 Blame, they get Rep+1"},
+    {id:11, n:"Military Parade", s:['Violence','Spin'], text:"If 3+ Violence: Rep+2"},
+    {id:12, n:"Fast-Track Vote", s:['Bureaucracy','Spin'], text:"Change Region Stab +/-1"},
+    {id:13, n:"Meme Team", s:['Memes','Memes'], text:"Online/FL: Rep+2"},
+    {id:14, n:"Crowdfund", s:['Money','Memes'], text:"Success: Rep+1, Remove 1 Blame"},
+    {id:15, n:"Obscure Law", s:['Bureaucracy','Science'], text:"Ignore 1 Violence"},
+    {id:16, n:"Bribe Influencers", s:['Money','Memes','Spin'], text:"Rep+1, Blame+1"},
+    {id:17, n:"Quiet Fix", s:['Science'], text:"If played alone: Rep+2"},
+    {id:18, n:"Summit", s:['Spin','Bureaucracy','Money'], text:"Choose Twist order"},
+    {id:19, n:"Blame Algo", s:['Science','Spin'], text:"Move Blame to highest Rep"},
+    {id:20, n:"Feel-Good Init", s:['Memes','Spin'], text:"2+ Regions: Rep+1"},
+    {id:21, n:"Procedural Nonsense", s:['Bureaucracy'], text:"Force discard"},
+    {id:22, n:"Backchannel Deal", s:['Money','Violence'], text:"Give Rep, remove Blame"},
+    {id:23, n:"Spin Doctor", s:['Spin','Spin'], text:"Convert 1 Blame to Rep"},
+    {id:24, n:"Weaponize Bureaucracy", s:['Bureaucracy','Violence'], text:"Give 1 Blame"},
+    {id:25, n:"Non-Apology", s:['Spin'], text:"Move 1 Blame"},
+    {id:26, n:"Think Tank", s:['Science','Spin'], text:"Draw 1"},
+    {id:27, n:"Holiday Distraction", s:['Memes','Money'], text:"Fail: still get Rep+1"},
+    {id:28, n:"Black Budget", s:['Money','Science'], text:"Most Science: Rep+2"},
+    {id:29, n:"Pilot Program", s:['Science','Bureaucracy'], text:"Set Region Stab to 3"},
+    {id:30, n:"Do Nothing", s:['Spin'], text:"Success: Rep+2, Fail: Blame+1"}
+];
+
+// TWISTS (10)
+const DECK_TWISTS = [
+    {id:1, n:"Buzzwords", text:"Say 'fix' = 1 Blame"},
+    {id:2, n:"Reverse Credit", text:"Fewest symbols = Rep+3"},
+    {id:3, n:"Bad Polling", text:"Subtract 2 Spin from total"},
+    {id:4, n:"Leaked Draft", text:"Swap 1 card before reveal"},
+    {id:5, n:"Trending Scandal", text:"Highest Rep gets 2 Blame"},
+    {id:6, n:"Hero Edit", text:"Vote: one player Rep+3, Blame+1"},
+    {id:7, n:"Budget Freeze", text:"Money doesn't count for reqs"},
+    {id:8, n:"Disinfo Storm", text:"Science=Spin, Memes=Science"},
+    {id:9, n:"Backroom Deal", text:"Trade cards (Simulated)"},
+    {id:10, n:"Collective Amnesia", text:"Redraw hand to 5"}
+];
+
+// MAJOR TWISTS (6)
+const MAJOR_TWISTS = [
+    {id:1, n:"Everything Is Content", text:"Memes in Success give Rep+1 & Blame+1"},
+    {id:2, n:"Blame Goes Viral", text:"Most Blame passes to neighbors"},
+    {id:3, n:"Martial Law", text:"Violence counts x2. Play Violence = Lose 1 Rep"},
+    {id:4, n:"Civilization on Read", text:"Draw +1 card, Discard 1 'Ignored'"},
+    {id:5, n:"Technocrats", text:"Science +1 Rep. Cannot move Blame"},
+    {id:6, n:"Committee Reshuffle", text:"Swap Agendas (Simulated)"}
+];
+
+const AGENDAS = [
+    {n:"The Hero", desc:"Most Rep + 3 Regions > 3 Stab"},
+    {n:"The Cockroach", desc:"Survive with < 3 Blame, 2+ Collapsed"},
+    {n:"The Nihilist", desc:"Exactly 2 Collapsed"},
+    {n:"The Meme Lord", desc:"Most Meme Rep + Online Successes"},
+    {n:"The Shadow Broker", desc:"Moved most Blame + 1 Region at 5"},
+    {n:"The Quiet Fixer", desc:"2nd Rep + 2 Regions > 4 Stab"},
+    {n:"The Populist", desc:"Gain Rep from Blame/Spin"},
+    {n:"The Chaos Gambler", desc:"High Rep + Collapse OR Low Blame + Safe"}
+];
+
+/* ================= STATE ================= */
+let G = {
+    round: 0,
+    phase: 'setup', // setup, crisis, planning, debate, reveal, blame, cleanup, over
+    players: [],
+    deckP: [], deckT: [], deckC: [], deckM: [],
+    regions: [],
+    activeCrisis: null,
+    activeTwist: null,
+    majorTwists: [],
+    played: [], // {pid, cards:[]}
+    log: [],
+    rules: { // Global modifiers
+        martialLaw: false,
+        technocrats: false,
+        budgetFreeze: false,
+        disinfo: false,
+        everythingContent: false
+    }
+};
+
+// Init
+window.onload = initGame;
+
+function initGame() {
+    G.players = [
+        {id:0, name:"You", human:true, hand:[], twistHand:[], rep:0, blame:0, agenda:null},
+        {id:1, name:"Bot Alpha", human:false, hand:[], twistHand:[], rep:0, blame:0, agenda:null},
+        {id:2, name:"Bot Beta", human:false, hand:[], twistHand:[], rep:0, blame:0, agenda:null},
+        {id:3, name:"Bot Gamma", human:false, hand:[], twistHand:[], rep:0, blame:0, agenda:null}
+    ];
+
+    // Shuffle Decks
+    G.deckP = shuffle([...DECK_PLANS, ...DECK_PLANS]); // 60 cards
+    G.deckT = shuffle([...DECK_TWISTS]);
+    G.deckC = shuffle([...DECK_CRISIS]);
+    G.deckM = shuffle([...MAJOR_TWISTS]);
+    
+    // Setup Regions
+    G.regions = REGIONS.map(r => ({...r, stability: 4}));
+
+    // Deal
+    G.players.forEach(p => {
+        draw(p, 5);
+        p.agenda = AGENDAS[Math.floor(Math.random()*AGENDAS.length)];
+        if(p.human) {
+             document.getElementById('lbl-agenda').innerText = "Agenda: " + p.agenda.n;
+             document.getElementById('lbl-agenda').title = p.agenda.desc;
+             // Give human 1 twist for fun
+             p.twistHand.push(G.deckT.pop());
+        }
+    });
+
+    renderBoard();
+    renderOpponents();
+    logMsg("Committee Initialized. The world is slightly on fire.");
+    startRound();
+}
+
+/* ================= GAME LOOP ================= */
+function startRound() {
+    if(G.round >= 10 || countCollapsed() >= 3) { endGame(); return; }
+    G.round++;
+    updateHeader();
+    
+    // Check Major Twist Rules
+    if(G.majorTwists.some(m=>m.id===4)) { // Civ on Read
+        logMsg("Civilization on Read: Everyone draws extra.");
+        G.players.forEach(p => draw(p, 1));
+        // Simplified: Auto discard usually happens here
+    }
+
+    // 1. REVEAL CRISIS
+    G.phase = 'crisis';
+    G.activeCrisis = G.deckC.pop();
+    G.played = [];
+    G.activeTwist = null;
+    renderCrisis();
+    logMsg(`ROUND ${G.round} CRISIS: ${G.activeCrisis.n}`);
+    
+    // 2. PLANNING
+    G.phase = 'planning';
+    setBtn("Lock In Plan", resolvePlanning);
+    updateStatus("Select 1-3 Plan Cards. (Optional: 1 Twist)");
+    renderHand();
+    
+    // AI Sim
+    G.players.forEach(p => {
+        if(!p.human) aiPlan(p);
+    });
+}
+
+function aiPlan(p) {
+    // Simple AI
+    let count = 1 + Math.floor(Math.random()*2); // 1-3 cards
+    let selection = [];
+    // Try to match symbols
+    let reqs = G.activeCrisis.req;
+    let best = p.hand.filter(c => c.s.some(s => reqs[s]));
+    if(best.length > 0) selection = best.slice(0, count);
+    else selection = p.hand.slice(0, count); // Dump junk
+
+    // Remove from hand (virtual)
+    p.hand = p.hand.filter(c => !selection.includes(c));
+    G.played.push({pid: p.id, cards: selection, twist: null});
+    
+    // AI Twist chance
+    if(Math.random() < 0.1 && G.deckT.length > 0) {
+         // AI 'plays' a twist from deck (cheat for simulation)
+         G.played.find(x=>x.pid===p.id).twist = G.deckT.pop();
+    }
+}
+
+function resolvePlanning() {
+    let sel = document.querySelectorAll('.card.selected');
+    if(sel.length < 1 || sel.length > 3) { alert("Select 1-3 Plan cards"); return; }
+    
+    let p = G.players[0];
+    let pCards = [];
+    let pTwist = null;
+
+    sel.forEach(el => {
+        let idx = parseInt(el.dataset.idx);
+        let type = el.dataset.type;
+        if(type === 'twist') {
+            if(pTwist) alert("Only 1 Twist allowed");
+            pTwist = p.twistHand[idx];
+            // Remove later
+        } else {
+            pCards.push(p.hand[idx]);
+        }
+    });
+
+    // Remove from hand
+    p.hand = p.hand.filter(c => !pCards.includes(c));
+    if(pTwist) p.twistHand = p.twistHand.filter(c => c !== pTwist);
+
+    G.played.push({pid: 0, cards: pCards, twist: pTwist});
+    
+    startDebate();
+}
+
+function startDebate() {
+    G.phase = 'debate';
+    updateStatus("Debate Phase: Discuss, Lie, or use Actions.");
+    setBtn("End Debate", startReveal);
+    document.getElementById('btn-debate').disabled = false;
+    document.getElementById('debate-menu').style.display = 'none';
+
+    // AI Chatter
+    setTimeout(() => showBubble(1, "I'm handling the Science."), 1000);
+    setTimeout(() => showBubble(2, "Don't blame me if this fails."), 2500);
+}
+
+function startReveal() {
+    document.getElementById('btn-debate').disabled = true;
+    document.getElementById('debate-menu').style.display = 'none';
+    G.phase = 'reveal';
+    
+    // 1. Reveal Twists
+    let twists = G.played.filter(pl => pl.twist).map(pl => pl.twist);
+    if(twists.length > 0) {
+        G.activeTwist = twists[0]; // Just take first for simplicity
+        logMsg(`TWIST REVEALED: ${G.activeTwist.n}`);
+        applyTwist(G.activeTwist);
+    }
+
+    // 2. Count Symbols
+    let totals = {Science:0, Money:0, Memes:0, Violence:0, Spin:0, Bureaucracy:0};
+    
+    G.played.forEach(pl => {
+        let plyr = G.players[pl.pid];
+        pl.cards.forEach(c => {
+            c.s.forEach(sym => {
+                // MODIFIERS
+                let finalSym = sym;
+                if(G.rules.disinfo) {
+                    if(sym === 'Science') finalSym = 'Spin';
+                    if(sym === 'Memes') finalSym = 'Science';
+                }
+                
+                // Logic for "Ignore Violence" card? Hard to track individually, skip for now
+                
+                // MARTIAL LAW
+                let val = 1;
+                if(G.rules.martialLaw && finalSym === 'Violence') val = 2;
+                if(G.rules.budgetFreeze && finalSym === 'Money') val = 0;
+
+                totals[finalSym] = (totals[finalSym] || 0) + val;
+            });
+            
+            // Per-Card Immediate Logic (Simplified)
+            if(c.id === 4) plyr.blame++; // Consultant
+            if(c.id === 23) { if(plyr.blame>0) {plyr.blame--; plyr.rep++;} } // Spin Doctor
+            if(G.rules.martialLaw && c.s.includes('Violence')) plyr.rep--;
+        });
+    });
+
+    // 3. Check Success
+    let reqs = G.activeCrisis.req;
+    let success = true;
+    
+    // Specific Crisis Logic
+    if(G.activeCrisis.id === 18 && totals['Science'] === 0) success = false; // Lick Monuments
+
+    for(let r in reqs) {
+        if(totals[r] < reqs[r]) success = false;
+    }
+
+    // 4. Outcomes
+    let txt = "";
+    if(success) {
+        txt = "SUCCESS! ";
+        G.activeCrisis.r.forEach(rid => modStab(rid, 1));
+        
+        // Distribute Rep
+        G.played.forEach(pl => {
+            let p = G.players[pl.pid];
+            // Base Rep
+            p.rep += pl.cards.length; 
+            
+            // Major Twist: Technocrats
+            if(G.rules.technocrats) {
+                let sci = pl.cards.filter(c=>c.s.includes('Science')).length;
+                p.rep += sci;
+            }
+        });
+        
+        // Specific Crisis Rewards (Hardcoded IDs for demo)
+        if(G.activeCrisis.id === 1) { // Pigeons
+             G.played.forEach(pl => { if(hasSym(pl,'Memes')) G.players[pl.pid].rep++; });
+        }
+        
+    } else {
+        txt = "FAILURE! ";
+        G.activeCrisis.r.forEach(rid => modStab(rid, -2));
+        
+        // Specific Punishments
+        if(G.activeCrisis.id === 7) { // Economy
+             G.played.forEach(pl => { if(!hasSym(pl,'Money')) G.players[pl.pid].blame++; });
+        }
+    }
+
+    logMsg(txt + JSON.stringify(totals).replace(/[{"}]/g,''));
+    renderBoard();
+    updateHeader();
+    
+    showModal(success ? "CRISIS AVERTED" : "CATASTROPHE", txt + "<br>Proceed to Blame.");
+    setBtn("Start Blame", startBlame);
+}
+
+function startBlame() {
+    closeModal();
+    G.phase = 'blame';
+    updateStatus("BLAME PHASE: Click a player to blame them.");
+    setBtn("Waiting for Vote...", null);
+    document.getElementById('btn-main').disabled = true;
+
+    // Enable pointing
+    document.querySelectorAll('.avatar').forEach(el => {
+        el.style.cursor = 'pointer';
+        el.onclick = (e) => castVote(parseInt(e.target.parentElement.dataset.pid));
+    });
+}
+
+function castVote(targetId) {
+    if(G.phase !== 'blame') return;
+    document.querySelectorAll('.avatar').forEach(el => el.style.cursor = 'default');
+    
+    // AI Voting Logic
+    let votes = [0,0,0,0];
+    votes[targetId]++; // Human vote
+
+    G.players.forEach(p => {
+        if(p.human) return;
+        // AI blames highest Rep usually
+        let target = G.players.sort((a,b) => b.rep - a.rep)[0].id;
+        if(target === p.id) target = (p.id + 1) % 4; // Don't blame self
+        votes[target]++;
+        
+        // Visual
+        let el = document.querySelector(`.player-spot[data-pid="${p.id}"] .avatar`);
+        el.classList.add('pointing');
+    });
+
+    setTimeout(() => {
+        let max = Math.max(...votes);
+        let victims = G.players.filter(p => votes[p.id] === max);
+        let victim = victims[0]; // Tiebreaker: index order (simplification)
+        
+        logMsg(`${victim.name} receives the BLAME (+2).`);
+        victim.blame += 2;
+        
+        // Major Twist: Blame Goes Viral
+        if(G.rules.blameGoesViral) {
+             // Pass 1 blame to neighbors (Simplified: just +1 to all others)
+             logMsg("Blame Goes Viral! Everyone else +1 Blame.");
+             G.players.forEach(p => { if(p !== victim) p.blame++; });
+        }
+
+        updateHeader();
+        document.querySelectorAll('.avatar').forEach(el => el.classList.remove('pointing'));
+        checkCollapse();
+    }, 1500);
+}
+
+function checkCollapse() {
+    let collapsed = G.regions.filter(r => r.stability <= 0);
+    let newCollapses = false;
+    
+    collapsed.forEach(r => {
+        if(!r.collapsed) {
+            r.collapsed = true;
+            r.stability = 0;
+            newCollapses = true;
+            logMsg(`REGION COLLAPSED: ${r.n}`);
+            
+            // Draw Major Twist
+            let mt = G.deckM.pop();
+            if(mt) {
+                G.majorTwists.push(mt);
+                applyMajorTwist(mt);
+                logMsg(`MAJOR TWIST: ${mt.n}`);
+            }
+        }
+    });
+    
+    renderBoard();
+    renderMajorTwists();
+    
+    setBtn("Next Round", cleanup);
+    document.getElementById('btn-main').disabled = false;
+    updateStatus("Review the damage.");
+}
+
+function cleanup() {
+    G.players.forEach(p => {
+        while(p.hand.length < 5) draw(p, 1);
+    });
+    
+    // Reset round specific flags
+    G.rules.budgetFreeze = false; 
+    G.rules.disinfo = false;
+    
+    startRound();
+}
+
+/* ================= HELPERS ================= */
+
+function applyTwist(t) {
+    if(t.id === 7) G.rules.budgetFreeze = true;
+    if(t.id === 8) G.rules.disinfo = true;
+    if(t.id === 10) { // Amnesia
+        G.players.forEach(p => { p.hand = []; draw(p, 5); });
+        renderHand();
+        logMsg("Collective Amnesia! Hands reset.");
+    }
+}
+
+function applyMajorTwist(mt) {
+    if(mt.id === 3) G.rules.martialLaw = true;
+    if(mt.id === 5) G.rules.technocrats = true;
+    if(mt.id === 1) G.rules.everythingContent = true;
+    if(mt.id === 2) G.rules.blameGoesViral = true;
+}
+
+function hasSym(pl, sym) {
+    return pl.cards.some(c => c.s.includes(sym));
+}
+
+function modStab(rid, val) {
+    let r = G.regions.find(x=>x.id === rid);
+    r.stability = Math.max(0, Math.min(6, r.stability + val));
+}
+
+function draw(p, n) {
+    for(let i=0; i<n; i++) {
+        if(G.deckP.length===0) G.deckP = shuffle([...DECK_PLANS]);
+        p.hand.push(G.deckP.pop());
+    }
+}
+
+function shuffle(a) { return a.sort(()=>Math.random()-0.5); }
+
+function countCollapsed() { return G.regions.filter(r=>r.stability<=0).length; }
+
+function endGame() {
+    G.phase = 'over';
+    let msg = "GAME OVER<br><br>";
+    
+    // Score calc
+    let scores = G.players.map(p => {
+        let score = p.rep - p.blame;
+        // Agenda Bonuses (Simplified Logic)
+        if(p.agenda.n === "The Hero") score += (countCollapsed() === 0 ? 5 : 0);
+        if(p.agenda.n === "The Cockroach" && countCollapsed() >= 2) score += 5;
+        // ... add other agenda logic here
+        return {n: p.name, s: score, a: p.agenda.n};
+    }).sort((a,b) => b.s - a.s);
+
+    scores.forEach(s => msg += `${s.n}: ${s.s} pts (${s.a})<br>`);
+    showModal("Final Standings", msg);
+    setBtn("Reload", ()=>location.reload());
+}
+
+/* ================= UI ================= */
+function renderHand() {
+    let h = document.getElementById('hand-container');
+    h.innerHTML = "";
+    let p = G.players[0];
+    
+    [...p.hand, ...p.twistHand].forEach((c, i) => {
+        let isTwist = p.twistHand.includes(c);
+        let div = document.createElement('div');
+        div.className = `card ${isTwist?'twist':''}`;
+        div.dataset.idx = i; // NOTE: index logic is tricky with combined arrays, simplified here
+        div.dataset.type = isTwist ? 'twist' : 'plan';
+        
+        // Actual index in source array needs to be tracked. 
+        // For this demo, we'll just use the index in the render loop and assume strict separation in the click handler.
+        // Actually, let's fix the click handler to just check the object.
+        div.onclick = function() { 
+            if(G.phase !== 'planning') return;
+            this.classList.toggle('selected');
+            // Recalc index based on current array state is hard in HTML. 
+            // Let's store the type-specific index.
+            div.dataset.idx = isTwist ? p.twistHand.indexOf(c) : p.hand.indexOf(c);
+        };
+
+        let symbols = c.s ? c.s.map(x=>SYMBOLS[x]).join(' ') : '⚠️';
+        div.innerHTML = `
+            <div class="c-title">${c.n}</div>
+            <div class="c-sym">${isTwist ? 'TWIST' : symbols}</div>
+            <div class="c-text">${c.text}</div>
+            <div class="c-type">${isTwist ? 'Twist' : 'Plan'}</div>
+        `;
+        h.appendChild(div);
+    });
+}
+
+function renderBoard() {
+    let b = document.getElementById('board');
+    b.innerHTML = "";
+    G.regions.forEach(r => {
+        let div = document.createElement('div');
+        div.className = `region ${r.stability===0 ? 'collapsed' : ''}`;
+        div.innerHTML = `
+            <div style="font-weight:bold; color:${r.stability===0 ? 'var(--accent)' : 'white'}">${r.n}</div>
+            <div>Stab: ${r.stability}</div>
+            <div class="bar-bg"><div class="bar-fill ${r.stability<3?'crit':''}" style="width:${(r.stability/6)*100}%"></div></div>
+        `;
+        b.appendChild(div);
+    });
+}
+
+function renderCrisis() {
+    let c = G.activeCrisis;
+    let div = document.getElementById('active-crisis');
+    div.classList.remove('hidden');
+    document.getElementById('ac-name').innerText = c.n;
+    document.getElementById('ac-regions').innerText = c.r.map(x=>REGIONS.find(r=>r.id==x).n).join(', ');
+    
+    let reqHTML = "";
+    for(let s in c.req) reqHTML += `${c.req[s]}${SYMBOLS[s]} `;
+    document.getElementById('ac-req').innerHTML = reqHTML;
+    document.getElementById('ac-text').innerText = c.spec || c.text || "";
+}
+
+function renderMajorTwists() {
+    let area = document.getElementById('major-twists-area');
+    area.innerHTML = "";
+    G.majorTwists.forEach(mt => {
+        let d = document.createElement('div');
+        d.className = 'card-display major-twist-badge';
+        d.innerHTML = `<strong>${mt.n}</strong>: ${mt.text}`;
+        area.appendChild(d);
+    });
+}
+
+function renderOpponents() {
+    let d = document.getElementById('opponents');
+    d.innerHTML = "";
+    G.players.forEach(p => {
+        let spot = document.createElement('div');
+        spot.className = 'player-spot';
+        spot.dataset.pid = p.id;
+        spot.innerHTML = `
+            <div class="bubble" id="bub-${p.id}"></div>
+            <div class="avatar">${p.human ? '👤' : '🤖'}</div>
+            <div style="font-size:0.7rem; font-weight:bold; margin-top:4px">${p.name}</div>
+            <div style="font-size:0.6rem; color:#aaa">R:${p.rep} B:${p.blame}</div>
+        `;
+        d.appendChild(spot);
+    });
+}
+
+function updateHeader() {
+    document.getElementById('lbl-round').innerText = G.round;
+    document.getElementById('lbl-rep').innerText = G.players[0].rep;
+    document.getElementById('lbl-blame').innerText = G.players[0].blame;
+    renderOpponents(); // Refresh stats
+}
+
+function updateStatus(msg) { document.getElementById('status-text').innerText = msg; }
+
+function logMsg(msg) {
+    let l = document.getElementById('log');
+    let d = document.createElement('div');
+    d.innerHTML = `> ${msg}`;
+    l.prepend(d);
+}
+
+function setBtn(txt, func) {
+    let b = document.getElementById('btn-main');
+    b.innerText = txt;
+    b.onclick = func;
+    b.disabled = func ? false : true;
+}
+
+function showModal(t, m) {
+    document.getElementById('m-title').innerText = t;
+    document.getElementById('m-msg').innerHTML = m;
+    document.getElementById('modal').classList.remove('hidden');
+}
+function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+
+function showBubble(pid, msg) {
+    let b = document.getElementById(`bub-${pid}`);
+    if(b) { b.innerText = msg; b.style.display = 'block'; setTimeout(()=>b.style.display='none', 3000); }
+}
+
+/* DEBATE ACTIONS */
+function toggleDebate() {
+    let m = document.getElementById('debate-menu');
+    m.style.display = m.style.display === 'none' ? 'grid' : 'none';
+}
+function debateAction(act) {
+    toggleDebate();
+    let msgs = [];
+    if(act === 'promise') {
+        logMsg("You: I promise to help with this!");
+        msgs = ["Good.", "We'll see.", "I don't trust you."];
+    } else if(act === 'threaten') {
+        logMsg("You: Don't mess this up or else.");
+        msgs = ["Whoa, calm down.", "Noted.", "Whatever."];
+    } else if(act === 'joke') {
+        logMsg("You tell a joke about the budget.");
+        if(Math.random() > 0.5) {
+            logMsg("The table laughs. (Blame -1)");
+            if(G.players[0].blame > 0) G.players[0].blame--;
+            msgs = ["Haha!", "Classic.", "Lol."];
+        } else {
+            logMsg("Silence. Awkward.");
+            msgs = ["...", "Focus, please.", "Cringe."];
+        }
+    } else if(act === 'lie') {
+        logMsg("You: I definitely have the Science needed.");
+        msgs = ["I hope so.", "Doubt it.", "Okay."];
+    }
+    
+    updateHeader();
+    setTimeout(() => showBubble(1, msgs[Math.floor(Math.random()*msgs.length)]), 800);
+}
+
+</script>
+</body>
+</html>
