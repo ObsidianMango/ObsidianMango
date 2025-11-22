@@ -6,7 +6,7 @@
   name="viewport"
   content="width=device-width, initial-scale=1.0, user-scalable=no"
 />
-<title>Mothman Life & Turn Tracker</title>
+<title>Mothman Life / Turn / Rad Tracker</title>
 <style>
   :root {
     --bg: #050608;
@@ -227,6 +227,40 @@
 
   #lifeRightZone {
     right: 0;
+  }
+
+  /* RAD CONTROL */
+
+  #radControl {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    border: 1px solid #3bffb0;
+    background: rgba(10, 20, 16, 0.9);
+    box-shadow:
+      0 0 10px rgba(166, 255, 120, 0.35),
+      0 0 18px rgba(40, 120, 80, 0.45);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  #radLabel {
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 9px;
+  }
+
+  #radDisplay {
+    min-width: 22px;
+    text-align: center;
+    color: var(--life);
+    font-weight: 600;
   }
 
   /* LIFE FEEDBACK ANIMATIONS */
@@ -494,12 +528,17 @@
 
       <div id="lifeLeftZone" class="life-zone"></div>
       <div id="lifeRightZone" class="life-zone"></div>
+
+      <div id="radControl">
+        <span id="radLabel">RAD</span>
+        <div id="radDisplay">0</div>
+      </div>
     </div>
   </main>
 
   <section id="effectsPanel">
     <div class="effects-header">
-      <div class="effects-title">Turn Effects / Reminders</div>
+      <div class="effects-title">Mothman Effects / Reminders</div>
       <button id="addEffectBtn">+ Add</button>
     </div>
     <div id="effectsList"></div>
@@ -521,53 +560,58 @@
 <script>
   const DEFAULT_LIFE = 40;
 
+  // Pre-filled with common Wise Mothman / Mutant Menace reminders
   const EFFECT_TEMPLATES = [
     {
       id: "mothman_rad_main",
       name: "Wise Mothman – Rad trigger",
       tag: "precombat main",
-      note: "Each player with rad counters mills and loses life. Remember this every precombat main phase."
+      note: "Each player with rad counters mills that many and loses that much life."
     },
     {
       id: "mothman_attack",
       name: "Wise Mothman – Attack trigger",
       tag: "attack",
-      note: "On attack, give each player a rad counter."
+      note: "On attack, each player gets a rad counter."
     },
     {
       id: "vault_87",
-      name: "Vault 87 / heavy rad",
+      name: "Vault 87 / heavy rad source",
       tag: "static",
-      note: "High radiation effects active. Keep rad counters updated each turn cycle."
+      note: "Persistent rad from Vault 87 or similar effects."
     },
     {
       id: "inexorable_tide",
       name: "Inexorable Tide",
       tag: "cast spell",
-      note: "Whenever you cast a spell, proliferate (rad + +1/+1 counters)."
+      note: "Whenever you cast a spell, proliferate (rad and +1/+1 counters)."
     },
     {
       id: "counters_double",
-      name: "Corpsejack / Branching",
+      name: "Corpsejack Menace / Branching Evolution",
       tag: "counters",
-      note: "Remember counters are doubled when placed on creatures you control."
+      note: "Counters entering on your creatures are doubled or increased."
     },
     {
       id: "master_reanimate",
       name: "The Master – Reanimate",
       tag: "activated",
-      note: "Once per turn, you can reanimate a creature that was milled this turn as a 3/3 Mutant."
+      note: "Once per turn, reanimate a creature milled this turn as a 3/3 Mutant."
     }
   ];
 
   let numPlayers = 4;
   let currentPlayer = 0;
-  let players = [];
+  let players = []; // { life, rad }
+  let activeEffects = [];
 
   const lifeEl = document.getElementById("life");
   const lifeLeftZone = document.getElementById("lifeLeftZone");
   const lifeRightZone = document.getElementById("lifeRightZone");
   const flashEl = document.getElementById("flash");
+
+  const radDisplay = document.getElementById("radDisplay");
+  const radControl = document.getElementById("radControl");
 
   const turnTracker = document.getElementById("turnTracker");
   const turnText = document.getElementById("turnText");
@@ -583,13 +627,13 @@
     numPlayers = Math.min(Math.max(count, 1), 5);
     players = [];
     for (let i = 0; i < numPlayers; i++) {
-      players.push({ life: DEFAULT_LIFE, effects: [] });
+      players.push({ life: DEFAULT_LIFE, rad: 0 });
     }
     currentPlayer = 0;
     updateTurnDisplay();
-    updateLifeDisplay();
-    renderEffects();
     updateTurnOrbs();
+    updateLifeDisplay();
+    updateRadDisplay();
   }
 
   function updateTurnDisplay() {
@@ -627,9 +671,11 @@
       flashEl.classList.add("flash-dmg");
     }
 
-    setTimeout(() => {
-      flashEl.classList.remove("flash-heal", "flash-dmg");
-    }, 200);
+    if (type === "heal" || type === "dmg") {
+      setTimeout(() => {
+        flashEl.classList.remove("flash-heal", "flash-dmg");
+      }, 200);
+    }
 
     updateTurnDisplay();
   }
@@ -641,11 +687,21 @@
     updateLifeDisplay(type);
   }
 
+  function updateRadDisplay() {
+    const rad = players[currentPlayer].rad;
+    radDisplay.textContent = rad;
+  }
+
+  function changeRad(delta) {
+    const player = players[currentPlayer];
+    player.rad = Math.max(0, player.rad + delta);
+    updateRadDisplay();
+  }
+
   function renderEffects() {
     effectsListEl.innerHTML = "";
-    const player = players[currentPlayer];
 
-    if (!player.effects.length) {
+    if (!activeEffects.length) {
       const empty = document.createElement("div");
       empty.textContent = "No active effects – tap + Add to track Mothman triggers.";
       empty.style.fontSize = "11px";
@@ -654,7 +710,7 @@
       return;
     }
 
-    player.effects.forEach((eff, idx) => {
+    activeEffects.forEach((eff, idx) => {
       const chip = document.createElement("div");
       chip.className = "effect-chip";
 
@@ -669,7 +725,7 @@
       removeBtn.className = "effect-remove";
       removeBtn.textContent = "✕";
       removeBtn.addEventListener("click", () => {
-        player.effects.splice(idx, 1);
+        activeEffects.splice(idx, 1);
         renderEffects();
       });
 
@@ -717,8 +773,7 @@
       opt.appendChild(note);
 
       opt.addEventListener("click", () => {
-        const player = players[currentPlayer];
-        player.effects.push({
+        activeEffects.push({
           id: tpl.id,
           name: tpl.name
         });
@@ -740,6 +795,19 @@
     });
   }
 
+  function attachRadHandlers() {
+    radControl.addEventListener("pointerdown", e => {
+      const rect = radControl.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const half = rect.width / 2;
+      if (x < half) {
+        changeRad(-1);
+      } else {
+        changeRad(1);
+      }
+    });
+  }
+
   // Turn tracker tap / double-tap handling
   let lastTurnTapTime = 0;
   let lastTurnTapIndex = null;
@@ -749,10 +817,11 @@
     const orbEl = e.target.closest(".turn-orb");
     const idx = orbEl ? parseInt(orbEl.getAttribute("data-index"), 10) : null;
 
+    // double tap on a specific orb -> set player count to that (index+1)
     if (idx !== null && lastTurnTapIndex === idx && now - lastTurnTapTime < 350) {
-      // double tap same orb: set number of players to that index+1
       const count = idx + 1;
       initPlayers(count);
+      updateTurnOrbs();
       lastTurnTapTime = 0;
       lastTurnTapIndex = null;
       return;
@@ -761,11 +830,15 @@
     lastTurnTapTime = now;
     lastTurnTapIndex = idx;
 
-    // single tap anywhere: advance turn
+    // single tap anywhere on tracker -> advance turn
     currentPlayer = (currentPlayer + 1) % numPlayers;
-    updateLifeDisplay();
-    renderEffects();
+    updateTurnDisplay();
     updateTurnOrbs();
+    // show new player's life/rad without pulse
+    lifeEl.classList.remove("life-heal", "life-dmg");
+    flashEl.classList.remove("flash-heal", "flash-dmg");
+    lifeEl.textContent = players[currentPlayer].life;
+    updateRadDisplay();
   });
 
   // Effect picker controls
@@ -781,6 +854,8 @@
   // INIT
   buildEffectOptions();
   attachLifeZoneHandlers();
+  attachRadHandlers();
+  renderEffects();
   initPlayers(4);
 </script>
 </body>
