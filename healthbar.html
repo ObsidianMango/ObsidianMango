@@ -52,86 +52,87 @@
     padding: 12px 12px 10px;
   }
 
-  /* TOP BAR */
+  /* TOP BAR – 5-COLOR TURN TRACKER */
 
   #topBar {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 6px;
     margin-bottom: 10px;
   }
 
-  #playerDotsRow {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
+  #turnTracker {
+    position: relative;
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: radial-gradient(circle at center, #181b27 0, #090b11 60%);
+    border: 1px solid var(--border-soft);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.6),
+      0 10px 22px rgba(0, 0, 0, 0.85);
   }
 
-  .player-dot {
+  .turn-orb {
+    position: absolute;
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    border: 2px solid var(--border-soft);
-    background: #080910;
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
-    position: relative;
-  }
-
-  .player-dot::after {
-    content: attr(data-players);
-    position: absolute;
-    top: 50%;
-    left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 9px;
-    color: var(--muted);
+    opacity: 0.25;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.9);
+    transition:
+      opacity 0.16s ease,
+      transform 0.16s ease,
+      box-shadow 0.16s ease;
   }
 
-  .player-dot.active {
-    border-color: var(--accent);
-    box-shadow: 0 0 9px rgba(94, 224, 255, 0.9);
+  /* Positions for pentagon layout */
+  .orb0 { /* white - top */
+    top: 8%;
+    left: 50%;
+    background: #f8f5e6;
+  }
+  .orb1 { /* blue - upper right */
+    top: 34%;
+    left: 90%;
+    background: #3aa3ff;
+  }
+  .orb2 { /* black - lower right */
+    top: 78%;
+    left: 70%;
+    background: #1b1b24;
+  }
+  .orb3 { /* red - lower left */
+    top: 78%;
+    left: 30%;
+    background: #ff5a40;
+  }
+  .orb4 { /* green - upper left */
+    top: 34%;
+    left: 10%;
+    background: #2fd166;
   }
 
-  #turnRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 10px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #101321, #171a27);
-    border: 1px solid var(--border-soft);
+  .turn-orb.active {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.18);
+    box-shadow:
+      0 0 8px rgba(255, 255, 255, 0.9),
+      0 0 18px rgba(94, 224, 255, 0.7);
   }
 
-  #turnDisplay {
-    font-size: 14px;
-    font-weight: 600;
+  .turn-orb.disabled {
+    opacity: 0.08;
+    box-shadow: none;
   }
 
-  #turnSub {
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  #turnLabelGroup {
-    display: flex;
-    flex-direction: column;
-  }
-
-  #nextTurnBtn {
-    padding: 6px 14px;
-    border-radius: 999px;
-    border: 1px solid var(--accent);
-    background: radial-gradient(circle at top, #2b3248 0, #11131a 60%);
-    color: var(--text-main);
+  #turnText {
     font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
     text-transform: uppercase;
-  }
-
-  #nextTurnBtn:active {
-    transform: scale(0.96);
-    opacity: 0.85;
+    letter-spacing: 0.14em;
+    color: var(--muted);
   }
 
   /* LIFE AREA */
@@ -470,19 +471,14 @@
 <body>
 <div class="app">
   <header id="topBar">
-    <div id="playerDotsRow">
-      <div class="player-dot" data-players="2"></div>
-      <div class="player-dot" data-players="3"></div>
-      <div class="player-dot active" data-players="4"></div>
-      <div class="player-dot" data-players="5"></div>
+    <div id="turnTracker">
+      <div class="turn-orb orb0" data-index="0"></div>
+      <div class="turn-orb orb1" data-index="1"></div>
+      <div class="turn-orb orb2" data-index="2"></div>
+      <div class="turn-orb orb3" data-index="3"></div>
+      <div class="turn-orb orb4" data-index="4"></div>
     </div>
-    <div id="turnRow">
-      <div id="turnLabelGroup">
-        <div id="turnDisplay">Player 1's turn</div>
-        <div id="turnSub">Tap "Next" when you pass the turn</div>
-      </div>
-      <button id="nextTurnBtn">Next</button>
-    </div>
+    <div id="turnText">Player 1</div>
   </header>
 
   <main id="lifeArea">
@@ -536,13 +532,13 @@
       id: "mothman_attack",
       name: "Wise Mothman – Attack trigger",
       tag: "attack",
-      note: "On attack, give each player a rad counter. Useful if you forget on busy boards."
+      note: "On attack, give each player a rad counter."
     },
     {
       id: "vault_87",
       name: "Vault 87 / heavy rad",
       tag: "static",
-      note: "High radiation effects active. Extra reminder to keep rad counters updated each turn cycle."
+      note: "High radiation effects active. Keep rad counters updated each turn cycle."
     },
     {
       id: "inexorable_tide",
@@ -573,10 +569,9 @@
   const lifeRightZone = document.getElementById("lifeRightZone");
   const flashEl = document.getElementById("flash");
 
-  const playerDots = Array.from(document.querySelectorAll(".player-dot"));
-  const turnDisplay = document.getElementById("turnDisplay");
-  const turnSub = document.getElementById("turnSub");
-  const nextTurnBtn = document.getElementById("nextTurnBtn");
+  const turnTracker = document.getElementById("turnTracker");
+  const turnText = document.getElementById("turnText");
+  const turnOrbs = Array.from(document.querySelectorAll(".turn-orb"));
 
   const effectsListEl = document.getElementById("effectsList");
   const addEffectBtn = document.getElementById("addEffectBtn");
@@ -585,26 +580,33 @@
   const closePickerBtn = document.getElementById("closePickerBtn");
 
   function initPlayers(count) {
-    numPlayers = count;
+    numPlayers = Math.min(Math.max(count, 1), 5);
     players = [];
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < numPlayers; i++) {
       players.push({ life: DEFAULT_LIFE, effects: [] });
     }
     currentPlayer = 0;
     updateTurnDisplay();
     updateLifeDisplay();
     renderEffects();
-  }
-
-  function setActivePlayerDot(dotEl) {
-    playerDots.forEach(d => d.classList.remove("active"));
-    if (dotEl) dotEl.classList.add("active");
+    updateTurnOrbs();
   }
 
   function updateTurnDisplay() {
     const pNum = currentPlayer + 1;
-    turnDisplay.textContent = `Player ${pNum}'s turn`;
-    turnSub.textContent = `Commander life: ${players[currentPlayer].life}`;
+    turnText.textContent = `Player ${pNum}`;
+  }
+
+  function updateTurnOrbs() {
+    turnOrbs.forEach((orb, idx) => {
+      orb.classList.remove("active", "disabled");
+      if (idx >= numPlayers) {
+        orb.classList.add("disabled");
+      }
+      if (idx === currentPlayer) {
+        orb.classList.add("active");
+      }
+    });
   }
 
   function updateLifeDisplay(type) {
@@ -728,9 +730,6 @@
     });
   }
 
-  /* EVENTS */
-
-  // Life zones: left = damage, right = heal
   function attachLifeZoneHandlers() {
     const onLeft = () => changeLife(-1);
     const onRight = () => changeLife(1);
@@ -741,42 +740,32 @@
     });
   }
 
-  // Turn cycling
-  nextTurnBtn.addEventListener("click", () => {
-    currentPlayer = (currentPlayer + 1) % numPlayers;
-    updateLifeDisplay();
-    renderEffects();
-  });
+  // Turn tracker tap / double-tap handling
+  let lastTurnTapTime = 0;
+  let lastTurnTapIndex = null;
 
-  // Also allow tapping the turn display to advance
-  document.getElementById("turnRow").addEventListener("click", e => {
-    if (e.target === nextTurnBtn) return;
-    currentPlayer = (currentPlayer + 1) % numPlayers;
-    updateLifeDisplay();
-    renderEffects();
-  });
+  turnTracker.addEventListener("pointerdown", e => {
+    const now = performance.now();
+    const orbEl = e.target.closest(".turn-orb");
+    const idx = orbEl ? parseInt(orbEl.getAttribute("data-index"), 10) : null;
 
-  // Player count dots – double tap / double click to change
-  let lastDotTapTime = 0;
-  let lastDotEl = null;
-
-  playerDots.forEach(dot => {
-    dot.addEventListener("dblclick", () => {
-      const count = parseInt(dot.getAttribute("data-players"), 10);
+    if (idx !== null && lastTurnTapIndex === idx && now - lastTurnTapTime < 350) {
+      // double tap same orb: set number of players to that index+1
+      const count = idx + 1;
       initPlayers(count);
-      setActivePlayerDot(dot);
-    });
+      lastTurnTapTime = 0;
+      lastTurnTapIndex = null;
+      return;
+    }
 
-    dot.addEventListener("pointerdown", () => {
-      const now = performance.now();
-      if (lastDotEl === dot && now - lastDotTapTime < 350) {
-        const count = parseInt(dot.getAttribute("data-players"), 10);
-        initPlayers(count);
-        setActivePlayerDot(dot);
-      }
-      lastDotEl = dot;
-      lastDotTapTime = now;
-    });
+    lastTurnTapTime = now;
+    lastTurnTapIndex = idx;
+
+    // single tap anywhere: advance turn
+    currentPlayer = (currentPlayer + 1) % numPlayers;
+    updateLifeDisplay();
+    renderEffects();
+    updateTurnOrbs();
   });
 
   // Effect picker controls
