@@ -133,6 +133,15 @@
     text-transform: uppercase;
     letter-spacing: 0.14em;
     color: var(--muted);
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(8, 10, 18, 0.7);
+    border: 1px solid rgba(38, 42, 54, 0.9);
+  }
+
+  #turnText:active {
+    transform: scale(0.97);
+    opacity: 0.9;
   }
 
   /* LIFE AREA */
@@ -489,6 +498,121 @@
     border-color: var(--accent);
   }
 
+  /* PLAYER CONFIG POPUP */
+
+  #playerConfig {
+    position: fixed;
+    inset: 0;
+    background: rgba(1, 2, 5, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 25;
+  }
+
+  #playerConfig.open {
+    display: flex;
+  }
+
+  .config-inner {
+    width: 100%;
+    max-width: 420px;
+    border-radius: 16px;
+    background: #090b11;
+    border: 1px solid var(--border-soft);
+    box-shadow: 0 18px 35px rgba(0, 0, 0, 0.9);
+    padding: 10px 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .config-header {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .player-count-row {
+    display: flex;
+    gap: 6px;
+    margin: 4px 0;
+  }
+
+  .count-btn {
+    flex: 1;
+    padding: 6px 0;
+    border-radius: 999px;
+    border: 1px solid var(--border-soft);
+    background: #121421;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .count-btn.active {
+    border-color: var(--accent);
+    color: var(--text-main);
+    background: radial-gradient(circle at top, #22273b 0, #121421 80%);
+  }
+
+  #nameFields {
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .name-row label {
+    min-width: 64px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .name-row input {
+    flex: 1;
+    padding: 4px 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border-soft);
+    background: #11141f;
+    color: var(--text-main);
+    font-size: 12px;
+  }
+
+  .config-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .config-btn {
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid var(--border-soft);
+    background: #141722;
+    color: var(--muted);
+  }
+
+  #configSave {
+    border-color: var(--accent);
+    color: var(--text-main);
+    background: radial-gradient(circle at top, #22273b 0, #11131f 80%);
+  }
+
+  .config-btn:active {
+    transform: scale(0.97);
+    opacity: 0.9;
+  }
+
   /* SCROLLBARS (SUBTLE) */
   #effectsList::-webkit-scrollbar,
   #effectOptions::-webkit-scrollbar {
@@ -555,12 +679,51 @@
   </div>
 </div>
 
+<div id="playerConfig">
+  <div class="config-inner">
+    <div class="config-header">Players & Names</div>
+    <div class="player-count-row">
+      <button class="count-btn" data-count="1">1</button>
+      <button class="count-btn" data-count="2">2</button>
+      <button class="count-btn" data-count="3">3</button>
+      <button class="count-btn" data-count="4">4</button>
+      <button class="count-btn" data-count="5">5</button>
+    </div>
+    <div id="nameFields">
+      <div class="name-row" data-index="0">
+        <label>Player 1</label>
+        <input id="nameInput0" type="text" placeholder="Player 1" />
+      </div>
+      <div class="name-row" data-index="1">
+        <label>Player 2</label>
+        <input id="nameInput1" type="text" placeholder="Player 2" />
+      </div>
+      <div class="name-row" data-index="2">
+        <label>Player 3</label>
+        <input id="nameInput2" type="text" placeholder="Player 3" />
+      </div>
+      <div class="name-row" data-index="3">
+        <label>Player 4</label>
+        <input id="nameInput3" type="text" placeholder="Player 4" />
+      </div>
+      <div class="name-row" data-index="4">
+        <label>Player 5</label>
+        <input id="nameInput4" type="text" placeholder="Player 5" />
+      </div>
+    </div>
+    <div class="config-footer">
+      <button id="configCancel" class="config-btn">Cancel</button>
+      <button id="configSave" class="config-btn" >Save</button>
+    </div>
+  </div>
+</div>
+
 <div id="flash"></div>
 
 <script>
   const DEFAULT_LIFE = 40;
 
-  // Pre-filled with common Wise Mothman / Mutant Menace reminders
+  // Mothman / Mutant Menace specific reminders
   const EFFECT_TEMPLATES = [
     {
       id: "mothman_rad_main",
@@ -602,7 +765,7 @@
 
   let numPlayers = 4;
   let currentPlayer = 0;
-  let players = []; // { life, rad }
+  let players = []; // { name, life, rad }
   let activeEffects = [];
 
   const lifeEl = document.getElementById("life");
@@ -623,13 +786,41 @@
   const effectOptionsEl = document.getElementById("effectOptions");
   const closePickerBtn = document.getElementById("closePickerBtn");
 
+  const playerConfig = document.getElementById("playerConfig");
+  const countButtons = Array.from(document.querySelectorAll(".count-btn"));
+  const nameRows = Array.from(document.querySelectorAll(".name-row"));
+  const nameInputs = [
+    document.getElementById("nameInput0"),
+    document.getElementById("nameInput1"),
+    document.getElementById("nameInput2"),
+    document.getElementById("nameInput3"),
+    document.getElementById("nameInput4")
+  ];
+  const configCancel = document.getElementById("configCancel");
+  const configSave = document.getElementById("configSave");
+
+  let configSelectedCount = 4;
+
+  function defaultName(index) {
+    return `Player ${index + 1}`;
+  }
+
   function initPlayers(count) {
     numPlayers = Math.min(Math.max(count, 1), 5);
-    players = [];
+    const newPlayers = [];
+
     for (let i = 0; i < numPlayers; i++) {
-      players.push({ life: DEFAULT_LIFE, rad: 0 });
+      const existing = players[i];
+      newPlayers.push({
+        name: existing ? existing.name : defaultName(i),
+        life: existing ? existing.life : DEFAULT_LIFE,
+        rad: existing ? existing.rad : 0
+      });
     }
-    currentPlayer = 0;
+
+    players = newPlayers;
+    if (currentPlayer >= numPlayers) currentPlayer = numPlayers - 1;
+
     updateTurnDisplay();
     updateTurnOrbs();
     updateLifeDisplay();
@@ -637,8 +828,9 @@
   }
 
   function updateTurnDisplay() {
-    const pNum = currentPlayer + 1;
-    turnText.textContent = `Player ${pNum}`;
+    const p = players[currentPlayer];
+    const name = p && p.name ? p.name : defaultName(currentPlayer);
+    turnText.textContent = name;
   }
 
   function updateTurnOrbs() {
@@ -808,37 +1000,87 @@
     });
   }
 
-  // Turn tracker tap / double-tap handling
-  let lastTurnTapTime = 0;
-  let lastTurnTapIndex = null;
-
-  turnTracker.addEventListener("pointerdown", e => {
-    const now = performance.now();
-    const orbEl = e.target.closest(".turn-orb");
-    const idx = orbEl ? parseInt(orbEl.getAttribute("data-index"), 10) : null;
-
-    // double tap on a specific orb -> set player count to that (index+1)
-    if (idx !== null && lastTurnTapIndex === idx && now - lastTurnTapTime < 350) {
-      const count = idx + 1;
-      initPlayers(count);
-      updateTurnOrbs();
-      lastTurnTapTime = 0;
-      lastTurnTapIndex = null;
-      return;
-    }
-
-    lastTurnTapTime = now;
-    lastTurnTapIndex = idx;
-
-    // single tap anywhere on tracker -> advance turn
+  // Turn tracker: single tap advances turn
+  turnTracker.addEventListener("pointerdown", () => {
     currentPlayer = (currentPlayer + 1) % numPlayers;
-    updateTurnDisplay();
     updateTurnOrbs();
     // show new player's life/rad without pulse
     lifeEl.classList.remove("life-heal", "life-dmg");
     flashEl.classList.remove("flash-heal", "flash-dmg");
     lifeEl.textContent = players[currentPlayer].life;
     updateRadDisplay();
+    updateTurnDisplay();
+  });
+
+  // Player config popup
+
+  function setConfigCount(count) {
+    configSelectedCount = count;
+    countButtons.forEach(btn => {
+      const c = parseInt(btn.getAttribute("data-count"), 10);
+      btn.classList.toggle("active", c === count);
+    });
+    nameRows.forEach((row, idx) => {
+      row.style.display = idx < count ? "flex" : "none";
+    });
+  }
+
+  function openPlayerConfig() {
+    // Prefill with current data
+    setConfigCount(numPlayers);
+    for (let i = 0; i < 5; i++) {
+      const player = players[i];
+      nameInputs[i].value = player && player.name ? player.name : defaultName(i);
+    }
+    playerConfig.classList.add("open");
+  }
+
+  function closePlayerConfig() {
+    playerConfig.classList.remove("open");
+  }
+
+  // Clicking "Player 1" name area
+  turnText.addEventListener("pointerdown", openPlayerConfig);
+
+  // Count buttons in config
+  countButtons.forEach(btn => {
+    btn.addEventListener("pointerdown", () => {
+      const count = parseInt(btn.getAttribute("data-count"), 10);
+      setConfigCount(count);
+    });
+  });
+
+  // Config cancel/save
+  configCancel.addEventListener("pointerdown", closePlayerConfig);
+
+  configSave.addEventListener("pointerdown", () => {
+    const newPlayers = [];
+    for (let i = 0; i < configSelectedCount; i++) {
+      const existing = players[i];
+      const rawName = nameInputs[i].value.trim();
+      const name = rawName || defaultName(i);
+      newPlayers.push({
+        name,
+        life: existing ? existing.life : DEFAULT_LIFE,
+        rad: existing ? existing.rad : 0
+      });
+    }
+    players = newPlayers;
+    numPlayers = configSelectedCount;
+    if (currentPlayer >= numPlayers) currentPlayer = numPlayers - 1;
+
+    updateTurnOrbs();
+    updateTurnDisplay();
+    updateLifeDisplay();
+    updateRadDisplay();
+    closePlayerConfig();
+  });
+
+  // Close config on backdrop tap
+  playerConfig.addEventListener("click", e => {
+    if (e.target === playerConfig) {
+      closePlayerConfig();
+    }
   });
 
   // Effect picker controls
@@ -856,6 +1098,11 @@
   attachLifeZoneHandlers();
   attachRadHandlers();
   renderEffects();
+  // initial players with default names
+  players = [];
+  for (let i = 0; i < 4; i++) {
+    players.push({ name: defaultName(i), life: DEFAULT_LIFE, rad: 0 });
+  }
   initPlayers(4);
 </script>
 </body>
