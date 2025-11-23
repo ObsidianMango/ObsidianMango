@@ -366,14 +366,24 @@
 
   .effect-chip {
     display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 9px;
-    border-radius: 999px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 6px 9px;
+    border-radius: 12px;
     font-size: 11px;
     background: #171a26;
     border: 1px solid #262a36;
     color: var(--muted);
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .effect-chip-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
   }
 
   .effect-dot {
@@ -382,10 +392,25 @@
     border-radius: 999px;
     background: var(--accent);
     box-shadow: 0 0 6px rgba(94, 224, 255, 0.7);
+    flex-shrink: 0;
   }
 
   .effect-name {
     color: var(--text-main);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  .effect-tag-inline {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    opacity: 0.85;
+    white-space: nowrap;
   }
 
   .effect-remove {
@@ -394,6 +419,7 @@
     color: #707793;
     font-size: 12px;
     padding: 0;
+    flex-shrink: 0;
   }
 
   .effect-remove:active {
@@ -401,9 +427,19 @@
     opacity: 0.7;
   }
 
+  .effect-note {
+    font-size: 10px;
+    line-height: 1.25;
+    color: var(--muted);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   #footerSpacer {
     flex-shrink: 0;
-    height: 18px; /* gives you that "smidge" of empty footer for thumb room */
+    height: 18px; /* thumb room at the bottom on iPhone */
   }
 
   /* EFFECT PICKER (BOTTOM SHEET) */
@@ -751,7 +787,8 @@
 <script>
   const DEFAULT_LIFE = 40;
 
-  // Sections covering all relevant Mutant Menace / Mothman deck cards
+  // Mutant Menace / Mothman deck key cards, with more specific effect reminders.
+  // These are short summaries, not full rules text.
   const EFFECT_SECTIONS = [
     {
       title: "Commanders & Rad Engines",
@@ -759,62 +796,72 @@
         {
           id: "wise_mothman",
           name: "The Wise Mothman",
-          tag: "commander",
-          note: "Rad + mill + +1/+1 counter engine."
+          tag: "commander · rad engine",
+          note:
+            "ETB/attack: each player gets 1 rad. When rads resolve, you spread that many +1/+1 counters on your creatures."
         },
         {
           id: "master_transcendent",
           name: "The Master, Transcendent",
-          tag: "legendary",
-          note: "Zombie Mutant / reanimation / mill payoff."
+          tag: "legendary · reanimate",
+          note:
+            "Reanimates a creature that went to a graveyard this turn as a 3/3 Mutant under your control."
         },
         {
           id: "jason_bright",
           name: "Jason Bright, Glowing Prophet",
-          tag: "legendary",
-          note: "Radiation and life swing around rad counters."
+          tag: "legendary · rad drain",
+          note:
+            "Gives rads, then drains or gains life based on rad counts. Watch total rads on each player."
         },
         {
           id: "hancock",
           name: "Hancock, Ghoulish Mayor",
-          tag: "legendary",
-          note: "Ghouls / radiation payoff, life & cards."
+          tag: "legendary · ghoul engine",
+          note:
+            "Rewards you for Ghouls / death / radiation with life loss and card advantage."
         },
         {
           id: "glowing_one",
           name: "Glowing One",
-          tag: "creature",
-          note: "Rad / life drain engine tied to radiation."
+          tag: "creature · rad drain",
+          note:
+            "Gives rad counters, then drains life from each player based on their rad total."
         },
         {
           id: "vexing_radgull",
           name: "Vexing Radgull",
-          tag: "creature",
-          note: "Combat rad distribution / proliferate-style pressure."
+          tag: "creature · combat rad",
+          note:
+            "On combat damage to a player, that player gets rad counters. Airborne rad pressure."
         },
         {
           id: "radstorm",
           name: "Radstorm",
-          tag: "sorcery",
-          note: "Mass radiation; all players affected."
+          tag: "sorcery · mass rad",
+          note:
+            "Each player gets rad counters; you gain value. Big symmetric radiation hit for the whole table."
         },
         {
           id: "nuclear_fallout",
           name: "Nuclear Fallout",
-          tag: "sorcery",
-          note: "Board wipe / radiation; track life and rads."
+          tag: "sorcery · wipe",
+          note:
+            "Board wipe that also hands out rads / damage. Track life loss and post-wipe radiation."
         },
         {
           id: "struggle_purity",
           name: "Struggle for Project Purity",
-          tag: "sorcery",
-          note: "Big, symmetric rad / life effect."
+          tag: "sorcery · huge swing",
+          note:
+            "Mass life and radiation change. Expect multiple rads per player and big life swings."
         },
         {
           id: "contaminated_drink",
           name: "Contaminated Drink",
-          tag: "artifact / spell",
-          note: "Single-target rad / life swing."
+          tag: "spell · single target rad",
+          note:
+            "Gives one player rads and life loss. Good for finishing or setting up lethal rad resolution."
         }
       ]
     },
@@ -825,127 +872,148 @@
           id: "mirelurk_queen",
           name: "Mirelurk Queen",
           tag: "legendary creature",
-          note: "Token / combat pressure; remember attack triggers."
+          note:
+            "Big body that makes tokens on cast/attack. Tracks how many extra bodies you’re making."
         },
         {
           id: "piper_wright",
           name: "Piper Wright, Publick Reporter",
           tag: "legendary creature",
-          note: "Card advantage / attack triggers."
+          note:
+            "Attack trigger for cards/selection. Attacking multiple players scales value."
         },
         {
           id: "screeching_scorchbeast",
           name: "Screeching Scorchbeast",
-          tag: "creature",
-          note: "Flying threat with on-attack effect."
+          tag: "creature · flier",
+          note:
+            "Flying finisher; on attack usually drains/damages multiple things. Count potential lethal."
         },
         {
           id: "harold_bob",
           name: "Harold and Bob, First Numens",
           tag: "legendary creature",
-          note: "Counters / lands / growth engine."
+          note:
+            "Land/counter synergy; grows your board and mana over time via counters."
         },
         {
           id: "lily_bowen",
           name: "Lily Bowen, Raging Grandma",
           tag: "legendary creature",
-          note: "Combat-focused; tracks attack/block triggers."
+          note:
+            "Combat monster; gives surprise power or combat bonuses. Plan around burst damage."
         },
         {
           id: "power_fist",
           name: "Power Fist",
           tag: "equipment",
-          note: "Equipment buff; remember equip / activated ability."
+          note:
+            "Massive attack buff to one creature. Track which creature is wearing it and total swing."
         },
         {
           id: "rampaging_yao_guai",
           name: "Rampaging Yao Guai",
-          tag: "creature",
-          note: "Big trampler; combat trigger reminder."
+          tag: "creature · trampler",
+          note:
+            "Large trampler; punishes small boards. Good for trample-over lethal math."
         },
         {
           id: "strong_brutish_thespian",
           name: "Strong, the Brutish Thespian",
           tag: "legendary creature",
-          note: "Combat / buff lines."
+          note:
+            "Big attacker that rewards big board / Mutants. Attack triggers remove blockers or push damage."
         },
         {
           id: "tato_farmer",
           name: "Tato Farmer",
-          tag: "creature",
-          note: "Token / value engine."
+          tag: "creature · value engine",
+          note:
+            "Produces Food/tokens over time. Marks slow life gain and sacrifice fodder."
         },
         {
           id: "watchful_radstag",
           name: "Watchful Radstag",
-          tag: "creature",
-          note: "Utility stag; keep its passive in mind."
+          tag: "creature · utility",
+          note:
+            "Utility passive (fixing / information). Remember it whenever you tap lands or attack."
         },
         {
           id: "agent_frank_horrigan",
           name: "Agent Frank Horrigan",
-          tag: "legendary creature",
-          note: "Huge finisher, ETB / attack abilities."
+          tag: "legendary creature · finisher",
+          note:
+            "Huge finisher with removal stapled on. Plan to clear one key permanent plus swing big."
         },
         {
           id: "alpha_deathclaw",
           name: "Alpha Deathclaw",
-          tag: "creature",
-          note: "Combat stats / on-hit or on-attack triggers."
+          tag: "creature · finisher",
+          note:
+            "Fast lethal attacker with evasion/extra combat text. Count how many hits kill from current life."
         },
         {
           id: "marcus_mutant_mayor",
           name: "Marcus, Mutant Mayor",
-          tag: "legendary creature",
-          note: "Mutant tribal / +1/+1 counter support."
+          tag: "legendary creature · tribal",
+          note:
+            "Buffs Mutants / counters. Track your team’s size as you add more Mutants."
         },
         {
           id: "raul_trouble_shooter",
           name: "Raul, Trouble Shooter",
-          tag: "legendary creature",
-          note: "Artifact / equipment synergy."
+          tag: "legendary creature · artifacts",
+          note:
+            "Artifact/equipment support; cost reduction/recursion. Watch extra value from casting/equipping artifacts."
         },
         {
           id: "young_deathclaws",
           name: "Young Deathclaws",
-          tag: "creature",
-          note: "Pack attackers; remember any pack text."
+          tag: "creature · pack",
+          note:
+            "Better in packs; swinging multiple pushes a lot more damage."
         },
         {
           id: "lumbering_megasloth",
           name: "Lumbering Megasloth",
           tag: "creature",
-          note: "Big body; ETB / attack lines."
+          note:
+            "Big stabilizer/finisher that can pick up counters. Keep track of its size over time."
         },
         {
           id: "nightkin_ambusher",
           name: "Nightkin Ambusher",
-          tag: "creature",
-          note: "Flash ambusher; surprise combat interactions."
+          tag: "creature · flash",
+          note:
+            "Flash ambusher that punishes attackers. Hold up mana to blow people out in combat."
         },
         {
           id: "bloatfly_swarm",
           name: "Bloatfly Swarm",
-          tag: "creature",
-          note: "Death triggers / token production."
+          tag: "creature · death trigger",
+          note:
+            "Dies into additional bodies/damage. Great sacrifice target; track death triggers."
         },
         {
           id: "infesting_radroach",
           name: "Infesting Radroach",
-          tag: "creature",
-          note: "ETB / death insect value."
+          tag: "creature · pest",
+          note:
+            "Cheap annoyance that comes back or spreads value via death. Good early blocker/sac fodder."
         },
         {
           id: "cathedral_acolyte",
           name: "Cathedral Acolyte",
-          tag: "creature",
-          note: "Life gain / devotion-style effect."
+          tag: "creature · life gain",
+          note:
+            "Grants life via ETB or specific condition. Track life gained to know how safe you are."
         },
         {
           id: "feral_ghoul",
           name: "Feral Ghoul",
-          tag: "creature",
-          note: "Ghoul with graveyard / combat text."
+          tag: "creature · ghoul",
+          note:
+            "Aggressive Ghoul; may grow or synergize with Ghoul payoffs and death triggers."
         }
       ]
     },
@@ -955,38 +1023,44 @@
         {
           id: "mutational_advantage",
           name: "Mutational Advantage",
-          tag: "enchantment",
-          note: "Growth / counters engine; track every trigger."
+          tag: "enchantment · counters",
+          note:
+            "Adds extra +1/+1 counters to creatures under set conditions. Track how many counters new creatures should get."
         },
         {
           id: "forced_evolution",
           name: "Forced Evolution",
-          tag: "enchantment",
-          note: "Ongoing power/toughness buff."
+          tag: "enchantment · aura",
+          note:
+            "Aura that steadily grows one creature. Keep mental note which creature is wearing it and its boosted stats."
         },
         {
           id: "atomize",
           name: "Atomize",
-          tag: "instant",
-          note: "Removal spell; use if you want a reminder."
+          tag: "instant · removal",
+          note:
+            "Instant-speed destroy/exile at fixed cost. Use as single-target answer to a key threat."
         },
         {
           id: "nuka_nuke_launcher",
           name: "Nuka-Nuke Launcher",
-          tag: "artifact / equipment",
-          note: "Damage-dealing equipment; remember activations."
+          tag: "artifact · equipment",
+          note:
+            "Equipment that lets you deal direct damage (often to any target). Count damage lines when planning a kill."
         },
         {
           id: "recon_craft_theta",
           name: "Recon Craft Theta",
-          tag: "artifact",
-          note: "Vehicle / artifact engine; crew / attack triggers."
+          tag: "artifact · vehicle",
+          note:
+            "Vehicle that becomes a flying attacker and often draws or generates advantage on combat damage."
         },
         {
           id: "strength_bobblehead",
           name: "Strength Bobblehead",
-          tag: "artifact",
-          note: "Buff / counters; timing matters."
+          tag: "artifact · buff",
+          note:
+            "Boosts power (often commander/creatures). Track final power when planning lethal swings."
         }
       ]
     },
@@ -996,26 +1070,30 @@
         {
           id: "the_necropolis",
           name: "The Necropolis",
-          tag: "legendary land / location",
-          note: "Graveyard / zombie / rad related ability."
+          tag: "legendary land",
+          note:
+            "Graveyard/Zombie land. Activated ability uses graveyards or Zombies—remember when you can cash those in."
         },
         {
           id: "mariposa_base",
           name: "Mariposa Military Base",
-          tag: "land / base",
-          note: "Mutant / counter or token engine."
+          tag: "land · base",
+          note:
+            "Mutant/counter support land. Often adds counters or tokens over time."
         },
         {
           id: "overflowing_basin",
           name: "Overflowing Basin",
           tag: "land",
-          note: "Mana / counter manipulation; activated ability."
+          note:
+            "Adds extra counters to permanents for a mana cost. Use spare mana end step to grow your board."
         },
         {
           id: "viridescent_bog",
           name: "Viridescent Bog",
           tag: "land",
-          note: "Utility land; handle ETB / counters if any."
+          note:
+            "Fixes mana and possibly interacts with counters or radiation. Remember you have fixing for splashes."
         }
       ]
     },
@@ -1025,86 +1103,100 @@
         {
           id: "fraying_sanity",
           name: "Fraying Sanity",
-          tag: "enchantment",
-          note: "End step mill doubler on chosen player."
+          tag: "enchantment · mill doubler",
+          note:
+            "End step: chosen player mills again equal to cards that hit their yard this turn (rad mill + normal mill)."
         },
         {
           id: "inexorable_tide",
           name: "Inexorable Tide",
-          tag: "enchantment",
-          note: "Proliferate whenever you cast a spell."
+          tag: "enchantment · proliferate",
+          note:
+            "Whenever you cast a spell, proliferate. Every spell grows all counters and rads on the table."
         },
         {
           id: "branching_evolution",
           name: "Branching Evolution",
-          tag: "enchantment",
-          note: "Doubles +1/+1 counters on your creatures."
+          tag: "enchantment · double counters",
+          note:
+            "Your creatures get twice as many +1/+1 counters. Turns every small counter effect into a big buff."
         },
         {
           id: "guardian_project",
           name: "Guardian Project",
-          tag: "enchantment",
-          note: "Draw on nontoken creature ETB under your control."
+          tag: "enchantment · card draw",
+          note:
+            "Draw a card whenever a nontoken creature ETBs under your control with a new name. Don’t miss triggers."
         },
         {
           id: "hardened_scales",
           name: "Hardened Scales",
-          tag: "enchantment",
-          note: "Extra +1/+1 counters on your creatures."
+          tag: "enchantment · extra counters",
+          note:
+            "Whenever a creature would get counters, it gets one extra +1/+1. Stacks with your other doublers."
         },
         {
           id: "tireless_tracker",
           name: "Tireless Tracker",
-          tag: "creature",
-          note: "Clues on landfall, grows as you crack Clues."
+          tag: "creature · landfall draw",
+          note:
+            "Landfall: make a Clue. Sac a Clue: put a +1/+1 counter on it. Tracks both tokens and counters."
         },
         {
           id: "biomass_mutation",
           name: "Biomass Mutation",
-          tag: "instant",
-          note: "Mass pump finisher; combat step reminder."
+          tag: "instant · finisher",
+          note:
+            "XGU GU: all your creatures become X/X. Cast pre-combat to turn a wide board into lethal out of nowhere."
         },
         {
           id: "casualties_of_war",
           name: "Casualties of War",
-          tag: "sorcery",
-          note: "Multi-permanent removal; remember chosen types."
+          tag: "sorcery · multi kill",
+          note:
+            "Destroy up to one of each: artifact, creature, enchantment, land, planeswalker. Plan targets ahead."
         },
         {
           id: "find_finality",
           name: "Find // Finality",
           tag: "split spell",
-          note: "Recursion or sweeper; remember which half you cast."
+          note:
+            "Find: return up to 2 creatures from yard. Finality: board wipe that buffs one of your creatures first."
         },
         {
           id: "corpsejack_menace",
           name: "Corpsejack Menace",
-          tag: "creature",
-          note: "Doubles +1/+1 counters on your creatures."
+          tag: "creature · double counters",
+          note:
+            "Doubles +1/+1 counters on your creatures. Combos hard with Branching Evolution."
         },
         {
           id: "winding_constrictor",
           name: "Winding Constrictor",
-          tag: "creature",
-          note: "Extra counters on your permanents / players."
+          tag: "creature · extra counters",
+          note:
+            "You/your permanents get an extra counter of each type. Buffs rads on players and +1/+1 on creatures."
         },
         {
           id: "contagion_clasp",
           name: "Contagion Clasp",
-          tag: "artifact",
-          note: "ETB -1/-1 counter; activated proliferate."
+          tag: "artifact · proliferate",
+          note:
+            "ETB: put a -1/-1 counter on a creature. 4,T: proliferate (grow all counters, including rad)."
         },
         {
           id: "harmonize",
           name: "Harmonize",
-          tag: "sorcery",
-          note: "One-shot card draw; optional reminder."
+          tag: "sorcery · draw 3",
+          note:
+            "Simple: draw 3 cards for 4 mana. Use mid-game to refuel."
         },
         {
           id: "inspiring_call",
           name: "Inspiring Call",
-          tag: "instant",
-          note: "Protects & draws from creatures with +1/+1 counters."
+          tag: "instant · protect & draw",
+          note:
+            "Creatures with +1/+1 counters gain indestructible; draw for each of them. Cast vs wipes or in big combats."
         }
       ]
     }
@@ -1113,7 +1205,7 @@
   let numPlayers = 4;
   let currentPlayer = 0;
   let players = []; // { name, life, rad }
-  let activeEffects = [];
+  let activeEffects = []; // { id, name, tag, note }
 
   const lifeEl = document.getElementById("life");
   const lifeLeftZone = document.getElementById("lifeLeftZone");
@@ -1255,12 +1347,19 @@
       const chip = document.createElement("div");
       chip.className = "effect-chip";
 
+      const mainRow = document.createElement("div");
+      mainRow.className = "effect-chip-main";
+
       const dot = document.createElement("div");
       dot.className = "effect-dot";
 
       const nameSpan = document.createElement("span");
       nameSpan.className = "effect-name";
       nameSpan.textContent = eff.name;
+
+      const tagSpan = document.createElement("span");
+      tagSpan.className = "effect-tag-inline";
+      tagSpan.textContent = eff.tag || "";
 
       const removeBtn = document.createElement("button");
       removeBtn.className = "effect-remove";
@@ -1270,9 +1369,17 @@
         renderEffects();
       });
 
-      chip.appendChild(dot);
-      chip.appendChild(nameSpan);
-      chip.appendChild(removeBtn);
+      mainRow.appendChild(dot);
+      mainRow.appendChild(nameSpan);
+      if (eff.tag) mainRow.appendChild(tagSpan);
+      mainRow.appendChild(removeBtn);
+
+      const noteDiv = document.createElement("div");
+      noteDiv.className = "effect-note";
+      noteDiv.textContent = eff.note || "";
+
+      chip.appendChild(mainRow);
+      chip.appendChild(noteDiv);
 
       effectsListEl.appendChild(chip);
     });
@@ -1323,7 +1430,9 @@
         opt.addEventListener("click", () => {
           activeEffects.push({
             id: tpl.id,
-            name: tpl.name
+            name: tpl.name,
+            tag: tpl.tag,
+            note: tpl.note
           });
           renderEffects();
           closeEffectPicker();
