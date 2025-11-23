@@ -58,13 +58,13 @@
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
 
   #turnTracker {
     position: relative;
-    width: 112px;
-    height: 112px;
+    width: 128px;
+    height: 128px;
     border-radius: 50%;
     background:
       radial-gradient(circle at center, #181b27 0, #090b11 60%),
@@ -72,13 +72,13 @@
     border: 1px solid var(--border-soft);
     box-shadow:
       0 0 0 1px rgba(0, 0, 0, 0.6),
-      0 12px 26px rgba(0, 0, 0, 0.85);
+      0 14px 30px rgba(0, 0, 0, 0.9);
   }
 
   .turn-orb {
     position: absolute;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     transform: translate(-50%, -50%);
     opacity: 0.18;
@@ -102,7 +102,7 @@
     transform: translate(-50%, -50%) scale(1.2);
     box-shadow:
       0 0 8px rgba(255, 255, 255, 0.9),
-      0 0 18px rgba(94, 224, 255, 0.7);
+      0 0 20px rgba(94, 224, 255, 0.8);
   }
 
   .turn-orb.disabled {
@@ -111,11 +111,11 @@
   }
 
   #turnText {
-    font-size: 12px;
+    font-size: 13px;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.16em;
     color: var(--muted);
-    padding: 4px 12px;
+    padding: 5px 14px;
     border-radius: 999px;
     background: rgba(8, 10, 18, 0.9);
     border: 1px solid rgba(38, 42, 54, 0.9);
@@ -129,7 +129,7 @@
   /* MIDDLE: LIFE DISPLAY */
 
   #lifeArea {
-    flex: 1;
+    flex: 0.9;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -275,7 +275,6 @@
       transform 0.2s ease;
   }
 
-  /* Only glows/pulses when rad > 0 */
   #radControl.rad-active {
     border-color: var(--rad-glow);
     background:
@@ -364,6 +363,7 @@
     margin-bottom: 6px;
     gap: 6px;
     align-items: center;
+    flex-wrap: wrap;
   }
 
   #noteComposer.active {
@@ -371,21 +371,34 @@
   }
 
   #noteInput {
-    flex: 1;
-    padding: 5px 8px;
+    flex: 1 1 45%;
+    min-width: 140px;
+    padding: 6px 10px;
     border-radius: 999px;
     border: 1px solid var(--border-soft);
     background: #11141f;
     color: var(--text-main);
-    font-size: 12px;
+    font-size: 13px;
   }
 
   #noteInput::placeholder {
     color: #6d738a;
   }
 
+  #noteTarget {
+    flex: 0 0 34%;
+    min-width: 120px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-soft);
+    background: #11141f;
+    color: var(--muted);
+    font-size: 12px;
+    appearance: none;
+  }
+
   .note-compose-btn {
-    padding: 4px 8px;
+    padding: 5px 9px;
     border-radius: 999px;
     border: 1px solid var(--border-soft);
     background: #141722;
@@ -405,34 +418,51 @@
   }
 
   #notesList {
-    max-height: 140px;
+    max-height: 210px;
     overflow-y: auto;
     padding-right: 4px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 7px;
   }
 
   .note-chip {
     display: flex;
     align-items: flex-start;
-    gap: 6px;
-    padding: 6px 9px;
+    gap: 8px;
+    padding: 7px 9px;
     border-radius: 10px;
     background: #171a26;
     border: 1px solid #262a36;
-    font-size: 11px;
+    border-left-width: 3px;
+    border-left-style: solid;
+    border-left-color: #262a36;
+    font-size: 12px;
     color: var(--muted);
   }
 
   .note-dot {
-    width: 7px;
-    height: 7px;
+    width: 9px;
+    height: 9px;
     border-radius: 999px;
     background: var(--accent);
     box-shadow: 0 0 6px rgba(94, 224, 255, 0.7);
-    margin-top: 2px;
+    margin-top: 3px;
     flex-shrink: 0;
+  }
+
+  .note-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .note-targetLabel {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
   }
 
   .note-text {
@@ -440,13 +470,14 @@
     white-space: pre-wrap;
     word-wrap: break-word;
     color: var(--text-main);
+    font-size: 13px;
   }
 
   .note-remove {
     border: none;
     background: transparent;
     color: #707793;
-    font-size: 12px;
+    font-size: 13px;
     padding: 0;
     flex-shrink: 0;
   }
@@ -677,6 +708,9 @@
         placeholder="Ex: Mothman – give 1 rad on attack"
         autocomplete="off"
       />
+      <select id="noteTarget">
+        <!-- options filled via JS -->
+      </select>
       <button id="noteSave" class="note-compose-btn">Save</button>
       <button id="noteCancel" class="note-compose-btn">✕</button>
     </div>
@@ -742,7 +776,20 @@
   let numPlayers = 4;
   let currentPlayer = 0;
   let players = [];
+  /**
+   * notes: array of
+   * { text: string, target: 'none'|'self'|'player', playerIndex: number|null }
+   */
   let notes = [];
+
+  const playerColors = [
+    '#f8f5e6', // orb0 - white
+    '#3aa3ff', // orb1 - blue
+    '#1b1b24', // orb2 - black
+    '#ff5a40', // orb3 - red
+    '#2fd166', // orb4 - green
+    '#b38cff'  // orb5 - center/purple
+  ];
 
   const lifeEl = document.getElementById("life");
   const lifeLeftZone = document.getElementById("lifeLeftZone");
@@ -761,6 +808,7 @@
 
   const noteComposer = document.getElementById("noteComposer");
   const noteInput = document.getElementById("noteInput");
+  const noteTarget = document.getElementById("noteTarget");
   const noteSave = document.getElementById("noteSave");
   const noteCancel = document.getElementById("noteCancel");
 
@@ -796,6 +844,7 @@
     if (currentPlayer >= numPlayers) currentPlayer = numPlayers - 1;
     updateTurnDisplay();
     updateTurnOrbs();
+    refreshNoteTargetOptions();
   }
 
   function updateTurnDisplay() {
@@ -871,28 +920,61 @@
     }, 200);
   }
 
+  function getPlayerColor(index) {
+    if (index == null || index < 0 || index >= playerColors.length) {
+      return null;
+    }
+    return playerColors[index];
+  }
+
   function renderNotes() {
     notesListEl.innerHTML = "";
     if (!notes.length) {
       const empty = document.createElement("div");
       empty.textContent =
-        'No notes yet – add reminders like "Mothman: give rads on attack" or "Glowing One: drain this turn".';
+        'No notes yet – add reminders like "Self: gain 1 rad on upkeep" or "Attack P2 next turn".';
       empty.style.fontSize = "11px";
       empty.style.color = "var(--muted)";
       notesListEl.appendChild(empty);
       return;
     }
 
-    notes.forEach((text, idx) => {
+    notes.forEach((note, idx) => {
+      const n = typeof note === "string" ? { text: note, target: "none", playerIndex: null } : note;
       const chip = document.createElement("div");
       chip.className = "note-chip";
 
       const dot = document.createElement("div");
       dot.className = "note-dot";
 
+      const body = document.createElement("div");
+      body.className = "note-body";
+
+      const targetLabel = document.createElement("div");
+      targetLabel.className = "note-targetLabel";
+
+      let labelText = "";
+      let color = null;
+
+      if (n.target === "self") {
+        labelText = "Self";
+        color = "#b1ff6a";
+      } else if (n.target === "player" && typeof n.playerIndex === "number") {
+        const idxSafe = n.playerIndex;
+        const p = players[idxSafe];
+        const playerName = p && p.name ? p.name : defaultName(idxSafe);
+        labelText = `Target: ${playerName}`;
+        color = getPlayerColor(idxSafe) || "#5ee0ff";
+      } else {
+        labelText = "Board";
+        color = "#5ee0ff";
+      }
+
+      targetLabel.textContent = labelText;
+
       const span = document.createElement("div");
       span.className = "note-text";
-      span.textContent = text;
+      span.textContent = n.text;
 
       const removeBtn = document.createElement("button");
       removeBtn.className = "note-remove";
@@ -902,17 +984,52 @@
         renderNotes();
       });
 
+      if (color) {
+        dot.style.background = color;
+        dot.style.boxShadow = `0 0 8px ${color}80`;
+        chip.style.borderLeftColor = color;
+      }
+
+      body.appendChild(targetLabel);
+      body.appendChild(span);
+
       chip.appendChild(dot);
-      chip.appendChild(span);
+      chip.appendChild(body);
       chip.appendChild(removeBtn);
+
       notesListEl.appendChild(chip);
     });
+  }
+
+  function refreshNoteTargetOptions() {
+    if (!noteTarget) return;
+    noteTarget.innerHTML = "";
+
+    const optBoard = document.createElement("option");
+    optBoard.value = "none";
+    optBoard.textContent = "Board / General";
+    noteTarget.appendChild(optBoard);
+
+    const optSelf = document.createElement("option");
+    optSelf.value = "self";
+    optSelf.textContent = "Self";
+    noteTarget.appendChild(optSelf);
+
+    for (let i = 0; i < numPlayers; i++) {
+      const p = players[i];
+      const opt = document.createElement("option");
+      opt.value = `player-${i}`;
+      opt.textContent = p && p.name ? p.name : defaultName(i);
+      noteTarget.appendChild(opt);
+    }
+
+    noteTarget.value = "none";
   }
 
   function openNoteComposer() {
     noteComposer.classList.add("active");
     noteInput.value = "";
-    // small timeout helps iOS reliably focus
+    refreshNoteTargetOptions();
     setTimeout(() => {
       noteInput.focus();
     }, 30);
@@ -929,7 +1046,25 @@
       closeNoteComposer();
       return;
     }
-    notes.push(text);
+
+    const targetVal = noteTarget.value;
+    const noteObj = {
+      text,
+      target: "none",
+      playerIndex: null
+    };
+
+    if (targetVal === "self") {
+      noteObj.target = "self";
+    } else if (targetVal && targetVal.startsWith("player-")) {
+      const idx = parseInt(targetVal.split("-")[1], 10);
+      noteObj.target = "player";
+      noteObj.playerIndex = isNaN(idx) ? null : idx;
+    } else {
+      noteObj.target = "none";
+    }
+
+    notes.push(noteObj);
     renderNotes();
     closeNoteComposer();
   }
@@ -1007,6 +1142,7 @@
     if (currentPlayer >= numPlayers) currentPlayer = numPlayers - 1;
     updateTurnOrbs();
     updateTurnDisplay();
+    refreshNoteTargetOptions();
     closePlayerConfig();
   });
 
