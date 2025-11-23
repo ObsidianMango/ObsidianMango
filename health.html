@@ -51,14 +51,36 @@
     padding: 12px 12px 22px;
   }
 
-  /* TOP: TURN TRACKER */
+  /* TOP: TURN TRACKER + ROUND/TURN COUNTERS */
 
   #topBar {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 10px;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    height: 128px; /* match pentagram size */
+  }
+
+  #roundInfo {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding-left: 4px;
+  }
+
+  #roundText {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  #turnCountText {
+    margin-top: 2px;
+    font-size: 11px;
+    color: #6d738a;
   }
 
   #turnTracker {
@@ -73,6 +95,7 @@
     box-shadow:
       0 0 0 1px rgba(0, 0, 0, 0.6),
       0 14px 30px rgba(0, 0, 0, 0.9);
+    flex-shrink: 0;
   }
 
   .turn-orb {
@@ -89,7 +112,6 @@
       box-shadow 0.16s ease;
   }
 
-  /* Centered ring around middle orb */
   .orb0 { top: 16%; left: 50%; background: #f8f5e6; }   /* white - top */
   .orb1 { top: 40%; left: 88%; background: #3aa3ff; }   /* blue - upper right */
   .orb2 { top: 84%; left: 68%; background: #1b1b24; }   /* black - lower right */
@@ -110,6 +132,11 @@
     box-shadow: none;
   }
 
+  #topRightTap {
+    flex: 1;
+    height: 100%;
+  }
+
   #turnText {
     font-size: 13px;
     text-transform: uppercase;
@@ -119,6 +146,8 @@
     border-radius: 999px;
     background: rgba(8, 10, 18, 0.9);
     border: 1px solid rgba(38, 42, 54, 0.9);
+    align-self: center;
+    margin-bottom: 8px;
   }
 
   #turnText:active {
@@ -355,8 +384,6 @@
     transform: scale(0.96);
     opacity: 0.9;
   }
-
-  /* Inline note composer under header */
 
   #noteComposer {
     display: none;
@@ -663,6 +690,10 @@
 <body>
 <div class="app">
   <header id="topBar">
+    <div id="roundInfo">
+      <div id="roundText">Round 1</div>
+      <div id="turnCountText">Turn 1</div>
+    </div>
     <div id="turnTracker">
       <div class="turn-orb orb0" data-index="0"></div>
       <div class="turn-orb orb1" data-index="1"></div>
@@ -671,8 +702,10 @@
       <div class="turn-orb orb4" data-index="4"></div>
       <div class="turn-orb orb5" data-index="5"></div>
     </div>
-    <div id="turnText">Player 1</div>
+    <div id="topRightTap"></div>
   </header>
+
+  <div id="turnText">Player 1</div>
 
   <main id="lifeArea">
     <div id="lifeWrapper">
@@ -789,6 +822,10 @@
     '#b38cff'  // orb5 - center/purple
   ];
 
+  // Round / turn counters
+  let roundNumber = 1;
+  let turnTotal = 1;
+
   const lifeEl = document.getElementById("life");
   const lifeLeftZone = document.getElementById("lifeLeftZone");
   const lifeRightZone = document.getElementById("lifeRightZone");
@@ -800,6 +837,11 @@
   const turnTracker = document.getElementById("turnTracker");
   const turnText = document.getElementById("turnText");
   const turnOrbs = Array.from(document.querySelectorAll(".turn-orb"));
+
+  const roundInfo = document.getElementById("roundInfo");
+  const roundTextEl = document.getElementById("roundText");
+  const turnCountTextEl = document.getElementById("turnCountText");
+  const topRightTap = document.getElementById("topRightTap");
 
   const addNoteBtn = document.getElementById("addNoteBtn");
   const notesListEl = document.getElementById("notesList");
@@ -857,6 +899,11 @@
       if (idx >= numPlayers) orb.classList.add("disabled");
       if (idx === currentPlayer) orb.classList.add("active");
     });
+  }
+
+  function updateRoundTurnDisplay() {
+    roundTextEl.textContent = `Round ${roundNumber}`;
+    turnCountTextEl.textContent = `Turn ${turnTotal}`;
   }
 
   function updateLifeDisplay(type) {
@@ -925,12 +972,29 @@
     return playerColors[index];
   }
 
+  function sortNotes() {
+    notes.sort((a, b) => {
+      const na = typeof a === "string" ? { target: "none", playerIndex: null } : a;
+      const nb = typeof b === "string" ? { target: "none", playerIndex: null } : b;
+
+      const aKey = na.target === "player" && typeof na.playerIndex === "number"
+        ? na.playerIndex + 1
+        : 0;
+      const bKey = nb.target === "player" && typeof nb.playerIndex === "number"
+        ? nb.playerIndex + 1
+        : 0;
+
+      return aKey - bKey;
+    });
+  }
+
   function renderNotes() {
+    sortNotes();
     notesListEl.innerHTML = "";
     if (!notes.length) {
       const empty = document.createElement("div");
       empty.textContent =
-        'No notes yet – add reminders like "Board: next turn rad storm" or "Attack Player 2".';
+        'No notes yet – add reminders like "Board: rad storm next turn" or "Hit Player 2 with Mothman".';
       empty.style.fontSize = "11px";
       empty.style.color = "var(--muted)";
       notesListEl.appendChild(empty);
@@ -1084,6 +1148,35 @@
     playerConfig.classList.remove("open");
   }
 
+  // Turn navigation
+
+  function nextTurn() {
+    if (numPlayers <= 0) return;
+    currentPlayer++;
+    if (currentPlayer >= numPlayers) {
+      currentPlayer = 0;
+      roundNumber++;
+    }
+    turnTotal++;
+    updateTurnOrbs();
+    updateTurnDisplay();
+    updateRoundTurnDisplay();
+  }
+
+  function previousTurn() {
+    if (turnTotal <= 1 || numPlayers <= 0) return;
+    turnTotal--;
+    if (currentPlayer === 0) {
+      currentPlayer = numPlayers - 1;
+      if (roundNumber > 1) roundNumber--;
+    } else {
+      currentPlayer--;
+    }
+    updateTurnOrbs();
+    updateTurnDisplay();
+    updateRoundTurnDisplay();
+  }
+
   /* EVENTS */
 
   ["pointerdown"].forEach(evt => {
@@ -1103,12 +1196,14 @@
     }
   });
 
-  turnTracker.addEventListener("pointerdown", () => {
-    currentPlayer = (currentPlayer + 1) % numPlayers;
-    updateTurnOrbs();
-    updateTurnDisplay();
-  });
+  // Advance turn: tap pentagram or top-right area
+  turnTracker.addEventListener("pointerdown", nextTurn);
+  topRightTap.addEventListener("pointerdown", nextTurn);
 
+  // Go back a turn: tap upper-left round counter area
+  roundInfo.addEventListener("pointerdown", previousTurn);
+
+  // Open player config by tapping name text
   turnText.addEventListener("pointerdown", openPlayerConfig);
 
   countButtons.forEach(btn => {
@@ -1167,6 +1262,10 @@
     players.push({ name: defaultName(i) });
   }
   initPlayers(4);
+
+  roundNumber = 1;
+  turnTotal = 1;
+  updateRoundTurnDisplay();
   renderNotes();
 </script>
 </body>
