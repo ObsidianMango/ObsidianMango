@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Print Cost Calculator</title>
+    
+    <!-- 1. Load React and ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- 2. Load Babel (translates the code for the browser) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 3. Load Tailwind CSS (for the styling) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 4. Configure Tailwind Colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom scrollbar to match the dark theme */
+        body { background-color: #020617; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- 5. The Application Code -->
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- ICONS (Inline SVG components to avoid external dependencies) ---
+        const IconBox = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        );
+        const IconSettings = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        );
+        const IconDollar = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        );
+        const IconScale = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
+        );
+        const IconZap = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        );
+        const IconFile = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+        );
+        const IconTrash = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        );
+        const IconPlus = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        );
+        const IconCalc = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="14"/><line x1="16" y1="18" x2="16" y2="18"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="12" y1="18" x2="12" y2="18"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="8" y1="18" x2="8" y2="18"/></svg>
+        );
+
+        // --- MAIN APP COMPONENT ---
+        const App = () => {
+            // Global Settings State
+            const [spoolCost, setSpoolCost] = useState(25.00);
+            const [spoolWeight, setSpoolWeight] = useState(1000);
+            const [electricityRate, setElectricityRate] = useState(1.25);
+            const [licenseCost, setLicenseCost] = useState(0);
+            
+            // Parts State
+            const [parts, setParts] = useState([
+                { id: 1, name: 'Main Body', grams: 0, hours: 0, minutes: 0 }
+            ]);
+
+            // Derived Values
+            const costPerGram = spoolCost / (spoolWeight || 1); 
+
+            // Add a new part
+            const addPart = () => {
+                const newId = parts.length > 0 ? Math.max(...parts.map(p => p.id)) + 1 : 1;
+                setParts([...parts, { id: newId, name: '', grams: 0, hours: 0, minutes: 0 }]);
+            };
+
+            // Remove a part
+            const removePart = (id) => {
+                if (parts.length === 1) return; 
+                setParts(parts.filter(part => part.id !== id));
+            };
+
+            // Update a specific part's field
+            const updatePart = (id, field, value) => {
+                setParts(parts.map(part => {
+                if (part.id === id) {
+                    return { ...part, [field]: value };
+                }
+                return part;
+                }));
+            };
+
+            // Calculations
+            const calculatePartCost = (part) => {
+                const materialCost = part.grams * costPerGram;
+                const timeInHours = parseFloat(part.hours) + (parseFloat(part.minutes) / 60);
+                const energyCost = timeInHours * electricityRate;
+                return { materialCost, energyCost, total: materialCost + energyCost };
+            };
+
+            const grandTotal = parts.reduce((acc, part) => {
+                const costs = calculatePartCost(part);
+                return {
+                material: acc.material + costs.materialCost,
+                energy: acc.energy + costs.energyCost,
+                partsTotal: acc.partsTotal + costs.total
+                };
+            }, { material: 0, energy: 0, partsTotal: 0 });
+
+            // Final Total includes the License Cost
+            const finalTotal = grandTotal.partsTotal + licenseCost;
+
+            // Format currency helper
+            const formatMoney = (amount) => {
+                return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
+                <div className="max-w-6xl mx-auto p-4 md:p-8">
+                    
+                    {/* Header */}
+                    <header className="mb-8 flex items-center justify-between border-b border-slate-800 pb-6">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-indigo-600 p-2 rounded-lg shadow-lg shadow-indigo-900/50">
+                        <IconBox className="w-6 h-6 text-white" />
+                        </div>
+                        <h1 className="text-2xl font-bold text-white tracking-tight">PrintCost <span className="text-indigo-400">Pro</span></h1>
+                    </div>
+                    <div className="hidden sm:block">
+                        <span className="text-xs font-medium text-slate-400 bg-slate-900 px-4 py-2 rounded-full border border-slate-800">
+                        OG Edition v2.0
+                        </span>
+                    </div>
+                    </header>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    
+                    {/* LEFT COLUMN: Global Settings */}
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-800 sticky top-8">
+                        <div className="flex items-center gap-2 mb-6 text-slate-100">
+                            <IconSettings className="w-5 h-5 text-indigo-400" />
+                            <h2 className="font-semibold text-lg">Global Parameters</h2>
+                        </div>
+
+                        <div className="space-y-5">
+                            {/* Spool Cost */}
+                            <div className="group">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Filament Cost ($)</label>
+                            <div className="relative">
+                                <IconDollar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
+                                <input
+                                type="number"
+                                value={spoolCost}
+                                onChange={(e) => setSpoolCost(parseFloat(e.target.value) || 0)}
+                                className="w-full pl-9 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all font-medium text-slate-200 placeholder-slate-600"
+                                />
+                            </div>
+                            </div>
+
+                            {/* Spool Weight */}
+                            <div className="group">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Spool Weight (g)</label>
+                            <div className="relative">
+                                <IconScale className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
+                                <input
+                                type="number"
+                                value={spoolWeight}
+                                onChange={(e) => setSpoolWeight(parseFloat(e.target.value) || 0)}
+                                className="w-full pl-9 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all font-medium text-slate-200 placeholder-slate-600"
+                                />
+                            </div>
+                            <div className="mt-2 text-xs text-slate-500 text-right">
+                                Rate: <span className="font-medium text-slate-400">${costPerGram.toFixed(4)} / g</span>
+                            </div>
+                            </div>
+
+                            {/* Electricity Rate */}
+                            <div className="group">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Hourly Machine Rate ($)</label>
+                            <div className="relative">
+                                <IconZap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
+                                <input
+                                type="number"
+                                step="0.01"
+                                value={electricityRate}
+                                onChange={(e) => setElectricityRate(parseFloat(e.target.value) || 0)}
+                                className="w-full pl-9 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all font-medium text-slate-200 placeholder-slate-600"
+                                />
+                            </div>
+                            </div>
+
+                            <div className="h-px bg-slate-800 my-4"></div>
+
+                            {/* License Cost (New) */}
+                            <div className="group">
+                            <label className="block text-xs font-bold text-amber-500/80 uppercase tracking-wider mb-2">License / File Cost ($)</label>
+                            <div className="relative">
+                                <IconFile className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-amber-500 transition-colors" />
+                                <input
+                                type="number"
+                                step="0.01"
+                                value={licenseCost}
+                                onChange={(e) => setLicenseCost(parseFloat(e.target.value) || 0)}
+                                className="w-full pl-9 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition-all font-medium text-amber-100 placeholder-slate-600"
+                                />
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2">One-time cost for the digital file</p>
+                            </div>
+
+                        </div>
+                        </div>
+                    </div>
+
+                    {/* RIGHT COLUMN: Parts & Calculations */}
+                    <div className="lg:col-span-8 flex flex-col gap-6">
+                        
+                        {/* Parts List */}
+                        <div className="bg-slate-900 rounded-2xl shadow-xl border border-slate-800 overflow-hidden">
+                        <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900">
+                            <h2 className="font-semibold text-lg text-slate-100 flex items-center gap-2">
+                            <IconBox className="w-5 h-5 text-indigo-400" />
+                            Print Parts
+                            </h2>
+                            <span className="bg-indigo-500/10 text-indigo-400 text-xs font-bold px-2 py-1 rounded-md border border-indigo-500/20">
+                            {parts.length} {parts.length === 1 ? 'Item' : 'Items'}
+                            </span>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            {parts.map((part, index) => {
+                            const costs = calculatePartCost(part);
+                            return (
+                                <div key={part.id} className="relative group animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end bg-slate-950 rounded-xl border border-slate-800 p-4 hover:border-indigo-500/50 hover:bg-slate-900 transition-all">
+                                    
+                                    {/* Part Name */}
+                                    <div className="w-full sm:flex-1">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Part Name</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Head, Leg..."
+                                        value={part.name}
+                                        onChange={(e) => updatePart(part.id, 'name', e.target.value)}
+                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm text-slate-200 placeholder-slate-600 transition-colors"
+                                    />
+                                    </div>
+
+                                    {/* Weight */}
+                                    <div className="w-full sm:w-24">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Weight (g)</label>
+                                    <input
+                                        type="number"
+                                        value={part.grams || ''}
+                                        onChange={(e) => updatePart(part.id, 'grams', parseFloat(e.target.value) || 0)}
+                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm text-slate-200 placeholder-slate-600 transition-colors"
+                                    />
+                                    </div>
+
+                                    {/* Time: Hours */}
+                                    <div className="w-full sm:w-20">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Hours</label>
+                                    <input
+                                        type="number"
+                                        value={part.hours || ''}
+                                        onChange={(e) => updatePart(part.id, 'hours', parseFloat(e.target.value) || 0)}
+                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm text-slate-200 placeholder-slate-600 transition-colors"
+                                    />
+                                    </div>
+
+                                    {/* Time: Minutes */}
+                                    <div className="w-full sm:w-20">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Mins</label>
+                                    <input
+                                        type="number"
+                                        value={part.minutes || ''}
+                                        onChange={(e) => updatePart(part.id, 'minutes', parseFloat(e.target.value) || 0)}
+                                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm text-slate-200 placeholder-slate-600 transition-colors"
+                                    />
+                                    </div>
+
+                                    {/* Cost Display for Row */}
+                                    <div className="w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-end items-center sm:items-end min-w-[80px] pt-2 sm:pt-0">
+                                    <span className="text-xs text-slate-500 sm:hidden">Subtotal</span>
+                                    <span className="font-bold text-slate-300">{formatMoney(costs.total)}</span>
+                                    </div>
+
+                                    {/* Delete Action */}
+                                    <button 
+                                        onClick={() => removePart(part.id)}
+                                        disabled={parts.length === 1}
+                                        className={`p-2 rounded-lg transition-colors ${parts.length === 1 ? 'text-slate-700 cursor-not-allowed' : 'text-slate-600 hover:text-red-400 hover:bg-red-900/20'}`}
+                                    >
+                                        <IconTrash className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                </div>
+                            );
+                            })}
+
+                            {/* Add Button */}
+                            <button
+                            onClick={addPart}
+                            className="w-full py-4 border border-dashed border-slate-700 rounded-xl text-slate-400 font-medium hover:border-indigo-500 hover:text-indigo-400 hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group mt-2"
+                            >
+                            <IconPlus className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                            Add Another Part
+                            </button>
+                        </div>
+                        </div>
+
+                        {/* Total Summary Card */}
+                        <div className="bg-slate-900 text-white rounded-2xl p-8 shadow-2xl shadow-black/50 border border-slate-800">
+                        <div className="flex items-center gap-3 mb-6 opacity-80">
+                            <IconCalc className="w-6 h-6 text-indigo-400" />
+                            <h3 className="text-lg font-medium tracking-wide text-slate-200">ESTIMATED TOTAL</h3>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-8 border-b border-slate-800 pb-8">
+                            <div>
+                            <div className="text-slate-500 text-xs font-bold uppercase mb-1">Material</div>
+                            <div className="text-xl sm:text-2xl font-semibold text-indigo-400">{formatMoney(grandTotal.material)}</div>
+                            </div>
+                            <div>
+                            <div className="text-slate-500 text-xs font-bold uppercase mb-1">Machine</div>
+                            <div className="text-xl sm:text-2xl font-semibold text-emerald-400">{formatMoney(grandTotal.energy)}</div>
+                            </div>
+                            <div>
+                            <div className="text-slate-500 text-xs font-bold uppercase mb-1">License</div>
+                            <div className="text-xl sm:text-2xl font-semibold text-amber-400">{formatMoney(licenseCost)}</div>
+                            </div>
+                            <div className="col-span-2 sm:col-span-1 sm:text-right pt-4 sm:pt-0 border-t border-slate-800 sm:border-0">
+                            <div className="text-slate-500 text-xs font-bold mb-1 uppercase tracking-wider">Final Price</div>
+                            <div className="text-4xl sm:text-5xl font-bold tracking-tight text-white">{formatMoney(finalTotal)}</div>
+                            </div>
+                        </div>
+
+                        {/* Progress Bar Visualization */}
+                        <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden flex shadow-inner shadow-black/50">
+                            <div 
+                            className="bg-indigo-500 h-full transition-all duration-500" 
+                            style={{ width: `${finalTotal > 0 ? (grandTotal.material / finalTotal) * 100 : 0}%` }}
+                            ></div>
+                            <div 
+                            className="bg-emerald-500 h-full transition-all duration-500" 
+                            style={{ width: `${finalTotal > 0 ? (grandTotal.energy / finalTotal) * 100 : 0}%` }}
+                            ></div>
+                            <div 
+                            className="bg-amber-500 h-full transition-all duration-500" 
+                            style={{ width: `${finalTotal > 0 ? (licenseCost / finalTotal) * 100 : 0}%` }}
+                            ></div>
+                        </div>
+                        
+                        <div className="flex justify-between text-xs mt-3 text-slate-500 font-medium px-1">
+                            <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                            <span>Material</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                            <span>Energy</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                            <span>License</span>
+                            </div>
+                        </div>
+                        </div>
+
+                    </div>
+                    </div>
+                </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
