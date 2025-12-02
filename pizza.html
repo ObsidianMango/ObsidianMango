@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gianni's Master Order List</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --pizza-red: #D32F2F;
+            --pizza-dark-red: #B71C1C;
+            --cheese-gold: #FBC02D;
+            --dark-bg: #121212;
+            --card-bg: #1E1E1E;
+            --text-main: #E0E0E0;
+            --text-muted: #A0A0A0;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .category-header {
+            position: sticky;
+            top: 60px; /* Below main header */
+            z-index: 10;
+            background-color: var(--dark-bg);
+            border-bottom: 2px solid var(--pizza-red);
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+
+        .quantity-btn {
+            touch-action: manipulation;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--dark-bg);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--pizza-red);
+        }
+
+        .item-card {
+            transition: all 0.2s;
+            border: 1px solid #333;
+        }
+        
+        .item-card.active {
+            border-color: var(--pizza-red);
+            background-color: #2c2020;
+        }
+
+        .animate-pop {
+            animation: pop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="pb-24">
+
+    <!-- Header -->
+    <header class="fixed top-0 left-0 right-0 bg-neutral-900 border-b border-red-800 z-50 shadow-lg">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-red-700 text-white p-2 rounded-full shadow-inner">
+                    <i class="fas fa-pizza-slice text-xl"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight text-white">Gianni's<span class="text-red-500">List</span></h1>
+            </div>
+            <button onclick="clearAll()" class="text-xs text-neutral-400 hover:text-red-400 border border-neutral-700 px-3 py-1 rounded transition">
+                Reset
+            </button>
+        </div>
+    </header>
+
+    <!-- Search Bar -->
+    <div class="mt-20 max-w-4xl mx-auto px-4 mb-6">
+        <div class="relative">
+            <i class="fas fa-search absolute left-4 top-3.5 text-neutral-500"></i>
+            <input type="text" id="searchInput" placeholder="Search for items (e.g., 'Pep', 'Box')..." 
+                class="w-full bg-neutral-800 border border-neutral-700 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 transition shadow-sm placeholder-neutral-500">
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main id="app" class="max-w-4xl mx-auto px-4 space-y-8">
+        <!-- Content injected by JS -->
+    </main>
+
+    <!-- Floating Action Bar -->
+    <div class="fixed bottom-0 left-0 right-0 bg-neutral-900 border-t border-neutral-800 p-4 shadow-2xl z-40">
+        <div class="max-w-4xl mx-auto flex justify-between items-center gap-4">
+            <div class="flex flex-col">
+                <span class="text-xs text-neutral-400">Total Items</span>
+                <span class="text-xl font-bold text-white" id="totalCount">0</span>
+            </div>
+            <button onclick="openModal()" class="flex-1 bg-red-700 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 transition active:scale-95">
+                <span>Review Order</span>
+                <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Order Modal -->
+    <div id="orderModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-neutral-900 w-full max-w-lg rounded-t-2xl sm:rounded-2xl border border-neutral-800 shadow-2xl flex flex-col max-h-[90vh]">
+            
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-neutral-800 flex justify-between items-center bg-neutral-800/50 rounded-t-2xl">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-clipboard-list text-yellow-500"></i> Current Order
+                </h2>
+                <button onclick="closeModal()" class="text-neutral-400 hover:text-white p-2">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="flex-1 overflow-y-auto p-5" id="orderSummary">
+                <!-- Summary Items go here -->
+                <div class="text-center text-neutral-500 py-10">
+                    <i class="fas fa-shopping-basket text-4xl mb-3 opacity-30"></i>
+                    <p>No items selected yet.</p>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-5 border-t border-neutral-800 bg-neutral-900">
+                <button onclick="copyOrder()" class="w-full bg-green-700 hover:bg-green-600 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 transition active:scale-95 mb-3">
+                    <i class="fas fa-copy"></i> Copy to Clipboard
+                </button>
+                <p id="copyFeedback" class="text-center text-green-400 text-sm h-5 opacity-0 transition-opacity">Copied successfully!</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const inventoryData = [
+            {
+                category: "Dressings & Sauces",
+                icon: "fa-bottle-droplet",
+                items: [
+                    "HotHoney", "SweetChili", "BBQ", "Hot Sauce", "Red Vin.", "Italian", "Cr Italian", 
+                    "Ranch", "Blu Cheese", "Honey Mustard", "Ceasar", "Balsamic", "Glaze", "Mayo"
+                ]
+            },
+            {
+                category: "Cheese & Dairy",
+                icon: "fa-cheese",
+                items: [
+                    "East Coast", "Sliced Mozz", "Ovalini Mozz", "Pecorino", "Ricotta", "Provolone", 
+                    "Fresh Loaf", "Butter", "Heavy Cr.", "Eggs", "Baby wheel"
+                ]
+            },
+            {
+                category: "Boars Head",
+                icon: "fa-drumstick-bite",
+                items: [
+                    "American Cheese", "Panchetta", "Turkey", "Salami", "Ham", "Cappy", "Bacon"
+                ]
+            },
+            {
+                category: "Meat",
+                icon: "fa-bacon",
+                items: [
+                    "Chicken", "Rope Sausage", "Pizza Sausage", "Chop Meat", "Pepperoni", "Burgers", 
+                    "Proscuitto", "Hot Dogs", "Wings"
+                ]
+            },
+            {
+                category: "Frozen Food",
+                icon: "fa-snowflake",
+                items: [
+                    "Fingers", "French Fries", "Boneless wings", "Mozz Sticks", "Steak", "ChickSteak", 
+                    "FrozenVeges", "OnionRings", "Cauliflower crust", "Fried Ravioli", "Cannoli Ravs"
+                ]
+            },
+            {
+                category: "Produce",
+                icon: "fa-carrot",
+                items: [
+                    "Cherry Tomato", "Roma Tomato", "Celery", "Broccoli", "Spinach", "Eggplant", "Green Peppers", 
+                    "Romaine Lettuce", "Lemons", "Port. Mushrooms", "Pineapple", "Cucumbers", "Onions", 
+                    "Red Onions", "Broc. Rabe", "Escarole", "Potatos", "Carrots", "Pealed Garlic", "Basil", 
+                    "Parsley", "Scallions", "Shallots"
+                ]
+            },
+            {
+                category: "Pasta",
+                icon: "fa-bowl-food",
+                items: [
+                    "Misto", "Penne", "Rigatoni", "Cappalini", "Spagetti", "Fettucine", "Linguini", 
+                    "Stuffed Shells", "Ravioli", "Cavatelli", "Tortalini"
+                ]
+            },
+            {
+                category: "Canned Goods",
+                icon: "fa-box-open",
+                items: [
+                    "Tomato Magic", "Tuna", "Artichokes", "Black Olives", "Cannelini Beans", "Cheese Sauce", 
+                    "Capers", "Ketchup", "Roasted Peppers"
+                ]
+            },
+            {
+                category: "Oil & Wine",
+                icon: "fa-wine-bottle",
+                items: ["Olive Oil", "Fryer Oil", "Marsala", "White Wine"]
+            },
+            {
+                category: "Seafood",
+                icon: "fa-fish",
+                items: ["Shrimp", "Calamari", "Clams"]
+            },
+            {
+                category: "Drinks",
+                icon: "fa-glass-water",
+                items: ["Water", "Manhattan Spec."]
+            },
+            {
+                category: "Kitchen Supplies",
+                icon: "fa-kitchen-set",
+                items: [
+                    "Flour", "Durum Flour", "Salt", "Sugar", "Rice", "Plain Wrap", "WheatWrap", "Hot Peppers", 
+                    "Crisco", "Chips", "Printer Ink", "Printer Paper", "Thermal Paper"
+                ]
+            },
+            {
+                category: "Packaging Supplies",
+                icon: "fa-box",
+                items: [
+                    "Plates", "18\" Film", "Honeycomb Foil", "Cutlery Kits", "Wax Paper", "Napkins", 
+                    "Pizza tables", "16\" Boxes", "14\" Boxes", "10\" Boxes", "20lb Bags", "Sub Bag", 
+                    "Shop Bag", "Check Paper"
+                ]
+            },
+            {
+                category: "Containers",
+                icon: "fa-box-archive",
+                items: [
+                    "9\" Tin", "9\" Dome", "7\" versa", "9\" versa", "6 x 9 container", "6x6 Container", 
+                    "4oz Cup", "4oz Lid", "Soup Cont.", "Pizza Bags", "Cups"
+                ]
+            },
+            {
+                category: "Catering Trays",
+                icon: "fa-layer-group",
+                items: [
+                    "Lg Trays", "Lg Lids", "1/2 Trays", "1/2 Lids", "Lg 18\" Round"
+                ]
+            },
+            {
+                category: "Cleaning & Bathroom",
+                icon: "fa-pump-soap",
+                items: [
+                    "GarbageBag", "Easy off", "Dish Soap", "Gloves", "Steel Wool", "Bleach", "LemonJuice", 
+                    "Grill Cleaner", "Windex", "Paper Towel", "Toilet Paper"
+                ]
+            }
+        ];
+
+        // --- STATE ---
+        let orderState = {}; // Object to store quantities: { "Item Name": 5 }
+
+        // --- INITIALIZATION ---
+        const appElement = document.getElementById('app');
+        const searchInput = document.getElementById('searchInput');
+
+        function init() {
+            renderApp(inventoryData);
+            
+            // Search Listener
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                filterItems(term);
+            });
+        }
+
+        // --- RENDER FUNCTIONS ---
+        function renderApp(data) {
+            appElement.innerHTML = '';
+            
+            data.forEach(cat => {
+                // Create Category Section
+                const section = document.createElement('section');
+                section.className = 'category-section mb-8';
+                section.dataset.category = cat.category.toLowerCase();
+
+                // Header
+                const header = document.createElement('h2');
+                header.className = 'text-lg font-bold text-red-400 mb-3 flex items-center gap-2 uppercase tracking-wider';
+                header.innerHTML = `<i class="fas ${cat.icon}"></i> ${cat.category}`;
+                section.appendChild(header);
+
+                // Grid
+                const grid = document.createElement('div');
+                grid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3';
+                
+                cat.items.forEach(item => {
+                    const card = createItemCard(item);
+                    grid.appendChild(card);
+                });
+
+                section.appendChild(grid);
+                appElement.appendChild(section);
+            });
+        }
+
+        function createItemCard(itemName) {
+            const div = document.createElement('div');
+            const safeId = itemName.replace(/\s+/g, '-').replace(/["']/g, '');
+            const currentQty = orderState[itemName] || 0;
+            const activeClass = currentQty > 0 ? 'active' : '';
+
+            div.className = `item-card bg-neutral-800 rounded-lg p-3 flex justify-between items-center ${activeClass}`;
+            div.dataset.name = itemName.toLowerCase();
+            div.id = `card-${safeId}`;
+
+            div.innerHTML = `
+                <div class="flex-1 pr-2">
+                    <div class="font-medium text-gray-200 leading-snug">${itemName}</div>
+                </div>
+                <div class="flex items-center bg-neutral-900 rounded-lg border border-neutral-700 overflow-hidden">
+                    <button onclick="updateQty('${itemName}', -1)" class="quantity-btn w-10 h-10 flex items-center justify-center text-red-500 hover:bg-neutral-800 active:bg-neutral-700 transition">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <input type="number" readonly value="${currentQty}" id="input-${safeId}" 
+                        class="w-10 h-10 bg-transparent text-center text-white font-bold focus:outline-none appearance-none m-0 border-x border-neutral-800">
+                    <button onclick="updateQty('${itemName}', 1)" class="quantity-btn w-10 h-10 flex items-center justify-center text-green-500 hover:bg-neutral-800 active:bg-neutral-700 transition">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            `;
+            return div;
+        }
+
+        // --- LOGIC ---
+        window.updateQty = function(itemName, change) {
+            if (!orderState[itemName]) orderState[itemName] = 0;
+            orderState[itemName] += change;
+            
+            if (orderState[itemName] < 0) orderState[itemName] = 0;
+            
+            // Clean up zeros to keep state clean
+            if (orderState[itemName] === 0) delete orderState[itemName];
+
+            updateUI(itemName);
+            updateTotal();
+        };
+
+        function updateUI(itemName) {
+            const safeId = itemName.replace(/\s+/g, '-').replace(/["']/g, '');
+            const input = document.getElementById(`input-${safeId}`);
+            const card = document.getElementById(`card-${safeId}`);
+            
+            const qty = orderState[itemName] || 0;
+            
+            if (input) input.value = qty;
+            
+            if (card) {
+                if (qty > 0) {
+                    card.classList.add('active');
+                    // Small pop animation
+                    input.classList.remove('animate-pop');
+                    void input.offsetWidth; // trigger reflow
+                    input.classList.add('animate-pop');
+                } else {
+                    card.classList.remove('active');
+                }
+            }
+        }
+
+        function updateTotal() {
+            const total = Object.keys(orderState).length;
+            const totalBadge = document.getElementById('totalCount');
+            totalBadge.innerText = total;
+            
+            // Animate badge
+            totalBadge.classList.add('text-yellow-400');
+            setTimeout(() => totalBadge.classList.remove('text-yellow-400'), 300);
+        }
+
+        function filterItems(term) {
+            const cards = document.querySelectorAll('.item-card');
+            const sections = document.querySelectorAll('.category-section');
+
+            cards.forEach(card => {
+                const name = card.dataset.name;
+                if (name.includes(term)) {
+                    card.classList.remove('hidden');
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+
+            // Hide empty sections
+            sections.forEach(section => {
+                const visibleItems = section.querySelectorAll('.item-card:not(.hidden)');
+                if (visibleItems.length === 0) {
+                    section.classList.add('hidden');
+                } else {
+                    section.classList.remove('hidden');
+                }
+            });
+        }
+
+        window.clearAll = function() {
+            if(confirm("Are you sure you want to clear the entire order?")) {
+                orderState = {};
+                // Re-render to clear all visuals cleanly
+                renderApp(inventoryData);
+                updateTotal();
+                document.getElementById('searchInput').value = '';
+                // Reset display styles
+                document.querySelectorAll('.hidden').forEach(el => el.classList.remove('hidden'));
+            }
+        };
+
+        // --- MODAL LOGIC ---
+        window.openModal = function() {
+            const modal = document.getElementById('orderModal');
+            const summary = document.getElementById('orderSummary');
+            
+            // Build Summary HTML
+            const items = Object.entries(orderState).sort();
+            
+            if (items.length === 0) {
+                summary.innerHTML = `
+                    <div class="text-center text-neutral-500 py-10">
+                        <i class="fas fa-pizza-slice text-4xl mb-3 opacity-30"></i>
+                        <p>Your order is empty.</p>
+                        <p class="text-sm mt-2">Add items from the list to see them here.</p>
+                    </div>
+                `;
+            } else {
+                let html = '<div class="space-y-3">';
+                items.forEach(([name, qty]) => {
+                    html += `
+                        <div class="flex justify-between items-center bg-neutral-800 p-3 rounded-lg border border-neutral-700">
+                            <span class="font-medium text-white">${name}</span>
+                            <div class="flex items-center gap-3">
+                                <span class="text-yellow-500 font-bold text-lg">${qty}</span>
+                                <span class="text-xs text-neutral-500">qty</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                summary.innerHTML = html;
+            }
+
+            modal.classList.remove('hidden');
+        };
+
+        window.closeModal = function() {
+            document.getElementById('orderModal').classList.add('hidden');
+            // Hide feedback message
+            document.getElementById('copyFeedback').style.opacity = '0';
+        };
+
+        window.copyOrder = function() {
+            const items = Object.entries(orderState).sort();
+            if (items.length === 0) return;
+
+            const date = new Date().toLocaleDateString();
+            let text = `GIANNI'S ORDER - ${date}\n------------------------\n`;
+            
+            items.forEach(([name, qty]) => {
+                text += `[ ${qty} ] ${name}\n`;
+            });
+            
+            text += `------------------------\nTotal Items: ${items.length}`;
+
+            // Copy to clipboard
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy'); // Fallback for older browsers/webviews
+            document.body.removeChild(textArea);
+
+            // Show Feedback
+            const feedback = document.getElementById('copyFeedback');
+            feedback.style.opacity = '1';
+        };
+
+        // Close modal on outside click
+        document.getElementById('orderModal').addEventListener('click', (e) => {
+            if (e.target.id === 'orderModal') closeModal();
+        });
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
+
+
