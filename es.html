@@ -13,6 +13,7 @@
             color: #e0e0e0;
             margin: 0;
             padding: 0;
+            overflow-x: hidden; 
         }
 
         h1 {
@@ -120,7 +121,7 @@
             font-size: 4rem;
             margin: 20px auto;
             width: 100%;
-            position: absolute; /* Keep layout stable during load */
+            position: absolute;
             left: 0;
             z-index: 10;
         }
@@ -141,11 +142,39 @@
             gap: 20px;
             padding: 20px;
             transition: opacity 0.3s ease;
+            min-height: 300px;
         }
 
         .events-container.faded {
             opacity: 0.3;
             pointer-events: none;
+        }
+
+        .error-message {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 40px;
+            background-color: #2b1b1b;
+            border: 1px solid #ff5555;
+            border-radius: 10px;
+            color: #ff5555;
+            margin: 20px;
+        }
+        
+        .retry-btn {
+            background-color: #212121;
+            color: #ff5555;
+            border: 2px solid #ff5555;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+            font-size: 16px;
+        }
+        
+        .retry-btn:hover {
+            background-color: #ff5555;
+            color: #121212;
         }
 
         .event-tile {
@@ -348,7 +377,7 @@
             <span id="spinnerEmoji" class="spinner"></span>
         </div>
         <div id="filters" class="filters"></div>
-        <div id="eventsContainer" class="events-container"></div>
+        <div id="eventsContainer" class="events-container" aria-live="polite"></div>
     </div>
 
     <div id="overlay" class="overlay" style="display: none;"></div>
@@ -423,11 +452,10 @@
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error("Failed to fetch data.");
-                const data = await response.json();
-                return data;
+                return await response.json();
             } catch (error) {
                 console.error(error);
-                return {};
+                return null;
             }
         }
 
@@ -462,15 +490,57 @@
             });
         }
 
+        // --- NEW FUZZY MATCHING HELPERS ---
+
+        // Clean text and split into unique words larger than 3 letters
+        function getTokens(text) {
+            if (!text) return new Set();
+            return new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 3));
+        }
+
+        // Calculates similarity between two strings (0.0 to 1.0)
+        function checkSimilarity(textA, textB) {
+            const tokensA = getTokens(textA);
+            const tokensB = getTokens(textB);
+            
+            // Intersection
+            let intersection = 0;
+            tokensA.forEach(token => {
+                if (tokensB.has(token)) intersection++;
+            });
+
+            const union = new Set([...tokensA, ...tokensB]).size;
+            if (union === 0) return 0;
+
+            return intersection / union; // Jaccard Index
+        }
+
+        // Returns true if eventB is a duplicate of eventA
+        function isDuplicate(eventA, eventB) {
+            // Must be same year (or both missing year)
+            if (eventA.year !== eventB.year) return false;
+
+            // 1. Check strong ID: Same Wikipedia page title
+            const titleA = eventA.pages && eventA.pages[0] ? eventA.pages[0].title : null;
+            const titleB = eventB.pages && eventB.pages[0] ? eventB.pages[0].title : null;
+            if (titleA && titleB && titleA === titleB) return true;
+
+            // 2. Fuzzy Text Match (Jaccard > 0.5)
+            const similarity = checkSimilarity(eventA.text, eventB.text);
+            return similarity > 0.5; 
+        }
+
+        // ----------------------------------
+
         function renderFilters() {
             const filtersDiv = document.getElementById("filters");
             filtersDiv.innerHTML = "";
+            if (events.length === 0) return;
+
             allCategories.forEach(catName => {
                 const btn = document.createElement("button");
                 btn.className = enabledCategories.has(catName) ? "filter-btn active" : "filter-btn";
-                if (showFilterLabels) {
-                    btn.classList.add("full-text");
-                }
+                if (showFilterLabels) btn.classList.add("full-text");
                 btn.dataset.category = catName;
                 const emoji = categoryEmojis[catName] || "";
                 btn.textContent = showFilterLabels ? `${emoji} ${catName} (${categoryCounts[catName] || 0})` : emoji;
@@ -504,6 +574,11 @@
                 event.categories.some(cat => enabledCategories.has(cat))
             );
 
+            if (filteredEvents.length === 0 && events.length > 0) {
+                container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 20px;">No events match your current filters.</div>`;
+                return;
+            }
+
             const sortedEvents = [...filteredEvents].sort((a, b) =>
                 sortAscending ? getYearForSort(a) - getYearForSort(b) : getYearForSort(b) - getYearForSort(a)
             );
@@ -514,25 +589,18 @@
                 const tile = document.createElement("div");
                 tile.className = "event-tile";
                 
-                if (imageSrc === "📜") {
-                    tile.innerHTML = `
-                        <div style="font-size: 4rem; color: #ffcc00; padding: 20px;">📜</div>
-                        <div class="event-details">
-                            <div class="event-year">${event.year || 'Annual'}</div>
-                            <div class="event-subtopic">${subtopic}</div>
-                            <div class="event-title">${event.text}</div>
-                        </div>
-                    `;
-                } else {
-                    tile.innerHTML = `
-                        <img src="${imageSrc}" alt="Event Image">
-                        <div class="event-details">
-                            <div class="event-year">${event.year || 'Annual'}</div>
-                            <div class="event-subtopic">${subtopic}</div>
-                            <div class="event-title">${event.text}</div>
-                        </div>
-                    `;
-                }
+                const innerHTML = imageSrc === "📜" ?
+                    `<div style="font-size: 4rem; color: #ffcc00; padding: 20px;">📜</div>` :
+                    `<img src="${imageSrc}" alt="Event Image">`;
+
+                tile.innerHTML = `
+                    ${innerHTML}
+                    <div class="event-details">
+                        <div class="event-year">${event.year || 'Annual'}</div>
+                        <div class="event-subtopic">${subtopic}</div>
+                        <div class="event-title">${event.text}</div>
+                    </div>
+                `;
                 tile.addEventListener("click", () => openPopup(event, imageSrc));
                 container.appendChild(tile);
             });
@@ -551,6 +619,8 @@
         function openPopup(event, imageSrc) {
             document.getElementById("overlay").style.display = "block";
             document.getElementById("popup").style.display = "flex";
+            document.body.style.overflow = "hidden";
+
             document.getElementById("popupImage").src = imageSrc === "📜"
                 ? "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
                 : imageSrc;
@@ -563,66 +633,85 @@
         function closePopup() {
             document.getElementById("overlay").style.display = "none";
             document.getElementById("popup").style.display = "none";
+            document.body.style.overflow = "";
         }
 
         async function updateEventsForDate(date) {
             currentDate = date;
-
             const loading = document.getElementById("loading");
             const container = document.getElementById("eventsContainer");
+            const filtersDiv = document.getElementById("filters");
 
-            // Optimistic UI Update
             document.getElementById("dateDisplay").textContent = formatDateForDisplay(currentDate);
             document.getElementById("datePicker").value = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
 
-            // Smooth loading state
             container.classList.add("faded");
             loading.style.display = "block";
             
-            // Random loading emoji
             const categories = Object.keys(categoryEmojis);
             const randomCat = categories[Math.floor(Math.random() * categories.length)];
-            const emoji = categoryEmojis[randomCat];
-            document.getElementById("spinnerEmoji").textContent = emoji;
+            document.getElementById("spinnerEmoji").textContent = categoryEmojis[randomCat];
 
             const data = await fetchOnThisDay(currentDate);
 
-            // --- IMPROVED DEDUPLICATION LOGIC ---
-            const uniqueEventsMap = new Map();
-            const seenFingerprints = new Set();
+            if (!data) {
+                container.classList.remove("faded");
+                loading.style.display = "none";
+                filtersDiv.innerHTML = "";
+                container.innerHTML = `
+                    <div class="error-message">
+                        <div style="font-size: 3rem; margin-bottom: 10px;">⚠️</div>
+                        <h3>Oops! Could not load history.</h3>
+                        <p>We couldn't reach Wikipedia. Check your internet connection.</p>
+                        <button class="retry-btn" onclick="updateEventsForDate(currentDate)">Retry Connection</button>
+                    </div>`;
+                return;
+            }
 
-            const generateFingerprint = (item) => {
-                // Primary Fingerprint: Year + Main Wikipedia Page Title
-                // This handles cases where text wording differs (e.g. "Battle of X" vs "The Battle of X")
-                if (item.pages && item.pages.length > 0 && item.pages[0].title) {
-                    return `${item.year}_${item.pages[0].title}`;
-                }
-                // Fallback Fingerprint: Year + First 40 chars of Normalized Text
-                // Removes spaces/punctuation to catch "Event happens." vs "Event happens"
-                const normalizedText = item.text.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 40);
-                return `${item.year || 'annual'}_${normalizedText}`;
-            };
+            // --- ADVANCED DEDUPLICATION ---
+            let uniqueEvents = [];
 
-            const addEvents = (list, type) => {
-                if (!list) return;
-                list.forEach(item => {
-                    const fingerprint = generateFingerprint(item);
+            const addUnique = (candidateList, type) => {
+                if (!candidateList) return;
+                candidateList.forEach(candidate => {
+                    const candidateWithMeta = { ...candidate, type };
                     
-                    if (!seenFingerprints.has(fingerprint)) {
-                        seenFingerprints.add(fingerprint);
-                        uniqueEventsMap.set(fingerprint, { ...item, type });
+                    // Check against ALL existing unique events
+                    const existingIndex = uniqueEvents.findIndex(existing => isDuplicate(existing, candidateWithMeta));
+
+                    if (existingIndex === -1) {
+                        // No duplicate found, add it
+                        uniqueEvents.push(candidateWithMeta);
+                    } else {
+                        // Duplicate found! Decide which to keep.
+                        const existing = uniqueEvents[existingIndex];
+                        const candidateHasImg = getEventImage(candidate.pages) !== "📜";
+                        const existingHasImg = getEventImage(existing.pages) !== "📜";
+
+                        // Priority 1: Keep the one with an image
+                        if (candidateHasImg && !existingHasImg) {
+                            uniqueEvents[existingIndex] = candidateWithMeta;
+                        } 
+                        // Priority 2: If both/neither have images, prefer the 'Selected' type (usually better text)
+                        else if (type === "Historical Event" && existing.type !== "Historical Event" && !candidateHasImg && !existingHasImg) {
+                            // Actually, 'Selected' usually comes first, so we might not need this.
+                            // But keeping the longest text is a good tie-breaker
+                            if (candidate.text.length > existing.text.length) {
+                                uniqueEvents[existingIndex] = candidateWithMeta;
+                            }
+                        }
                     }
                 });
             };
 
-            // Priority: Selected > Historical Events > Births/Deaths/Holidays
-            addEvents(data.selected, "Historical Event");
-            addEvents(data.events, "Historical Event");
-            addEvents(data.births, "Birth");
-            addEvents(data.deaths, "Death");
-            addEvents(data.holidays, "Holiday");
+            // Order matters: 'selected' usually has the best text/links, so process it first.
+            addUnique(data.selected, "Historical Event"); 
+            addUnique(data.events, "Historical Event");
+            addUnique(data.births, "Birth");
+            addUnique(data.deaths, "Death");
+            addUnique(data.holidays, "Holiday");
 
-            events = Array.from(uniqueEventsMap.values());
+            events = uniqueEvents;
 
             classifyEvents();
             computeCategoryCounts();
@@ -650,16 +739,13 @@
 
         document.getElementById("datePicker").addEventListener("change", (event) => {
             const selectedDate = new Date(event.target.value);
-            // Fix timezone offset issue
             const userDate = new Date(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth(), selectedDate.getUTCDate());
             updateEventsForDate(userDate);
         });
 
         document.getElementById("sortButton").addEventListener("click", () => {
             sortAscending = !sortAscending;
-            document.getElementById("sortButton").textContent = sortAscending
-                ? "Sort: Oldest First"
-                : "Sort: Newest First";
+            document.getElementById("sortButton").textContent = sortAscending ? "Sort: Oldest First" : "Sort: Newest First";
             renderEvents();
         });
 
