@@ -2,195 +2,304 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>🎲 d20v2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🎲 d20v3 Pro</title>
     <style>
+      :root {
+        --primary: #bb86fc;
+        --accent: #03dac6;
+        --bg: #121212;
+        --surface: rgba(30, 30, 30, 0.85);
+      }
       body {
         margin: 0;
         overflow: hidden;
-        background: #111;
-        font-family: sans-serif;
+        background: radial-gradient(circle at center, #2a2a2a 0%, #000 100%);
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: white;
+        user-select: none;
       }
-      /* Container for Three.js canvas */
       #container {
         width: 100vw;
         height: 100vh;
+        display: block;
       }
-      /* Settings button in the top right corner */
-      #settings-button {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: linear-gradient(45deg, #222, #000);
-        color: #0f0;
-        border: 2px solid #0f0;
-        border-radius: 8px;
-        padding: 12px 24px;
-        font-size: 32px;
-        cursor: pointer;
-        z-index: 20;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-      #settings-button:hover {
-        transform: scale(1.05);
-        box-shadow: 0 4px 8px rgba(0, 255, 0, 0.5);
-      }
-      /* Result display styling */
-      #result-display {
-        position: fixed;
-        bottom: 90px;
-        left: 50%;
-        transform: translateX(-50%);
-        color: #0f0;
-        font-size: 55px;
-        z-index: 20;
-      }
-      /* Modal (pop‑up) styling */
-      .settings-panel {
-        display: none;
-        position: fixed;
+      
+      /* UI Overlay */
+      #ui-layer {
+        position: absolute;
         top: 0;
         left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.7);
-        z-index: 30;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      /* Top Bar */
+      .top-bar {
+        padding: 20px;
+        display: flex;
+        justify-content: flex-end;
+        pointer-events: auto;
+      }
+
+      /* Settings Panel */
+      #settings-panel {
+        background: var(--surface);
+        backdrop-filter: blur(10px);
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        transform: translateX(0);
+        transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+      }
+      
+      #settings-panel.hidden {
+        transform: translateX(120%);
+        position: absolute;
+        right: 20px;
+      }
+
+      .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      label {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #aaa;
+      }
+
+      .btn-group {
+        display: flex;
+        gap: 5px;
+        background: rgba(0,0,0,0.3);
+        padding: 4px;
+        border-radius: 8px;
+      }
+
+      .btn-group button {
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: #fff;
+        padding: 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.2s;
+        font-weight: bold;
+      }
+
+      .btn-group button.active {
+        background: var(--primary);
+        color: #000;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      }
+
+      .btn-group button:hover:not(.active) {
+        background: rgba(255,255,255,0.1);
+      }
+
+      /* Bottom Bar */
+      .bottom-bar {
+        padding: 30px;
+        text-align: center;
+        pointer-events: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+
+      #result-display {
+        font-size: 4rem;
+        font-weight: 800;
+        text-shadow: 0 0 20px var(--primary);
+        min-height: 80px;
+      }
+
+      #roll-btn {
+        background: linear-gradient(45deg, var(--primary), var(--accent));
+        border: none;
+        padding: 15px 60px;
+        font-size: 1.5rem;
+        border-radius: 50px;
+        color: #000;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 0 20px rgba(187, 134, 252, 0.4);
+        transition: transform 0.1s, box-shadow 0.2s;
+      }
+
+      #roll-btn:active {
+        transform: scale(0.95);
+      }
+
+      #toggle-settings {
+        background: none;
+        border: 2px solid var(--primary);
+        color: var(--primary);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        font-size: 20px;
+        cursor: pointer;
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 100;
+        display: flex;
         align-items: center;
         justify-content: center;
       }
-      .settings-content {
-        background: #111;
-        padding: 20px;
-        border: 2px solid #0f0;
-        border-radius: 8px;
-        font-size: 32px;
-        color: #0f0;
-        text-align: center;
+
+      /* Crit Animations */
+      @keyframes crit-success {
+        0% { transform: scale(1); opacity: 0; }
+        50% { transform: scale(1.5); opacity: 1; }
+        100% { transform: scale(2); opacity: 0; }
       }
-      .settings-content h2 {
-        margin-top: 0;
+      .crit-msg {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 5rem;
+        font-weight: 900;
+        pointer-events: none;
+        z-index: 999;
+        text-transform: uppercase;
+        text-shadow: 0 10px 30px rgba(0,0,0,0.8);
       }
-      .settings-content button {
-        background: none;
-        border: 2px solid #0f0;
-        color: #0f0;
-        border-radius: 4px;
-        padding: 8px 16px;
-        font-size: 28px;
-        margin: 5px;
-        cursor: pointer;
-        transition: background 0.2s, transform 0.2s;
-      }
-      .settings-content button:hover {
-        background: #222;
-        transform: scale(1.05);
-      }
-      /* Mobile responsive adjustments */
-      @media (max-width: 600px) {
-        #settings-button,
-        .settings-content,
-        #result-display {
-          font-size: 20px;
-          padding: 8px 16px;
-        }
-        #settings-button {
-          top: 10px;
-          right: 10px;
-        }
-      }
+      .crit-nat20 { color: #00ff00; animation: crit-success 1s forwards; }
+      .crit-nat1 { color: #ff0000; animation: crit-success 1s forwards; }
+
     </style>
   </head>
   <body>
     <div id="container"></div>
-    <div id="result-display"></div>
-    <button id="settings-button">⚙️</button>
 
-    <!-- Dice Type Modal -->
-    <div id="dice-type-panel" class="settings-panel">
-      <div class="settings-content">
-        <h2>Select Dice Type:</h2>
-        <button class="dice-type-btn" data-type="d4">d4</button>
-        <button class="dice-type-btn" data-type="d6">d6</button>
-        <button class="dice-type-btn" data-type="d8">d8</button>
-        <button class="dice-type-btn" data-type="d12">d12</button>
-        <button class="dice-type-btn" data-type="d20">d20</button>
+    <div id="ui-layer">
+      <button id="toggle-settings">⚙️</button>
+      
+      <div class="top-bar">
+        <div id="settings-panel" class="hidden">
+          <div class="control-group">
+            <label>Dice Type</label>
+            <div class="btn-group" id="type-selector">
+              <button data-val="d4">D4</button>
+              <button data-val="d6">D6</button>
+              <button data-val="d8">D8</button>
+              <button data-val="d12">D12</button>
+              <button data-val="d20" class="active">D20</button>
+            </div>
+          </div>
+          <div class="control-group">
+            <label>Quantity</label>
+            <div class="btn-group" id="count-selector">
+              <button data-val="1" class="active">1</button>
+              <button data-val="2">2</button>
+              <button data-val="3">3</button>
+              <button data-val="4">4</button>
+              <button data-val="5">5</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <div id="result-display">Ready</div>
+        <button id="roll-btn">ROLL</button>
       </div>
     </div>
 
-    <!-- Dice Count Modal -->
-    <div id="dice-count-panel" class="settings-panel">
-      <div class="settings-content">
-        <h2>Select Dice Count:</h2>
-        <button class="dice-count-btn" data-count="1">1</button>
-        <button class="dice-count-btn" data-count="2">2</button>
-        <button class="dice-count-btn" data-count="3">3</button>
-      </div>
-    </div>
-
-    <!-- Import Three.js -->
     <script type="module">
       import * as THREE from "https://unpkg.com/three@0.152.2/build/three.module.js";
 
-      /**********************
-       * GLOBAL VARIABLES
-       **********************/
-      let scene, camera, renderer;
-      let diceArray = []; // holds all dice objects
-      let isRolling = false;
-      const rollDuration = 2000; // in ms
-      const baseSpawnPos = new THREE.Vector3(0, 5, 0);
-      const baseLandPos = new THREE.Vector3(0, 0, 0);
-      const shakeAmplitude = 0.3;
-      const shakeFrequency = 30;
-      let rollStartTime = 0;
-      // current settings:
-      let currentDiceType = "d20";
-      let diceCount = 1;
+      // --- CONFIGURATION ---
+      const CONFIG = {
+        colors: {
+          dice: 0x4B0082, // Indigo
+          text: 0xffffff,
+          highlight: 0x03dac6,
+          floor: 0x111111
+        },
+        physics: {
+          duration: 1500, // ms
+          bounceHeight: 6 // Height of the throw arc
+        }
+      };
 
+      // --- STATE ---
+      let state = {
+        diceType: "d20",
+        diceCount: 1,
+        isRolling: false,
+        diceObjects: [] // { mesh, spawnPos, landPos, startRot, targetRot, startTime }
+      };
+
+      // --- THREE.JS GLOBALS ---
+      let scene, camera, renderer, floor;
       const container = document.getElementById("container");
-      const resultDisplay = document.getElementById("result-display");
-      const settingsButton = document.getElementById("settings-button");
-      const diceTypePanel = document.getElementById("dice-type-panel");
-      const diceCountPanel = document.getElementById("dice-count-panel");
 
-      /**********************
-       * INITIALIZE SCENE & SETTINGS
-       **********************/
       function init() {
+        // Scene setup
         scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(
-          45,
-          window.innerWidth / window.innerHeight,
-          0.1,
-          100
-        );
-        camera.position.set(0, 3, 6);
+        // Fog for depth
+        scene.fog = new THREE.FogExp2(0x000000, 0.03);
+
+        // Camera
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 12, 12);
         camera.lookAt(0, 0, 0);
-        renderer = new THREE.WebGLRenderer({ antialias: true });
+
+        // Renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const spotLight = new THREE.SpotLight(0xffffff, 1);
+        spotLight.position.set(10, 20, 10);
+        spotLight.castShadow = true;
+        spotLight.shadow.mapSize.width = 2048;
+        spotLight.shadow.mapSize.height = 2048;
+        scene.add(spotLight);
+
+        const fillLight = new THREE.PointLight(CONFIG.colors.highlight, 0.5);
+        fillLight.position.set(-10, 5, -10);
+        scene.add(fillLight);
+
+        // Floor (Shadow catcher)
+        const planeGeo = new THREE.PlaneGeometry(100, 100);
+        const planeMat = new THREE.ShadowMaterial({ opacity: 0.3 });
+        floor = new THREE.Mesh(planeGeo, planeMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -1; // Sit slightly below 0
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Event Listeners
         window.addEventListener("resize", onWindowResize);
-        // Roll dice when clicking on the canvas.
-        container.addEventListener("click", () => {
-          if (!isRolling) startRoll();
-        });
-        settingsButton.addEventListener("click", () => {
-          diceTypePanel.style.display = "flex";
-        });
-        // Set up dice type button event listeners.
-        document.querySelectorAll(".dice-type-btn").forEach(btn => {
-          btn.addEventListener("click", () => {
-            currentDiceType = btn.getAttribute("data-type");
-            diceTypePanel.style.display = "none";
-            diceCountPanel.style.display = "flex";
-          });
-        });
-        // Set up dice count button event listeners.
-        document.querySelectorAll(".dice-count-btn").forEach(btn => {
-          btn.addEventListener("click", () => {
-            diceCount = parseInt(btn.getAttribute("data-count"));
-            diceCountPanel.style.display = "none";
-          });
-        });
+        document.getElementById("roll-btn").addEventListener("click", triggerRoll);
+        document.getElementById("toggle-settings").addEventListener("click", toggleSettings);
+        
+        setupUI();
         animate();
       }
 
@@ -200,349 +309,364 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       }
 
-      /**********************
-       * DICE CREATION & LABELING
-       **********************/
-      function getDiceGeometry(type) {
+      // --- UI HANDLING ---
+      function setupUI() {
+        // Type Selectors
+        document.querySelectorAll("#type-selector button").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            document.querySelector("#type-selector .active").classList.remove("active");
+            e.target.classList.add("active");
+            state.diceType = e.target.dataset.val;
+          });
+        });
+
+        // Count Selectors
+        document.querySelectorAll("#count-selector button").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            document.querySelector("#count-selector .active").classList.remove("active");
+            e.target.classList.add("active");
+            state.diceCount = parseInt(e.target.dataset.val);
+          });
+        });
+      }
+
+      function toggleSettings() {
+        const panel = document.getElementById("settings-panel");
+        panel.classList.toggle("hidden");
+      }
+
+      // --- DICE GEOMETRY FACTORY ---
+      function getGeometry(type) {
         switch (type) {
-          case "d4":
-            return new THREE.TetrahedronGeometry(1, 0);
-          case "d6":
-            return new THREE.BoxGeometry(1.5, 1.5, 1.5);
-          case "d8":
-            return new THREE.OctahedronGeometry(1, 0);
-          case "d12":
-            return new THREE.DodecahedronGeometry(1, 0);
-          case "d20":
-          default:
-            return new THREE.IcosahedronGeometry(1, 0);
+          case "d4": return new THREE.TetrahedronGeometry(1.2, 0);
+          case "d6": return new THREE.BoxGeometry(1.5, 1.5, 1.5);
+          case "d8": return new THREE.OctahedronGeometry(1.2, 0);
+          case "d12": return new THREE.DodecahedronGeometry(1.2, 0);
+          case "d20": default: return new THREE.IcosahedronGeometry(1.2, 0);
         }
       }
 
-      function createDiceMesh() {
-        const geometry = getDiceGeometry(currentDiceType);
-        const material = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      // --- TEXTURE GENERATION ---
+      function createTextTexture(text, color) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 512; // Higher res
+        canvas.height = 512;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, 512, 512);
+        ctx.font = "bold 200px Arial"; // Thicker font
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = color === "highlight" ? "#00ff00" : "white";
+        ctx.shadowColor = "rgba(0,0,0,0.5)";
+        ctx.shadowBlur = 10;
+        ctx.fillText(text, 256, 256);
+        
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        return tex;
+      }
+
+      // --- MESH CREATION ---
+      function createDiceMesh(type) {
+        const geometry = getGeometry(type);
+        
+        // Main Material (Plastic look)
+        const material = new THREE.MeshStandardMaterial({
+          color: CONFIG.colors.dice,
+          roughness: 0.1,
+          metalness: 0.1,
+          flatShading: true
+        });
+
         const mesh = new THREE.Mesh(geometry, material);
-        // Add glowing edges.
-        const edges = new THREE.EdgesGeometry(geometry);
-        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-        const edgeLines = new THREE.LineSegments(edges, lineMaterial);
-        mesh.add(edgeLines);
-        addFaceLabels(mesh);
-        scene.add(mesh);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+
+        // Add Labels
+        addFaceLabels(mesh, type);
+        
         return mesh;
       }
 
-      function addFaceLabels(mesh) {
+      function addFaceLabels(mesh, type) {
         const geometry = mesh.geometry;
+        
+        // Ensure index exists
         if (!geometry.index) {
-          geometry.setIndex(
-            Array.from({ length: geometry.attributes.position.count }, (_, i) => i)
-          );
+          const pos = geometry.attributes.position;
+          const indices = [];
+          for (let i = 0; i < pos.count; i++) indices.push(i);
+          geometry.setIndex(indices);
         }
+
         const posAttr = geometry.attributes.position;
-        const indices = geometry.index.array;
-        const faceCount = indices.length / 3;
-        const offset = 0.02;
-        let trianglesPerFace;
-        switch (currentDiceType) {
-          case "d6":
-            trianglesPerFace = 2;
-            break;
-          case "d12":
-            trianglesPerFace = 3;
-            break;
-          default:
-            trianglesPerFace = 1;
-            break;
-        }
-        let faceLabelIndex = 0;
-        for (let i = 0; i < faceCount; i += trianglesPerFace) {
-          let centroid = new THREE.Vector3();
-          let accumulatedNormal = new THREE.Vector3();
-          for (let t = 0; t < trianglesPerFace; t++) {
-            const triIndex = i + t;
-            if (triIndex >= faceCount) break;
-            const a = indices[triIndex * 3];
-            const b = indices[triIndex * 3 + 1];
-            const c = indices[triIndex * 3 + 2];
-            const vA = new THREE.Vector3().fromBufferAttribute(posAttr, a);
-            const vB = new THREE.Vector3().fromBufferAttribute(posAttr, b);
-            const vC = new THREE.Vector3().fromBufferAttribute(posAttr, c);
-            centroid.add(vA).add(vB).add(vC);
-            const edge1 = new THREE.Vector3().subVectors(vB, vA);
-            const edge2 = new THREE.Vector3().subVectors(vC, vA);
-            const faceNormal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
-            accumulatedNormal.add(faceNormal);
+        const indexArr = geometry.index.array;
+        const faceCount = indexArr.length / 3;
+        
+        // Determine triangles per face based on shape
+        let trisPerFace = 1;
+        if (type === "d6") trisPerFace = 2; // Square faces = 2 tris
+        if (type === "d12") trisPerFace = 3; // Pentagon faces (approx) = 3 tris from center
+
+        let labelIndex = 1;
+        const offsetAmount = 1.02; // Push labels slightly off surface
+
+        for (let i = 0; i < faceCount; i += trisPerFace) {
+          let center = new THREE.Vector3();
+          let normalAcc = new THREE.Vector3();
+
+          // Average the centroids of the triangles that make up this face
+          for (let t = 0; t < trisPerFace; t++) {
+             // Safe check
+             if(i + t >= faceCount) break;
+
+             const a = indexArr[(i + t) * 3];
+             const b = indexArr[(i + t) * 3 + 1];
+             const c = indexArr[(i + t) * 3 + 2];
+
+             const vA = new THREE.Vector3().fromBufferAttribute(posAttr, a);
+             const vB = new THREE.Vector3().fromBufferAttribute(posAttr, b);
+             const vC = new THREE.Vector3().fromBufferAttribute(posAttr, c);
+
+             // Center of this triangle
+             const triCenter = new THREE.Vector3().add(vA).add(vB).add(vC).divideScalar(3);
+             center.add(triCenter);
+
+             // Normal of this triangle
+             const edge1 = new THREE.Vector3().subVectors(vB, vA);
+             const edge2 = new THREE.Vector3().subVectors(vC, vA);
+             const norm = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+             normalAcc.add(norm);
           }
-          centroid.divideScalar(trianglesPerFace * 3);
-          const normal = accumulatedNormal.normalize();
-          const labelPos = centroid.clone().add(normal.clone().multiplyScalar(offset));
-          const faceNumber = faceLabelIndex + 1;
-          const labelMesh = makeTextPlane(faceNumber.toString(), "#0f0");
-          labelMesh.position.copy(labelPos);
-          labelMesh.quaternion.copy(
-            new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal)
-          );
-          labelMesh.userData.faceIndex = faceLabelIndex;
+
+          center.divideScalar(trisPerFace);
+          const normal = normalAcc.normalize();
+
+          // Create the Label Plane
+          const labelGeo = new THREE.PlaneGeometry(0.8, 0.8);
+          const labelMat = new THREE.MeshBasicMaterial({
+            map: createTextTexture(labelIndex.toString(), "white"),
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthTest: true
+          });
+          
+          const labelMesh = new THREE.Mesh(labelGeo, labelMat);
+          
+          // Position slightly above face
+          labelMesh.position.copy(center.multiplyScalar(offsetAmount));
+          
+          // Rotate to face outward
+          labelMesh.lookAt(center.clone().add(normal));
+          
+          labelMesh.userData = { isLabel: true, number: labelIndex };
           mesh.add(labelMesh);
-          faceLabelIndex++;
+          
+          labelIndex++;
         }
       }
 
-      function makeTextPlane(message, textColor) {
-        const canvas = document.createElement("canvas");
-        canvas.width = 256;
-        canvas.height = 256;
-        const context = canvas.getContext("2d");
-        context.clearRect(0, 0, canvas.width, canvas.height);
-        context.font = "Bold 100px Arial";
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.fillStyle = textColor;
-        context.fillText(message, canvas.width / 2, canvas.height / 2);
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter;
-        const material = new THREE.MeshBasicMaterial({
-          map: texture,
-          transparent: true,
-          polygonOffset: true,
-          polygonOffsetFactor: -1,
-          polygonOffsetUnits: -1
-        });
-        return new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), material);
-      }
+      // --- ROLL LOGIC ---
+      function triggerRoll() {
+        if (state.isRolling) return;
+        
+        // UI Updates
+        document.getElementById("result-display").innerText = "...";
+        document.getElementById("settings-panel").classList.add("hidden");
+        
+        // Clear old dice
+        state.diceObjects.forEach(d => scene.remove(d.mesh));
+        state.diceObjects = [];
 
-      function createHighlightedLabel(message) {
-        const label = makeTextPlane(message, "#ff0000");
-        label.scale.set(1.3, 1.3, 1.3);
-        return label;
-      }
+        // Calculation for spacing
+        const spacing = 2.5;
+        const startX = -((state.diceCount - 1) * spacing) / 2;
 
-      /**********************
-       * ROLL ANIMATION & MULTIPLE DICE LOGIC
-       **********************/
-      // Updated startRoll function for responsive dice positioning/scaling.
-      function startRoll() {
-        // Remove any previous dice.
-        diceArray.forEach(d => scene.remove(d.mesh));
-        diceArray = [];
+        for (let i = 0; i < state.diceCount; i++) {
+          const mesh = createDiceMesh(state.diceType);
+          
+          // Spawn Position (High and random X/Z offset)
+          const spawnPos = new THREE.Vector3(
+            startX + i * spacing + (Math.random() - 0.5), 
+            0, // Start y is calculated in animation
+            (Math.random() - 0.5) * 2
+          );
 
-        // Calculate available horizontal view width at the dice landing plane.
-        const d = camera.position.distanceTo(baseLandPos);
-        const fovInRadians = camera.fov * (Math.PI / 180);
-        const viewHeight = 2 * d * Math.tan(fovInRadians / 2);
-        const viewWidth = viewHeight * camera.aspect;
+          // Landing Position
+          const landPos = new THREE.Vector3(startX + i * spacing, 0, 0);
 
-        // Compute dice size from geometry.
-        const tempGeometry = getDiceGeometry(currentDiceType);
-        tempGeometry.computeBoundingSphere();
-        const diceRadius = tempGeometry.boundingSphere.radius;
-
-        const defaultSpacing = 2; // default spacing between dice centers
-        const totalDesiredWidth = (diceCount - 1) * defaultSpacing + 2 * diceRadius;
-        const scaleFactor =
-          diceCount > 1 ? Math.min(1, viewWidth / totalDesiredWidth) : 1;
-        const spacing = defaultSpacing * scaleFactor;
-        const startX = diceCount > 1 ? -((diceCount - 1) / 2) * spacing : 0;
-
-        for (let i = 0; i < diceCount; i++) {
-          const offset = new THREE.Vector3(startX + i * spacing, 0, 0);
-          const mesh = createDiceMesh();
-          // Apply scale factor so dice resize on smaller screens.
-          mesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
-          // Set each dice's spawn and land positions using the offset.
-          const spawnPos = baseSpawnPos.clone().add(offset);
-          const landPos = baseLandPos.clone().add(offset);
-          mesh.position.copy(spawnPos);
-          // Assign random initial rotation.
-          mesh.rotation.set(
+          // Rotations
+          const startRot = new THREE.Euler(
             Math.random() * Math.PI * 2,
             Math.random() * Math.PI * 2,
             Math.random() * Math.PI * 2
           );
-          const initialRotation = mesh.rotation.clone();
-          // Compute target rotation with extra spins.
-          const targetRotation = new THREE.Euler(
-            initialRotation.x + (Math.random() * 4 + 4) * Math.PI,
-            initialRotation.y + (Math.random() * 4 + 4) * Math.PI,
-            initialRotation.z + (Math.random() * 4 + 4) * Math.PI
+
+          // Target Rotation (Multiple full spins + random finish)
+          const targetRot = new THREE.Euler(
+             startRot.x + (Math.random() * 6 + 6) * Math.PI,
+             startRot.y + (Math.random() * 6 + 6) * Math.PI,
+             startRot.z + (Math.random() * 6 + 6) * Math.PI
           );
-          // Push the dice object into the array.
-          diceArray.push({
-            mesh,
-            spawnPos,
-            landPos,
-            initialRotation,
-            targetRotation
+
+          scene.add(mesh);
+          state.diceObjects.push({
+            mesh, spawnPos, landPos, startRot, targetRot,
+            startTime: performance.now(),
+            finished: false
           });
         }
-        rollStartTime = performance.now();
-        isRolling = true;
-        resultDisplay.innerText = "";
+
+        state.isRolling = true;
       }
 
+      // --- ANIMATION LOOP ---
       function animate() {
         requestAnimationFrame(animate);
+        
         const now = performance.now();
-        if (isRolling) {
-          let t = (now - rollStartTime) / rollDuration;
-          if (t > 1) t = 1;
-          const ease = easeOutCubic(t);
-          diceArray.forEach(diceObj => {
-            // Lerp position for this dice.
-            diceObj.mesh.position.lerpVectors(
-              diceObj.spawnPos,
-              diceObj.landPos,
-              ease
-            );
-            const baseX = THREE.MathUtils.lerp(
-              diceObj.initialRotation.x,
-              diceObj.targetRotation.x,
-              ease
-            );
-            const baseY = THREE.MathUtils.lerp(
-              diceObj.initialRotation.y,
-              diceObj.targetRotation.y,
-              ease
-            );
-            const baseZ = THREE.MathUtils.lerp(
-              diceObj.initialRotation.z,
-              diceObj.targetRotation.z,
-              ease
-            );
-            const shakeDecay = 1 - ease;
-            const shakeX =
-              shakeDecay *
-              shakeAmplitude *
-              Math.sin(shakeFrequency * ((now - rollStartTime) / 1000));
-            const shakeY =
-              shakeDecay *
-              shakeAmplitude *
-              Math.sin(shakeFrequency * ((now - rollStartTime) / 1000) + 1);
-            const shakeZ =
-              shakeDecay *
-              shakeAmplitude *
-              Math.sin(shakeFrequency * ((now - rollStartTime) / 1000) + 2);
-            diceObj.mesh.rotation.set(baseX + shakeX, baseY + shakeY, baseZ + shakeZ);
+        
+        if (state.isRolling) {
+          let allFinished = true;
+          
+          state.diceObjects.forEach(d => {
+            const elapsed = now - d.startTime;
+            let t = elapsed / CONFIG.physics.duration;
+            
+            if (t < 1) {
+              allFinished = false;
+              // Easing
+              const ease = 1 - Math.pow(1 - t, 3); // Cubic out
+
+              // Position: Lerp X/Z, Parabola Y
+              d.mesh.position.x = THREE.MathUtils.lerp(d.spawnPos.x, d.landPos.x, ease);
+              d.mesh.position.z = THREE.MathUtils.lerp(d.spawnPos.z, d.landPos.z, ease);
+              
+              // Parabolic Arc: y = 4 * h * t * (1-t)
+              // We combine a drop from height with a bounce
+              // Simple approach: Start high, bounce once. 
+              // Let's do a simple Throw Arc.
+              const height = CONFIG.physics.bounceHeight;
+              // A nice arc: sin(t * PI) * height
+              // But we want it to land at 0.
+              // Let's treat t=0 as hand, t=1 as floor.
+              // Arc equation: 
+              const yBase = 0; 
+              // Simulate "Toss"
+              const arc = Math.sin(t * Math.PI) * height;
+              // Decay the arc at the end to settle
+              d.mesh.position.y = (t > 0.8) ? 0 : arc;
+              
+              // If we are near the end (t>0.8), snap Y to 0 to prevent floating
+
+              // Rotation
+              d.mesh.rotation.x = THREE.MathUtils.lerp(d.startRot.x, d.targetRot.x, ease);
+              d.mesh.rotation.y = THREE.MathUtils.lerp(d.startRot.y, d.targetRot.y, ease);
+              d.mesh.rotation.z = THREE.MathUtils.lerp(d.startRot.z, d.targetRot.z, ease);
+
+            } else if (!d.finished) {
+              // Finalize
+              d.mesh.position.copy(d.landPos);
+              d.mesh.rotation.copy(d.targetRot);
+              d.finished = true;
+            }
           });
-          if (t >= 1) {
-            isRolling = false;
-            // Finalize positions and compute results.
-            const results = [];
-            diceArray.forEach(diceObj => {
-              diceObj.mesh.position.copy(diceObj.landPos);
-              diceObj.mesh.rotation.set(
-                diceObj.targetRotation.x,
-                diceObj.targetRotation.y,
-                diceObj.targetRotation.z
-              );
-              diceObj.mesh.updateMatrixWorld(true);
-              const desiredNormal = camera.position
-                .clone()
-                .sub(diceObj.mesh.position)
-                .normalize();
-              const result = computeDiceResult(diceObj.mesh, desiredNormal);
-              results.push(result);
-              highlightWinningFace(diceObj.mesh, result - 1);
-              // Critical alerts for d20 (applied per dice)
-              if (currentDiceType === "d20") {
-                if (result === 1)
-                  flashScreen("CRITICAL FAILURE", "#ff0000", "#ffffff");
-                if (result === 20)
-                  flashScreen("CRITICAL SUCCESS", "#00ff00", "#000000");
-              }
-            });
-            resultDisplay.innerText = "Results: " + results.join(", ");
+
+          if (allFinished) {
+            finishRoll();
           }
         }
+
         renderer.render(scene, camera);
       }
 
-      function easeOutCubic(t) {
-        return --t * t * t + 1;
-      }
+      function finishRoll() {
+        state.isRolling = false;
+        const results = [];
+        
+        // Calculate results based on normals
+        const upVector = new THREE.Vector3(0, 0, 1); // Camera looks down Z roughly, but we check UP relative to world for top face usually?
+        // Actually our camera is at (0,12,12), looking at (0,0,0).
+        // The "Winning Face" is the one whose normal points most towards the camera.
+        const camDir = camera.position.clone().normalize();
 
-      function getTrianglesPerFace(diceType) {
-        switch (diceType) {
-          case "d6":
-            return 2;
-          case "d12":
-            return 3;
-          default:
-            return 1;
+        state.diceObjects.forEach(d => {
+          const num = getResult(d.mesh, camDir, state.diceType);
+          results.push(num);
+          highlightFace(d.mesh, num);
+        });
+
+        // Display
+        const sum = results.reduce((a, b) => a + b, 0);
+        const resStr = results.join(" + ");
+        const finalStr = results.length > 1 ? `${resStr} = ${sum}` : `${sum}`;
+        document.getElementById("result-display").innerText = finalStr;
+
+        // Effects for d20
+        if (state.diceType === "d20" && state.diceCount === 1) {
+          if (sum === 20) showCrit("NAT 20", "crit-nat20");
+          if (sum === 1) showCrit("CRIT FAIL", "crit-nat1");
         }
       }
 
-      function computeDiceResult(mesh, desiredNormal) {
-        mesh.updateMatrixWorld(true);
-        const geometry = mesh.geometry;
-        const posAttr = geometry.attributes.position;
-        const indices = geometry.index.array;
-        const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
-        const trianglesPerFace = getTrianglesPerFace(currentDiceType);
-        let bestDot = -Infinity;
-        let bestTriangleIndex = -1;
-        for (let i = 0; i < indices.length; i += 3) {
-          const a = indices[i],
-            b = indices[i + 1],
-            c = indices[i + 2];
-          const vA = new THREE.Vector3().fromBufferAttribute(posAttr, a);
-          const vB = new THREE.Vector3().fromBufferAttribute(posAttr, b);
-          const vC = new THREE.Vector3().fromBufferAttribute(posAttr, c);
-          const edge1 = new THREE.Vector3().subVectors(vB, vA);
-          const edge2 = new THREE.Vector3().subVectors(vC, vA);
-          const localNormal = new THREE.Vector3()
-            .crossVectors(edge1, edge2)
-            .normalize();
-          const worldNormal = localNormal.clone().applyMatrix3(normalMatrix).normalize();
-          const dot = worldNormal.dot(desiredNormal);
-          if (dot > bestDot) {
-            bestDot = dot;
-            bestTriangleIndex = i / 3;
-          }
-        }
-        const bestFaceIndex = Math.floor(bestTriangleIndex / trianglesPerFace);
-        return bestFaceIndex + 1;
+      function getResult(mesh, targetDir, type) {
+         // Transform local face normals to world and compare with targetDir
+         const geometry = mesh.geometry;
+         const pos = geometry.attributes.position;
+         const indices = geometry.index.array;
+         
+         let trisPerFace = 1;
+         if (type === "d6") trisPerFace = 2;
+         if (type === "d12") trisPerFace = 3;
+
+         let bestDot = -Infinity;
+         let bestIndex = 0;
+         const faceCount = indices.length / 3;
+
+         mesh.updateMatrixWorld();
+         const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+
+         for (let i = 0; i < faceCount; i += trisPerFace) {
+             // Get normal of first triangle of the face
+             const a = indices[i*3];
+             const b = indices[i*3+1];
+             const c = indices[i*3+2];
+             
+             const vA = new THREE.Vector3().fromBufferAttribute(pos, a);
+             const vB = new THREE.Vector3().fromBufferAttribute(pos, b);
+             const vC = new THREE.Vector3().fromBufferAttribute(pos, c);
+             
+             const edge1 = new THREE.Vector3().subVectors(vB, vA);
+             const edge2 = new THREE.Vector3().subVectors(vC, vA);
+             const normal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+             
+             // Transform to world space
+             normal.applyMatrix3(normalMatrix).normalize();
+             
+             const dot = normal.dot(targetDir);
+             if (dot > bestDot) {
+                 bestDot = dot;
+                 bestIndex = (i / trisPerFace) + 1;
+             }
+         }
+         return bestIndex;
       }
 
-      function highlightWinningFace(mesh, faceIndex) {
-        mesh.children.forEach(child => {
-          if (child.userData && child.userData.faceIndex === faceIndex) {
-            const newLabel = createHighlightedLabel((faceIndex + 1).toString());
-            newLabel.position.copy(child.position);
-            newLabel.quaternion.copy(child.quaternion);
-            newLabel.userData.faceIndex = faceIndex;
-            mesh.remove(child);
-            mesh.add(newLabel);
-          }
+      function highlightFace(mesh, num) {
+        mesh.children.forEach(c => {
+           if (c.userData.number === num) {
+               c.material.color.setHex(0x00ff00);
+               c.scale.set(1.5, 1.5, 1.5);
+           }
         });
       }
 
-      function flashScreen(message, bgColor, textColor) {
-        const flashDiv = document.createElement("div");
-        flashDiv.style.position = "fixed";
-        flashDiv.style.top = "0";
-        flashDiv.style.left = "0";
-        flashDiv.style.width = "100vw";
-        flashDiv.style.height = "100vh";
-        flashDiv.style.backgroundColor = bgColor;
-        flashDiv.style.opacity = "0.8";
-        flashDiv.style.display = "flex";
-        flashDiv.style.alignItems = "center";
-        flashDiv.style.justifyContent = "center";
-        flashDiv.style.color = textColor;
-        flashDiv.style.fontSize = "72px";
-        flashDiv.style.zIndex = "9999";
-        flashDiv.innerText = message;
-        document.body.appendChild(flashDiv);
-        setTimeout(() => {
-          flashDiv.style.transition = "opacity 0.5s";
-          flashDiv.style.opacity = "0";
-          setTimeout(() => {
-            document.body.removeChild(flashDiv);
-          }, 500);
-        }, 300);
+      function showCrit(text, className) {
+        const div = document.createElement("div");
+        div.className = `crit-msg ${className}`;
+        div.innerText = text;
+        document.body.appendChild(div);
+        setTimeout(() => div.remove(), 2000);
       }
 
       init();
