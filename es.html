@@ -140,10 +140,9 @@
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             padding: 20px;
-            transition: opacity 0.3s ease; /* Smooth transition */
+            transition: opacity 0.3s ease;
         }
 
-        /* New class for smoother loading */
         .events-container.faded {
             opacity: 0.3;
             pointer-events: none;
@@ -572,11 +571,11 @@
             const loading = document.getElementById("loading");
             const container = document.getElementById("eventsContainer");
 
-            // Optimistic Update: Update UI Date immediately
+            // Optimistic UI Update
             document.getElementById("dateDisplay").textContent = formatDateForDisplay(currentDate);
             document.getElementById("datePicker").value = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
 
-            // Smooth loading: Fade out existing events
+            // Smooth loading state
             container.classList.add("faded");
             loading.style.display = "block";
             
@@ -588,21 +587,35 @@
 
             const data = await fetchOnThisDay(currentDate);
 
-            // DEDUPLICATION LOGIC
+            // --- IMPROVED DEDUPLICATION LOGIC ---
             const uniqueEventsMap = new Map();
+            const seenFingerprints = new Set();
+
+            const generateFingerprint = (item) => {
+                // Primary Fingerprint: Year + Main Wikipedia Page Title
+                // This handles cases where text wording differs (e.g. "Battle of X" vs "The Battle of X")
+                if (item.pages && item.pages.length > 0 && item.pages[0].title) {
+                    return `${item.year}_${item.pages[0].title}`;
+                }
+                // Fallback Fingerprint: Year + First 40 chars of Normalized Text
+                // Removes spaces/punctuation to catch "Event happens." vs "Event happens"
+                const normalizedText = item.text.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 40);
+                return `${item.year || 'annual'}_${normalizedText}`;
+            };
 
             const addEvents = (list, type) => {
                 if (!list) return;
                 list.forEach(item => {
-                    // Normalize text slightly to catch near-duplicates if needed, 
-                    // but raw text check is usually sufficient for this API.
-                    if (!uniqueEventsMap.has(item.text)) {
-                        uniqueEventsMap.set(item.text, { ...item, type });
+                    const fingerprint = generateFingerprint(item);
+                    
+                    if (!seenFingerprints.has(fingerprint)) {
+                        seenFingerprints.add(fingerprint);
+                        uniqueEventsMap.set(fingerprint, { ...item, type });
                     }
                 });
             };
 
-            // Process lists in order of priority
+            // Priority: Selected > Historical Events > Births/Deaths/Holidays
             addEvents(data.selected, "Historical Event");
             addEvents(data.events, "Historical Event");
             addEvents(data.births, "Birth");
@@ -616,7 +629,6 @@
             renderFilters();
             renderEvents();
 
-            // Smooth loading: Reveal new events
             container.classList.remove("faded");
             loading.style.display = "none";
         }
@@ -638,7 +650,7 @@
 
         document.getElementById("datePicker").addEventListener("change", (event) => {
             const selectedDate = new Date(event.target.value);
-            // Must fix the timezone offset issue with date pickers returning UTC midnight
+            // Fix timezone offset issue
             const userDate = new Date(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth(), selectedDate.getUTCDate());
             updateEventsForDate(userDate);
         });
