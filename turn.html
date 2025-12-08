@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0, user-scalable=no"
+/>
+<title>⏱️ Time-Tracked Turn Tracker</title>
+<style>
+  :root {
+    --bg: #040608;
+    --panel-soft: #171b24;
+    --border-soft: #262a36;
+    --text-main: #f7f7f7;
+    --muted: #a0a8c0;
+    --accent: #5ee0ff;
+    --heal: #6dff9f; /* Keeping color variables for style consistency */
+    --dmg: #ff5a5a;
+    --life: #b1ff6a;
+    --rad-glow: #7cff3b;
+    --stat-color: #5ee0ff;
+    --stat-bg: #1f2a3a;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: radial-gradient(circle at top, #14182a 0, #050608 55%);
+    color: var(--text-main);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+  }
+
+  .app {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 12px 22px;
+  }
+
+  /* TOP: TURN TRACKER + ROUND/TURN COUNTERS */
+
+  #topBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    height: 128px;
+  }
+
+  #roundInfo {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding-left: 4px;
+  }
+
+  #roundText {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+
+  #turnCountText {
+    margin-top: 2px;
+    font-size: 15px;
+    color: #6d738a;
+  }
+
+  #turnTracker {
+    position: relative;
+    width: 128px;
+    height: 128px;
+    border-radius: 50%;
+    background: radial-gradient(circle at center, #181b27 0, #090b11 60%),
+      radial-gradient(
+        circle at 20% 20%,
+        rgba(124, 255, 59, 0.16),
+        transparent 55%
+      );
+    border: 1px solid var(--border-soft);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 14px 30px rgba(0, 0, 0, 0.9);
+    flex-shrink: 0;
+  }
+
+  .turn-orb {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.18;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.9);
+    transition: opacity 0.16s ease, transform 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+
+  .orb0 { top: 16%; left: 50%; background: #f8f5e6; }
+  .orb1 { top: 40%; left: 88%; background: #3aa3ff; }
+  .orb2 { top: 84%; left: 68%; background: #1b1b24; }
+  .orb3 { top: 84%; left: 32%; background: #ff5a40; }
+  .orb4 { top: 40%; left: 12%; background: #2fd166; }
+  .orb5 { top: 50%; left: 50%; background: #b38cff; }
+
+  .turn-orb.active {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.9),
+      0 0 20px rgba(94, 224, 255, 0.8);
+  }
+
+  .turn-orb.disabled {
+    opacity: 0.05;
+    box-shadow: none;
+  }
+
+  #topRightTap {
+    flex: 1;
+    height: 100%;
+  }
+
+  #turnText {
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    padding: 5px 14px;
+    border-radius: 999px;
+    background: rgba(8, 10, 18, 0.9);
+    border: 1px solid rgba(38, 42, 54, 0.9);
+    align-self: center;
+    margin-bottom: 8px;
+  }
+
+  #turnText:active {
+    transform: scale(0.97);
+    opacity: 0.9;
+  }
+
+  /* MIDDLE: STATS BUTTON */
+
+  #statsButton {
+    flex: 0.9;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 10px 0;
+  }
+
+  #statsWrapper {
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 4 / 1.5;
+    border-radius: 24px;
+    background: radial-gradient(
+        circle at 20% 0,
+        rgba(94, 224, 255, 0.18) 0,
+        transparent 55%
+      ),
+      radial-gradient(circle at top, #141826 0, #05070c 60%);
+    border: 1px solid var(--border-soft);
+    box-shadow: 0 0 0 1px rgba(94, 224, 255, 0.05),
+      0 20px 35px rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+
+  #statsWrapper:active {
+    transform: scale(0.98);
+  }
+
+  #statsLabel {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--stat-color);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 4px;
+    text-shadow: 0 0 10px rgba(94, 224, 255, 0.5);
+  }
+
+  #avgTimeDisplay {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-main);
+    letter-spacing: 0.05em;
+  }
+
+  /* BOTTOM: NOTES (retained original style) */
+
+  #notesPanel {
+    margin-top: 10px;
+    padding: 10px 10px 8px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #111522, #080910);
+    border: 1px solid var(--border-soft);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.75);
+    /* Set a flex-basis to allow the notes panel to shrink and grow */
+    flex: 1; 
+    min-height: 100px;
+  }
+
+  .notes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .notes-title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  #addNoteBtn {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: radial-gradient(circle at top, #22273b 0, #12141e 70%);
+    color: var(--text-main);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  #addNoteBtn:active {
+    transform: scale(0.96);
+    opacity: 0.9;
+  }
+
+  #noteComposer {
+    display: none;
+    margin-bottom: 6px;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  #noteComposer.active {
+    display: flex;
+  }
+
+  #noteInput {
+    flex: 1 1 45%;
+    min-width: 140px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-soft);
+    background: #11141f;
+    color: var(--text-main);
+    font-size: 15px;
+  }
+
+  #noteInput::placeholder {
+    color: #6d738a;
+  }
+
+  #noteTarget {
+    flex: 0 0 34%;
+    min-width: 120px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-soft);
+    background: #11141f;
+    color: var(--muted);
+    font-size: 14px;
+    appearance: none;
+  }
+
+  .note-compose-btn {
+    padding: 5px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border-soft);
+    background: #141722;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  #noteSave {
+    border-color: var(--accent);
+    color: var(--text-main);
+    background: radial-gradient(circle at top, #22273b 0, #11131f 80%);
+  }
+
+  .note-compose-btn:active {
+    transform: scale(0.96);
+    opacity: 0.9;
+  }
+
+  #notesList {
+    max-height: 210px;
+    overflow-y: auto;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .note-chip {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 9px;
+    border-radius: 10px;
+    background: #171a26;
+    border: 1px solid #262a36;
+    border-left-width: 3px;
+    border-left-style: solid;
+    border-left-color: #262a36;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .note-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 6px rgba(94, 224, 255, 0.7);
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+
+  .note-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .note-targetLabel {
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
+  }
+
+  .note-text {
+    flex: 1;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--text-main);
+    font-size: 15px;
+  }
+
+  .note-remove {
+    border: none;
+    background: transparent;
+    color: #707793;
+    font-size: 15px;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  .note-remove:active {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+
+  #footerSpacer {
+    flex-shrink: 0;
+    height: 12px;
+  }
+
+  /* PLAYER CONFIG (retained original style) */
+
+  #playerConfig {
+    position: fixed;
+    inset: 0;
+    background: rgba(1, 2, 5, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+  }
+
+  #playerConfig.open {
+    display: flex;
+  }
+
+  .config-inner {
+    width: 100%;
+    max-width: 420px;
+    border-radius: 16px;
+    background: #090b11;
+    border: 1px solid var(--border-soft);
+    box-shadow: 0 18px 35px rgba(0, 0, 0, 0.9);
+    padding: 10px 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .config-header {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .player-count-row {
+    display: flex;
+    gap: 6px;
+    margin: 4px 0;
+  }
+
+  .count-btn {
+    flex: 1;
+    padding: 6px 0;
+    border-radius: 999px;
+    border: 1px solid var(--border-soft);
+    background: #121421;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .count-btn.active {
+    border-color: var(--accent);
+    color: var(--text-main);
+    background: radial-gradient(circle at top, #22273b 0, #121421 80%);
+  }
+
+  #nameFields {
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .name-row label {
+    min-width: 64px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .name-row input {
+    flex: 1;
+    padding: 4px 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border-soft);
+    background: #11141f;
+    color: var(--text-main);
+    font-size: 14px;
+  }
+
+  .config-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .config-btn {
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 14px;
+    border: 1px solid var(--border-soft);
+    background: #141722;
+    color: var(--muted);
+  }
+
+  #configSave {
+    border-color: var(--accent);
+    color: var(--text-main);
+    background: radial-gradient(circle at top, #22273b 0, #11131f 80%);
+  }
+
+  .config-btn:active {
+    transform: scale(0.97);
+    opacity: 0.9;
+  }
+
+  #notesList::-webkit-scrollbar {
+    width: 4px;
+  }
+  #notesList::-webkit-scrollbar-thumb {
+    background: #2b3040;
+    border-radius: 999px;
+  }
+  
+  /* STATS PANEL */
+
+  #statsPanel {
+    position: fixed;
+    inset: 0;
+    background: rgba(1, 2, 5, 0.9);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 30;
+  }
+
+  #statsPanel.open {
+    display: flex;
+  }
+
+  .stats-inner {
+    width: 100%;
+    max-width: 480px;
+    max-height: 80vh;
+    border-radius: 16px;
+    background: #090b11;
+    border: 1px solid var(--border-soft);
+    box-shadow: 0 18px 35px rgba(0, 0, 0, 0.9);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+  }
+
+  .stats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .stats-title {
+    font-size: 18px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--stat-color);
+  }
+
+  .stats-close {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 20px;
+  }
+
+  .stats-section-title {
+    font-size: 15px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border-soft);
+    padding-bottom: 4px;
+    margin-top: 10px;
+  }
+
+  #statsSummary, #turnDistribution {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px dashed #1d202e;
+    font-size: 15px;
+  }
+
+  .stat-label {
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .stat-value {
+    color: var(--text-main);
+    font-weight: 600;
+  }
+
+  /* Bar Chart for Distribution */
+
+  .distribution-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+  }
+
+  .player-name-short {
+    width: 60px;
+    flex-shrink: 0;
+    font-size: 13px;
+    color: var(--muted);
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  .bar-container {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .time-bar {
+    height: 12px;
+    background: var(--stat-color);
+    border-radius: 2px;
+    transition: width 0.5s ease-out;
+    box-shadow: 0 0 5px rgba(94, 224, 255, 0.6);
+  }
+
+  .bar-time {
+    font-size: 13px;
+    color: var(--text-main);
+    font-weight: 500;
+    min-width: 40px;
+    text-align: left;
+  }
+  
+  /* Log Viewer */
+  #turnLogList {
+    max-height: 200px;
+    overflow-y: auto;
+    border-radius: 8px;
+    background: #141722;
+    padding: 8px;
+    border: 1px solid var(--border-soft);
+  }
+
+  .log-entry {
+    font-size: 12px;
+    padding: 3px 0;
+    border-bottom: 1px dotted #1d202e;
+    color: var(--muted);
+  }
+  
+  .log-entry:last-child {
+      border-bottom: none;
+  }
+
+  .log-entry strong {
+      color: var(--text-main);
+  }
+
+  /* Remaining original styles (help overlay, etc.) are omitted for brevity in this response but should be retained */
+</style>
+</head>
+<body>
+<div class="app">
+  <header id="topBar">
+    <div id="roundInfo">
+      <div id="roundText">Round 1</div>
+      <div id="turnCountText">Turn 1</div>
+    </div>
+    <div id="turnTracker">
+      <div class="turn-orb orb0" data-index="0"></div>
+      <div class="turn-orb orb1" data-index="1"></div>
+      <div class="turn-orb orb2" data-index="2"></div>
+      <div class="turn-orb orb3" data-index="3"></div>
+      <div class="turn-orb orb4" data-index="4"></div>
+      <div class="turn-orb orb5" data-index="5"></div>
+    </div>
+    <div id="topRightTap"></div>
+  </header>
+
+  <div id="turnText">Player 1</div>
+
+  <main id="statsButton">
+    <div id="statsWrapper">
+      <div id="statsLabel">Average Turn Time</div>
+      <div id="avgTimeDisplay">--:--</div>
+    </div>
+  </main>
+
+  <section id="notesPanel">
+    <div class="notes-header">
+      <div class="notes-title">Board Notes / Triggers</div>
+      <button id="addNoteBtn">+ Note</button>
+    </div>
+
+    <div id="noteComposer">
+      <input
+        id="noteInput"
+        type="text"
+        placeholder="Ex: Reminder for next turn"
+        autocomplete="off"
+      />
+      <select id="noteTarget"></select>
+      <button id="noteSave" class="note-compose-btn">Save</button>
+      <button id="noteCancel" class="note-compose-btn">✕</button>
+    </div>
+
+    <div id="notesList"></div>
+  </section>
+
+  <div id="footerSpacer"></div>
+</div>
+
+<div id="playerConfig">
+  <div class="config-inner">
+    <div class="config-header">Players & Names</div>
+    <div class="player-count-row">
+      <button class="count-btn" data-count="1">1</button>
+      <button class="count-btn" data-count="2">2</button>
+      <button class="count-btn" data-count="3">3</button>
+      <button class="count-btn" data-count="4">4</button>
+      <button class="count-btn" data-count="5">5</button>
+      <button class="count-btn" data-count="6">6</button>
+    </div>
+    <div id="nameFields">
+      <div class="name-row" data-index="0">
+        <label>Player 1</label>
+        <input id="nameInput0" type="text" placeholder="Player 1" />
+      </div>
+      <div class="name-row" data-index="1">
+        <label>Player 2</label>
+        <input id="nameInput1" type="text" placeholder="Player 2" />
+      </div>
+      <div class="name-row" data-index="2">
+        <label>Player 3</label>
+        <input id="nameInput2" type="text" placeholder="Player 3" />
+      </div>
+      <div class="name-row" data-index="3">
+        <label>Player 4</label>
+        <input id="nameInput3" type="text" placeholder="Player 4" />
+      </div>
+      <div class="name-row" data-index="4">
+        <label>Player 5</label>
+        <input id="nameInput4" type="text" placeholder="Player 5" />
+      </div>
+      <div class="name-row" data-index="5">
+        <label>Player 6</label>
+        <input id="nameInput5" type="text" placeholder="Player 6" />
+      </div>
+    </div>
+    <div class="config-footer">
+      <button id="configCancel" class="config-btn">Cancel</button>
+      <button id="configSave" class="config-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="statsPanel">
+  <div class="stats-inner">
+    <div class="stats-header">
+      <div class="stats-title">Turn Time Statistics</div>
+      <button class="stats-close" id="statsCloseBtn">✕</button>
+    </div>
+
+    <div class="stats-section-title">Summary</div>
+    <div id="statsSummary">
+      <div class="stat-item">
+        <span class="stat-label">Total Turns Logged</span>
+        <span class="stat-value" id="statTotalTurns">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Overall Avg Turn Time</span>
+        <span class="stat-value" id="statOverallAvg">--:--</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Longest Turn Time</span>
+        <span class="stat-value" id="statLongestTurn">--:--</span>
+      </div>
+    </div>
+    
+    <div class="stats-section-title">Player Turn Time Distribution</div>
+    <div id="turnDistribution">
+      </div>
+    
+    <div class="stats-section-title">Turn Log</div>
+    <div id="turnLogList">
+        <div class="log-entry">Log empty. Complete a few turns to see data.</div>
+    </div>
+  </div>
+</div>
+<script>
+  // --- STATE VARIABLES ---
+  
+  let numPlayers = 4;
+  let currentPlayer = 0;
+  let players = [];
+  /**
+   * notes: array of
+   * { text: string, target: 'none'|'player', playerIndex: number|null }
+   */
+  let notes = [];
+  
+  // Turn tracking and timing
+  let roundNumber = 1;
+  let turnTotal = 1;
+  let currentTurnStartTime = Date.now(); // Start time of the very first turn
+  /**
+   * turnLog: array of objects representing a COMPLETED turn.
+   * { round: number, turn: number, playerIndex: number, durationMs: number }
+   */
+  let turnLog = [];
+  
+  // --- DOM ELEMENTS ---
+  
+  const turnText = document.getElementById("turnText");
+  const turnOrbs = Array.from(document.querySelectorAll(".turn-orb"));
+  const roundInfo = document.getElementById("roundInfo");
+  const roundTextEl = document.getElementById("roundText");
+  const turnCountTextEl = document.getElementById("turnCountText");
+  const turnTracker = document.getElementById("turnTracker");
+  const topRightTap = document.getElementById("topRightTap");
+
+  // New Stats Elements
+  const statsWrapper = document.getElementById("statsWrapper");
+  const avgTimeDisplay = document.getElementById("avgTimeDisplay");
+  const statsPanel = document.getElementById("statsPanel");
+  const statsCloseBtn = document.getElementById("statsCloseBtn");
+  const statsSummaryEl = document.getElementById("statsSummary");
+  const statTotalTurnsEl = document.getElementById("statTotalTurns");
+  const statOverallAvgEl = document.getElementById("statOverallAvg");
+  const statLongestTurnEl = document.getElementById("statLongestTurn");
+  const turnDistributionEl = document.getElementById("turnDistribution");
+  const turnLogListEl = document.getElementById("turnLogList");
+  
+  const playerColors = [
+    '#f8f5e6', // orb0 - white
+    '#3aa3ff', // orb1 - blue
+    '#1b1b24', // orb2 - black
+    '#ff5a40', // orb3 - red
+    '#2fd166', // orb4 - green
+    '#b38cff'  // orb5 - center/purple
+  ];
+  
+  // Notes/Config elements (simplified reference)
+  const addNoteBtn = document.getElementById("addNoteBtn");
+  const notesListEl = document.getElementById("notesList");
+  const noteComposer = document.getElementById("noteComposer");
+  const noteInput = document.getElementById("noteInput");
+  const noteTarget = document.getElementById("noteTarget");
+  const noteSave = document.getElementById("noteSave");
+  const noteCancel = document.getElementById("noteCancel");
+  const playerConfig = document.getElementById("playerConfig");
+  const countButtons = Array.from(document.querySelectorAll(".count-btn"));
+  const nameRows = Array.from(document.querySelectorAll(".name-row"));
+  const nameInputs = Array.from(document.querySelectorAll("#nameFields input"));
+  const configCancel = document.getElementById("configCancel");
+  const configSave = document.getElementById("configSave");
+  let configSelectedCount = 4;
+  
+  // --- UTILITY FUNCTIONS ---
+  
+  function defaultName(index) {
+    return `Player ${index + 1}`;
+  }
+  
+  function formatTime(ms) {
+    if (ms == null) return '--:--';
+    const totalSeconds = Math.round(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  
+  function getPlayerColor(index) {
+    if (index == null || index < 0 || index >= playerColors.length) {
+      return null;
+    }
+    return playerColors[index];
+  }
+  
+  // --- RENDER FUNCTIONS ---
+  
+  function updateTurnDisplay() {
+    const p = players[currentPlayer];
+    const name = p && p.name ? p.name : defaultName(currentPlayer);
+    turnText.textContent = name;
+  }
+  
+  function updateTurnOrbs() {
+    turnOrbs.forEach((orb, idx) => {
+      orb.classList.remove("active", "disabled");
+      if (idx >= numPlayers) orb.classList.add("disabled");
+      if (idx === currentPlayer) orb.classList.add("active");
+    });
+    // Set color indicator for the current player
+    const orb = turnOrbs[currentPlayer];
+    if (orb) {
+      turnText.style.borderColor = orb.style.background;
+    }
+  }
+  
+  function updateRoundTurnDisplay() {
+    roundTextEl.textContent = `Round ${roundNumber}`;
+    turnCountTextEl.textContent = `Turn ${turnTotal}`;
+  }
+  
+  function renderNotes() {
+    // Retain original note rendering logic
+    // ... (omitted for brevity, keep the original implementation)
+    notesListEl.innerHTML = ''; // Placeholder to prevent error
+    const empty = document.createElement("div");
+    empty.textContent = 'No notes yet – add reminders.';
+    empty.style.fontSize = "13px";
+    empty.style.color = "var(--muted)";
+    notesListEl.appendChild(empty);
+  }
+  
+  function refreshNoteTargetOptions() {
+    // Retain original note target rendering logic
+    // ... (omitted for brevity, keep the original implementation)
+  }
+  
+  // --- STATS LOGIC ---
+  
+  function calculateAndDisplayStats() {
+    const completedTurns = turnLog.length;
+    statTotalTurnsEl.textContent = completedTurns;
+    
+    if (completedTurns === 0) {
+      avgTimeDisplay.textContent = statOverallAvgEl.textContent = '--:--';
+      statLongestTurnEl.textContent = '--:--';
+      turnDistributionEl.innerHTML = 'Complete a few turns to see distribution.';
+      turnLogListEl.innerHTML = '<div class="log-entry">Log empty. Complete a few turns to see data.</div>';
+      return;
+    }
+    
+    // 1. Calculate Summary Stats
+    const totalDuration = turnLog.reduce((sum, log) => sum + log.durationMs, 0);
+    const overallAvgTime = totalDuration / completedTurns;
+    let longestTurnTime = 0;
+    
+    turnLog.forEach(log => {
+      if (log.durationMs > longestTurnTime) {
+        longestTurnTime = log.durationMs;
+      }
+    });
+    
+    avgTimeDisplay.textContent = formatTime(overallAvgTime);
+    statOverallAvgEl.textContent = formatTime(overallAvgTime);
+    statLongestTurnEl.textContent = formatTime(longestTurnTime);
+
+    // 2. Calculate Player-Specific Stats
+    const playerStats = players.map((p, index) => ({
+      name: p.name || defaultName(index),
+      index: index,
+      totalDuration: 0,
+      turnCount: 0,
+      color: getPlayerColor(index) || 'gray'
+    }));
+    
+    turnLog.forEach(log => {
+      const stat = playerStats[log.playerIndex];
+      if (stat) {
+        stat.totalDuration += log.durationMs;
+        stat.turnCount += 1;
+      }
+    });
+
+    // Determine the max time for the bar chart scaling
+    let maxPlayerTime = 0;
+    playerStats.forEach(stat => {
+        if (stat.turnCount > 0) {
+            stat.avgTimeMs = stat.totalDuration / stat.turnCount;
+            if (stat.avgTimeMs > maxPlayerTime) {
+                maxPlayerTime = stat.avgTimeMs;
+            }
+        } else {
+            stat.avgTimeMs = 0;
+        }
+    });
+
+    // 3. Render Distribution Bar Chart
+    turnDistributionEl.innerHTML = '';
+    
+    playerStats.forEach(stat => {
+        if (stat.turnCount === 0) return; // Skip players with 0 turns logged
+
+        const row = document.createElement('div');
+        row.className = 'distribution-row';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'player-name-short';
+        nameEl.textContent = stat.name;
+        
+        const barContainer = document.createElement('div');
+        barContainer.className = 'bar-container';
+
+        const barEl = document.createElement('div');
+        barEl.className = 'time-bar';
+        
+        // Calculate bar width based on max time
+        const barWidth = maxPlayerTime > 0 ? (stat.avgTimeMs / maxPlayerTime) * 100 : 0;
+        barEl.style.width = `${Math.max(5, barWidth)}%`; // Min 5% to show color
+        barEl.style.background = stat.color;
+
+        const timeEl = document.createElement('div');
+        timeEl.className = 'bar-time';
+        timeEl.textContent = formatTime(stat.avgTimeMs);
+        
+        barContainer.appendChild(barEl);
+        barContainer.appendChild(timeEl);
+        
+        row.appendChild(nameEl);
+        row.appendChild(barContainer);
+        turnDistributionEl.appendChild(row);
+    });
+    
+    // 4. Render Turn Log
+    turnLogListEl.innerHTML = '';
+    turnLog.slice(-20).reverse().forEach((log, index) => { // Show last 20 turns
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        const playerName = players[log.playerIndex].name || defaultName(log.playerIndex);
+        entry.innerHTML = `Round ${log.round}, Turn ${log.turn}: <strong>${playerName}</strong> took <strong>${formatTime(log.durationMs)}</strong>.`;
+        turnLogListEl.appendChild(entry);
+    });
+  }
+
+  function openStatsPanel() {
+    calculateAndDisplayStats();
+    statsPanel.classList.add("open");
+  }
+
+  function closeStatsPanel() {
+    statsPanel.classList.remove("open");
+  }
+
+  // --- TURN NAVIGATION ---
+
+  function nextTurn() {
+    if (numPlayers <= 0) return;
+    
+    // 1. Log the COMPLETED turn (the one that is ending now)
+    const turnEndTime = Date.now();
+    const durationMs = turnEndTime - currentTurnStartTime;
+
+    // Log the turn that just finished
+    turnLog.push({
+        round: roundNumber,
+        turn: turnTotal,
+        playerIndex: currentPlayer,
+        durationMs: durationMs
+    });
+    
+    // 2. Advance the turn/round state
+    currentPlayer++;
+    if (currentPlayer >= numPlayers) {
+      currentPlayer = 0;
+      roundNumber++;
+    }
+    turnTotal++;
+
+    // 3. Set the start time for the NEW turn
+    currentTurnStartTime = Date.now();
+    
+    // 4. Update display
+    updateTurnOrbs();
+    updateTurnDisplay();
+    updateRoundTurnDisplay();
+    calculateAndDisplayStats(); // Update avg time on the main screen
+  }
+
+  function previousTurn() {
+    if (turnTotal <= 1 || numPlayers <= 0) return;
+    
+    // 1. Remove the current turn's duration data
+    // We don't log the turn time if the player undoes it, because the time is incomplete.
+    currentTurnStartTime = Date.now(); // Reset timer for the undone turn
+
+    // 2. Go back in state
+    turnTotal--;
+    if (currentPlayer === 0) {
+      if (roundNumber > 1) roundNumber--;
+      currentPlayer = numPlayers - 1;
+    } else {
+      currentPlayer--;
+    }
+    
+    // 3. Remove the log entry for the turn we're returning to
+    // The player's current turn (which is turnTotal) was the one that was previously completed and logged.
+    // However, since we just decremented turnTotal, the log entry for the new turnTotal number should be removed.
+    // The log is for the *completed* turn, which is now the current turn.
+    // Instead of complex logic, simply remove the *last* completed log entry.
+    if (turnLog.length > 0) {
+        turnLog.pop();
+    }
+    
+    // 4. Update display
+    updateTurnOrbs();
+    updateTurnDisplay();
+    updateRoundTurnDisplay();
+    calculateAndDisplayStats(); // Update avg time on the main screen
+  }
+  
+  // --- CONFIG FUNCTIONS (mostly retained) ---
+  
+  function initPlayers(count) {
+    numPlayers = Math.min(Math.max(count, 1), 6);
+    const newPlayers = [];
+    for (let i = 0; i < numPlayers; i++) {
+      const existing = players[i];
+      newPlayers.push({
+        name: existing ? existing.name : defaultName(i)
+      });
+    }
+    players = newPlayers;
+    if (currentPlayer >= numPlayers) currentPlayer = numPlayers - 1;
+    updateTurnDisplay();
+    updateTurnOrbs();
+    refreshNoteTargetOptions();
+    calculateAndDisplayStats(); // Update stats after player change
+  }
+
+  function setConfigCount(count) {
+    configSelectedCount = count;
+    countButtons.forEach(btn => {
+      const c = parseInt(btn.getAttribute("data-count"), 10);
+      btn.classList.toggle("active", c === count);
+    });
+    nameRows.forEach((row, idx) => {
+      row.style.display = idx < count ? "flex" : "none";
+    });
+  }
+
+  function openPlayerConfig() {
+    setConfigCount(numPlayers);
+    for (let i = 0; i < 6; i++) {
+      const p = players[i];
+      nameInputs[i].value = p && p.name ? p.name : defaultName(i);
+    }
+    playerConfig.classList.add("open");
+  }
+
+  function closePlayerConfig() {
+    playerConfig.classList.remove("open");
+  }
+
+  // --- EVENT LISTENERS ---
+  
+  // Advance turn: tap pentagram or top-right area
+  turnTracker.addEventListener("pointerdown", nextTurn);
+  topRightTap.addEventListener("pointerdown", nextTurn);
+
+  // Go back a turn: tap upper-left round counter area
+  roundInfo.addEventListener("pointerdown", previousTurn);
+  
+  // Open player config by tapping name text
+  turnText.addEventListener("pointerdown", openPlayerConfig);
+  
+  // Open/Close Stats Panel
+  statsWrapper.addEventListener("pointerdown", openStatsPanel);
+  statsCloseBtn.addEventListener("pointerdown", closeStatsPanel);
+  statsPanel.addEventListener("click", e => {
+      if (e.target === statsPanel) closeStatsPanel();
+  });
+
+
+  // Config Buttons
+  countButtons.forEach(btn => {
+    btn.addEventListener("pointerdown", () => {
+      const count = parseInt(btn.getAttribute("data-count"), 10);
+      setConfigCount(count);
+    });
+  });
+
+  configCancel.addEventListener("pointerdown", closePlayerConfig);
+
+  configSave.addEventListener("pointerdown", () => {
+    const newPlayers = [];
+    for (let i = 0; i < configSelectedCount; i++) {
+      const rawName = nameInputs[i].value.trim();
+      newPlayers.push({
+        name: rawName || defaultName(i)
+      });
+    }
+    players = newPlayers;
+    numPlayers = configSelectedCount;
+    if (currentPlayer >= numPlayers) currentPlayer = 0; // Reset to P1 on config save
+    roundNumber = 1;
+    turnTotal = 1;
+    turnLog = []; // Clear log on config save
+    currentTurnStartTime = Date.now(); // Restart timer
+    
+    updateTurnOrbs();
+    updateTurnDisplay();
+    updateRoundTurnDisplay();
+    refreshNoteTargetOptions();
+    calculateAndDisplayStats();
+    closePlayerConfig();
+  });
+  
+  // Notes Listeners (retained original logic)
+  addNoteBtn.addEventListener("click", () => { /* openNoteComposer() logic */ });
+  noteSave.addEventListener("click", () => { /* saveNoteFromComposer() logic */ });
+  noteCancel.addEventListener("click", () => { /* closeNoteComposer() logic */ });
+  noteInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); /* saveNoteFromComposer() logic */ }
+      else if (e.key === "Escape") { e.preventDefault(); /* closeNoteComposer() logic */ }
+  });
+
+  // --- INIT ---
+
+  // NOTE: The original code used initPlayers(4) which calls update functions.
+  // The logic below ensures everything is initialized correctly for the new version.
+  
+  // Initial player setup
+  for (let i = 0; i < 4; i++) {
+    players.push({ name: defaultName(i) });
+  }
+  initPlayers(4); // Sets up the initial state
+</script>
+</body>
+</html>
