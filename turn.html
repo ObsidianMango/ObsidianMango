@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>Turn Tracker Pro (High Contrast)</title>
+<title>Turn Tracker Pro</title>
 <style>
   :root {
     --bg: #040608;
@@ -69,7 +69,6 @@
     transform: translate(-50%, -50%); opacity: 0.2;
     transition: 0.3s; box-shadow: 0 0 10px rgba(0,0,0,0.8);
   }
-  /* CHANGED ORB 2 to Steel Grey for visibility */
   .orb0 { top: 16%; left: 50%; background: #f8f5e6; }
   .orb1 { top: 40%; left: 88%; background: #3aa3ff; }
   .orb2 { top: 84%; left: 68%; background: #94a3b8; } 
@@ -88,7 +87,6 @@
     color: var(--muted); padding: 15px; text-align: center;
     margin-bottom: 10px; transition: color 0.3s;
     border: 1px solid transparent; border-radius: 999px;
-    /* Added text shadow for readability on dark colors */
     text-shadow: 0 2px 4px rgba(0,0,0,0.9);
   }
   #turnText:active { background: rgba(255,255,255,0.05); border-color: var(--border); }
@@ -278,6 +276,8 @@
 window.addEventListener('DOMContentLoaded', () => {
 
   // --- VARIABLES ---
+  const STORAGE_KEY = 'turnTracker_v1';
+  
   let numPlayers = 4;
   let currentPlayer = 0; 
   let round = 1;
@@ -293,7 +293,6 @@ window.addEventListener('DOMContentLoaded', () => {
   let logs = []; 
   let gameStartTime = Date.now();
 
-  // Changed Index 2 (Black) to a Steel Grey for visibility
   const colors = ['#f8f5e6', '#3aa3ff', '#94a3b8', '#ff5a40', '#2fd166', '#b38cff'];
 
   // --- ELEMENTS ---
@@ -315,10 +314,81 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // --- INITIALIZATION ---
   function init() {
-    turnStartTime = Date.now();
+    if(!loadState()) {
+      // New Game
+      turnStartTime = Date.now();
+      gameStartTime = Date.now();
+    }
     startTimer();
     renderNamesConfig();
     updateUI();
+  }
+
+  // --- SAVE / LOAD SYSTEM ---
+  function saveState() {
+    const state = {
+      numPlayers, currentPlayer, round, turnCount, players,
+      logs, gameStartTime,
+      // We must save the "Base" turn start time to persist accuracy
+      turnStartTime, 
+      totalPausedTime,
+      isPaused,
+      savedAt: Date.now()
+    };
+    
+    // If paused, we need to artificially adjust totalPausedTime so when we reload, the time doesn't jump
+    if(isPaused) {
+       // We don't save pauseStartTime because the time spent closed counts as "paused" time essentially
+       // Logic: If closed while paused, the elapsed time should be frozen.
+    }
+    
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function loadState() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    
+    try {
+      const s = JSON.parse(raw);
+      // Basic validation
+      if (!s.players) return false;
+
+      numPlayers = s.numPlayers;
+      currentPlayer = s.currentPlayer;
+      round = s.round;
+      turnCount = s.turnCount;
+      players = s.players;
+      logs = s.logs;
+      gameStartTime = s.gameStartTime;
+      turnStartTime = s.turnStartTime;
+      totalPausedTime = s.totalPausedTime;
+      isPaused = s.isPaused;
+      
+      // If we loaded a paused game, we need to add the time the app was closed to the "paused" time
+      // so the timer doesn't jump forward.
+      if (isPaused) {
+        const now = Date.now();
+        const timeClosed = now - s.savedAt;
+        totalPausedTime += timeClosed;
+        pauseStartTime = now; // Reset pause start to now
+        document.body.classList.add('is-paused');
+      }
+
+      // Update toggle buttons for config
+      document.querySelectorAll('#countGroup .toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.n) === numPlayers);
+      });
+
+      return true;
+    } catch(e) {
+      console.error("Save file corrupt");
+      return false;
+    }
+  }
+
+  function clearState() {
+    localStorage.removeItem(STORAGE_KEY);
   }
 
   // --- TIMER ---
@@ -343,6 +413,7 @@ window.addEventListener('DOMContentLoaded', () => {
       pauseStartTime = Date.now();
       document.body.classList.add('is-paused');
     }
+    saveState();
   }
 
   function formatTime(ms) {
@@ -379,6 +450,7 @@ window.addEventListener('DOMContentLoaded', () => {
     
     updateUI();
     updateStats();
+    saveState();
   }
 
   function prevTurn() {
@@ -400,10 +472,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
     updateUI();
     updateStats();
+    saveState();
   }
 
   function resetGame() {
     if (!confirm("Start a new game? Stats will be cleared.")) return;
+    clearState();
     round = 1;
     turnCount = 1;
     currentPlayer = 0;
@@ -453,6 +527,7 @@ window.addEventListener('DOMContentLoaded', () => {
     const max = Math.max(...logs.map(l => l.duration));
     document.getElementById('stLongest').textContent = formatTime(max);
 
+    // Distribution
     const activePlayers = players.slice(0, numPlayers);
     const pStats = activePlayers.map((name, i) => {
       const pLogs = logs.filter(l => l.playerIdx === i);
@@ -494,6 +569,7 @@ window.addEventListener('DOMContentLoaded', () => {
       input.oninput = (e) => { 
         players[i] = e.target.value || `Player ${i+1}`; 
         updateUI(); 
+        saveState(); // Save names on type
       };
       
       row.appendChild(input);
@@ -537,6 +613,7 @@ window.addEventListener('DOMContentLoaded', () => {
       renderNamesConfig();
       updateUI();
       updateStats();
+      saveState();
     });
   });
 
