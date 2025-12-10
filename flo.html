@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; background: #000; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+    const c = document.getElementById('c');
+    const x = c.getContext('2d');
+    let w, h, p = [], s = 20, cols, rows;
+    
+    // Pseudo-random noise generator
+    const noise = (x, y) => {
+        let n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+        return n - Math.floor(n);
+    };
+
+    const init = () => {
+        w = c.width = window.innerWidth;
+        h = c.height = window.innerHeight;
+        cols = Math.floor(w / s) + 1;
+        rows = Math.floor(h / s) + 1;
+        p = [];
+        // Spawn 2000 particles
+        for(let i=0; i<2000; i++) p.push({
+            x: Math.random()*w, y: Math.random()*h, 
+            vx: 0, vy: 0, 
+            history: [],
+            hue: Math.random() * 60 + 180 // Cyan/Blue spectrum
+        });
+        x.fillStyle = '#000';
+        x.fillRect(0,0,w,h);
+    };
+
+    const draw = () => {
+        // Trail effect (fade out previous frames slightly)
+        x.fillStyle = 'rgba(0, 0, 0, 0.05)';
+        x.fillRect(0, 0, w, h);
+
+        p.forEach(pt => {
+            // Calculate grid position
+            let gx = Math.floor(pt.x / s);
+            let gy = Math.floor(pt.y / s);
+            
+            // Generate flow angle based on noise
+            let angle = noise(gx * 0.1, gy * 0.1) * Math.PI * 4;
+            
+            // Physics
+            pt.vx += Math.cos(angle) * 0.5;
+            pt.vy += Math.sin(angle) * 0.5;
+            
+            // Friction and Limit
+            pt.vx *= 0.5; pt.vy *= 0.5;
+            pt.x += pt.vx; pt.y += pt.vy;
+
+            // Wrap around screen
+            if(pt.x > w) pt.x = 0; if(pt.x < 0) pt.x = w;
+            if(pt.y > h) pt.y = 0; if(pt.y < 0) pt.y = h;
+
+            // Render
+            x.beginPath();
+            x.moveTo(pt.x, pt.y);
+            x.lineTo(pt.x - pt.vx * 4, pt.y - pt.vy * 4);
+            x.strokeStyle = `hsl(${pt.hue}, 100%, 50%)`;
+            x.lineWidth = 1.5;
+            x.stroke();
+            
+            // Shift hue slowly
+            pt.hue += 0.5; 
+            if(pt.hue > 360) pt.hue = 0;
+        });
+        requestAnimationFrame(draw);
+    };
+
+    window.addEventListener('resize', init);
+    window.addEventListener('click', () => {
+        // Click to reset with random noise seed offset
+        init();
+    });
+    
+    init();
+    draw();
+</script>
+</body>
+</html>
