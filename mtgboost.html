@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Pocket Sim: GM</title>
+    <title>MTG Pocket Sim: v9</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -28,8 +28,7 @@
             background-color: var(--bg);
             color: var(--text);
             font-family: 'Inter', sans-serif;
-            overflow: hidden; /* Prevent body scroll */
-            overscroll-behavior: none; /* No bounce on iOS */
+            overflow: hidden;
             height: 100vh;
             display: flex;
             flex-direction: column;
@@ -71,11 +70,10 @@
             flex-direction: column;
             padding: 16px;
             overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
             width: 100%;
         }
         
-        .view.active { display: flex; animation: fadeIn 0.2s cubic-bezier(0.25, 1, 0.5, 1); }
+        .view.active { display: flex; animation: fadeIn 0.25s cubic-bezier(0.25, 1, 0.5, 1); }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -245,7 +243,6 @@
             text-align: center; border-radius: 0 0 8px 8px; padding: 4px 0; font-weight: 600;
         }
         
-        /* Commander Badge */
         .col-cmd {
             position: absolute; top: -5px; left: -5px; background: #9b59b6;
             color: white; font-size: 0.9rem; font-weight: bold;
@@ -262,6 +259,7 @@
         }
         .deck-list-item:active { background: var(--surface-2); }
         .deck-fmt-tag { font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; background: #333; color: #aaa; margin-left: 5px; text-transform: uppercase; }
+        .deck-val-tag { font-size: 0.8rem; color: var(--success); font-weight: bold; margin-right: 10px; }
 
         #deck-view-container { display: none; flex-direction: column; height: 100%; }
         
@@ -309,6 +307,8 @@
             transition: background 0.2s;
         }
         .settings-btn:hover { background: var(--surface-2); }
+
+        .warning-text { color: var(--danger); font-size: 0.75rem; margin-top: 20px; line-height: 1.4; border: 1px solid var(--danger); padding: 10px; border-radius: 8px; background: rgba(235, 87, 87, 0.1); }
     </style>
 </head>
 <body>
@@ -320,7 +320,7 @@
 
         <div id="view-home" class="view active">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h1>Pack Simulator</h1>
+                <h1>Booster Pack Simulator</h1>
                 <button class="settings-btn" onclick="openSettings()">⚙️</button>
             </div>
             
@@ -404,6 +404,9 @@
                         <button id="btn-mode-grid" class="btn secondary" onclick="toggleDeckMode('grid')">Binder View</button>
                         <button id="btn-mode-list" class="btn secondary" onclick="toggleDeckMode('list')">List View</button>
                     </div>
+                    
+                    <button class="btn secondary" style="padding:8px;" onclick="exportDeckToText()">📋 Export List</button>
+
                     <div class="binder-controls" id="deck-filter-controls" style="display:none;">
                         <input type="text" id="deck-search-input" placeholder="Search deck..." onkeyup="renderActiveDeck()">
                         <div class="filter-toggle-btn" onclick="toggleFilterPanel('deck')">⚡</div>
@@ -465,8 +468,13 @@
                 <h2 style="margin:0;">Settings</h2>
                 <button onclick="closeSettings()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
-            <p style="color:#888; margin-bottom:20px;">Manage your data here.</p>
+            <button class="btn secondary" onclick="exportCollectionToText()" style="margin-bottom:15px;">Export Collection Text</button>
             <button class="btn danger" onclick="clearData()">Factory Reset (Delete All)</button>
+            
+            <p class="warning-text">
+                ⚠️ <b>STORAGE WARNING:</b> The app may stop saving cards after 3,000 - 5,000 pulls due to browser limits. Use the Export feature often.<br><br>
+                *Prices are simulated snapshots and may not reflect real-time market value.
+            </p>
         </div>
     </div>
 
@@ -533,6 +541,60 @@
             `;
         }
 
+        // --- EXPORT LOGIC ---
+        function generateTextExport(cards) {
+            // Group by Type (simple heuristic)
+            const groups = {};
+            const types = ['Creature', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Planeswalker', 'Land', 'Other'];
+            
+            cards.forEach(c => {
+                let foundType = 'Other';
+                for(let t of types) {
+                    if(c.type_line && c.type_line.includes(t)) { foundType = t; break; }
+                }
+                if(!groups[foundType]) groups[foundType] = [];
+                groups[foundType].push(c);
+            });
+
+            let text = "";
+            types.forEach(t => {
+                if(groups[t] && groups[t].length > 0) {
+                    text += `\n== ${t.toUpperCase()} (${groups[t].reduce((a,b)=>a+(b.qty||b.count),0)}) ==\n`;
+                    // Sort by Rarity then Name
+                    const rarityOrder = { 'mythic':0, 'rare':1, 'uncommon':2, 'common':3 };
+                    groups[t].sort((a,b) => (rarityOrder[a.rarity] - rarityOrder[b.rarity]) || a.name.localeCompare(b.name));
+                    
+                    groups[t].forEach(c => {
+                        const qty = c.qty || c.count;
+                        const rarityTag = c.rarity ? `[${c.rarity.charAt(0).toUpperCase()}]` : '';
+                        text += `${qty}x ${c.name} ${rarityTag}\n`;
+                    });
+                }
+            });
+            return text.trim();
+        }
+
+        function exportDeckToText() {
+            if(state.activeDeckId === null) return;
+            const deck = state.decks[state.activeDeckId];
+            const cards = getDeckCards(deck);
+            const text = `Deck: ${deck.name} (${deck.format})\n\n` + generateTextExport(cards);
+            copyTextToClipboard(text);
+        }
+
+        function exportCollectionToText() {
+            const cards = Object.values(state.collection);
+            const text = "MY COLLECTION\n\n" + generateTextExport(cards);
+            copyTextToClipboard(text);
+        }
+
+        function copyTextToClipboard(text) {
+            const el = document.createElement('textarea');
+            el.value = text; document.body.appendChild(el); el.select();
+            document.execCommand('copy'); document.body.removeChild(el);
+            showToast("List copied to clipboard!");
+        }
+
         // --- INIT ---
         window.addEventListener('DOMContentLoaded', () => {
             renderTotalValue(); initSets();
@@ -575,7 +637,7 @@
                     let img = c.image_uris?.normal; if(!img && c.card_faces && c.card_faces[0].image_uris) img = c.card_faces[0].image_uris.normal;
                     let colors = c.colors; if(!colors && c.card_faces && c.card_faces[0].colors) colors = c.card_faces[0].colors;
                     if(img && c.rarity) {
-                        const obj = { id: c.id, name: c.name, img: img, rarity: c.rarity, prices: c.prices, colors: colors || [], type: c.type_line || "Unknown", set: c.set };
+                        const obj = { id: c.id, name: c.name, img: img, rarity: c.rarity, prices: c.prices, colors: colors || [], type_line: c.type_line, type: c.type_line || "Unknown", set: c.set };
                         if(c.type_line && c.type_line.includes("Basic Land")) state.pool.land.push(obj); else if(state.pool[c.rarity]) state.pool[c.rarity].push(obj);
                     }
                 });
@@ -601,8 +663,7 @@
             let pack = [];
             if(p.mythic.length && Math.random() < 0.13) pack.push({...pick(p.mythic)}); else if(p.rare.length) pack.push({...pick(p.rare)}); else if(p.uncommon.length) pack.push({...pick(p.uncommon)});
             for(let i=0; i<3; i++) { let c=pick(p.uncommon); if(c) pack.push({...c}); }
-            let cCount = 10;
-            if(Math.random() < 0.3) { cCount--; const pools = [p.common, p.uncommon, p.rare, p.mythic].flat(); if(pools.length) { let foil = {...pick(pools)}; foil.foil = true; pack.push(foil); } }
+            let cCount = 10; if(Math.random() < 0.3) { cCount--; const pools = [p.common, p.uncommon, p.rare, p.mythic].flat(); if(pools.length) { let foil = {...pick(pools)}; foil.foil = true; pack.push(foil); } }
             for(let i=0; i<cCount; i++) { let c=pick(p.common); if(c) pack.push({...c}); }
             if(p.land.length) pack.push({...pick(p.land)});
             const stack = []; const rares = pack.filter(c=>['rare','mythic'].includes(c.rarity)); const uncs = pack.filter(c=>c.rarity==='uncommon' && !c.foil); const foils = pack.filter(c=>c.foil); const coms = pack.filter(c=>c.rarity==='common' && !c.foil); const lands = pack.filter(c=>c.type_line?.includes("Basic Land"));
@@ -627,6 +688,7 @@
             if(card.colors) state.collection[card.id].colors = card.colors;
             if(card.prices) state.collection[card.id].prices = card.prices;
             if(card.type) state.collection[card.id].type = card.type;
+            if(card.type_line) state.collection[card.id].type_line = card.type_line; // Ensure type_line is saved
             if(card.set) state.collection[card.id].set = card.set;
             state.collection[card.id].date = Date.now();
             localStorage.setItem('mtgCollection_v2', JSON.stringify(state.collection));
@@ -650,7 +712,6 @@
         function toggleFilterPanel(context) {
             const panel = context === 'main' ? elements.filterPanelMain : elements.filterPanelDeck;
             if(panel.style.display === 'block') { panel.style.display = 'none'; } else {
-                // Populate SETS dynamically based on visible cards
                 const source = context === 'main' ? Object.values(state.collection) : getDeckCards(state.decks[state.activeDeckId]);
                 const uniqueSets = [...new Set(source.map(c => c.set).filter(Boolean))];
                 const setContainer = document.getElementById(`filter-sets-${context}`);
@@ -750,24 +811,18 @@
             const btnCmd = document.getElementById('btn-set-commander');
             elements.deckSelectArea.style.display = 'none'; 
             
-            // LOGIC FOR BUTTONS
             if(source === 'deck' && state.activeDeckId !== null) {
-                // REMOVE MODE
                 btnAdd.style.display = 'inline-block';
                 btnAdd.innerText = "Remove from Deck"; 
                 btnAdd.className = "btn danger";
                 btnAdd.onclick = () => removeFromDeck();
                 
-                // COMMANDER BUTTON
                 const deck = state.decks[state.activeDeckId];
                 if(deck.format === 'Commander' && card.type && card.type.includes('Legendary') && card.type.includes('Creature')) {
                     btnCmd.style.display = 'inline-block';
                     btnCmd.onclick = () => setCommander();
-                } else {
-                    btnCmd.style.display = 'none';
-                }
+                } else { btnCmd.style.display = 'none'; }
             } else {
-                // ADD MODE
                 btnAdd.style.display = 'inline-block';
                 btnAdd.innerText = "Add to Deck"; 
                 btnAdd.className = "btn";
@@ -799,7 +854,7 @@
             const deck = state.decks[state.activeDeckId];
             if(deck.cards[state.modalCardId]) {
                 deck.cards[state.modalCardId]--; if(deck.cards[state.modalCardId] <= 0) delete deck.cards[state.modalCardId];
-                if(deck.commander === state.modalCardId) deck.commander = null; // Unset commander if removed
+                if(deck.commander === state.modalCardId) deck.commander = null; 
                 localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks));
                 showToast("Removed from Deck"); closeModal(); renderActiveDeck();
             }
@@ -820,10 +875,25 @@
             main.style.display = 'block'; view.style.display = 'none'; list.innerHTML = ''; state.activeDeckId = null;
             if(state.decks.length === 0) { list.innerHTML = '<div style="text-align:center; color:#666;">No decks.</div>'; return; }
             state.decks.forEach((deck, idx) => {
-                const count = Object.values(deck.cards).reduce((a,b)=>a+b,0);
+                const deckCards = getDeckCards(deck);
+                let deckVal = 0;
+                deckCards.forEach(c => {
+                    let p = parseFloat(c.foil ? c.prices.usd_foil : c.prices.usd) || 0;
+                    deckVal += p * c.qty;
+                });
+                const count = deckCards.reduce((acc, c) => acc + c.qty, 0);
                 const el = document.createElement('div'); el.className = 'deck-list-item';
                 const fmt = deck.format === 'Commander' ? 'CMD' : 'STD';
-                el.innerHTML = `<div onclick="openDeck(${idx}, 'grid')" style="flex:1;"><div style="font-weight:bold; font-size:1rem">${deck.name}<span class="deck-fmt-tag">${fmt}</span></div><div style="font-size:0.8rem; color:#888;">${count} cards</div></div><div style="display:flex; gap:10px;"><button class="btn secondary" style="width:auto; padding:8px 12px; margin:0;" onclick="openDeck(${idx}, 'list')">Edit</button><button class="btn danger" style="width:auto; padding:8px 12px; margin:0;" onclick="deleteDeck(${idx})">X</button></div>`;
+                el.innerHTML = `
+                    <div onclick="openDeck(${idx}, 'grid')" style="flex:1;">
+                        <div style="font-weight:bold; font-size:1rem">${deck.name}<span class="deck-fmt-tag">${fmt}</span></div>
+                        <div style="font-size:0.8rem; color:#888;">${count} cards</div>
+                    </div>
+                    <div style="display:flex; align-items:center;">
+                        <span class="deck-val-tag">${fmtMoney(deckVal)}</span>
+                        <button class="btn secondary" style="width:auto; padding:8px 12px; margin:0; margin-right:5px;" onclick="openDeck(${idx}, 'list')">Edit</button>
+                        <button class="btn danger" style="width:auto; padding:8px 12px; margin:0;" onclick="deleteDeck(${idx})">X</button>
+                    </div>`;
                 list.appendChild(el);
             });
         }
@@ -868,13 +938,9 @@
             const search = document.getElementById('deck-search-input').value.toLowerCase();
             deckCards = filterCards(deckCards, search);
 
-            // Move Commander to front if exists
             if(deck.commander) {
                 const cmdIndex = deckCards.findIndex(c => c.id === deck.commander);
-                if(cmdIndex > -1) {
-                    const cmd = deckCards.splice(cmdIndex, 1)[0];
-                    deckCards.unshift(cmd);
-                }
+                if(cmdIndex > -1) { const cmd = deckCards.splice(cmdIndex, 1)[0]; deckCards.unshift(cmd); }
             }
 
             if(state.deckViewMode === 'list') {
@@ -892,10 +958,7 @@
                     el.onclick = () => openModal(c, 'deck'); 
                     const count = document.createElement('div'); count.className = 'col-count'; count.innerText = c.qty;
                     el.appendChild(count);
-                    if(c.id === deck.commander) {
-                        const badge = document.createElement('div'); badge.className = 'col-cmd'; badge.innerText = '👑';
-                        el.appendChild(badge);
-                    }
+                    if(c.id === deck.commander) { const badge = document.createElement('div'); badge.className = 'col-cmd'; badge.innerText = '👑'; el.appendChild(badge); }
                     gridView.appendChild(el);
                 });
             }
