@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Pocket Sim v2</title>
+    <title>MTG Pocket Sim v3</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #d4af37; /* Gold */
-            --accent: #2d9cdb;  /* Blue */
             --bg: #0f0f13;
             --surface: #1a1a20;
             --surface-2: #25252e;
@@ -16,9 +15,12 @@
             --text-muted: #8b8b99;
             --danger: #eb5757;
             --success: #27ae60;
+            
+            /* Mana Colors */
+            --w: #f0f2c0; --u: #b3ceea; --b: #a69f9d; --r: #ea9f82; --g: #c4d3ca;
         }
 
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
         
         body {
             margin: 0;
@@ -31,7 +33,7 @@
             flex-direction: column;
         }
 
-        /* --- APP CONTAINER --- */
+        /* --- APP STRUCTURE --- */
         #app-container {
             flex: 1;
             position: relative;
@@ -40,20 +42,19 @@
             flex-direction: column;
         }
 
-        /* --- VIEWS --- */
         .view {
             position: absolute;
-            top: 0; left: 0; right: 0; bottom: 70px; /* Leave room for nav */
+            top: 0; left: 0; right: 0; bottom: 80px; /* Nav height */
             display: none;
             flex-direction: column;
-            overflow-y: auto;
             background: var(--bg);
             padding: 20px;
+            overflow-y: auto;
         }
         
-        .view.active { display: flex; animation: fadeIn 0.3s ease; }
+        .view.active { display: flex; animation: fadeIn 0.2s ease; }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         /* --- NAVIGATION --- */
         #nav-bar {
@@ -64,279 +65,188 @@
             align-items: center;
             border-top: 1px solid #333;
             z-index: 100;
-            padding-bottom: 20px; /* Safe area for modern phones */
+            padding-bottom: 20px;
         }
 
         .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: color 0.2s;
-            width: 33%;
+            display: flex; flex-direction: column; align-items: center;
+            font-size: 0.7rem; color: var(--text-muted);
+            cursor: pointer; width: 33%; transition: color 0.2s;
         }
-
         .nav-item.active { color: var(--primary); }
         .nav-icon { font-size: 1.5rem; margin-bottom: 4px; }
 
-        /* --- COMMON UI --- */
-        h1, h2, h3 { margin: 0 0 10px 0; }
-        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px; }
+        /* --- UI ELEMENTS --- */
+        h1, h2 { margin: 0 0 10px 0; }
+        .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 10px; }
 
         .btn {
-            background: var(--primary);
-            color: #000;
-            border: none;
-            padding: 14px 20px;
-            border-radius: 12px;
-            font-weight: 800;
-            font-size: 1rem;
-            cursor: pointer;
-            width: 100%;
-            text-align: center;
-            margin-top: 10px;
-            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.2);
-            transition: transform 0.1s;
+            background: var(--primary); color: #000; border: none;
+            padding: 12px; border-radius: 8px; font-weight: 800; font-size: 0.9rem;
+            cursor: pointer; width: 100%; text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
-        .btn:active { transform: scale(0.98); }
-        .btn.secondary { background: var(--surface-2); color: white; box-shadow: none; }
-        .btn.danger { background: var(--danger); color: white; box-shadow: none; }
+        .btn.secondary { background: var(--surface-2); color: white; box-shadow: none; border: 1px solid #444; }
+        .btn.danger { background: var(--danger); color: white; }
 
-        .stat-card {
-            background: var(--surface);
-            padding: 15px;
-            border-radius: 12px;
-            margin-bottom: 15px;
-            text-align: center;
-            border: 1px solid #333;
-        }
-        .stat-val { font-size: 1.8rem; font-weight: 800; color: var(--success); }
-
-        /* --- HOME / PACK SELECTION --- */
-        #set-select-container { margin-bottom: 20px; display: flex; gap: 10px; }
-        select {
-            flex: 1;
-            padding: 12px;
-            background: var(--surface-2);
-            border: 1px solid #444;
-            color: white;
-            border-radius: 8px;
-            font-size: 1rem;
+        select, input {
+            width: 100%; padding: 12px; background: var(--surface-2);
+            border: 1px solid #444; color: white; border-radius: 8px; font-size: 1rem;
         }
 
-        /* --- PACK OPENING STAGE --- */
-        #pack-stage {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            perspective: 1000px;
+        /* --- COLLECTION & FILTERING --- */
+        .binder-controls {
+            display: flex; gap: 10px; margin-bottom: 15px;
         }
+        #search-input { flex: 1; }
+        .filter-toggle-btn {
+            width: 48px; display: flex; align-items: center; justify-content: center;
+            background: var(--surface-2); border: 1px solid #444; border-radius: 8px;
+            font-size: 1.2rem; cursor: pointer;
+        }
+        .filter-toggle-btn.active { border-color: var(--primary); background: #333; }
 
-        .pack-wrapper {
-            width: 280px;
-            height: 440px;
-            position: relative;
-            animation: float 6s ease-in-out infinite;
+        /* FILTER PANEL */
+        #filter-panel {
+            background: var(--surface); border: 1px solid #333; border-radius: 12px;
+            padding: 15px; margin-bottom: 15px; display: none;
+            animation: slideDown 0.2s;
         }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-        .pack-body {
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #2b2b2b, #111);
-            border-radius: 18px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-            border: 1px solid #444;
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* Pack Foil Shader */
-        .pack-body::before {
-            content: "";
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
-            background-size: 200% 100%;
-            animation: shimmer 4s infinite linear;
-            pointer-events: none;
-            z-index: 5;
-        }
-        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
-        .pack-icon {
-            width: 60%;
-            height: 60%;
-            object-fit: contain;
-            opacity: 0.8;
-            filter: drop-shadow(0 0 15px rgba(255,255,255,0.3));
-            z-index: 2;
-        }
-
-        .pack-title {
-            position: absolute;
-            bottom: 40px;
-            font-size: 1.4rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            text-align: center;
-            width: 100%;
-            padding: 0 10px;
-            z-index: 6;
-            text-shadow: 0 2px 10px black;
-            color: var(--primary);
-        }
-
-        .pack-strip {
-            position: absolute; top: 0; left: 0; width: 100%; height: 60px;
-            background: repeating-linear-gradient(45deg, #181818, #181818 10px, #222 10px, #222 20px);
-            z-index: 20; border-radius: 18px 18px 0 0;
-            border-bottom: 2px dashed #444;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .pack-strip span { font-size: 0.7rem; opacity: 0.6; letter-spacing: 2px; color: #aaa; pointer-events: none;}
+        .filter-group { margin-bottom: 15px; }
+        .filter-label { font-size: 0.8rem; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;}
         
-        .tear-progress {
-            position: absolute; left: 0; top: 0; bottom: 0;
-            background: rgba(212, 175, 55, 0.8);
-            width: 0%; pointer-events: none;
-            box-shadow: 0 0 15px var(--primary);
+        .filter-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .chip {
+            padding: 6px 12px; background: var(--surface-2); border: 1px solid #444;
+            border-radius: 20px; font-size: 0.8rem; cursor: pointer;
+            transition: all 0.2s;
         }
-
-        /* --- CARDS & REVEAL --- */
-        .card-stack {
-            width: 280px; height: 390px;
-            position: relative;
-            display: none;
-        }
+        .chip.active { background: var(--primary); color: black; border-color: var(--primary); font-weight: bold; }
         
-        .card {
-            width: 100%; height: 100%;
-            position: absolute; top: 0; left: 0;
-            border-radius: 14px;
-            background-size: cover; background-position: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-            transition: transform 0.4s ease, opacity 0.4s ease;
-            background-color: #222;
-        }
+        /* Color specific chips */
+        .chip[data-val="W"].active { background: var(--w); }
+        .chip[data-val="U"].active { background: var(--u); }
+        .chip[data-val="B"].active { background: var(--b); color: white; }
+        .chip[data-val="R"].active { background: var(--r); }
+        .chip[data-val="G"].active { background: var(--g); }
 
-        .card.swiped { transform: translateX(150%) rotate(20deg); opacity: 0; }
-
-        .card.foil::after {
-            content: ""; position: absolute; inset: 0; border-radius: 14px;
-            background: linear-gradient(125deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 70%);
-            mix-blend-mode: overlay; opacity: 0.7;
-            animation: foilShine 4s infinite;
-        }
-        @keyframes foilShine { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
-
-        /* --- SUMMARY SCREEN --- */
-        #summary-screen {
-            text-align: center;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            width: 100%;
-        }
-        .rare-pull-list {
-            display: flex; gap: 10px; overflow-x: auto; 
-            max-width: 100%; padding: 10px;
-            margin-bottom: 20px;
-            justify-content: center;
-        }
-        .mini-card {
-            width: 80px; height: 112px;
-            border-radius: 6px; background-size: cover;
-            flex-shrink: 0; border: 1px solid #555;
-            box-shadow: 0 4px 8px black;
-        }
-
-        /* --- COLLECTION GRID --- */
-        .grid-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        
         #collection-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr); /* 3 cols for mobile */
-            gap: 8px;
-            padding-bottom: 50px;
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+            padding-bottom: 40px;
         }
 
         .col-card {
-            aspect-ratio: 2.5/3.5;
-            background-size: cover; border-radius: 6px;
-            position: relative;
-            background-color: #222;
+            aspect-ratio: 2.5/3.5; background-size: cover; border-radius: 6px;
+            position: relative; background-color: #222; cursor: pointer;
         }
         .col-count {
-            position: absolute; top: 3px; right: 3px;
-            background: var(--primary); color: black;
-            font-size: 0.6rem; font-weight: bold;
+            position: absolute; top: 3px; right: 3px; background: var(--primary);
+            color: black; font-size: 0.6rem; font-weight: bold;
             width: 18px; height: 18px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
         .col-price {
             position: absolute; bottom: 0; left: 0; width: 100%;
-            background: rgba(0,0,0,0.85); font-size: 0.6rem;
-            text-align: center; color: var(--success);
-            border-radius: 0 0 6px 6px; padding: 2px 0;
+            background: rgba(0,0,0,0.85); font-size: 0.65rem; color: var(--success);
+            text-align: center; border-radius: 0 0 6px 6px; padding: 2px 0;
         }
 
-        /* --- MODAL (FULL CARD VIEW) --- */
-        #card-modal {
-            position: fixed; inset: 0; z-index: 500;
-            background: rgba(0,0,0,0.95);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            animation: fadeIn 0.2s;
+        /* --- PACK STAGE --- */
+        #pack-stage {
+            flex: 1; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; perspective: 1000px;
         }
-        #modal-img {
-            max-width: 90%; max-height: 60vh;
-            border-radius: 18px;
-            box-shadow: 0 0 40px rgba(212, 175, 55, 0.2);
-            margin-bottom: 20px;
+        .pack-wrapper {
+            width: 280px; height: 440px; position: relative;
+            animation: float 6s ease-in-out infinite;
         }
-        .modal-details { text-align: center; color: white; width: 100%; }
-        .modal-price { color: var(--success); font-size: 1.5rem; font-weight: bold; margin: 10px 0; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        
+        .pack-body {
+            width: 100%; height: 100%; background: linear-gradient(135deg, #2b2b2b, #111);
+            border-radius: 18px; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            border: 1px solid #444; position: relative; overflow: hidden;
+        }
+        .pack-body::before {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,0.1) 50%, transparent 60%);
+            background-size: 200% 100%; animation: shimmer 4s infinite linear; pointer-events: none;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        .pack-icon { width: 60%; height: 60%; opacity: 0.8; filter: drop-shadow(0 0 15px rgba(255,255,255,0.3)); object-fit: contain; }
+        .pack-title {
+            position: absolute; bottom: 40px; font-size: 1.4rem; font-weight: 900;
+            text-transform: uppercase; text-align: center; color: var(--primary);
+            text-shadow: 0 2px 5px black; width: 100%;
+        }
+        .pack-strip {
+            position: absolute; top: 0; left: 0; width: 100%; height: 60px;
+            background: repeating-linear-gradient(45deg, #181818, #181818 10px, #222 10px, #222 20px);
+            z-index: 20; border-radius: 18px 18px 0 0; border-bottom: 2px dashed #444;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .tear-progress {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+            background: rgba(212, 175, 55, 0.8); pointer-events: none;
+        }
+
+        .card-stack { width: 280px; height: 390px; position: relative; display: none; }
+        .card {
+            width: 100%; height: 100%; position: absolute; top: 0; left: 0;
+            border-radius: 14px; background-size: cover; background-position: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); background-color: #222;
+            transition: transform 0.4s ease, opacity 0.4s ease;
+        }
+        .card.swiped { transform: translateX(150%) rotate(20deg); opacity: 0; }
+        .card.foil::after {
+            content: ""; position: absolute; inset: 0; border-radius: 14px;
+            background: linear-gradient(125deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 70%);
+            mix-blend-mode: overlay; opacity: 0.7; animation: foilShine 4s infinite;
+        }
+        @keyframes foilShine { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+
+        /* --- SUMMARY --- */
+        #summary-screen { text-align: center; display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+        .rare-pull-list { display: flex; gap: 10px; overflow-x: auto; max-width: 100%; padding: 10px; justify-content: center; margin-bottom: 20px; }
+        .mini-card { width: 80px; height: 112px; border-radius: 6px; background-size: cover; flex-shrink: 0; border: 1px solid #555; }
+        
+        .stat-card {
+            background: var(--surface); padding: 15px; border-radius: 12px;
+            margin-bottom: 15px; text-align: center; border: 1px solid #333;
+        }
+        .stat-val { font-size: 1.8rem; font-weight: 800; color: var(--success); }
 
         /* --- DECK BUILDER --- */
         .deck-list-item {
-            background: var(--surface);
-            padding: 15px; border-radius: 12px;
+            background: var(--surface); padding: 15px; border-radius: 12px;
             margin-bottom: 10px; border: 1px solid #333;
             display: flex; justify-content: space-between; align-items: center;
         }
-        .deck-stats { font-size: 0.8rem; color: #888; }
-        
         #deck-view-container { display: none; flex-direction: column; height: 100%; }
-        #active-deck-list { flex: 1; overflow-y: auto; margin-top: 10px; }
         .deck-card-row {
             display: flex; align-items: center; gap: 10px;
-            background: var(--surface); margin-bottom: 5px; padding: 8px;
-            border-radius: 8px;
+            background: var(--surface); margin-bottom: 5px; padding: 8px; border-radius: 8px;
         }
         .row-img { width: 30px; height: 42px; background-size: cover; border-radius: 4px; }
-        .row-name { flex: 1; font-size: 0.9rem; }
-        .row-qty { font-weight: bold; color: var(--primary); }
 
-        /* --- TOAST --- */
+        /* --- MODAL --- */
+        #card-modal {
+            position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.95);
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px; animation: fadeIn 0.2s;
+        }
+        #modal-img { max-width: 90%; max-height: 60vh; border-radius: 18px; margin-bottom: 20px; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
+        
         #toast {
             position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
             background: #333; padding: 10px 20px; border-radius: 20px;
-            font-size: 0.9rem; opacity: 0; pointer-events: none;
-            transition: opacity 0.3s; z-index: 600; text-align: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5); border: 1px solid #555;
+            font-size: 0.9rem; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+            z-index: 600; box-shadow: 0 5px 15px rgba(0,0,0,0.5); border: 1px solid #555;
         }
     </style>
 </head>
@@ -355,9 +265,9 @@
                 <div class="stat-val" id="home-value">$0.00</div>
             </div>
 
-            <div id="set-select-container">
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
                 <select id="set-select" onchange="updateSetInfo()">
-                    <option disabled selected>Loading sets list...</option>
+                    <option disabled selected>Loading sets...</option>
                 </select>
                 <button id="retry-btn" onclick="initSets()" style="display:none; width:auto; padding:10px;" class="btn secondary">↻</button>
             </div>
@@ -365,7 +275,7 @@
             <div id="pack-stage">
                 <div id="pack-wrapper" class="pack-wrapper" style="display:none;">
                     <div class="pack-strip" id="pack-strip">
-                        <span>SLIDE TO OPEN >>></span>
+                        <span style="font-size:0.7rem; color:#aaa; pointer-events:none;">SLIDE TO OPEN >>></span>
                         <div class="tear-progress" id="tear-line"></div>
                     </div>
                     <div class="pack-body">
@@ -377,51 +287,87 @@
                 <div id="card-stack" class="card-stack"></div>
 
                 <div id="summary-screen">
-                    <h2 style="color:var(--primary); text-transform:uppercase;">Pack Complete</h2>
-                    <div class="subtitle">Best Pulls</div>
+                    <h2 style="color:var(--primary);">PACK COMPLETE</h2>
+                    <div class="subtitle">Highlights</div>
                     <div class="rare-pull-list" id="summary-rares"></div>
                     <div class="stat-card" style="width:100%">
                         <div class="subtitle">Pack Value</div>
                         <div class="stat-val" id="pack-value">$0.00</div>
                     </div>
-                    <button class="btn" onclick="resetPack()">Open Another Pack</button>
+                    <button class="btn" onclick="resetPack()">Open Another</button>
                 </div>
             </div>
         </div>
 
         <div id="view-collection" class="view">
-            <div class="grid-header">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h1>Binder</h1>
-                <select id="sort-select" style="width: 120px; font-size: 0.8rem; padding: 6px;" onchange="renderCollection()">
-                    <option value="value">Price: High</option>
+                <select id="sort-select" style="width: 110px; padding: 8px; font-size: 0.8rem;" onchange="renderCollection()">
+                    <option value="value">Price</option>
                     <option value="recent">Recent</option>
                     <option value="name">Name</option>
                 </select>
             </div>
+
+            <div class="binder-controls">
+                <input type="text" id="search-input" placeholder="Search cards..." onkeyup="renderCollection()">
+                <div class="filter-toggle-btn" onclick="toggleFilterPanel()">⚡</div>
+            </div>
+
+            <div id="filter-panel">
+                <div class="filter-group">
+                    <div class="filter-label">Colors</div>
+                    <div class="filter-chips" id="filter-colors">
+                        <div class="chip" data-cat="color" data-val="W" onclick="toggleFilter('color', 'W')">☀️</div>
+                        <div class="chip" data-cat="color" data-val="U" onclick="toggleFilter('color', 'U')">💧</div>
+                        <div class="chip" data-cat="color" data-val="B" onclick="toggleFilter('color', 'B')">💀</div>
+                        <div class="chip" data-cat="color" data-val="R" onclick="toggleFilter('color', 'R')">🔥</div>
+                        <div class="chip" data-cat="color" data-val="G" onclick="toggleFilter('color', 'G')">🌳</div>
+                        <div class="chip" data-cat="color" data-val="M" onclick="toggleFilter('color', 'M')">🌈</div>
+                        <div class="chip" data-cat="color" data-val="C" onclick="toggleFilter('color', 'C')">💎</div>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <div class="filter-label">Rarity</div>
+                    <div class="filter-chips" id="filter-rarity">
+                        <div class="chip" data-cat="rarity" data-val="mythic" onclick="toggleFilter('rarity', 'mythic')">M</div>
+                        <div class="chip" data-cat="rarity" data-val="rare" onclick="toggleFilter('rarity', 'rare')">R</div>
+                        <div class="chip" data-cat="rarity" data-val="uncommon" onclick="toggleFilter('rarity', 'uncommon')">U</div>
+                        <div class="chip" data-cat="rarity" data-val="common" onclick="toggleFilter('rarity', 'common')">C</div>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <div class="filter-label">Type</div>
+                    <div class="filter-chips" id="filter-types">
+                        <div class="chip" data-cat="type" data-val="Creature" onclick="toggleFilter('type', 'Creature')">Creature</div>
+                        <div class="chip" data-cat="type" data-val="Instant" onclick="toggleFilter('type', 'Instant')">Instant</div>
+                        <div class="chip" data-cat="type" data-val="Sorcery" onclick="toggleFilter('type', 'Sorcery')">Sorcery</div>
+                        <div class="chip" data-cat="type" data-val="Artifact" onclick="toggleFilter('type', 'Artifact')">Artifact</div>
+                        <div class="chip" data-cat="type" data-val="Enchantment" onclick="toggleFilter('type', 'Enchantment')">Enchant</div>
+                        <div class="chip" data-cat="type" data-val="Land" onclick="toggleFilter('type', 'Land')">Land</div>
+                    </div>
+                </div>
+                <button class="btn secondary" style="padding: 8px;" onclick="clearFilters()">Clear Filters</button>
+            </div>
+
             <div id="collection-grid"></div>
         </div>
 
         <div id="view-decks" class="view">
             <h1>Deck Builder</h1>
-            
             <div id="decks-main-list">
                 <button class="btn secondary" onclick="createNewDeck()">+ New Deck</button>
                 <div id="deck-list-container" style="margin-top:20px;"></div>
             </div>
-
             <div id="deck-view-container">
-                <div class="grid-header">
-                    <button onclick="closeDeckView()" style="background:none; border:none; color:var(--text-muted); font-size:1rem;">&lt; Back</button>
-                    <h3 id="active-deck-name" style="margin:0;">Deck Name</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <button onclick="closeDeckView()" style="background:none; border:none; color:var(--text-muted);">&lt; Back</button>
+                    <h3 id="active-deck-name" style="margin:0;">Deck</h3>
                     <div id="active-deck-count" style="color:var(--primary); font-weight:bold;">0/60</div>
                 </div>
-                <div id="active-deck-list"></div>
-                <div style="text-align:center; margin-top:20px; color:#666; font-size:0.8rem;">
-                    Go to your Binder to add cards.
-                </div>
+                <div id="active-deck-list" style="flex:1; overflow-y:auto;"></div>
             </div>
         </div>
-
     </div>
 
     <div id="nav-bar">
@@ -441,10 +387,10 @@
 
     <div id="card-modal">
         <img id="modal-img" src="">
-        <div class="modal-details">
+        <div class="modal-details" style="text-align:center; width:100%; color:white;">
             <h2 id="modal-name">Card Name</h2>
             <div class="modal-price" id="modal-price">$0.00</div>
-            <div id="modal-actions" style="display:flex; gap:10px; width:100%;">
+            <div style="display:flex; gap:10px; margin-top:15px; justify-content:center;">
                 <button class="btn" id="btn-add-deck" onclick="addToActiveDeck()">Add to Deck</button>
                 <button class="btn secondary" onclick="closeModal()">Close</button>
             </div>
@@ -454,18 +400,24 @@
     <div id="toast">Message</div>
 
     <script>
-        // --- STATE & UTILS ---
+        // --- DATA STORE ---
         const state = {
             sets: [],
             currentSet: null,
             pool: { common: [], uncommon: [], rare: [], mythic: [], land: [] },
             isLoaded: false,
+            // v3 uses same key to keep data, but we will upgrade data on the fly
             collection: JSON.parse(localStorage.getItem('mtgCollection_v2')) || {},
             decks: JSON.parse(localStorage.getItem('mtgDecks_v2')) || [],
-            activeDeckId: null, 
+            activeDeckId: null,
             tempPackValue: 0,
             tempPackRares: [],
-            modalCardId: null
+            modalCardId: null,
+            filters: {
+                color: [], // ['W', 'U']
+                rarity: [],
+                type: []
+            }
         };
 
         const elements = {
@@ -481,7 +433,8 @@
             toast: document.getElementById('toast'),
             modal: document.getElementById('card-modal'),
             retryBtn: document.getElementById('retry-btn'),
-            spinner: document.getElementById('loading-spinner')
+            spinner: document.getElementById('loading-spinner'),
+            filterPanel: document.getElementById('filter-panel')
         };
 
         const fmtMoney = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -503,7 +456,6 @@
             elements.setSelect.disabled = true;
 
             try {
-                // Fetch Scryfall Sets
                 const res = await fetch('https://api.scryfall.com/sets');
                 if(!res.ok) throw new Error("API Error");
                 const data = await res.json();
@@ -514,10 +466,9 @@
                 elements.setSelect.innerHTML = '<option value="" disabled selected>Select Expansion...</option>';
                 
                 state.sets.forEach(s => {
+                    const year = s.released_at ? s.released_at.substring(0,4) : '????';
                     const opt = document.createElement('option');
                     opt.value = s.code;
-                    // Handle missing release date gracefully
-                    const year = s.released_at ? s.released_at.substring(0,4) : '????';
                     opt.innerText = `${s.name} (${year})`;
                     elements.setSelect.appendChild(opt);
                 });
@@ -526,39 +477,31 @@
                 elements.spinner.style.display = 'none';
 
             } catch(e) {
-                console.error(e);
                 elements.setSelect.innerHTML = '<option>Connection Failed</option>';
                 elements.retryBtn.style.display = 'block';
-                showToast("Failed to load sets.");
                 elements.spinner.style.display = 'none';
             }
         }
 
-        // --- PACK LOGIC ---
+        // --- PACK LOGIC (No API Change) ---
         async function updateSetInfo() {
             const code = elements.setSelect.value;
             const set = state.sets.find(s => s.code === code);
             if(!set) return;
 
-            // Update UI
             document.getElementById('pack-title').innerText = set.name;
             document.getElementById('pack-icon').src = set.icon_svg_uri;
             resetPack();
             elements.packWrapper.style.opacity = '0.5';
-            
             showToast(`Loading ${set.name}...`);
             state.isLoaded = false;
 
             try {
-                // Fetch Cards
                 const url = `https://api.scryfall.com/cards/search?q=set:${code}%20unique:cards%20game:paper&order=rarity`;
-                
                 let allCards = [];
                 let r = await fetch(url);
                 let d = await r.json();
                 if(d.data) allCards = allCards.concat(d.data);
-                
-                // Get page 2 if needed (limit to 2 pages to save data/speed)
                 if(d.has_more) {
                     let r2 = await fetch(d.next_page);
                     let d2 = await r2.json();
@@ -568,17 +511,27 @@
                 state.pool = { common: [], uncommon: [], rare: [], mythic: [], land: [] };
                 
                 allCards.forEach(c => {
-                    // Check normal image OR face image (for dual faced cards)
                     let img = c.image_uris?.normal;
+                    // Handle double-faced cards (get front face)
                     if(!img && c.card_faces && c.card_faces[0].image_uris) {
                         img = c.card_faces[0].image_uris.normal;
+                    }
+
+                    // Extract colors (handle double faced)
+                    let colors = c.colors;
+                    if(!colors && c.card_faces && c.card_faces[0].colors) {
+                        colors = c.card_faces[0].colors;
                     }
 
                     if(img && c.rarity) {
                         const obj = {
                             id: c.id, name: c.name, img: img, rarity: c.rarity,
-                            prices: c.prices
+                            prices: c.prices,
+                            // NEW: Store colors and type for filtering
+                            colors: colors || [],
+                            type: c.type_line || "Unknown"
                         };
+                        
                         if(c.type_line && c.type_line.includes("Basic Land")) state.pool.land.push(obj);
                         else if(state.pool[c.rarity]) state.pool[c.rarity].push(obj);
                     }
@@ -586,14 +539,11 @@
 
                 state.isLoaded = true;
                 elements.packWrapper.style.opacity = '1';
-                showToast("Ready to Open!");
-
-            } catch(e) {
-                showToast("Error loading cards");
-            }
+                showToast("Ready!");
+            } catch(e) { showToast("Error loading cards"); }
         }
 
-        // DRAG INTERACTIONS
+        // --- OPENING MECHANIC ---
         let isDragging = false;
         const handleMove = (e) => {
             if(!isDragging) return;
@@ -601,12 +551,8 @@
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             let pct = (clientX - rect.left) / rect.width * 100;
             if(pct > 100) pct = 100; if(pct < 0) pct = 0;
-            
             elements.tear.style.width = pct + '%';
-            if(pct > 92) {
-                openPack();
-                isDragging = false;
-            }
+            if(pct > 92) { openPack(); isDragging = false; }
         };
         const handleStart = () => isDragging = true;
         const handleEnd = () => { isDragging = false; elements.tear.style.width = '0%'; };
@@ -629,25 +575,22 @@
 
         function openPack() {
             if(!state.isLoaded) return;
-            
-            // GENERATOR LOGIC
             const p = state.pool;
             const pick = arr => arr.length ? arr[Math.floor(Math.random()*arr.length)] : null;
             let pack = [];
 
-            // 1. Rare Slot
+            // 1. Rare
             if(p.mythic.length && Math.random() < 0.13) pack.push({...pick(p.mythic)});
             else if(p.rare.length) pack.push({...pick(p.rare)});
-            else if(p.uncommon.length) pack.push({...pick(p.uncommon)}); // Fallback if no rares
+            else if(p.uncommon.length) pack.push({...pick(p.uncommon)});
 
-            // 2. Uncommons (3)
+            // 2. Uncommons
             for(let i=0; i<3; i++) { let c=pick(p.uncommon); if(c) pack.push({...c}); }
 
-            // 3. Commons (9-10) + Foil Chance
+            // 3. Commons + Foil
             let cCount = 10;
             if(Math.random() < 0.3) {
                 cCount--;
-                // Foil can be anything
                 const pools = [p.common, p.uncommon, p.rare, p.mythic].flat();
                 if(pools.length) {
                     let foil = {...pick(pools)};
@@ -660,26 +603,20 @@
             // 4. Land
             if(p.land.length) pack.push({...pick(p.land)});
 
-            // ORGANIZE FOR REVEAL (Stack Bottom = Last Card)
-            // Reveal Order: Land -> Common -> Uncommon -> Rare
-            // Stack Order (DOM): Rare (0) -> Uncommon -> Common -> Land (Last)
+            // Stack order logic
             const stack = [];
             const rares = pack.filter(c=>['rare','mythic'].includes(c.rarity));
             const uncs = pack.filter(c=>c.rarity==='uncommon' && !c.foil);
             const foils = pack.filter(c=>c.foil);
             const coms = pack.filter(c=>c.rarity==='common' && !c.foil);
             const lands = pack.filter(c=>c.type_line?.includes("Basic Land"));
-
-            // If old set has no basic lands in pool, coms are on top
             [...rares, ...uncs, ...foils, ...coms, ...lands].forEach(c => stack.push(c));
             
-            // RENDER
             elements.packWrapper.style.display = 'none';
             elements.cardStack.style.display = 'block';
             elements.cardStack.innerHTML = '';
             
-            state.tempPackValue = 0;
-            state.tempPackRares = [];
+            state.tempPackValue = 0; state.tempPackRares = [];
 
             stack.forEach((card, idx) => {
                 const el = document.createElement('div');
@@ -690,19 +627,10 @@
                 el.onclick = () => {
                     saveCard(card);
                     el.classList.add('swiped');
-                    
                     let val = parseFloat(card.foil ? card.prices.usd_foil : card.prices.usd) || 0;
                     state.tempPackValue += val;
-                    
-                    // Highlight big hits
-                    if(val > 5 || ['rare','mythic'].includes(card.rarity)) {
-                        state.tempPackRares.push(card);
-                    }
-
-                    // If it was the last card (index 0)
-                    if(idx === 0) {
-                        setTimeout(showSummary, 500);
-                    }
+                    if(val > 5 || ['rare','mythic'].includes(card.rarity)) state.tempPackRares.push(card);
+                    if(idx === 0) setTimeout(showSummary, 500);
                 };
                 elements.cardStack.appendChild(el);
             });
@@ -713,7 +641,11 @@
                 state.collection[card.id] = {...card, count: 0, date: Date.now()};
             }
             state.collection[card.id].count++;
+            // Update metadata if missing (for legacy data upgrade)
+            if(card.colors) state.collection[card.id].colors = card.colors;
+            if(card.type) state.collection[card.id].type = card.type;
             if(card.prices) state.collection[card.id].prices = card.prices;
+            
             state.collection[card.id].date = Date.now();
             localStorage.setItem('mtgCollection_v2', JSON.stringify(state.collection));
             renderTotalValue();
@@ -723,18 +655,13 @@
             elements.cardStack.style.display = 'none';
             elements.summary.style.display = 'flex';
             elements.packVal.innerText = fmtMoney(state.tempPackValue);
-            
             elements.summaryRares.innerHTML = '';
-            if(state.tempPackRares.length === 0) {
-                elements.summaryRares.innerHTML = '<div style="color:#666; font-size:0.8rem">No big hits this time.</div>';
-            } else {
-                state.tempPackRares.forEach(c => {
-                    const d = document.createElement('div');
-                    d.className = 'mini-card';
-                    d.style.backgroundImage = `url(${c.img})`;
-                    elements.summaryRares.appendChild(d);
-                });
-            }
+            if(!state.tempPackRares.length) elements.summaryRares.innerHTML = '<div style="color:#666;font-size:0.8rem">No big hits.</div>';
+            state.tempPackRares.forEach(c => {
+                const d = document.createElement('div');
+                d.className = 'mini-card'; d.style.backgroundImage = `url(${c.img})`;
+                elements.summaryRares.appendChild(d);
+            });
         }
 
         function renderTotalValue() {
@@ -747,27 +674,81 @@
             elements.homeVal.innerText = fmtMoney(total);
         }
 
-        // --- NAVIGATION & VIEWS ---
-        function switchView(viewName) {
-            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-            document.getElementById('view-' + viewName).classList.add('active');
-            
-            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-
-            if(viewName === 'collection') renderCollection();
-            if(viewName === 'decks') renderDeckList();
+        // --- FILTERING & COLLECTION UI ---
+        
+        function toggleFilterPanel() {
+            const panel = elements.filterPanel;
+            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
         }
 
-        // --- COLLECTION RENDER ---
+        function toggleFilter(category, value) {
+            const list = state.filters[category];
+            const idx = list.indexOf(value);
+            if(idx > -1) list.splice(idx, 1);
+            else list.push(value);
+            
+            // Update visual chips
+            document.querySelectorAll(`.chip[data-cat="${category}"][data-val="${value}"]`)
+                .forEach(el => el.classList.toggle('active'));
+            
+            renderCollection();
+        }
+
+        function clearFilters() {
+            state.filters.color = [];
+            state.filters.rarity = [];
+            state.filters.type = [];
+            document.querySelectorAll('.chip').forEach(el => el.classList.remove('active'));
+            renderCollection();
+        }
+
         function renderCollection() {
             const grid = document.getElementById('collection-grid');
             grid.innerHTML = '';
             const cards = Object.values(state.collection);
             const sortMode = document.getElementById('sort-select').value;
+            const search = document.getElementById('search-input').value.toLowerCase();
 
-            // Sorting
-            cards.sort((a,b) => {
+            // 1. FILTERING
+            const filtered = cards.filter(c => {
+                // Name Search
+                if(search && !c.name.toLowerCase().includes(search)) return false;
+
+                // Color Filter
+                if(state.filters.color.length > 0) {
+                    const cColors = c.colors || [];
+                    // Handle "Colorless" logic
+                    if(state.filters.color.includes('C')) {
+                        if(cColors.length > 0) return false; 
+                    }
+                    // Handle "Multicolor" logic
+                    else if(state.filters.color.includes('M')) {
+                         if(cColors.length < 2) return false;
+                    }
+                    // Specific Colors (OR logic: if card has Red OR Blue selected)
+                    else {
+                        const hasMatch = state.filters.color.some(f => cColors.includes(f));
+                        if(!hasMatch) return false;
+                    }
+                }
+
+                // Rarity Filter
+                if(state.filters.rarity.length > 0) {
+                    if(!state.filters.rarity.includes(c.rarity)) return false;
+                }
+
+                // Type Filter
+                if(state.filters.type.length > 0) {
+                    const typeLine = c.type || "";
+                    const hasMatch = state.filters.type.some(t => typeLine.includes(t));
+                    if(!hasMatch) return false;
+                }
+
+                return true;
+            });
+
+            // 2. SORTING
+            filtered.sort((a,b) => {
                 if(sortMode === 'value') {
                     let va = parseFloat(a.prices?.usd)||0; let vb = parseFloat(b.prices?.usd)||0;
                     return vb - va;
@@ -776,12 +757,12 @@
                 return a.name.localeCompare(b.name);
             });
 
-            if(cards.length === 0) {
-                grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:40px; color:#666;">Collection Empty<br>Open some packs!</div>';
+            if(filtered.length === 0) {
+                grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:40px; color:#666;">No cards match.</div>';
                 return;
             }
 
-            cards.forEach(c => {
+            filtered.forEach(c => {
                 const el = document.createElement('div');
                 el.className = 'col-card';
                 el.style.backgroundImage = `url(${c.img})`;
@@ -802,118 +783,17 @@
             });
         }
 
-        // --- DECK BUILDER ---
-        function renderDeckList() {
-            const list = document.getElementById('deck-list-container');
-            const main = document.getElementById('decks-main-list');
-            const view = document.getElementById('deck-view-container');
-            
-            main.style.display = 'block';
-            view.style.display = 'none';
-            list.innerHTML = '';
-            state.activeDeckId = null;
-
-            if(state.decks.length === 0) {
-                list.innerHTML = '<div style="text-align:center; color:#666;">No decks yet.</div>';
-                return;
-            }
-
-            state.decks.forEach((deck, idx) => {
-                const count = Object.values(deck.cards).reduce((a,b)=>a+b,0);
-                const el = document.createElement('div');
-                el.className = 'deck-list-item';
-                el.innerHTML = `
-                    <div>
-                        <div style="font-weight:bold; font-size:1rem">${deck.name}</div>
-                        <div class="deck-stats">${count} cards</div>
-                    </div>
-                    <div style="display:flex; gap:10px;">
-                        <button class="btn secondary" style="width:auto; padding:8px 12px; margin:0;" onclick="openDeck(${idx})">Edit</button>
-                        <button class="btn danger" style="width:auto; padding:8px 12px; margin:0;" onclick="deleteDeck(${idx})">X</button>
-                    </div>
-                `;
-                list.appendChild(el);
-            });
+        // --- NAVIGATION ---
+        function switchView(viewName) {
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+            document.getElementById('view-' + viewName).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            if(viewName === 'collection') renderCollection();
+            if(viewName === 'decks') renderDeckList();
         }
 
-        function createNewDeck() {
-            const name = prompt("Deck Name:");
-            if(!name) return;
-            state.decks.push({ name: name, cards: {} });
-            saveDecks();
-            renderDeckList();
-        }
-
-        function deleteDeck(idx) {
-            if(confirm("Delete this deck?")) {
-                state.decks.splice(idx, 1);
-                saveDecks();
-                renderDeckList();
-            }
-        }
-
-        function openDeck(idx) {
-            state.activeDeckId = idx;
-            document.getElementById('decks-main-list').style.display = 'none';
-            document.getElementById('deck-view-container').style.display = 'flex';
-            renderActiveDeck();
-        }
-
-        function closeDeckView() {
-            state.activeDeckId = null;
-            renderDeckList();
-        }
-
-        function renderActiveDeck() {
-            const deck = state.decks[state.activeDeckId];
-            document.getElementById('active-deck-name').innerText = deck.name;
-            const list = document.getElementById('active-deck-list');
-            list.innerHTML = '';
-
-            let total = 0;
-            // Iterate deck cards
-            Object.keys(deck.cards).forEach(id => {
-                const qty = deck.cards[id];
-                total += qty;
-                const cardInfo = state.collection[id];
-                if(!cardInfo) return;
-
-                const row = document.createElement('div');
-                row.className = 'deck-card-row';
-                row.innerHTML = `
-                    <div class="row-img" style="background-image:url(${cardInfo.img})"></div>
-                    <div class="row-name">${cardInfo.name}</div>
-                    <div class="row-qty">x${qty}</div>
-                `;
-                list.appendChild(row);
-            });
-            document.getElementById('active-deck-count').innerText = `${total}/60`;
-        }
-
-        function addToActiveDeck() {
-            if(state.activeDeckId === null || !state.modalCardId) {
-                // If no active deck, verify if user has any deck.
-                if(state.decks.length > 0) {
-                     // Auto-select first deck or prompt? 
-                     // For simplicity, just tell them to open a deck.
-                     showToast("Open a deck in 'Decks' tab first!");
-                     return;
-                }
-                showToast("Create a deck first!");
-                return;
-            }
-            const deck = state.decks[state.activeDeckId];
-            if(!deck.cards[state.modalCardId]) deck.cards[state.modalCardId] = 0;
-            deck.cards[state.modalCardId]++;
-            
-            saveDecks();
-            showToast(`Added to ${deck.name}`);
-            closeModal();
-        }
-
-        function saveDecks() { localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks)); }
-
-        // --- MODAL ---
+        // --- DECK & MODAL (No Changes) ---
         function openModal(card) {
             state.modalCardId = card.id;
             elements.modal.style.display = 'flex';
@@ -924,7 +804,7 @@
             
             const btn = document.getElementById('btn-add-deck');
             if(state.activeDeckId !== null) {
-                btn.style.display = 'block';
+                btn.style.display = 'inline-block';
                 const deckName = state.decks[state.activeDeckId].name;
                 btn.innerText = `Add to "${deckName}"`;
             } else {
@@ -932,7 +812,67 @@
             }
         }
         function closeModal() { elements.modal.style.display = 'none'; }
+        
+        function renderDeckList() {
+            const list = document.getElementById('deck-list-container');
+            const main = document.getElementById('decks-main-list');
+            const view = document.getElementById('deck-view-container');
+            main.style.display = 'block'; view.style.display = 'none'; list.innerHTML = '';
+            state.activeDeckId = null;
 
+            if(state.decks.length === 0) { list.innerHTML = '<div style="text-align:center; color:#666;">No decks.</div>'; return; }
+            state.decks.forEach((deck, idx) => {
+                const count = Object.values(deck.cards).reduce((a,b)=>a+b,0);
+                const el = document.createElement('div');
+                el.className = 'deck-list-item';
+                el.innerHTML = `<div><div style="font-weight:bold; font-size:1rem">${deck.name}</div><div style="font-size:0.8rem; color:#888;">${count} cards</div></div>
+                    <div style="display:flex; gap:10px;"><button class="btn secondary" style="width:auto; padding:8px 12px; margin:0;" onclick="openDeck(${idx})">Edit</button>
+                    <button class="btn danger" style="width:auto; padding:8px 12px; margin:0;" onclick="deleteDeck(${idx})">X</button></div>`;
+                list.appendChild(el);
+            });
+        }
+        function createNewDeck() {
+            const name = prompt("Deck Name:");
+            if(!name) return;
+            state.decks.push({ name: name, cards: {} });
+            localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks));
+            renderDeckList();
+        }
+        function deleteDeck(idx) {
+            if(confirm("Delete this deck?")) { state.decks.splice(idx, 1); localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks)); renderDeckList(); }
+        }
+        function openDeck(idx) {
+            state.activeDeckId = idx;
+            document.getElementById('decks-main-list').style.display = 'none';
+            document.getElementById('deck-view-container').style.display = 'flex';
+            renderActiveDeck();
+        }
+        function closeDeckView() { state.activeDeckId = null; renderDeckList(); }
+        function renderActiveDeck() {
+            const deck = state.decks[state.activeDeckId];
+            document.getElementById('active-deck-name').innerText = deck.name;
+            const list = document.getElementById('active-deck-list');
+            list.innerHTML = '';
+            let total = 0;
+            Object.keys(deck.cards).forEach(id => {
+                const qty = deck.cards[id]; total += qty;
+                const cardInfo = state.collection[id];
+                if(!cardInfo) return;
+                const row = document.createElement('div');
+                row.className = 'deck-card-row';
+                row.innerHTML = `<div class="row-img" style="background-image:url(${cardInfo.img})"></div><div class="row-name">${cardInfo.name}</div><div class="row-qty">x${qty}</div>`;
+                list.appendChild(row);
+            });
+            document.getElementById('active-deck-count').innerText = `${total} cards`;
+        }
+        function addToActiveDeck() {
+            if(state.activeDeckId === null || !state.modalCardId) return;
+            const deck = state.decks[state.activeDeckId];
+            if(!deck.cards[state.modalCardId]) deck.cards[state.modalCardId] = 0;
+            deck.cards[state.modalCardId]++;
+            localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks));
+            showToast(`Added to ${deck.name}`); closeModal();
+        }
     </script>
 </body>
 </html>
