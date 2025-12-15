@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Pocket Sim: Ultimate</title>
+    <title>MTG Pocket Sim: v5</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -32,11 +32,25 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
-            
-            /* PREMIUM TEXTURE BACKGROUND */
-            background-image: radial-gradient(#222 15%, transparent 16%), radial-gradient(#222 15%, transparent 16%);
-            background-size: 20px 20px;
-            background-position: 0 0, 10px 10px;
+        }
+
+        /* --- DYNAMIC BACKGROUND --- */
+        #dynamic-bg {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none;
+            opacity: 0.08; /* Subtle texture */
+            background-repeat: repeat;
+            background-position: center;
+            background-size: 80px 80px; /* Size of the repeating set icons */
+            filter: grayscale(100%); /* Keep it neutral */
+            transition: background-image 0.5s ease;
+        }
+        
+        /* Dark overlay to ensure text readability */
+        #bg-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1; pointer-events: none;
+            background: rgba(18, 18, 18, 0.92);
         }
 
         /* --- APP CONTAINER --- */
@@ -48,7 +62,7 @@
             flex-direction: column;
             width: 100%;
             height: 100%;
-            background: rgba(18, 18, 18, 0.96); /* Slight fade over texture */
+            z-index: 10;
         }
 
         .view {
@@ -74,7 +88,7 @@
             align-items: center;
             border-top: 1px solid #333;
             z-index: 100;
-            padding-bottom: 20px; /* Safe area for iPhone home bar */
+            padding-bottom: 20px;
             box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
         }
 
@@ -103,18 +117,16 @@
         .btn.secondary { background: var(--surface-2); color: white; box-shadow: none; border: 1px solid #444; }
         .btn.danger { background: var(--danger); color: white; box-shadow: none; }
         
-        select, input, textarea {
+        select, input {
             width: 100%; padding: 12px; background: var(--surface-2);
             border: 1px solid #444; color: white; border-radius: 10px; font-size: 1rem;
             margin-bottom: 8px; font-family: inherit;
         }
-        input:focus, textarea:focus { border-color: var(--primary); }
 
         /* --- PACK OPENING STAGE --- */
         #pack-stage {
             flex: 1; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; perspective: 1000px;
-            width: 100%;
+            justify-content: center; align-items: center; perspective: 1000px; width: 100%;
         }
         .pack-wrapper {
             width: 280px; height: 440px; position: relative;
@@ -128,7 +140,6 @@
             justify-content: center; box-shadow: 0 30px 60px rgba(0,0,0,0.8);
             border: 1px solid #444; position: relative; overflow: hidden;
         }
-        /* Foil Shader on Pack */
         .pack-body::before {
             content: ""; position: absolute; inset: 0;
             background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.1) 45%, rgba(255,255,255,0.1) 55%, transparent 70%);
@@ -179,8 +190,7 @@
         .stat-card {
             background: var(--surface); padding: 20px; border-radius: 16px;
             margin-bottom: 15px; text-align: center; border: 1px solid #333; position: relative;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-            width: 100%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2); width: 100%;
         }
         .stat-val { font-size: 2.2rem; font-weight: 800; color: var(--success); text-shadow: 0 0 20px rgba(39, 174, 96, 0.3); }
 
@@ -200,13 +210,17 @@
         }
         @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-        .filter-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .filter-group { margin-bottom: 15px; }
+        .filter-label { font-size: 0.75rem; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+        .filter-chips { display: flex; flex-wrap: wrap; gap: 8px; }
         .chip {
-            padding: 8px 16px; background: var(--surface-2); border: 1px solid #444;
-            border-radius: 20px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; font-weight: 600;
+            padding: 6px 14px; background: var(--surface-2); border: 1px solid #444;
+            border-radius: 20px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+            font-weight: 600;
         }
         .chip.active { background: var(--primary); color: black; border-color: var(--primary); box-shadow: 0 0 10px rgba(212, 175, 55, 0.4); }
         
+        /* Color Chips */
         .chip[data-val="W"].active { background: var(--w); }
         .chip[data-val="U"].active { background: var(--u); }
         .chip[data-val="B"].active { background: var(--b); color: white; }
@@ -264,10 +278,8 @@
         .settings-content {
             background: var(--surface); width: 100%; max-width: 400px;
             padding: 25px; border-radius: 20px; border: 1px solid #444;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8); text-align: center;
         }
-        .settings-group { margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 15px; }
-        .settings-group:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
         
         #toast {
             position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
@@ -286,6 +298,9 @@
     </style>
 </head>
 <body>
+
+    <div id="dynamic-bg"></div>
+    <div id="bg-overlay"></div>
 
     <div id="app-container">
 
@@ -352,6 +367,25 @@
 
             <div id="filter-panel">
                 <div class="filter-group">
+                    <div class="filter-label">Card Type</div>
+                    <div class="filter-chips" id="filter-types">
+                        <div class="chip" data-cat="type" data-val="Creature" onclick="toggleFilter('type', 'Creature')">Creature</div>
+                        <div class="chip" data-cat="type" data-val="Instant" onclick="toggleFilter('type', 'Instant')">Instant</div>
+                        <div class="chip" data-cat="type" data-val="Sorcery" onclick="toggleFilter('type', 'Sorcery')">Sorcery</div>
+                        <div class="chip" data-cat="type" data-val="Artifact" onclick="toggleFilter('type', 'Artifact')">Artifact</div>
+                        <div class="chip" data-cat="type" data-val="Enchantment" onclick="toggleFilter('type', 'Enchantment')">Enchantment</div>
+                        <div class="chip" data-cat="type" data-val="Planeswalker" onclick="toggleFilter('type', 'Planeswalker')">Planeswalker</div>
+                        <div class="chip" data-cat="type" data-val="Land" onclick="toggleFilter('type', 'Land')">Land</div>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <div class="filter-label">Expansion Set</div>
+                    <div class="filter-chips" id="filter-sets">
+                        </div>
+                </div>
+
+                <div class="filter-group">
                     <div class="filter-label">Colors</div>
                     <div class="filter-chips" id="filter-colors">
                         <div class="chip" data-cat="color" data-val="W" onclick="toggleFilter('color', 'W')">☀️ White</div>
@@ -363,6 +397,7 @@
                         <div class="chip" data-cat="color" data-val="C" onclick="toggleFilter('color', 'C')">💎 Colorless</div>
                     </div>
                 </div>
+
                 <div class="filter-group">
                     <div class="filter-label">Rarity</div>
                     <div class="filter-chips" id="filter-rarity">
@@ -430,24 +465,8 @@
                 <h2 style="margin:0;">Settings</h2>
                 <button onclick="closeSettings()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
-
-            <div class="settings-group">
-                <div class="subtitle">Backup Collection</div>
-                <p style="font-size:0.8rem; color:#888; margin-bottom:10px;">Copy this code to save your data.</p>
-                <textarea id="export-area" readonly style="height:60px; font-size:0.7rem; color:#aaa;"></textarea>
-                <button class="btn secondary" onclick="copySaveData()">Copy to Clipboard</button>
-            </div>
-
-            <div class="settings-group">
-                <div class="subtitle">Restore Backup</div>
-                <p style="font-size:0.8rem; color:#888; margin-bottom:10px;">Paste a save code here.</p>
-                <input type="text" id="import-input" placeholder="Paste code...">
-                <button class="btn secondary" onclick="loadSaveData()">Load Data</button>
-            </div>
-
-            <div class="settings-group">
-                <button class="btn danger" onclick="clearData()">Factory Reset (Delete All)</button>
-            </div>
+            <p style="color:#888; margin-bottom:20px;">Manage your data here.</p>
+            <button class="btn danger" onclick="clearData()">Factory Reset (Delete All)</button>
         </div>
     </div>
 
@@ -466,7 +485,7 @@
             tempPackValue: 0,
             tempPackRares: [],
             modalCardId: null,
-            filters: { color: [], rarity: [], type: [] }
+            filters: { color: [], rarity: [], type: [], set: [] } // Added set filter
         };
 
         const elements = {
@@ -485,7 +504,9 @@
             deckSelectArea: document.getElementById('deck-select-area'),
             retryBtn: document.getElementById('retry-btn'),
             spinner: document.getElementById('loading-spinner'),
-            filterPanel: document.getElementById('filter-panel')
+            filterPanel: document.getElementById('filter-panel'),
+            dynamicBg: document.getElementById('dynamic-bg'),
+            filterSets: document.getElementById('filter-sets')
         };
 
         const fmtMoney = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -496,43 +517,8 @@
         };
 
         // --- SETTINGS LOGIC ---
-        function openSettings() {
-            elements.settingsModal.style.display = 'flex';
-            // Generate Export Data immediately for display
-            const data = { collection: state.collection, decks: state.decks };
-            const blob = btoa(JSON.stringify(data));
-            document.getElementById('export-area').value = blob;
-        }
-
+        function openSettings() { elements.settingsModal.style.display = 'flex'; }
         function closeSettings() { elements.settingsModal.style.display = 'none'; }
-
-        function copySaveData() {
-            const copyText = document.getElementById("export-area");
-            copyText.select();
-            copyText.setSelectionRange(0, 99999); // Mobile
-            navigator.clipboard.writeText(copyText.value).then(() => {
-                showToast("Copied to clipboard!");
-            }).catch(err => {
-                document.execCommand('copy'); // Fallback
-                showToast("Copied!");
-            });
-        }
-
-        function loadSaveData() {
-            const str = document.getElementById("import-input").value;
-            if(!str) return;
-            try {
-                const d = JSON.parse(atob(str));
-                if(d.collection && d.decks) {
-                    if(confirm("This will overwrite your current collection. Continue?")) {
-                        localStorage.setItem('mtgCollection_v2', JSON.stringify(d.collection));
-                        localStorage.setItem('mtgDecks_v2', JSON.stringify(d.decks));
-                        location.reload();
-                    }
-                } else alert("Invalid code format.");
-            } catch(e) { alert("Error reading code."); }
-        }
-
         function clearData() {
             if(confirm("⚠ WARNING: This will delete ALL cards and decks. Are you sure?")) {
                 localStorage.clear();
@@ -579,11 +565,16 @@
             }
         }
 
-        // --- PACK LOGIC ---
+        // --- PACK & BACKGROUND LOGIC ---
         async function updateSetInfo() {
             const code = elements.setSelect.value;
             const set = state.sets.find(s => s.code === code);
             if(!set) return;
+
+            // UPDATE DYNAMIC BACKGROUND
+            if(set.icon_svg_uri) {
+                elements.dynamicBg.style.backgroundImage = `url('${set.icon_svg_uri}')`;
+            }
 
             document.getElementById('pack-title').innerText = set.name;
             document.getElementById('pack-icon').src = set.icon_svg_uri;
@@ -615,7 +606,8 @@
                     if(img && c.rarity) {
                         const obj = {
                             id: c.id, name: c.name, img: img, rarity: c.rarity,
-                            prices: c.prices, colors: colors || [], type: c.type_line || "Unknown"
+                            prices: c.prices, colors: colors || [], type: c.type_line || "Unknown",
+                            set: c.set // Save Set Code!
                         };
                         if(c.type_line && c.type_line.includes("Basic Land")) state.pool.land.push(obj);
                         else if(state.pool[c.rarity]) state.pool[c.rarity].push(obj);
@@ -721,6 +713,9 @@
             state.collection[card.id].count++;
             if(card.colors) state.collection[card.id].colors = card.colors;
             if(card.prices) state.collection[card.id].prices = card.prices;
+            if(card.type) state.collection[card.id].type = card.type;
+            if(card.set) state.collection[card.id].set = card.set; // Save Set Code
+            
             state.collection[card.id].date = Date.now();
             localStorage.setItem('mtgCollection_v2', JSON.stringify(state.collection));
             renderTotalValue();
@@ -752,7 +747,18 @@
         // --- FILTERING & COLLECTION UI ---
         function toggleFilterPanel() {
             const panel = elements.filterPanel;
-            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+            if(panel.style.display === 'block') {
+                panel.style.display = 'none';
+            } else {
+                // Populate SET filters dynamically when opening
+                const uniqueSets = [...new Set(Object.values(state.collection).map(c => c.set).filter(Boolean))];
+                elements.filterSets.innerHTML = '';
+                uniqueSets.forEach(s => {
+                    const isActive = state.filters.set.includes(s) ? 'active' : '';
+                    elements.filterSets.innerHTML += `<div class="chip ${isActive}" data-cat="set" data-val="${s}" onclick="toggleFilter('set', '${s}')">${s.toUpperCase()}</div>`;
+                });
+                panel.style.display = 'block';
+            }
         }
 
         function toggleFilter(category, value) {
@@ -760,13 +766,15 @@
             const idx = list.indexOf(value);
             if(idx > -1) list.splice(idx, 1);
             else list.push(value);
+            
             document.querySelectorAll(`.chip[data-cat="${category}"][data-val="${value}"]`)
                 .forEach(el => el.classList.toggle('active'));
+            
             renderCollection();
         }
 
         function clearFilters() {
-            state.filters.color = []; state.filters.rarity = [];
+            state.filters.color = []; state.filters.rarity = []; state.filters.type = []; state.filters.set = [];
             document.querySelectorAll('.chip').forEach(el => el.classList.remove('active'));
             renderCollection();
         }
@@ -780,13 +788,29 @@
 
             const filtered = cards.filter(c => {
                 if(search && !c.name.toLowerCase().includes(search)) return false;
+                
+                // Color Filter
                 if(state.filters.color.length > 0) {
                     const cColors = c.colors || [];
                     if(state.filters.color.includes('C')) { if(cColors.length > 0) return false; }
                     else if(state.filters.color.includes('M')) { if(cColors.length < 2) return false; }
                     else { const hasMatch = state.filters.color.some(f => cColors.includes(f)); if(!hasMatch) return false; }
                 }
+                
+                // Rarity Filter
                 if(state.filters.rarity.length > 0) { if(!state.filters.rarity.includes(c.rarity)) return false; }
+
+                // Type Filter
+                if(state.filters.type.length > 0) {
+                    const hasMatch = state.filters.type.some(t => c.type && c.type.includes(t));
+                    if(!hasMatch) return false;
+                }
+
+                // Set Filter
+                if(state.filters.set.length > 0) {
+                    if(!c.set || !state.filters.set.includes(c.set)) return false;
+                }
+
                 return true;
             });
 
