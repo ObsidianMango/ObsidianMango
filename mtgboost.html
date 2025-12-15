@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Pocket Sim: v7</title>
+    <title>MTG Pocket Sim: v8 (Commander)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -114,6 +114,7 @@
         .btn:active { transform: scale(0.96); }
         .btn.secondary { background: var(--surface-2); color: white; box-shadow: none; border: 1px solid #444; }
         .btn.danger { background: var(--danger); color: white; box-shadow: none; }
+        .btn.commander { background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; box-shadow: 0 4px 15px rgba(155, 89, 182, 0.4); }
         
         select, input {
             width: 100%; padding: 12px; background: var(--surface-2);
@@ -199,7 +200,6 @@
         }
         .filter-toggle-btn.active { border-color: var(--primary); background: #333; color: var(--primary); }
 
-        /* Filter Panel Styles (Shared) */
         .filter-panel {
             background: var(--surface); border: 1px solid #333; border-radius: 12px;
             padding: 15px; margin-bottom: 15px; display: none; animation: slideDown 0.2s;
@@ -242,6 +242,15 @@
             background: rgba(0,0,0,0.85); font-size: 0.7rem; color: var(--success);
             text-align: center; border-radius: 0 0 8px 8px; padding: 4px 0; font-weight: 600;
         }
+        
+        /* Commander Badge */
+        .col-cmd {
+            position: absolute; top: -5px; left: -5px; background: #9b59b6;
+            color: white; font-size: 0.9rem; font-weight: bold;
+            width: 24px; height: 24px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 2; border: 2px solid white;
+        }
 
         /* --- DECK BUILDER --- */
         .deck-list-item {
@@ -250,6 +259,7 @@
             display: flex; justify-content: space-between; align-items: center; cursor: pointer;
         }
         .deck-list-item:active { background: var(--surface-2); }
+        .deck-fmt-tag { font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; background: #333; color: #aaa; margin-left: 5px; text-transform: uppercase; }
 
         #deck-view-container { display: none; flex-direction: column; height: 100%; }
         
@@ -276,7 +286,7 @@
         .modal-details { width: 100%; max-width: 400px; text-align: center; color: white; }
         #deck-select-area { display: none; flex-direction: column; gap: 8px; margin-top: 15px; max-height: 200px; overflow-y: auto; }
 
-        /* --- SETTINGS MODAL --- */
+        /* --- SETTINGS & NEW DECK MODAL --- */
         .settings-content {
             background: var(--surface); width: 100%; max-width: 400px;
             padding: 25px; border-radius: 20px; border: 1px solid #444;
@@ -367,24 +377,26 @@
                 <div class="filter-toggle-btn" onclick="toggleFilterPanel('main')">⚡</div>
             </div>
 
-            <div id="filter-panel-main" class="filter-panel">
-                </div>
-
+            <div id="filter-panel-main" class="filter-panel"></div>
             <div id="collection-grid"></div>
         </div>
 
         <div id="view-decks" class="view">
             <h1>Deck Builder</h1>
             <div id="decks-main-list">
-                <button class="btn secondary" onclick="createNewDeck()">+ New Deck</button>
+                <button class="btn secondary" onclick="openNewDeckModal()">+ New Deck</button>
                 <div id="deck-list-container" style="margin-top:20px;"></div>
             </div>
             <div id="deck-view-container">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <button onclick="closeDeckView()" style="background:none; border:none; color:var(--text-muted); font-size:1rem; font-weight:600;">&lt; Back</button>
-                    <h3 id="active-deck-name" style="margin:0;">Deck</h3>
+                    <div>
+                        <h3 id="active-deck-name" style="margin:0; display:inline;">Deck</h3>
+                        <span id="active-deck-format" class="deck-fmt-tag">STD</span>
+                    </div>
                     <div id="active-deck-count" style="color:var(--primary); font-weight:bold;">0/60</div>
                 </div>
+                
                 <div id="deck-controls" style="display:none; flex-direction:column; gap:10px; margin-bottom:15px;">
                     <div style="display:flex; gap:10px;">
                         <button id="btn-mode-grid" class="btn secondary" onclick="toggleDeckMode('grid')">Binder View</button>
@@ -394,8 +406,7 @@
                         <input type="text" id="deck-search-input" placeholder="Search deck..." onkeyup="renderActiveDeck()">
                         <div class="filter-toggle-btn" onclick="toggleFilterPanel('deck')">⚡</div>
                     </div>
-                    <div id="filter-panel-deck" class="filter-panel">
-                        </div>
+                    <div id="filter-panel-deck" class="filter-panel"></div>
                 </div>
                 
                 <div id="active-deck-list" style="flex:1; overflow-y:auto;"></div>
@@ -425,11 +436,24 @@
             <h2 id="modal-name">Card Name</h2>
             <div class="modal-price" id="modal-price">$0.00</div>
             
-            <div style="margin-top:20px;">
-                <button class="btn" id="btn-modal-add" onclick="handleDeckAdd()">Add to Deck</button>
+            <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px;">
+                <button class="btn" id="btn-modal-add">Add to Deck</button>
+                <button class="btn commander" id="btn-set-commander" style="display:none;">👑 Set as Commander</button>
                 <div id="deck-select-area"></div>
-                <button class="btn secondary" style="margin-top:10px;" onclick="closeModal()">Close</button>
+                <button class="btn secondary" onclick="closeModal()">Close</button>
             </div>
+        </div>
+    </div>
+
+    <div id="new-deck-modal" class="modal-overlay">
+        <div class="settings-content">
+            <h2 style="margin-bottom:15px;">Create New Deck</h2>
+            <input type="text" id="new-deck-name" placeholder="Deck Name" style="margin-bottom:15px;">
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <button class="btn" onclick="finalizeNewDeck('Standard')">Standard (60)</button>
+                <button class="btn commander" onclick="finalizeNewDeck('Commander')">Commander (100)</button>
+            </div>
+            <button class="btn secondary" onclick="document.getElementById('new-deck-modal').style.display='none'">Cancel</button>
         </div>
     </div>
 
@@ -486,8 +510,7 @@
 
         const fmtMoney = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
         const showToast = (msg) => {
-            elements.toast.innerText = msg;
-            elements.toast.style.opacity = 1;
+            elements.toast.innerText = msg; elements.toast.style.opacity = 1;
             setTimeout(() => elements.toast.style.opacity = 0, 2000);
         };
 
@@ -495,19 +518,13 @@
         function generateFilterHTML(context) {
             return `
                 <div class="filter-group"><div class="filter-label">Card Type</div><div class="filter-chips">
-                    ${['Creature','Instant','Sorcery','Artifact','Enchantment','Planeswalker','Land'].map(t => 
-                        `<div class="chip" data-ctx="${context}" data-cat="type" data-val="${t}" onclick="toggleFilter('${context}', 'type', '${t}')">${t}</div>`
-                    ).join('')}
+                    ${['Creature','Instant','Sorcery','Artifact','Enchantment','Planeswalker','Land'].map(t => `<div class="chip" data-ctx="${context}" data-cat="type" data-val="${t}" onclick="toggleFilter('${context}', 'type', '${t}')">${t}</div>`).join('')}
                 </div></div>
                 <div class="filter-group"><div class="filter-label">Colors</div><div class="filter-chips">
-                    ${[{v:'W',l:'☀️ White'},{v:'U',l:'💧 Blue'},{v:'B',l:'💀 Black'},{v:'R',l:'🔥 Red'},{v:'G',l:'🌳 Green'},{v:'M',l:'🌈 Multi'},{v:'C',l:'💎 Colorless'}].map(c => 
-                        `<div class="chip" data-ctx="${context}" data-cat="color" data-val="${c.v}" onclick="toggleFilter('${context}', 'color', '${c.v}')">${c.l}</div>`
-                    ).join('')}
+                    ${[{v:'W',l:'☀️ White'},{v:'U',l:'💧 Blue'},{v:'B',l:'💀 Black'},{v:'R',l:'🔥 Red'},{v:'G',l:'🌳 Green'},{v:'M',l:'🌈 Multi'},{v:'C',l:'💎 Colorless'}].map(c => `<div class="chip" data-ctx="${context}" data-cat="color" data-val="${c.v}" onclick="toggleFilter('${context}', 'color', '${c.v}')">${c.l}</div>`).join('')}
                 </div></div>
                 <div class="filter-group"><div class="filter-label">Rarity</div><div class="filter-chips">
-                    ${['mythic','rare','uncommon','common'].map(r => 
-                        `<div class="chip" data-ctx="${context}" data-cat="rarity" data-val="${r}" onclick="toggleFilter('${context}', 'rarity', '${r}')">${r}</div>`
-                    ).join('')}
+                    ${['mythic','rare','uncommon','common'].map(r => `<div class="chip" data-ctx="${context}" data-cat="rarity" data-val="${r}" onclick="toggleFilter('${context}', 'rarity', '${r}')">${r}</div>`).join('')}
                 </div></div>
                 <div class="filter-group"><div class="filter-label">Expansion Set</div><div class="filter-chips" id="filter-sets-${context}"></div></div>
                 <button class="btn secondary" style="padding:10px;" onclick="clearFilters('${context}')">Reset Filters</button>
@@ -516,25 +533,19 @@
 
         // --- INIT ---
         window.addEventListener('DOMContentLoaded', () => {
-            renderTotalValue();
-            initSets();
-            // Inject filter HTML
+            renderTotalValue(); initSets();
             elements.filterPanelMain.innerHTML = generateFilterHTML('main');
             elements.filterPanelDeck.innerHTML = generateFilterHTML('deck');
         });
 
-        // --- SETTINGS ---
         function openSettings() { elements.settingsModal.style.display = 'flex'; }
         function closeSettings() { elements.settingsModal.style.display = 'none'; }
         function clearData() { if(confirm("⚠ WARNING: This will delete ALL cards and decks.")) { localStorage.clear(); location.reload(); } }
 
         async function initSets() {
-            elements.spinner.style.display = 'block';
-            elements.retryBtn.style.display = 'none';
-            elements.setSelect.disabled = true;
+            elements.spinner.style.display = 'block'; elements.retryBtn.style.display = 'none'; elements.setSelect.disabled = true;
             try {
-                const res = await fetch('https://api.scryfall.com/sets');
-                const data = await res.json();
+                const res = await fetch('https://api.scryfall.com/sets'); const data = await res.json();
                 const validTypes = ['core', 'expansion', 'masters', 'draft_innovation', 'commander', 'funny'];
                 state.sets = data.data.filter(s => validTypes.includes(s.set_type) && s.card_count > 0);
                 elements.setSelect.innerHTML = '<option value="" disabled selected>Select Expansion...</option>';
@@ -543,20 +554,16 @@
                     const opt = document.createElement('option'); opt.value = s.code; opt.innerText = `${s.name} (${year})`;
                     elements.setSelect.appendChild(opt);
                 });
-                elements.setSelect.disabled = false;
-                elements.spinner.style.display = 'none';
+                elements.setSelect.disabled = false; elements.spinner.style.display = 'none';
             } catch(e) { elements.retryBtn.style.display = 'block'; elements.spinner.style.display = 'none'; }
         }
 
         async function updateSetInfo() {
-            const code = elements.setSelect.value;
-            const set = state.sets.find(s => s.code === code);
+            const code = elements.setSelect.value; const set = state.sets.find(s => s.code === code);
             if(!set) return;
             if(set.icon_svg_uri) elements.dynamicBg.style.backgroundImage = `url('${set.icon_svg_uri}')`;
-            document.getElementById('pack-title').innerText = set.name;
-            document.getElementById('pack-icon').src = set.icon_svg_uri;
-            resetPack();
-            elements.packWrapper.style.opacity = '0.5'; showToast(`Loading ${set.name}...`); state.isLoaded = false;
+            document.getElementById('pack-title').innerText = set.name; document.getElementById('pack-icon').src = set.icon_svg_uri;
+            resetPack(); elements.packWrapper.style.opacity = '0.5'; showToast(`Loading ${set.name}...`); state.isLoaded = false;
             try {
                 const url = `https://api.scryfall.com/cards/search?q=set:${code}%20unique:cards%20game:paper&order=rarity`;
                 let allCards = []; let r = await fetch(url); let d = await r.json(); if(d.data) allCards = allCards.concat(d.data);
@@ -576,16 +583,12 @@
 
         let isDragging = false;
         const handleMove = (e) => {
-            if(!isDragging) return;
-            const rect = elements.strip.getBoundingClientRect();
+            if(!isDragging) return; const rect = elements.strip.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            let pct = (clientX - rect.left) / rect.width * 100;
-            if(pct > 100) pct = 100; if(pct < 0) pct = 0;
-            elements.tear.style.width = pct + '%';
-            if(pct > 92) { openPack(); isDragging = false; }
+            let pct = (clientX - rect.left) / rect.width * 100; if(pct > 100) pct = 100; if(pct < 0) pct = 0;
+            elements.tear.style.width = pct + '%'; if(pct > 92) { openPack(); isDragging = false; }
         };
-        const handleStart = () => isDragging = true;
-        const handleEnd = () => { isDragging = false; elements.tear.style.width = '0%'; };
+        const handleStart = () => isDragging = true; const handleEnd = () => { isDragging = false; elements.tear.style.width = '0%'; };
         elements.strip.addEventListener('mousedown', handleStart); window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleEnd);
         elements.strip.addEventListener('touchstart', handleStart); window.addEventListener('touchmove', handleMove); window.addEventListener('touchend', handleEnd);
 
@@ -596,8 +599,7 @@
             let pack = [];
             if(p.mythic.length && Math.random() < 0.13) pack.push({...pick(p.mythic)}); else if(p.rare.length) pack.push({...pick(p.rare)}); else if(p.uncommon.length) pack.push({...pick(p.uncommon)});
             for(let i=0; i<3; i++) { let c=pick(p.uncommon); if(c) pack.push({...c}); }
-            let cCount = 10;
-            if(Math.random() < 0.3) { cCount--; const pools = [p.common, p.uncommon, p.rare, p.mythic].flat(); if(pools.length) { let foil = {...pick(pools)}; foil.foil = true; pack.push(foil); } }
+            let cCount = 10; if(Math.random() < 0.3) { cCount--; const pools = [p.common, p.uncommon, p.rare, p.mythic].flat(); if(pools.length) { let foil = {...pick(pools)}; foil.foil = true; pack.push(foil); } }
             for(let i=0; i<cCount; i++) { let c=pick(p.common); if(c) pack.push({...c}); }
             if(p.land.length) pack.push({...pick(p.land)});
             const stack = []; const rares = pack.filter(c=>['rare','mythic'].includes(c.rarity)); const uncs = pack.filter(c=>c.rarity==='uncommon' && !c.foil); const foils = pack.filter(c=>c.foil); const coms = pack.filter(c=>c.rarity==='common' && !c.foil); const lands = pack.filter(c=>c.type_line?.includes("Basic Land"));
@@ -641,11 +643,9 @@
             elements.homeVal.innerText = fmtMoney(total);
         }
 
-        // --- FILTERING ---
         function toggleFilterPanel(context) {
             const panel = context === 'main' ? elements.filterPanelMain : elements.filterPanelDeck;
             if(panel.style.display === 'block') { panel.style.display = 'none'; } else {
-                // Populate SETS dynamically based on visible cards
                 const source = context === 'main' ? Object.values(state.collection) : getDeckCards(state.decks[state.activeDeckId]);
                 const uniqueSets = [...new Set(source.map(c => c.set).filter(Boolean))];
                 const setContainer = document.getElementById(`filter-sets-${context}`);
@@ -720,6 +720,18 @@
             if(viewName === 'decks') renderDeckList();
         }
 
+        // --- NEW DECK WIZARD ---
+        function openNewDeckModal() { document.getElementById('new-deck-modal').style.display = 'flex'; }
+        function finalizeNewDeck(format) {
+            const name = document.getElementById('new-deck-name').value;
+            if(!name) { showToast("Enter a name!"); return; }
+            state.decks.push({ name: name, format: format, cards: {} });
+            localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks));
+            document.getElementById('new-deck-modal').style.display = 'none';
+            document.getElementById('new-deck-name').value = '';
+            renderDeckList();
+        }
+
         // --- DECK LOGIC ---
         function openModal(card, source = 'binder') {
             state.modalCardId = card.id;
@@ -729,17 +741,33 @@
             const p = parseFloat(card.foil?card.prices.usd_foil:card.prices.usd)||0;
             document.getElementById('modal-price').innerText = fmtMoney(p);
             
-            // --- FIX FOR BROKEN BUTTONS ---
-            const btn = document.getElementById('btn-modal-add');
-            btn.style.display = 'inline-block'; // Reset visibility
-            elements.deckSelectArea.style.display = 'none'; // Hide deck list
+            const btnAdd = document.getElementById('btn-modal-add');
+            const btnCmd = document.getElementById('btn-set-commander');
+            elements.deckSelectArea.style.display = 'none'; 
             
+            // LOGIC FOR BUTTONS
             if(source === 'deck' && state.activeDeckId !== null) {
-                btn.innerText = "Remove from Deck"; btn.className = "btn danger";
-                btn.onclick = () => removeFromDeck();
+                // REMOVE MODE
+                btnAdd.style.display = 'inline-block';
+                btnAdd.innerText = "Remove from Deck"; 
+                btnAdd.className = "btn danger";
+                btnAdd.onclick = () => removeFromDeck();
+                
+                // COMMANDER BUTTON
+                const deck = state.decks[state.activeDeckId];
+                if(deck.format === 'Commander' && card.type && card.type.includes('Legendary') && card.type.includes('Creature')) {
+                    btnCmd.style.display = 'inline-block';
+                    btnCmd.onclick = () => setCommander();
+                } else {
+                    btnCmd.style.display = 'none';
+                }
             } else {
-                btn.innerText = "Add to Deck"; btn.className = "btn";
-                btn.onclick = () => handleDeckAdd();
+                // ADD MODE
+                btnAdd.style.display = 'inline-block';
+                btnAdd.innerText = "Add to Deck"; 
+                btnAdd.className = "btn";
+                btnAdd.onclick = () => handleDeckAdd();
+                btnCmd.style.display = 'none';
             }
         }
         function closeModal() { elements.modal.style.display = 'none'; }
@@ -766,9 +794,18 @@
             const deck = state.decks[state.activeDeckId];
             if(deck.cards[state.modalCardId]) {
                 deck.cards[state.modalCardId]--; if(deck.cards[state.modalCardId] <= 0) delete deck.cards[state.modalCardId];
+                if(deck.commander === state.modalCardId) deck.commander = null; // Unset commander if removed
                 localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks));
                 showToast("Removed from Deck"); closeModal(); renderActiveDeck();
             }
+        }
+
+        function setCommander() {
+            if(state.activeDeckId === null) return;
+            const deck = state.decks[state.activeDeckId];
+            deck.commander = state.modalCardId;
+            localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks));
+            showToast("Commander Set! 👑"); closeModal(); renderActiveDeck();
         }
         
         function renderDeckList() {
@@ -780,17 +817,17 @@
             state.decks.forEach((deck, idx) => {
                 const count = Object.values(deck.cards).reduce((a,b)=>a+b,0);
                 const el = document.createElement('div'); el.className = 'deck-list-item';
-                el.innerHTML = `<div onclick="openDeck(${idx}, 'grid')" style="flex:1;"><div style="font-weight:bold; font-size:1rem">${deck.name}</div><div style="font-size:0.8rem; color:#888;">${count} cards (Tap to View)</div></div><div style="display:flex; gap:10px;"><button class="btn secondary" style="width:auto; padding:8px 12px; margin:0;" onclick="openDeck(${idx}, 'list')">Edit</button><button class="btn danger" style="width:auto; padding:8px 12px; margin:0;" onclick="deleteDeck(${idx})">X</button></div>`;
+                const fmt = deck.format === 'Commander' ? 'CMD' : 'STD';
+                el.innerHTML = `<div onclick="openDeck(${idx}, 'grid')" style="flex:1;"><div style="font-weight:bold; font-size:1rem">${deck.name}<span class="deck-fmt-tag">${fmt}</span></div><div style="font-size:0.8rem; color:#888;">${count} cards</div></div><div style="display:flex; gap:10px;"><button class="btn secondary" style="width:auto; padding:8px 12px; margin:0;" onclick="openDeck(${idx}, 'list')">Edit</button><button class="btn danger" style="width:auto; padding:8px 12px; margin:0;" onclick="deleteDeck(${idx})">X</button></div>`;
                 list.appendChild(el);
             });
         }
 
-        function createNewDeck() { const name = prompt("Deck Name:"); if(!name) return; state.decks.push({ name: name, cards: {} }); localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks)); renderDeckList(); }
         function deleteDeck(idx) { if(confirm("Delete this deck?")) { state.decks.splice(idx, 1); localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks)); renderDeckList(); } }
 
         function openDeck(idx, mode) {
             state.activeDeckId = idx; state.deckViewMode = mode;
-            clearFilters('deck'); // Clear deck filters on open
+            clearFilters('deck'); 
             document.getElementById('decks-main-list').style.display = 'none';
             document.getElementById('deck-view-container').style.display = 'flex';
             renderActiveDeck();
@@ -809,6 +846,7 @@
         function renderActiveDeck() {
             const deck = state.decks[state.activeDeckId];
             document.getElementById('active-deck-name').innerText = deck.name;
+            document.getElementById('active-deck-format').innerText = deck.format === 'Commander' ? 'CMD' : 'STD';
             const listView = document.getElementById('active-deck-list');
             const gridView = document.getElementById('deck-grid-view');
             const controls = document.getElementById('deck-controls');
@@ -822,26 +860,38 @@
             const total = deckCards.reduce((acc, c) => acc + c.qty, 0);
             document.getElementById('active-deck-count').innerText = `${total} cards`;
 
-            // Apply Filters (Only in Grid Mode usually, but logic allows both)
             const search = document.getElementById('deck-search-input').value.toLowerCase();
             deckCards = filterCards(deckCards, search);
 
+            // Move Commander to front if exists
+            if(deck.commander) {
+                const cmdIndex = deckCards.findIndex(c => c.id === deck.commander);
+                if(cmdIndex > -1) {
+                    const cmd = deckCards.splice(cmdIndex, 1)[0];
+                    deckCards.unshift(cmd);
+                }
+            }
+
             if(state.deckViewMode === 'list') {
-                filterControls.style.display = 'none'; // Hide filters in list mode
-                gridView.style.display = 'none'; listView.style.display = 'block'; listView.innerHTML = '';
+                filterControls.style.display = 'none'; gridView.style.display = 'none'; listView.style.display = 'block'; listView.innerHTML = '';
                 deckCards.forEach(c => {
+                    const isCmd = c.id === deck.commander ? '👑 ' : '';
                     const row = document.createElement('div'); row.className = 'deck-card-row';
-                    row.innerHTML = `<div class="row-img" style="background-image:url(${c.img})"></div><div style="flex:1; font-size:0.9rem;">${c.name}</div><div style="font-weight:bold; color:var(--primary); margin-right:10px;">x${c.qty}</div><button class="remove-btn" onclick="quickRemove('${c.id}')">-</button>`;
+                    row.innerHTML = `<div class="row-img" style="background-image:url(${c.img})"></div><div style="flex:1; font-size:0.9rem;">${isCmd}${c.name}</div><div style="font-weight:bold; color:var(--primary); margin-right:10px;">x${c.qty}</div><button class="remove-btn" onclick="quickRemove('${c.id}')">-</button>`;
                     listView.appendChild(row);
                 });
             } else {
-                filterControls.style.display = 'flex'; // Show filters in grid mode
-                listView.style.display = 'none'; gridView.style.display = 'grid'; gridView.innerHTML = '';
+                filterControls.style.display = 'flex'; listView.style.display = 'none'; gridView.style.display = 'grid'; gridView.innerHTML = '';
                 deckCards.forEach(c => {
                     const el = document.createElement('div'); el.className = 'col-card'; el.style.backgroundImage = `url(${c.img})`;
                     el.onclick = () => openModal(c, 'deck'); 
                     const count = document.createElement('div'); count.className = 'col-count'; count.innerText = c.qty;
-                    el.appendChild(count); gridView.appendChild(el);
+                    el.appendChild(count);
+                    if(c.id === deck.commander) {
+                        const badge = document.createElement('div'); badge.className = 'col-cmd'; badge.innerText = '👑';
+                        el.appendChild(badge);
+                    }
+                    gridView.appendChild(el);
                 });
             }
         }
