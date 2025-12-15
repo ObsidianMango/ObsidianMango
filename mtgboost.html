@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Pocket Sim v3</title>
+    <title>MTG Pocket Sim v4</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -33,6 +33,25 @@
             flex-direction: column;
         }
 
+        /* --- ANIMATED BACKGROUND --- */
+        #mana-bg {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none; overflow: hidden;
+        }
+        .mana-symbol {
+            position: absolute;
+            font-size: 2rem;
+            opacity: 0.05; /* Very subtle */
+            animation: floatUp 15s linear infinite;
+            user-select: none;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(110vh) rotate(0deg); opacity: 0; }
+            20% { opacity: 0.05; }
+            80% { opacity: 0.05; }
+            100% { transform: translateY(-10vh) rotate(360deg); opacity: 0; }
+        }
+
         /* --- APP STRUCTURE --- */
         #app-container {
             flex: 1;
@@ -40,6 +59,7 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            z-index: 10; /* Above background */
         }
 
         .view {
@@ -47,9 +67,11 @@
             top: 0; left: 0; right: 0; bottom: 80px; /* Nav height */
             display: none;
             flex-direction: column;
-            background: var(--bg);
             padding: 20px;
             overflow-y: auto;
+            /* Glassmorphism backing to make text readable over anims */
+            background: rgba(15, 15, 19, 0.85); 
+            backdrop-filter: blur(5px);
         }
         
         .view.active { display: flex; animation: fadeIn 0.2s ease; }
@@ -59,13 +81,14 @@
         /* --- NAVIGATION --- */
         #nav-bar {
             height: 80px;
-            background: var(--surface);
+            background: rgba(26, 26, 32, 0.95);
             display: flex;
             justify-content: space-around;
             align-items: center;
             border-top: 1px solid #333;
             z-index: 100;
             padding-bottom: 20px;
+            backdrop-filter: blur(10px);
         }
 
         .nav-item {
@@ -85,9 +108,11 @@
             padding: 12px; border-radius: 8px; font-weight: 800; font-size: 0.9rem;
             cursor: pointer; width: 100%; text-align: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            margin-top: 5px;
         }
         .btn.secondary { background: var(--surface-2); color: white; box-shadow: none; border: 1px solid #444; }
         .btn.danger { background: var(--danger); color: white; }
+        .btn-sm { padding: 8px; font-size: 0.8rem; width: auto; display: inline-block; }
 
         select, input {
             width: 100%; padding: 12px; background: var(--surface-2);
@@ -95,9 +120,7 @@
         }
 
         /* --- COLLECTION & FILTERING --- */
-        .binder-controls {
-            display: flex; gap: 10px; margin-bottom: 15px;
-        }
+        .binder-controls { display: flex; gap: 10px; margin-bottom: 15px; }
         #search-input { flex: 1; }
         .filter-toggle-btn {
             width: 48px; display: flex; align-items: center; justify-content: center;
@@ -116,12 +139,10 @@
 
         .filter-group { margin-bottom: 15px; }
         .filter-label { font-size: 0.8rem; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;}
-        
         .filter-chips { display: flex; flex-wrap: wrap; gap: 8px; }
         .chip {
             padding: 6px 12px; background: var(--surface-2); border: 1px solid #444;
-            border-radius: 20px; font-size: 0.8rem; cursor: pointer;
-            transition: all 0.2s;
+            border-radius: 20px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
         }
         .chip.active { background: var(--primary); color: black; border-color: var(--primary); font-weight: bold; }
         
@@ -217,7 +238,7 @@
         
         .stat-card {
             background: var(--surface); padding: 15px; border-radius: 12px;
-            margin-bottom: 15px; text-align: center; border: 1px solid #333;
+            margin-bottom: 15px; text-align: center; border: 1px solid #333; position: relative;
         }
         .stat-val { font-size: 1.8rem; font-weight: 800; color: var(--success); }
 
@@ -240,7 +261,11 @@
             display: none; flex-direction: column; align-items: center; justify-content: center;
             padding: 20px; animation: fadeIn 0.2s;
         }
-        #modal-img { max-width: 90%; max-height: 60vh; border-radius: 18px; margin-bottom: 20px; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
+        #modal-img { max-width: 90%; max-height: 55vh; border-radius: 18px; margin-bottom: 20px; box-shadow: 0 0 30px rgba(0,0,0,0.5); }
+        .modal-details { width: 100%; max-width: 400px; text-align: center; color: white; }
+
+        /* Deck Selection inside Modal */
+        #deck-select-area { display: none; flex-direction: column; gap: 8px; margin-top: 10px; max-height: 150px; overflow-y: auto; }
         
         #toast {
             position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
@@ -248,9 +273,16 @@
             font-size: 0.9rem; opacity: 0; pointer-events: none; transition: opacity 0.3s;
             z-index: 600; box-shadow: 0 5px 15px rgba(0,0,0,0.5); border: 1px solid #555;
         }
+
+        .trash-btn {
+            position: absolute; top: 10px; right: 10px;
+            background: transparent; border: none; color: #444; font-size: 1.2rem; cursor: pointer;
+        }
     </style>
 </head>
 <body>
+
+    <div id="mana-bg"></div>
 
     <div id="app-container">
 
@@ -261,6 +293,7 @@
             </div>
             
             <div class="stat-card">
+                <button class="trash-btn" onclick="clearData()" title="Clear All Data">🗑️</button>
                 <div class="subtitle">Collection Value</div>
                 <div class="stat-val" id="home-value">$0.00</div>
             </div>
@@ -336,17 +369,6 @@
                         <div class="chip" data-cat="rarity" data-val="common" onclick="toggleFilter('rarity', 'common')">C</div>
                     </div>
                 </div>
-                <div class="filter-group">
-                    <div class="filter-label">Type</div>
-                    <div class="filter-chips" id="filter-types">
-                        <div class="chip" data-cat="type" data-val="Creature" onclick="toggleFilter('type', 'Creature')">Creature</div>
-                        <div class="chip" data-cat="type" data-val="Instant" onclick="toggleFilter('type', 'Instant')">Instant</div>
-                        <div class="chip" data-cat="type" data-val="Sorcery" onclick="toggleFilter('type', 'Sorcery')">Sorcery</div>
-                        <div class="chip" data-cat="type" data-val="Artifact" onclick="toggleFilter('type', 'Artifact')">Artifact</div>
-                        <div class="chip" data-cat="type" data-val="Enchantment" onclick="toggleFilter('type', 'Enchantment')">Enchant</div>
-                        <div class="chip" data-cat="type" data-val="Land" onclick="toggleFilter('type', 'Land')">Land</div>
-                    </div>
-                </div>
                 <button class="btn secondary" style="padding: 8px;" onclick="clearFilters()">Clear Filters</button>
             </div>
 
@@ -387,12 +409,16 @@
 
     <div id="card-modal">
         <img id="modal-img" src="">
-        <div class="modal-details" style="text-align:center; width:100%; color:white;">
+        <div class="modal-details">
             <h2 id="modal-name">Card Name</h2>
             <div class="modal-price" id="modal-price">$0.00</div>
-            <div style="display:flex; gap:10px; margin-top:15px; justify-content:center;">
-                <button class="btn" id="btn-add-deck" onclick="addToActiveDeck()">Add to Deck</button>
-                <button class="btn secondary" onclick="closeModal()">Close</button>
+            
+            <div style="margin-top:15px;">
+                <button class="btn" id="btn-modal-add" onclick="handleDeckAdd()">Add to Deck</button>
+                
+                <div id="deck-select-area"></div>
+                
+                <button class="btn secondary" style="margin-top:10px;" onclick="closeModal()">Close</button>
             </div>
         </div>
     </div>
@@ -406,18 +432,13 @@
             currentSet: null,
             pool: { common: [], uncommon: [], rare: [], mythic: [], land: [] },
             isLoaded: false,
-            // v3 uses same key to keep data, but we will upgrade data on the fly
             collection: JSON.parse(localStorage.getItem('mtgCollection_v2')) || {},
             decks: JSON.parse(localStorage.getItem('mtgDecks_v2')) || [],
             activeDeckId: null,
             tempPackValue: 0,
             tempPackRares: [],
             modalCardId: null,
-            filters: {
-                color: [], // ['W', 'U']
-                rarity: [],
-                type: []
-            }
+            filters: { color: [], rarity: [], type: [] }
         };
 
         const elements = {
@@ -432,9 +453,11 @@
             homeVal: document.getElementById('home-value'),
             toast: document.getElementById('toast'),
             modal: document.getElementById('card-modal'),
+            deckSelectArea: document.getElementById('deck-select-area'),
             retryBtn: document.getElementById('retry-btn'),
             spinner: document.getElementById('loading-spinner'),
-            filterPanel: document.getElementById('filter-panel')
+            filterPanel: document.getElementById('filter-panel'),
+            manaBg: document.getElementById('mana-bg')
         };
 
         const fmtMoney = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -443,6 +466,37 @@
             elements.toast.style.opacity = 1;
             setTimeout(() => elements.toast.style.opacity = 0, 2000);
         };
+
+        // --- BACKGROUND ANIMATION ---
+        function initBackground() {
+            const symbols = ['☀','💧','💀','🔥','🌳'];
+            for(let i=0; i<15; i++) {
+                const el = document.createElement('div');
+                el.className = 'mana-symbol';
+                el.innerText = symbols[Math.floor(Math.random()*symbols.length)];
+                el.style.left = Math.random() * 100 + '%';
+                el.style.animationDuration = (10 + Math.random() * 10) + 's';
+                el.style.animationDelay = (Math.random() * 5) + 's';
+                
+                // Random color based on symbol
+                if(el.innerText === '☀') el.style.color = '#fff6d4';
+                if(el.innerText === '💧') el.style.color = '#aae0fa';
+                if(el.innerText === '💀') el.style.color = '#cbc2bf';
+                if(el.innerText === '🔥') el.style.color = '#f9aa8f';
+                if(el.innerText === '🌳') el.style.color = '#9bd3ae';
+
+                elements.manaBg.appendChild(el);
+            }
+        }
+        initBackground();
+
+        // --- CLEAR DATA ---
+        function clearData() {
+            if(confirm("⚠ WARNING: This will delete ALL cards and decks. Are you sure?")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
 
         // --- INIT ---
         window.addEventListener('DOMContentLoaded', () => {
@@ -483,7 +537,7 @@
             }
         }
 
-        // --- PACK LOGIC (No API Change) ---
+        // --- PACK LOGIC ---
         async function updateSetInfo() {
             const code = elements.setSelect.value;
             const set = state.sets.find(s => s.code === code);
@@ -512,26 +566,15 @@
                 
                 allCards.forEach(c => {
                     let img = c.image_uris?.normal;
-                    // Handle double-faced cards (get front face)
-                    if(!img && c.card_faces && c.card_faces[0].image_uris) {
-                        img = c.card_faces[0].image_uris.normal;
-                    }
-
-                    // Extract colors (handle double faced)
+                    if(!img && c.card_faces && c.card_faces[0].image_uris) img = c.card_faces[0].image_uris.normal;
                     let colors = c.colors;
-                    if(!colors && c.card_faces && c.card_faces[0].colors) {
-                        colors = c.card_faces[0].colors;
-                    }
+                    if(!colors && c.card_faces && c.card_faces[0].colors) colors = c.card_faces[0].colors;
 
                     if(img && c.rarity) {
                         const obj = {
                             id: c.id, name: c.name, img: img, rarity: c.rarity,
-                            prices: c.prices,
-                            // NEW: Store colors and type for filtering
-                            colors: colors || [],
-                            type: c.type_line || "Unknown"
+                            prices: c.prices, colors: colors || [], type: c.type_line || "Unknown"
                         };
-                        
                         if(c.type_line && c.type_line.includes("Basic Land")) state.pool.land.push(obj);
                         else if(state.pool[c.rarity]) state.pool[c.rarity].push(obj);
                     }
@@ -579,31 +622,24 @@
             const pick = arr => arr.length ? arr[Math.floor(Math.random()*arr.length)] : null;
             let pack = [];
 
-            // 1. Rare
             if(p.mythic.length && Math.random() < 0.13) pack.push({...pick(p.mythic)});
             else if(p.rare.length) pack.push({...pick(p.rare)});
             else if(p.uncommon.length) pack.push({...pick(p.uncommon)});
 
-            // 2. Uncommons
             for(let i=0; i<3; i++) { let c=pick(p.uncommon); if(c) pack.push({...c}); }
 
-            // 3. Commons + Foil
             let cCount = 10;
             if(Math.random() < 0.3) {
                 cCount--;
                 const pools = [p.common, p.uncommon, p.rare, p.mythic].flat();
                 if(pools.length) {
-                    let foil = {...pick(pools)};
-                    foil.foil = true;
-                    pack.push(foil);
+                    let foil = {...pick(pools)}; foil.foil = true; pack.push(foil);
                 }
             }
             for(let i=0; i<cCount; i++) { let c=pick(p.common); if(c) pack.push({...c}); }
             
-            // 4. Land
             if(p.land.length) pack.push({...pick(p.land)});
 
-            // Stack order logic
             const stack = [];
             const rares = pack.filter(c=>['rare','mythic'].includes(c.rarity));
             const uncs = pack.filter(c=>c.rarity==='uncommon' && !c.foil);
@@ -641,11 +677,8 @@
                 state.collection[card.id] = {...card, count: 0, date: Date.now()};
             }
             state.collection[card.id].count++;
-            // Update metadata if missing (for legacy data upgrade)
             if(card.colors) state.collection[card.id].colors = card.colors;
-            if(card.type) state.collection[card.id].type = card.type;
             if(card.prices) state.collection[card.id].prices = card.prices;
-            
             state.collection[card.id].date = Date.now();
             localStorage.setItem('mtgCollection_v2', JSON.stringify(state.collection));
             renderTotalValue();
@@ -675,7 +708,6 @@
         }
 
         // --- FILTERING & COLLECTION UI ---
-        
         function toggleFilterPanel() {
             const panel = elements.filterPanel;
             panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
@@ -686,18 +718,13 @@
             const idx = list.indexOf(value);
             if(idx > -1) list.splice(idx, 1);
             else list.push(value);
-            
-            // Update visual chips
             document.querySelectorAll(`.chip[data-cat="${category}"][data-val="${value}"]`)
                 .forEach(el => el.classList.toggle('active'));
-            
             renderCollection();
         }
 
         function clearFilters() {
-            state.filters.color = [];
-            state.filters.rarity = [];
-            state.filters.type = [];
+            state.filters.color = []; state.filters.rarity = [];
             document.querySelectorAll('.chip').forEach(el => el.classList.remove('active'));
             renderCollection();
         }
@@ -709,45 +736,18 @@
             const sortMode = document.getElementById('sort-select').value;
             const search = document.getElementById('search-input').value.toLowerCase();
 
-            // 1. FILTERING
             const filtered = cards.filter(c => {
-                // Name Search
                 if(search && !c.name.toLowerCase().includes(search)) return false;
-
-                // Color Filter
                 if(state.filters.color.length > 0) {
                     const cColors = c.colors || [];
-                    // Handle "Colorless" logic
-                    if(state.filters.color.includes('C')) {
-                        if(cColors.length > 0) return false; 
-                    }
-                    // Handle "Multicolor" logic
-                    else if(state.filters.color.includes('M')) {
-                         if(cColors.length < 2) return false;
-                    }
-                    // Specific Colors (OR logic: if card has Red OR Blue selected)
-                    else {
-                        const hasMatch = state.filters.color.some(f => cColors.includes(f));
-                        if(!hasMatch) return false;
-                    }
+                    if(state.filters.color.includes('C')) { if(cColors.length > 0) return false; }
+                    else if(state.filters.color.includes('M')) { if(cColors.length < 2) return false; }
+                    else { const hasMatch = state.filters.color.some(f => cColors.includes(f)); if(!hasMatch) return false; }
                 }
-
-                // Rarity Filter
-                if(state.filters.rarity.length > 0) {
-                    if(!state.filters.rarity.includes(c.rarity)) return false;
-                }
-
-                // Type Filter
-                if(state.filters.type.length > 0) {
-                    const typeLine = c.type || "";
-                    const hasMatch = state.filters.type.some(t => typeLine.includes(t));
-                    if(!hasMatch) return false;
-                }
-
+                if(state.filters.rarity.length > 0) { if(!state.filters.rarity.includes(c.rarity)) return false; }
                 return true;
             });
 
-            // 2. SORTING
             filtered.sort((a,b) => {
                 if(sortMode === 'value') {
                     let va = parseFloat(a.prices?.usd)||0; let vb = parseFloat(b.prices?.usd)||0;
@@ -767,23 +767,15 @@
                 el.className = 'col-card';
                 el.style.backgroundImage = `url(${c.img})`;
                 el.onclick = () => openModal(c);
-
                 const count = document.createElement('div');
-                count.className = 'col-count';
-                count.innerText = c.count;
-                
+                count.className = 'col-count'; count.innerText = c.count;
                 const pVal = parseFloat(c.foil?c.prices.usd_foil:c.prices.usd)||0;
                 const price = document.createElement('div');
-                price.className = 'col-price';
-                price.innerText = fmtMoney(pVal);
-
-                el.appendChild(count);
-                el.appendChild(price);
-                grid.appendChild(el);
+                price.className = 'col-price'; price.innerText = fmtMoney(pVal);
+                el.appendChild(count); el.appendChild(price); grid.appendChild(el);
             });
         }
 
-        // --- NAVIGATION ---
         function switchView(viewName) {
             document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
             document.getElementById('view-' + viewName).classList.add('active');
@@ -793,7 +785,7 @@
             if(viewName === 'decks') renderDeckList();
         }
 
-        // --- DECK & MODAL (No Changes) ---
+        // --- NEW DECK LOGIC ---
         function openModal(card) {
             state.modalCardId = card.id;
             elements.modal.style.display = 'flex';
@@ -802,16 +794,44 @@
             const p = parseFloat(card.foil?card.prices.usd_foil:card.prices.usd)||0;
             document.getElementById('modal-price').innerText = fmtMoney(p);
             
-            const btn = document.getElementById('btn-add-deck');
-            if(state.activeDeckId !== null) {
-                btn.style.display = 'inline-block';
-                const deckName = state.decks[state.activeDeckId].name;
-                btn.innerText = `Add to "${deckName}"`;
-            } else {
-                btn.style.display = 'none';
-            }
+            // Reset modal state
+            document.getElementById('btn-modal-add').style.display = 'inline-block';
+            elements.deckSelectArea.style.display = 'none';
         }
         function closeModal() { elements.modal.style.display = 'none'; }
+
+        function handleDeckAdd() {
+            if(state.decks.length === 0) {
+                showToast("Create a Deck first!");
+                return;
+            }
+            // If only 1 deck, add immediately
+            if(state.decks.length === 1) {
+                addToDeck(0);
+                return;
+            }
+            // If > 1 deck, show buttons
+            document.getElementById('btn-modal-add').style.display = 'none';
+            elements.deckSelectArea.innerHTML = '';
+            elements.deckSelectArea.style.display = 'flex';
+            
+            state.decks.forEach((deck, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'btn secondary';
+                btn.innerText = deck.name;
+                btn.onclick = () => addToDeck(idx);
+                elements.deckSelectArea.appendChild(btn);
+            });
+        }
+
+        function addToDeck(idx) {
+            const deck = state.decks[idx];
+            if(!deck.cards[state.modalCardId]) deck.cards[state.modalCardId] = 0;
+            deck.cards[state.modalCardId]++;
+            localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks));
+            showToast(`Added to ${deck.name}`);
+            closeModal();
+        }
         
         function renderDeckList() {
             const list = document.getElementById('deck-list-container');
@@ -864,14 +884,6 @@
                 list.appendChild(row);
             });
             document.getElementById('active-deck-count').innerText = `${total} cards`;
-        }
-        function addToActiveDeck() {
-            if(state.activeDeckId === null || !state.modalCardId) return;
-            const deck = state.decks[state.activeDeckId];
-            if(!deck.cards[state.modalCardId]) deck.cards[state.modalCardId] = 0;
-            deck.cards[state.modalCardId]++;
-            localStorage.setItem('mtgDecks_v2', JSON.stringify(state.decks));
-            showToast(`Added to ${deck.name}`); closeModal();
         }
     </script>
 </body>
