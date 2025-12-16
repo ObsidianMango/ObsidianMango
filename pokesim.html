@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PokéSim: Unlimited</title>
+    <title>PokéSim: Ultimate Fixed</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -39,10 +39,29 @@
             background-repeat: repeat; background-position: center; background-size: 150px;
             filter: grayscale(100%); transition: background-image 0.5s ease;
         }
-        #bg-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 1; pointer-events: none; background: rgba(18, 18, 18, 0.92);
+        
+        /* --- LOADING SCREEN --- */
+        #loading-overlay {
+            position: fixed; inset: 0; z-index: 2000; background: var(--bg);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.5s ease;
         }
+        #loading-poke {
+            width: 150px; height: 150px; object-fit: contain;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 0 20px rgba(255, 203, 5, 0.4));
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        .loading-text {
+            font-weight: 900; letter-spacing: 2px; color: var(--text-muted);
+            text-transform: uppercase; font-size: 0.9rem;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
         /* --- APP CONTAINER --- */
         #app-container {
@@ -112,6 +131,8 @@
             justify-content: center; box-shadow: 0 30px 60px rgba(0,0,0,0.8);
             border: 1px solid #444; position: relative; overflow: hidden;
         }
+        
+        /* Shimmer Effect */
         .pack-body::before {
             content: ""; position: absolute; inset: 0;
             background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.1) 45%, rgba(255,255,255,0.1) 55%, transparent 70%);
@@ -127,12 +148,17 @@
             text-transform: uppercase; text-align: center; color: var(--primary);
             text-shadow: 0 4px 10px black; width: 100%; z-index: 6; padding: 0 10px;
         }
+        
+        /* --- TEAR STRIP FIXED --- */
         .pack-strip {
-            position: absolute; top: 0; left: 0; width: 100%; height: 60px;
+            position: absolute; top: 0; left: 0; width: 100%; height: 65px;
             background: repeating-linear-gradient(45deg, #cc0000, #cc0000 10px, #ff0000 10px, #ff0000 20px);
-            z-index: 20; border-radius: 18px 18px 0 0; border-bottom: 2px dashed #fff;
+            z-index: 50; /* Ensure high z-index to catch clicks */
+            border-radius: 18px 18px 0 0; border-bottom: 2px dashed #fff;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            cursor: pointer; /* Show pointer to indicate clickable */
+            touch-action: none; /* IMPORTANT: Prevents scrolling while dragging */
         }
         .tear-progress {
             position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
@@ -264,7 +290,11 @@
 </head>
 <body>
     <div id="dynamic-bg"></div>
-    <div id="bg-overlay"></div>
+    
+    <div id="loading-overlay">
+        <img id="loading-poke" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png" alt="Loading...">
+        <div class="loading-text" id="loading-text">Connecting to PokéNetwork...</div>
+    </div>
 
     <div id="app-container">
         <div id="view-home" class="view active">
@@ -280,7 +310,7 @@
 
             <div style="display:flex; gap:10px; margin-bottom:20px;">
                 <select id="set-select" onchange="updateSetInfo()">
-                    <option disabled selected>Connecting to PokeAPI...</option>
+                    <option disabled selected>Loading Sets...</option>
                 </select>
                 <div id="loading-spinner" style="font-size:0.8rem; color:#888; display:none; align-self:center;">↻</div>
             </div>
@@ -288,7 +318,7 @@
             <div id="pack-stage">
                 <div id="pack-wrapper" class="pack-wrapper" style="display:none;">
                     <div class="pack-strip" id="pack-strip">
-                        <span style="font-size:0.7rem; color:white; pointer-events:none; letter-spacing:2px; font-weight:bold;">TEAR HERE >>></span>
+                        <span style="font-size:0.7rem; color:white; pointer-events:none; letter-spacing:2px; font-weight:bold;">SLIDE OR CLICK >>></span>
                         <div class="tear-progress" id="tear-line"></div>
                     </div>
                     <div class="pack-body">
@@ -406,7 +436,9 @@
             settingsModal: document.getElementById('settings-modal'),
             spinner: document.getElementById('loading-spinner'),
             filterPanel: document.getElementById('filter-panel'),
-            dynamicBg: document.getElementById('dynamic-bg'),
+            loadingOverlay: document.getElementById('loading-overlay'),
+            loadingPoke: document.getElementById('loading-poke'),
+            loadingText: document.getElementById('loading-text'),
             packIcon: document.getElementById('pack-icon')
         };
 
@@ -457,8 +489,36 @@
             `;
         }
 
+        // --- LOADING SCREEN LOGIC ---
+        const loadSprites = [
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png", // Pikachu
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png",  // Charizard
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/9.png",  // Blastoise
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/3.png",  // Venusaur
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png", // Eevee
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png"  // Mewtwo
+        ];
+        let loadIdx = 0;
+        let loadInterval;
+
+        function startLoadingAnim() {
+            elements.loadingOverlay.style.opacity = '1';
+            elements.loadingOverlay.style.pointerEvents = 'auto';
+            loadInterval = setInterval(() => {
+                loadIdx = (loadIdx + 1) % loadSprites.length;
+                elements.loadingPoke.src = loadSprites[loadIdx];
+            }, 3500); // 3.5 seconds per pokemon
+        }
+
+        function stopLoadingAnim() {
+            clearInterval(loadInterval);
+            elements.loadingOverlay.style.opacity = '0';
+            setTimeout(() => { elements.loadingOverlay.style.pointerEvents = 'none'; }, 500);
+        }
+
         // --- INIT ---
         window.addEventListener('DOMContentLoaded', () => {
+            startLoadingAnim();
             renderTotalValue(); 
             initSets();
             elements.filterPanel.innerHTML = generateFilterHTML();
@@ -476,7 +536,7 @@
 
         // --- API & LOGIC ---
         async function initSets() {
-            elements.spinner.style.display = 'block'; elements.setSelect.disabled = true;
+            elements.setSelect.disabled = true;
             try {
                 // INCREASED PAGE SIZE TO 250 TO GET ALL ERAS (API handles ~150 sets)
                 const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250'); 
@@ -490,10 +550,11 @@
                     opt.innerText = `${s.name} (${s.releaseDate.substring(0,4)})`;
                     elements.setSelect.appendChild(opt);
                 });
-                elements.setSelect.disabled = false; elements.spinner.style.display = 'none';
+                elements.setSelect.disabled = false;
+                stopLoadingAnim();
             } catch(e) { 
+                elements.loadingText.innerText = "Error Loading Data. Check Internet.";
                 showToast("API Error. Check internet."); 
-                elements.spinner.style.display = 'none'; 
             }
         }
 
@@ -546,22 +607,55 @@
             } catch(e) { console.error(e); showToast("Error loading cards"); }
         }
 
-        // --- TEAR MECHANIC ---
+        // --- FIXED TEAR MECHANIC ---
         let isDragging = false;
-        const handleMove = (e) => {
-            if(!isDragging) return; 
-            const rect = elements.strip.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            let pct = (clientX - rect.left) / rect.width * 100; 
-            if(pct > 100) pct = 100; if(pct < 0) pct = 0;
-            elements.tear.style.width = pct + '%'; 
-            if(pct > 92) { openPack(); isDragging = false; }
-        };
-        const handleStart = () => isDragging = true; 
-        const handleEnd = () => { isDragging = false; elements.tear.style.width = '0%'; };
         
-        elements.strip.addEventListener('mousedown', handleStart); window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleEnd);
-        elements.strip.addEventListener('touchstart', handleStart); window.addEventListener('touchmove', handleMove); window.addEventListener('touchend', handleEnd);
+        // Use a much simpler handler
+        const handleInteraction = (clientX) => {
+            if(!isDragging) return;
+            const rect = elements.strip.getBoundingClientRect();
+            let pct = (clientX - rect.left) / rect.width * 100;
+            if(pct < 0) pct = 0; if(pct > 100) pct = 100;
+            
+            elements.tear.style.width = pct + '%';
+            if(pct > 90) { // Slightly easier threshold
+                openPack(); 
+                isDragging = false; 
+            }
+        };
+
+        const startDrag = (e) => {
+            isDragging = true;
+        };
+
+        const stopDrag = () => {
+            isDragging = false;
+            if(elements.packWrapper.style.display !== 'none') {
+                 elements.tear.style.width = '0%';
+            }
+        };
+        
+        // CLICK FALLBACK (If drag fails)
+        elements.strip.addEventListener('click', () => {
+             elements.tear.style.transition = "width 0.3s";
+             elements.tear.style.width = "100%";
+             setTimeout(() => openPack(), 300);
+        });
+
+        // Mouse Events
+        elements.strip.addEventListener('mousedown', startDrag);
+        window.addEventListener('mousemove', (e) => handleInteraction(e.clientX));
+        window.addEventListener('mouseup', stopDrag);
+
+        // Touch Events
+        elements.strip.addEventListener('touchstart', (e) => {
+            startDrag(e);
+        });
+        window.addEventListener('touchmove', (e) => {
+            handleInteraction(e.touches[0].clientX);
+        });
+        window.addEventListener('touchend', stopDrag);
+
 
         function resetPack() { 
             elements.packWrapper.style.display = 'flex'; 
@@ -570,6 +664,7 @@
             elements.strip.style.pointerEvents = 'auto'; 
             elements.strip.style.opacity = 1; 
             elements.tear.style.width = '0%'; 
+            elements.tear.style.transition = "none";
         }
 
         function openPack() {
@@ -585,6 +680,7 @@
             for(let i=0; i<3; i++) { let c=pick(p.uncommon); if(c) pack.push({...c}); }
             for(let i=0; i<6; i++) { let c=pick(p.common); if(c) pack.push({...c}); }
 
+            // Actually hide the wrapper
             elements.packWrapper.style.display = 'none'; 
             elements.cardStack.style.display = 'block'; 
             elements.cardStack.innerHTML = '';
