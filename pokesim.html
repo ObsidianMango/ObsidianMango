@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PokéSim: Unlimited</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ffcb05; /* Pokemon Yellow */
+            --primary-dim: #c7a008;
+            --accent: #3b4cca; /* Pokemon Blue */
+            --bg: #121212;
+            --surface: #1e1e24;
+            --surface-2: #2a2a35;
+            --text: #ffffff;
+            --text-muted: #8b8b99;
+            --danger: #eb5757;
+            --success: #2ecc71;
+            
+            /* Energy Colors */
+            --grass: #78c850; --fire: #f08030; --water: #6890f0; --lightning: #f8d030;
+            --psychic: #f85888; --fighting: #c03028; --darkness: #705848; --metal: #b8b8d0;
+            --fairy: #ee99ac; --dragon: #7038f8; --colorless: #a8a878;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        
+        body {
+            margin: 0; background-color: var(--bg); color: var(--text);
+            font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh;
+            display: flex; flex-direction: column; user-select: none;
+        }
+
+        /* --- DYNAMIC BACKGROUND --- */
+        #dynamic-bg {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none; opacity: 0.1; 
+            background-repeat: repeat; background-position: center; background-size: 150px;
+            filter: grayscale(100%); transition: background-image 0.5s ease;
+        }
+        #bg-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1; pointer-events: none; background: rgba(18, 18, 18, 0.92);
+        }
+
+        /* --- APP CONTAINER --- */
+        #app-container {
+            flex: 1; position: relative; overflow: hidden;
+            display: flex; flex-direction: column; width: 100%; height: 100%; z-index: 10;
+        }
+
+        .view {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 90px; 
+            display: none; flex-direction: column; padding: 16px;
+            overflow-y: auto; width: 100%;
+        }
+        .view.active { display: flex; animation: fadeIn 0.25s cubic-bezier(0.25, 1, 0.5, 1); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- NAVIGATION --- */
+        #nav-bar {
+            height: 90px; background: var(--surface); display: flex;
+            justify-content: space-around; align-items: center;
+            border-top: 1px solid #333; z-index: 100; padding-bottom: 25px;
+            flex-shrink: 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+        }
+        .nav-item {
+            display: flex; flex-direction: column; align-items: center;
+            font-size: 0.75rem; color: var(--text-muted); cursor: pointer;
+            width: 33%; transition: all 0.2s; font-weight: 600;
+        }
+        .nav-item.active { color: var(--primary); transform: translateY(-2px); }
+        .nav-icon { font-size: 1.7rem; margin-bottom: 4px; }
+
+        /* --- UI ELEMENTS --- */
+        h1, h2 { margin: 0 0 10px 0; letter-spacing: -0.5px; }
+        .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+            color: #000; border: none; padding: 14px; border-radius: 12px;
+            font-weight: 800; font-size: 1rem; cursor: pointer; width: 100%;
+            text-align: center; box-shadow: 0 4px 15px rgba(255, 203, 5, 0.2);
+            transition: transform 0.1s;
+        }
+        .btn:active { transform: scale(0.96); }
+        .btn.secondary { background: var(--surface-2); color: white; box-shadow: none; border: 1px solid #444; }
+        .btn.danger { background: var(--danger); color: white; box-shadow: none; }
+        .btn.shop { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; margin-top: 5px; } 
+
+        select, input {
+            width: 100%; padding: 12px; background: var(--surface-2);
+            border: 1px solid #444; color: white; border-radius: 10px;
+            font-size: 1rem; margin-bottom: 8px; font-family: inherit;
+        }
+
+        /* --- PACK STAGE --- */
+        #pack-stage {
+            flex: 1; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; perspective: 1000px; width: 100%;
+        }
+        .pack-wrapper {
+            width: 300px; height: 420px; position: relative; 
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        
+        .pack-body {
+            width: 100%; height: 100%; background: linear-gradient(135deg, #1a1a1a, #000);
+            border-radius: 18px; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+            border: 1px solid #444; position: relative; overflow: hidden;
+        }
+        .pack-body::before {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.1) 45%, rgba(255,255,255,0.1) 55%, transparent 70%);
+            background-size: 200% 100%; animation: shimmer 5s infinite linear; pointer-events: none; z-index: 5;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        .pack-art-container { width: 85%; height: 60%; overflow: hidden; border-radius: 10px; z-index: 2; display: flex; align-items: center; justify-content: center; background: #222; }
+        .pack-icon { width: 100%; height: 100%; object-fit: contain; }
+        
+        .pack-title {
+            position: absolute; bottom: 40px; font-size: 1.4rem; font-weight: 900;
+            text-transform: uppercase; text-align: center; color: var(--primary);
+            text-shadow: 0 4px 10px black; width: 100%; z-index: 6; padding: 0 10px;
+        }
+        .pack-strip {
+            position: absolute; top: 0; left: 0; width: 100%; height: 60px;
+            background: repeating-linear-gradient(45deg, #cc0000, #cc0000 10px, #ff0000 10px, #ff0000 20px);
+            z-index: 20; border-radius: 18px 18px 0 0; border-bottom: 2px dashed #fff;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        .tear-progress {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+            background: white; pointer-events: none; opacity: 0.9;
+        }
+
+        .card-stack { width: 300px; height: 420px; position: relative; display: none; }
+        .card {
+            width: 100%; height: 100%; position: absolute; top: 0; left: 0;
+            border-radius: 14px; background-size: cover; background-position: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.9); background-color: #222;
+            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease; 
+            border: 1px solid #111;
+            background-image: url('https://images.pokemontcg.io/card-back.png'); 
+        }
+        .card.swiped { transform: translateX(140%) rotate(25deg); opacity: 0; }
+        
+        .card.holo::after {
+            content: ""; position: absolute; inset: 0; border-radius: 14px;
+            background: linear-gradient(135deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0) 100%);
+            mix-blend-mode: overlay; opacity: 0.8; animation: foilShine 3s infinite; pointer-events: none;
+        }
+        @keyframes foilShine { 0% { background-position: 0% 0%; } 100% { background-position: 200% 200%; } }
+
+        /* --- PRICE POP --- */
+        .price-pop {
+            position: fixed; font-size: 2.5rem; font-weight: 900; color: var(--success);
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8); pointer-events: none; z-index: 2000;
+            animation: popUp 1.2s ease-out forwards;
+        }
+        .price-pop.high-value { color: var(--primary); font-size: 3.5rem; text-shadow: 0 0 20px var(--primary); }
+        @keyframes popUp {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -200%) scale(1); opacity: 0; }
+        }
+
+        /* --- SUMMARY --- */
+        #summary-screen { text-align: center; display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; width: 100%; }
+        .rare-pull-list { display: flex; gap: 10px; overflow-x: auto; max-width: 100%; padding: 10px; justify-content: center; margin-bottom: 20px; }
+        .mini-card { width: 80px; height: 112px; border-radius: 6px; background-size: cover; flex-shrink: 0; border: 1px solid #555; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .stat-card {
+            background: var(--surface); padding: 20px; border-radius: 16px;
+            margin-bottom: 15px; text-align: center; border: 1px solid #333; position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2); width: 100%;
+        }
+        .stat-val { font-size: 2.2rem; font-weight: 800; color: var(--success); text-shadow: 0 0 20px rgba(39, 174, 96, 0.3); }
+
+        /* --- COLLECTION & FILTERS --- */
+        .binder-controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        .filter-toggle-btn {
+            width: 48px; display: flex; align-items: center; justify-content: center;
+            background: var(--surface-2); border: 1px solid #444; border-radius: 10px;
+            font-size: 1.2rem; cursor: pointer;
+        }
+        .filter-toggle-btn.active { border-color: var(--primary); background: #333; color: var(--primary); }
+
+        .filter-panel { 
+            background: var(--surface); border: 1px solid #333; border-radius: 12px; 
+            padding: 15px; margin-bottom: 15px; display: none; 
+            animation: slideDown 0.2s;
+        }
+        @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .filter-group { margin-bottom: 15px; }
+        .filter-label { font-size: 0.75rem; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+        .filter-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        
+        .chip {
+            padding: 8px 16px; background: var(--surface-2); border: 1px solid #444;
+            border-radius: 20px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; font-weight: 600;
+        }
+        .chip.active { background: var(--primary); color: black; border-color: var(--primary); box-shadow: 0 0 8px rgba(255,203,5,0.3); }
+        
+        /* Type Colors */
+        .chip[data-val="Grass"].active { background: var(--grass); color: white; }
+        .chip[data-val="Fire"].active { background: var(--fire); color: white; }
+        .chip[data-val="Water"].active { background: var(--water); color: white; }
+        .chip[data-val="Lightning"].active { background: var(--lightning); color: black; }
+        .chip[data-val="Psychic"].active { background: var(--psychic); color: white; }
+        .chip[data-val="Fighting"].active { background: var(--fighting); color: white; }
+        .chip[data-val="Darkness"].active { background: var(--darkness); color: white; }
+        .chip[data-val="Metal"].active { background: var(--metal); color: black; }
+        .chip[data-val="Fairy"].active { background: var(--fairy); color: black; }
+        .chip[data-val="Dragon"].active { background: var(--dragon); color: white; }
+        .chip[data-val="Colorless"].active { background: var(--colorless); color: black; }
+
+        #collection-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding-bottom: 20px;
+        }
+        .col-card {
+            aspect-ratio: 2.5/3.5; background-size: cover; border-radius: 8px;
+            position: relative; background-color: #222; cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3); border: 1px solid #333;
+        }
+        .col-count {
+            position: absolute; top: -5px; right: -5px; background: var(--primary);
+            color: black; font-size: 0.7rem; font-weight: bold;
+            width: 22px; height: 22px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; z-index: 2;
+        }
+        .col-price {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            background: rgba(0,0,0,0.85); font-size: 0.7rem; color: var(--success);
+            text-align: center; border-radius: 0 0 8px 8px; padding: 4px 0; font-weight: 600;
+        }
+
+        /* --- MODAL --- */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.95);
+            backdrop-filter: blur(5px); display: none; flex-direction: column; 
+            align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.2s;
+        }
+        #modal-img { max-width: 90%; max-height: 55vh; border-radius: 18px; margin-bottom: 20px; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
+        .modal-details { width: 100%; max-width: 400px; text-align: center; color: white; }
+
+        #toast {
+            position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
+            background: #333; padding: 12px 24px; border-radius: 30px;
+            font-size: 0.9rem; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+            z-index: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #555; font-weight: 600;
+        }
+        
+        .settings-content {
+            background: var(--surface); width: 100%; max-width: 400px;
+            padding: 25px; border-radius: 20px; border: 1px solid #444; text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="dynamic-bg"></div>
+    <div id="bg-overlay"></div>
+
+    <div id="app-container">
+        <div id="view-home" class="view active">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h1><span style="color:var(--primary)">Poké</span>Sim V5</h1>
+                <button onclick="openSettings()" style="background:none; border:none; font-size:1.5rem; cursor:pointer;">⚙️</button>
+            </div>
+            
+            <div class="stat-card">
+                <div class="subtitle">Collection Value</div>
+                <div class="stat-val" id="home-value">$0.00</div>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <select id="set-select" onchange="updateSetInfo()">
+                    <option disabled selected>Connecting to PokeAPI...</option>
+                </select>
+                <div id="loading-spinner" style="font-size:0.8rem; color:#888; display:none; align-self:center;">↻</div>
+            </div>
+
+            <div id="pack-stage">
+                <div id="pack-wrapper" class="pack-wrapper" style="display:none;">
+                    <div class="pack-strip" id="pack-strip">
+                        <span style="font-size:0.7rem; color:white; pointer-events:none; letter-spacing:2px; font-weight:bold;">TEAR HERE >>></span>
+                        <div class="tear-progress" id="tear-line"></div>
+                    </div>
+                    <div class="pack-body">
+                        <div class="pack-art-container">
+                            <img id="pack-icon" class="pack-icon" src="" alt="">
+                        </div>
+                        <div id="pack-title" class="pack-title">Set Name</div>
+                    </div>
+                </div>
+                
+                <div id="card-stack" class="card-stack"></div>
+
+                <div id="summary-screen">
+                    <h2 style="color:var(--primary); font-size:1.8rem;">PACK OPENED</h2>
+                    <div class="subtitle">Best Pulls</div>
+                    <div class="rare-pull-list" id="summary-rares"></div>
+                    <div class="stat-card" style="width:100%; padding:15px; margin-bottom:10px;">
+                        <div class="subtitle">Pack Value</div>
+                        <div class="stat-val" style="font-size:1.4rem;" id="pack-value">$0.00</div>
+                    </div>
+                    <button class="btn" onclick="resetPack()">Open Another</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-collection" class="view">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h1>Binder</h1>
+                <select id="sort-select" style="width: 110px; padding: 8px; font-size: 0.8rem;" onchange="renderCollection()">
+                    <option value="value">Price: High</option>
+                    <option value="recent">Recent</option>
+                    <option value="name">Name</option>
+                </select>
+            </div>
+
+            <div class="binder-controls">
+                <input type="text" id="search-input" placeholder="Search Pokemon..." onkeyup="renderCollection()">
+                <div class="filter-toggle-btn" onclick="toggleFilterPanel()">⚡</div>
+            </div>
+
+            <div id="filter-panel" class="filter-panel"></div>
+            <div id="collection-grid"></div>
+        </div>
+        
+        <div id="view-decks" class="view">
+            <h1>Decks</h1>
+            <p style="color:#666; font-size:0.9rem;">Deck building coming soon.</p>
+            <button class="btn secondary" onclick="switchView('collection')">Go to Binder</button>
+        </div>
+    </div>
+
+    <div id="nav-bar">
+        <div class="nav-item active" onclick="switchView('home')">
+            <div class="nav-icon">📦</div>
+            <div>Packs</div>
+        </div>
+        <div class="nav-item" onclick="switchView('collection')">
+            <div class="nav-icon">📕</div>
+            <div>Binder</div>
+        </div>
+    </div>
+
+    <div id="card-modal" class="modal-overlay">
+        <img id="modal-img" src="">
+        <div class="modal-details">
+            <h2 id="modal-name">Card Name</h2>
+            <div class="modal-price" id="modal-price">$0.00</div>
+            
+            <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px;">
+                <button class="btn shop" id="btn-buy-card" onclick="buyCard()">Lookup on TCGPlayer</button>
+                <button class="btn secondary" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal-overlay">
+        <div class="settings-content">
+            <h2>Settings</h2>
+            <button class="btn secondary" onclick="exportCollection()">Export Collection (JSON)</button>
+            <br><br>
+            <button class="btn danger" onclick="clearData()">Delete Save Data</button>
+            <br><br>
+            <button class="btn" onclick="document.getElementById('settings-modal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <div id="toast">Message</div>
+
+    <script>
+        // --- DATA STORE ---
+        const state = {
+            sets: [],
+            currentSetId: null,
+            pool: { common: [], uncommon: [], rare: [], ultra: [] }, 
+            isLoaded: false,
+            collection: JSON.parse(localStorage.getItem('pkmnCollection_v5')) || {},
+            tempPackValue: 0,
+            tempPackRares: [],
+            modalCardId: null,
+            filters: { category: [], trainerType: [], energyType: [], stage: [] }
+        };
+
+        const elements = {
+            packWrapper: document.getElementById('pack-wrapper'),
+            cardStack: document.getElementById('card-stack'),
+            summary: document.getElementById('summary-screen'),
+            summaryRares: document.getElementById('summary-rares'),
+            packVal: document.getElementById('pack-value'),
+            strip: document.getElementById('pack-strip'),
+            tear: document.getElementById('tear-line'),
+            setSelect: document.getElementById('set-select'),
+            homeVal: document.getElementById('home-value'),
+            toast: document.getElementById('toast'),
+            modal: document.getElementById('card-modal'),
+            settingsModal: document.getElementById('settings-modal'),
+            spinner: document.getElementById('loading-spinner'),
+            filterPanel: document.getElementById('filter-panel'),
+            dynamicBg: document.getElementById('dynamic-bg'),
+            packIcon: document.getElementById('pack-icon')
+        };
+
+        const fmtMoney = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+        const showToast = (msg) => { elements.toast.innerText = msg; elements.toast.style.opacity = 1; setTimeout(() => elements.toast.style.opacity = 0, 2000); };
+
+        // --- FILTER HTML GENERATOR ---
+        function generateFilterHTML() {
+            return `
+                <div class="filter-group">
+                    <div class="filter-label">Card Category</div>
+                    <div class="filter-chips">
+                        <div class="chip" data-cat="category" data-val="Pokémon" onclick="toggleFilter('category', 'Pokémon')">Pokémon</div>
+                        <div class="chip" data-cat="category" data-val="Trainer" onclick="toggleFilter('category', 'Trainer')">Trainer</div>
+                        <div class="chip" data-cat="category" data-val="Energy" onclick="toggleFilter('category', 'Energy')">Energy</div>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <div class="filter-label">Trainer Subtype</div>
+                    <div class="filter-chips">
+                        <div class="chip" data-cat="trainerType" data-val="Item" onclick="toggleFilter('trainerType', 'Item')">Item</div>
+                        <div class="chip" data-cat="trainerType" data-val="Supporter" onclick="toggleFilter('trainerType', 'Supporter')">Supporter</div>
+                        <div class="chip" data-cat="trainerType" data-val="Stadium" onclick="toggleFilter('trainerType', 'Stadium')">Stadium</div>
+                        <div class="chip" data-cat="trainerType" data-val="Pokémon Tool" onclick="toggleFilter('trainerType', 'Pokémon Tool')">Tool</div>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <div class="filter-label">Energy Type</div>
+                    <div class="filter-chips">
+                        ${['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal','Fairy','Dragon','Colorless']
+                          .map(t => `<div class="chip" data-cat="energyType" data-val="${t}" onclick="toggleFilter('energyType', '${t}')">${t}</div>`).join('')}
+                    </div>
+                </div>
+                
+                 <div class="filter-group">
+                    <div class="filter-label">Pokémon Stage</div>
+                    <div class="filter-chips">
+                        <div class="chip" data-cat="stage" data-val="Basic" onclick="toggleFilter('stage', 'Basic')">Basic</div>
+                        <div class="chip" data-cat="stage" data-val="Stage 1" onclick="toggleFilter('stage', 'Stage 1')">Stage 1</div>
+                        <div class="chip" data-cat="stage" data-val="Stage 2" onclick="toggleFilter('stage', 'Stage 2')">Stage 2</div>
+                         <div class="chip" data-cat="stage" data-val="V" onclick="toggleFilter('stage', 'V')">V / EX</div>
+                    </div>
+                </div>
+
+                <button class="btn secondary" style="padding:10px;" onclick="clearFilters()">Reset Filters</button>
+            `;
+        }
+
+        // --- INIT ---
+        window.addEventListener('DOMContentLoaded', () => {
+            renderTotalValue(); 
+            initSets();
+            elements.filterPanel.innerHTML = generateFilterHTML();
+        });
+
+        function openSettings() { elements.settingsModal.style.display = 'flex'; }
+        function clearData() { if(confirm("Delete all cards?")) { localStorage.clear(); location.reload(); } }
+        function exportCollection() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.collection));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "mypokemon.json");
+            dlAnchorElem.click();
+        }
+
+        // --- API & LOGIC ---
+        async function initSets() {
+            elements.spinner.style.display = 'block'; elements.setSelect.disabled = true;
+            try {
+                // INCREASED PAGE SIZE TO 250 TO GET ALL ERAS (API handles ~150 sets)
+                const res = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250'); 
+                const data = await res.json();
+                state.sets = data.data;
+
+                elements.setSelect.innerHTML = '<option value="" disabled selected>Select Set...</option>';
+                state.sets.forEach(s => {
+                    const opt = document.createElement('option'); 
+                    opt.value = s.id; 
+                    opt.innerText = `${s.name} (${s.releaseDate.substring(0,4)})`;
+                    elements.setSelect.appendChild(opt);
+                });
+                elements.setSelect.disabled = false; elements.spinner.style.display = 'none';
+            } catch(e) { 
+                showToast("API Error. Check internet."); 
+                elements.spinner.style.display = 'none'; 
+            }
+        }
+
+        async function updateSetInfo() {
+            const id = elements.setSelect.value; 
+            const set = state.sets.find(s => s.id === id);
+            if(!set) return;
+
+            elements.dynamicBg.style.backgroundImage = `url('${set.images.logo}')`;
+            document.getElementById('pack-title').innerText = set.name;
+            elements.packIcon.src = set.images.symbol;
+            
+            resetPack(); elements.packWrapper.style.opacity = '0.5'; 
+            showToast(`Loading ${set.name}...`); state.isLoaded = false;
+
+            try {
+                const res = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${id}&pageSize=250`);
+                const d = await res.json();
+                
+                state.pool = { common: [], uncommon: [], rare: [], ultra: [] };
+                
+                d.data.forEach(c => {
+                    const price = c.tcgplayer?.prices?.holofoil?.market || c.tcgplayer?.prices?.normal?.market || 0;
+                    const type = c.types ? c.types[0] : 'Colorless';
+                    const img = c.images.large;
+                    const rarity = c.rarity ? c.rarity.toLowerCase() : 'common';
+                    
+                    const supertype = c.supertype; // 'Pokémon', 'Trainer', 'Energy'
+                    const subtypes = c.subtypes || []; 
+
+                    const cardObj = { 
+                        id: c.id, 
+                        name: c.name, 
+                        img: img, 
+                        rarity: rarity, 
+                        price: price, 
+                        type: type, 
+                        set: c.set.name, 
+                        supertype: supertype,
+                        subtypes: subtypes
+                    };
+
+                    if (rarity.includes('common') && !rarity.includes('un')) state.pool.common.push(cardObj);
+                    else if (rarity.includes('uncommon')) state.pool.uncommon.push(cardObj);
+                    else if (['rare', 'promo'].includes(rarity)) state.pool.rare.push(cardObj);
+                    else state.pool.ultra.push(cardObj);
+                });
+
+                state.isLoaded = true; elements.packWrapper.style.opacity = '1'; showToast("Ready to rip!");
+            } catch(e) { console.error(e); showToast("Error loading cards"); }
+        }
+
+        // --- TEAR MECHANIC ---
+        let isDragging = false;
+        const handleMove = (e) => {
+            if(!isDragging) return; 
+            const rect = elements.strip.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let pct = (clientX - rect.left) / rect.width * 100; 
+            if(pct > 100) pct = 100; if(pct < 0) pct = 0;
+            elements.tear.style.width = pct + '%'; 
+            if(pct > 92) { openPack(); isDragging = false; }
+        };
+        const handleStart = () => isDragging = true; 
+        const handleEnd = () => { isDragging = false; elements.tear.style.width = '0%'; };
+        
+        elements.strip.addEventListener('mousedown', handleStart); window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', handleEnd);
+        elements.strip.addEventListener('touchstart', handleStart); window.addEventListener('touchmove', handleMove); window.addEventListener('touchend', handleEnd);
+
+        function resetPack() { 
+            elements.packWrapper.style.display = 'flex'; 
+            elements.cardStack.style.display = 'none'; 
+            elements.summary.style.display = 'none'; 
+            elements.strip.style.pointerEvents = 'auto'; 
+            elements.strip.style.opacity = 1; 
+            elements.tear.style.width = '0%'; 
+        }
+
+        function openPack() {
+            if(!state.isLoaded) return;
+            const p = state.pool; 
+            const pick = arr => arr.length ? arr[Math.floor(Math.random()*arr.length)] : null;
+            let pack = [];
+
+            if(Math.random() < 0.16 && p.ultra.length > 0) { pack.push({...pick(p.ultra), holo: true}); } 
+            else if (p.rare.length > 0) { pack.push({...pick(p.rare)}); } 
+            else { pack.push({...pick(p.uncommon)}); }
+
+            for(let i=0; i<3; i++) { let c=pick(p.uncommon); if(c) pack.push({...c}); }
+            for(let i=0; i<6; i++) { let c=pick(p.common); if(c) pack.push({...c}); }
+
+            elements.packWrapper.style.display = 'none'; 
+            elements.cardStack.style.display = 'block'; 
+            elements.cardStack.innerHTML = '';
+            state.tempPackValue = 0; state.tempPackRares = [];
+            
+            pack.forEach((card, idx) => {
+                const el = document.createElement('div'); 
+                el.className = `card ${card.holo ? 'holo' : ''}`; 
+                el.style.backgroundImage = `url(${card.img})`; 
+                el.style.zIndex = idx + 10;
+                el.onclick = (e) => {
+                    saveCard(card); el.classList.add('swiped');
+                    state.tempPackValue += card.price;
+                    if(card.price > 2 || card.holo || ['rare','ultra'].includes(card.rarity)) { state.tempPackRares.push(card); }
+                    showPriceExplosion(e.clientX, e.clientY, card.price, card.price > 5);
+                    if(idx === 0) setTimeout(showSummary, 500);
+                };
+                elements.cardStack.appendChild(el);
+            });
+        }
+
+        function showPriceExplosion(x, y, val, isHighVal) {
+            const el = document.createElement('div'); el.className = `price-pop ${isHighVal ? 'high-value' : ''}`;
+            el.innerText = fmtMoney(val); el.style.left = x + 'px'; el.style.top = y + 'px';
+            document.body.appendChild(el);
+            setTimeout(() => document.body.removeChild(el), 1200);
+        }
+
+        function saveCard(card) {
+            if(!state.collection[card.id]) state.collection[card.id] = {...card, count: 0, date: Date.now()};
+            state.collection[card.id].count++;
+            state.collection[card.id].price = card.price;
+            state.collection[card.id].date = Date.now();
+            localStorage.setItem('pkmnCollection_v5', JSON.stringify(state.collection));
+            renderTotalValue();
+        }
+
+        function showSummary() {
+            elements.cardStack.style.display = 'none'; elements.summary.style.display = 'flex';
+            elements.packVal.innerText = fmtMoney(state.tempPackValue); elements.summaryRares.innerHTML = '';
+            state.tempPackRares.sort((a,b) => b.price - a.price);
+            if(!state.tempPackRares.length) elements.summaryRares.innerHTML = '<div style="color:#666;font-size:0.8rem">Just bulk...</div>';
+            state.tempPackRares.forEach(c => { 
+                const d = document.createElement('div'); d.className = 'mini-card'; 
+                d.style.backgroundImage = `url(${c.img})`; 
+                elements.summaryRares.appendChild(d); 
+            });
+        }
+
+        function renderTotalValue() {
+            const vals = Object.values(state.collection); let total = 0;
+            vals.forEach(c => { total += (c.price * c.count); });
+            elements.homeVal.innerText = fmtMoney(total);
+        }
+
+        // --- FILTERING LOGIC ---
+        function toggleFilterPanel() {
+            elements.filterPanel.style.display = elements.filterPanel.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function toggleFilter(cat, val) {
+            const list = state.filters[cat];
+            const idx = list.indexOf(val);
+            if(idx > -1) list.splice(idx, 1); else list.push(val);
+            document.querySelectorAll(`.chip[data-cat="${cat}"][data-val="${val}"]`).forEach(el => el.classList.toggle('active'));
+            renderCollection();
+        }
+
+        function clearFilters() {
+            state.filters = { category: [], trainerType: [], energyType: [], stage: [] };
+            document.querySelectorAll(`.chip`).forEach(el => el.classList.remove('active'));
+            renderCollection();
+        }
+
+        function renderCollection() {
+            const grid = document.getElementById('collection-grid'); grid.innerHTML = '';
+            const cards = Object.values(state.collection);
+            const sortMode = document.getElementById('sort-select').value;
+            const search = document.getElementById('search-input').value.toLowerCase();
+            
+            const filtered = cards.filter(c => {
+                if(search && !c.name.toLowerCase().includes(search)) return false;
+                
+                // 1. Category Filter (Pokemon, Trainer, Energy)
+                if(state.filters.category.length > 0) {
+                     if(!state.filters.category.includes(c.supertype)) return false;
+                }
+
+                // 2. Trainer Subtype (Item, Supporter, Stadium, Tool)
+                if(state.filters.trainerType.length > 0) {
+                     const hasSubtype = c.subtypes.some(s => state.filters.trainerType.includes(s));
+                     if(!hasSubtype) return false;
+                }
+
+                // 3. Energy Type
+                if(state.filters.energyType.length > 0) {
+                    if(!state.filters.energyType.includes(c.type)) return false;
+                }
+
+                // 4. Pokemon Stage
+                if(state.filters.stage.length > 0) {
+                    if(state.filters.stage.includes('V')) {
+                        const matchesAnyStage = state.filters.stage.some(s => {
+                            if(s === 'V') return c.subtypes.some(sub => sub.includes('V') || sub.includes('EX'));
+                            return c.subtypes.includes(s);
+                        });
+                        if(!matchesAnyStage) return false;
+                    } else {
+                         const hasSubtype = c.subtypes.some(s => state.filters.stage.includes(s));
+                         if(!hasSubtype) return false;
+                    }
+                }
+
+                return true;
+            });
+
+            filtered.sort((a,b) => {
+                if(sortMode === 'value') return b.price - a.price;
+                if(sortMode === 'recent') return b.date - a.date;
+                return a.name.localeCompare(b.name);
+            });
+
+            if(filtered.length === 0) { grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:40px; color:#666;">Binder Empty.</div>'; return; }
+            
+            filtered.forEach(c => {
+                const el = document.createElement('div'); el.className = 'col-card'; 
+                el.style.backgroundImage = `url(${c.img})`; el.onclick = () => openModal(c);
+                const count = document.createElement('div'); count.className = 'col-count'; count.innerText = c.count;
+                const price = document.createElement('div'); price.className = 'col-price'; price.innerText = fmtMoney(c.price);
+                el.appendChild(count); el.appendChild(price); grid.appendChild(el);
+            });
+        }
+
+        function openModal(card) {
+            state.modalCardId = card.id;
+            elements.modal.style.display = 'flex';
+            document.getElementById('modal-img').src = card.img;
+            document.getElementById('modal-name').innerText = card.name;
+            document.getElementById('modal-price').innerText = fmtMoney(card.price);
+        }
+        function closeModal() { elements.modal.style.display = 'none'; }
+        
+        function buyCard() {
+            const card = state.collection[state.modalCardId];
+            if(card) {
+                const query = encodeURIComponent(`${card.name} ${card.set}`);
+                const url = `https://www.tcgplayer.com/search/pokemon/all?q=${query}&view=grid`;
+                window.open(url, '_blank');
+            } else {
+                showToast("Card data error");
+            }
+        }
+
+        function switchView(viewName) {
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+            document.getElementById('view-' + viewName).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            if(viewName === 'collection') renderCollection();
+        }
+    </script>
+</body>
+</html>
