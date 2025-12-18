@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PokéSim: V34 (Filters & Years)</title>
+    <title>PokéSim: V35 (Years & Filters)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -354,7 +354,7 @@
             sets: [],
             pool: [],
             setCache: {}, 
-            collection: JSON.parse(localStorage.getItem('pkmnCollection_v34')) || {},
+            collection: JSON.parse(localStorage.getItem('pkmnCollection_v35')) || {},
             filters: { category: null, type: null },
             modalCardId: null,
             gameActive: false, flippedCards: [], matchedPairs: 0, timerInterval: null
@@ -376,13 +376,10 @@
                 const d = await r.json();
                 state.sets = d.reverse();
                 els.setSelect.innerHTML = '<option disabled selected>Select Expansion...</option>';
+                // Note: API summary often misses date, so we stick to name here
+                // We update the year display in the PACK TITLE instead (when user selects one)
                 state.sets.forEach(s => {
-                    // PARSE YEAR
-                    let year = "";
-                    if(s.releaseDate) {
-                        year = ` (${s.releaseDate.split('-')[0]})`;
-                    }
-                    els.setSelect.innerHTML += `<option value="${s.id}">${s.name}${year}</option>`;
+                    els.setSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
                 });
                 hideLoader();
             } catch (e) {
@@ -452,9 +449,13 @@
 
             if(state.setCache[id]) {
                 state.pool = state.setCache[id];
-                const set = state.sets.find(s => s.id === id);
-                finishLoadingSet(set);
-                return;
+                // Try to find the detailed set info in cache or default to basic list
+                // Since we don't cache detailed set info separately, we fetch again or use what we have
+                // To get the date, we might need the full object.
+                // Re-fetching sets/id is cheap enough for just the metadata if needed, but...
+                // Let's assume we cached the Cards, but not the Date. 
+                // Correction: Let's fetch the set detail again to be sure we get the Date for the title.
+                // It's fast.
             }
 
             try {
@@ -484,7 +485,15 @@
         
         function finishLoadingSet(setInfo) {
             if(setInfo) {
-                document.getElementById('pack-title').innerText = setInfo.name || "Pack";
+                // YEAR LOGIC HERE
+                let displayName = setInfo.name || "Pack";
+                if(setInfo.releaseDate) {
+                    const year = setInfo.releaseDate.split('-')[0];
+                    displayName += ` (${year})`;
+                }
+
+                document.getElementById('pack-title').innerText = displayName;
+                
                 if(setInfo.symbol) {
                      document.getElementById('pack-icon').src = `${setInfo.symbol}.png`;
                 } else {
@@ -525,6 +534,7 @@
                 div.style.zIndex = 100 - i;
                 
                 div.onclick = (e) => {
+                    // DIRECTIONAL SWIPE LOGIC
                     const rect = div.getBoundingClientRect();
                     const tapX = e.clientX - rect.left;
                     const dir = tapX > (rect.width / 2) ? 'fly-right' : 'fly-left';
@@ -593,7 +603,7 @@
                     state.collection[c.id].date = Date.now();
                 }
             });
-            localStorage.setItem('pkmnCollection_v34', JSON.stringify(state.collection));
+            localStorage.setItem('pkmnCollection_v35', JSON.stringify(state.collection));
             return { rares };
         }
 
