@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PokéSim: V22 (Pure Collection)</title>
+    <title>PokéSim: V30 (Vivid Animations)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -16,11 +16,8 @@
             --text-muted: #8b8b99;
             --danger: #eb5757;
             --success: #2ecc71;
-            
-            /* Energy Colors */
-            --grass: #78c850; --fire: #f08030; --water: #6890f0; --lightning: #f8d030;
-            --psychic: #f85888; --fighting: #c03028; --darkness: #705848; --metal: #b8b8d0;
-            --fairy: #ee99ac; --dragon: #7038f8; --colorless: #a8a878;
+            /* High-res stable card back */
+            --card-back: url('https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg');
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
@@ -31,7 +28,6 @@
             display: flex; flex-direction: column; user-select: none;
         }
 
-        /* --- DYNAMIC BACKGROUND --- */
         #dynamic-bg {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 0; pointer-events: none; opacity: 0.1; 
@@ -39,45 +35,51 @@
             filter: grayscale(100%); transition: background-image 0.5s ease;
         }
 
-        /* --- LOADING OVERLAY --- */
+        /* --- LOADING --- */
         #loading-overlay {
             position: fixed; inset: 0; z-index: 9999; background: var(--bg);
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.3s ease; perspective: 1000px;
         }
+        .loader-stage { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin-bottom: 30px; }
         #loading-sprite {
-            width: 120px; height: 120px; object-fit: contain; margin-bottom: 20px;
-            image-rendering: pixelated;
+            width: 90px; height: 90px; object-fit: contain; z-index: 10;
+            filter: drop-shadow(0 0 15px rgba(255, 203, 5, 0.6));
+            animation: bounce 2s infinite ease-in-out;
         }
-        .loading-text { font-weight: 900; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; font-size: 0.8rem; }
+        @keyframes bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+        
+        .orbit { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; transform: translate(-50%, -50%); animation: spin 2.5s linear infinite; }
+        .orbit-card {
+            position: absolute; width: 30px; height: 42px;
+            background-image: var(--card-back); background-size: cover;
+            border-radius: 3px; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .orbit-card:nth-child(1) { top: 0; left: 50%; transform: translate(-50%, -50%); }
+        .orbit-card:nth-child(2) { top: 30%; right: 0%; transform: translate(50%, -50%) rotate(72deg); }
+        .orbit-card:nth-child(3) { bottom: 0%; right: 20%; transform: translate(50%, 50%) rotate(144deg); }
+        .orbit-card:nth-child(4) { bottom: 0%; left: 20%; transform: translate(-50%, 50%) rotate(216deg); }
+        .orbit-card:nth-child(5) { top: 30%; left: 0%; transform: translate(-50%, -50%) rotate(288deg); }
+        @keyframes spin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+        .loading-text { font-weight: 900; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; font-size: 0.8rem; margin-top: 10px; }
 
-        /* --- APP STRUCTURE --- */
+        /* --- APP --- */
         #app-container { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; width: 100%; height: 100%; z-index: 10; }
-
-        .view {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 90px; 
-            display: none; flex-direction: column; padding: 16px;
-            overflow-y: auto; width: 100%;
-        }
+        .view { position: absolute; top: 0; left: 0; right: 0; bottom: 90px; display: none; flex-direction: column; padding: 16px; overflow-y: auto; width: 100%; }
         .view.active { display: flex; animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* --- NAV BAR --- */
+        /* --- NAV --- */
         #nav-bar {
             height: 90px; background: var(--surface); display: flex;
             justify-content: space-around; align-items: center;
             border-top: 1px solid #333; z-index: 100; padding-bottom: 25px;
             flex-shrink: 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
         }
-        .nav-item {
-            display: flex; flex-direction: column; align-items: center;
-            font-size: 0.75rem; color: var(--text-muted); cursor: pointer;
-            width: 33%; transition: all 0.2s; font-weight: 600;
-        }
+        .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 0.75rem; color: var(--text-muted); cursor: pointer; width: 33%; transition: all 0.2s; font-weight: 600; }
         .nav-item.active { color: var(--primary); transform: translateY(-2px); }
         .nav-icon { font-size: 1.7rem; margin-bottom: 4px; }
 
-        /* --- UI HELPERS --- */
         h1 { margin: 0 0 10px 0; letter-spacing: -0.5px; }
         .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 10px; font-weight: 600; text-transform: uppercase; }
 
@@ -85,128 +87,62 @@
             background: linear-gradient(135deg, var(--primary), var(--primary-dim));
             color: #000; border: none; padding: 14px; border-radius: 12px;
             font-weight: 800; font-size: 1rem; cursor: pointer; width: 100%;
-            text-align: center; box-shadow: 0 4px 15px rgba(255, 203, 5, 0.2);
-            margin-bottom: 10px;
+            text-align: center; box-shadow: 0 4px 15px rgba(255, 203, 5, 0.2); margin-bottom: 10px;
+            text-decoration: none; display: inline-block;
         }
         .btn:active { transform: scale(0.96); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
         .btn.secondary { background: var(--surface-2); color: white; box-shadow: none; border: 1px solid #444; }
-        .btn.shop { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; margin-top: 5px; } 
-        
-        select, input {
-            width: 100%; padding: 12px; background: var(--surface-2);
-            border: 1px solid #444; color: white; border-radius: 10px;
-            font-size: 1rem; margin-bottom: 8px; font-family: inherit;
-        }
+        .btn.tcg { background: #222; border: 1px solid #48a0dc; color: #48a0dc; }
+        select, input { width: 100%; padding: 12px; background: var(--surface-2); border: 1px solid #444; color: white; border-radius: 10px; font-size: 1rem; margin-bottom: 8px; font-family: inherit; }
 
         /* --- PACK STAGE --- */
-        #pack-stage {
-            flex: 1; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; width: 100%; position: relative;
-        }
-        
-        /* The Pack Wrapper */
-        .pack-wrapper {
-            width: 280px; height: 392px; position: relative; 
-            animation: float 6s ease-in-out infinite;
-            transition: transform 0.3s;
-            cursor: pointer;
-        }
+        #pack-stage { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; position: relative; }
+        .pack-wrapper { width: 280px; height: 392px; position: relative; animation: float 6s ease-in-out infinite; transition: transform 0.3s; cursor: pointer; }
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
-        
-        .pack-body {
-            width: 100%; height: 100%; background: linear-gradient(135deg, #1a1a1a, #000);
-            border-radius: 18px; display: flex; flex-direction: column; align-items: center;
-            justify-content: center; box-shadow: 0 30px 60px rgba(0,0,0,0.8);
-            border: 1px solid #444; overflow: hidden; position: relative;
-        }
+        .pack-body { width: 100%; height: 100%; background: linear-gradient(135deg, #1a1a1a, #000); border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 30px 60px rgba(0,0,0,0.8); border: 1px solid #444; overflow: hidden; position: relative; }
         .pack-art-container { width: 85%; height: 60%; overflow: hidden; border-radius: 10px; z-index: 2; display: flex; align-items: center; justify-content: center; background: #222; }
         .pack-icon { width: 100%; height: 100%; object-fit: contain; }
         .pack-title { position: absolute; bottom: 30px; font-size: 1.2rem; font-weight: 900; color: var(--primary); text-align: center; width: 100%; z-index: 6; text-transform: uppercase;}
-
-        /* Tear Strip */
-        .pack-strip {
-            position: absolute; top: 0; left: 0; width: 100%; height: 60px;
-            background: repeating-linear-gradient(45deg, #c00, #c00 10px, #f00 10px, #f00 20px);
-            z-index: 50; border-radius: 18px 18px 0 0; border-bottom: 2px dashed #fff;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5); pointer-events: none;
-            transition: transform 0.2s;
-        }
+        .pack-strip { position: absolute; top: 0; left: 0; width: 100%; height: 60px; background: repeating-linear-gradient(45deg, #c00, #c00 10px, #f00 10px, #f00 20px); z-index: 50; border-radius: 18px 18px 0 0; border-bottom: 2px dashed #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(0,0,0,0.5); pointer-events: none; transition: transform 0.2s; }
         .tear-text { color: white; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px; }
+        #pack-loading-msg { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; color: var(--primary); font-weight: 900; z-index: 60; font-size: 1.4rem; border-radius: 18px; letter-spacing: 1px; }
 
-        /* Opening Overlay */
-        #pack-loading-msg {
-            position: absolute; inset: 0; background: rgba(0,0,0,0.9); 
-            display: none; align-items: center; justify-content: center; 
-            color: var(--primary); font-weight: 900; z-index: 60; font-size: 1.4rem;
-            border-radius: 18px; letter-spacing: 1px;
-        }
-
-        /* The Cards */
-        .card-stack { 
-            width: 280px; height: 392px; position: relative; 
-            display: none; /* Hidden until pack opened */
-            z-index: 100;
-        }
-        .card {
-            width: 100%; height: 100%; position: absolute; top: 0; left: 0;
-            border-radius: 14px; background-size: cover; background-position: center;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.9); background-color: #222;
-            transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1); 
-            border: 1px solid #333;
-            background-image: url('https://images.pokemontcg.io/card-back.png');
-            cursor: pointer;
-        }
-        .card.swiped { transform: translateX(150%) rotate(20deg); opacity: 0; pointer-events: none; }
+        /* --- CARDS & VIVID ANIMATIONS --- */
+        .card-stack { width: 280px; height: 392px; position: relative; display: none; z-index: 100; }
+        .card { width: 100%; height: 100%; position: absolute; top: 0; left: 0; border-radius: 14px; background-size: cover; background-position: center; box-shadow: 0 10px 40px rgba(0,0,0,0.9); background-color: #222; border: 1px solid #333; background-image: var(--card-back); cursor: pointer; transition: transform 0.1s; }
         
-        /* Holo Overlay */
-        .card.holo::after {
-            content: ""; position: absolute; inset: 0; border-radius: 14px;
-            background: linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.4) 50%, transparent 70%);
-            mix-blend-mode: overlay; opacity: 0.7; pointer-events: none;
+        .card.holo::after { content: ""; position: absolute; inset: 0; border-radius: 14px; background: linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.4) 50%, transparent 70%); mix-blend-mode: overlay; opacity: 0.7; pointer-events: none; }
+
+        /* NEW ANIMATION CLASSES */
+        .card.fly-right { animation: flyRight 0.6s ease-out forwards; pointer-events: none; }
+        .card.fly-left { animation: flyLeft 0.6s ease-out forwards; pointer-events: none; }
+
+        @keyframes flyRight {
+            0% { transform: scale(1); filter: brightness(1); }
+            15% { transform: scale(1.1); filter: brightness(2); } /* Pop & Flash */
+            100% { transform: translateX(180%) rotate(60deg); opacity: 0; filter: brightness(1); }
         }
 
-        /* --- PRICE POPUP --- */
-        .price-pop {
-            position: fixed; font-size: 2.5rem; font-weight: 900; color: var(--success);
-            text-shadow: 0 2px 10px rgba(0,0,0,0.8); pointer-events: none; z-index: 2000;
-            animation: popUp 0.8s ease-out forwards;
-        }
-        @keyframes popUp {
-            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
-            20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-            100% { transform: translate(-50%, -150%) scale(1); opacity: 0; }
+        @keyframes flyLeft {
+            0% { transform: scale(1); filter: brightness(1); }
+            15% { transform: scale(1.1); filter: brightness(2); } /* Pop & Flash */
+            100% { transform: translateX(-180%) rotate(-60deg); opacity: 0; filter: brightness(1); }
         }
 
-        /* --- SUMMARY & MEMORY GAME --- */
+        /* --- SUMMARY & MEMORY --- */
         #summary-screen { text-align: center; display: none; flex-direction: column; align-items: center; justify-content: flex-start; height: 100%; width: 100%; overflow-y:auto; }
         .rare-pull-list { display: flex; gap: 10px; overflow-x: auto; max-width: 100%; padding: 10px; justify-content: center; margin-bottom: 10px; flex-shrink:0; }
         .mini-card { width: 60px; height: 84px; border-radius: 6px; background-size: cover; flex-shrink: 0; border: 1px solid #555; }
-        .stat-card { background: var(--surface); padding: 10px; border-radius: 16px; margin-bottom: 15px; width: 100%; flex-shrink:0; }
-        .stat-val { font-size: 1.8rem; font-weight: 800; color: var(--success); }
-
         #cooldown-area { width: 100%; background: var(--surface-2); border-radius: 16px; padding: 15px; border: 1px solid #444; }
         #timer-display { font-size: 1.5rem; font-weight: 900; color: var(--text); margin-bottom: 10px; font-variant-numeric: tabular-nums; }
         
-        /* Memory Game Grid */
-        #memory-grid { 
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; 
-            width: 100%; aspect-ratio: 1/0.8;
-        }
-        .mem-card {
-            background-color: #222; border-radius: 6px; cursor: pointer;
-            position: relative; transform-style: preserve-3d; transition: transform 0.3s;
-            aspect-ratio: 1/1;
-        }
+        #memory-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; width: 100%; aspect-ratio: 1/0.8; }
+        .mem-card { background-color: #222; border-radius: 6px; cursor: pointer; position: relative; transform-style: preserve-3d; transition: transform 0.3s; aspect-ratio: 1/1; }
         .mem-card.flipped { transform: rotateY(180deg); }
         .mem-card.matched { opacity: 0.5; pointer-events: none; }
-        
-        .mem-face, .mem-back {
-            position: absolute; inset: 0; backface-visibility: hidden; border-radius: 6px;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .mem-back { background: url('https://images.pokemontcg.io/card-back.png') center/cover; }
+        .mem-face, .mem-back { position: absolute; inset: 0; backface-visibility: hidden; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+        .mem-back { background: var(--card-back) center/100% 100% no-repeat; }
         .mem-face { transform: rotateY(180deg); background: #333; }
         .mem-sprite { width: 80%; height: 80%; image-rendering: pixelated; object-fit: contain; }
 
@@ -216,21 +152,13 @@
         .chip.active { background: var(--primary); color: black; border-color:var(--primary); }
         
         #collection-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding-bottom: 20px; }
-        .col-card { aspect-ratio: 2.5/3.5; background-size: cover; border-radius: 8px; position: relative; background-color: #222; cursor:pointer;}
-        .col-price { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.85); font-size: 0.7rem; color: var(--success); text-align: center; border-radius: 0 0 8px 8px; padding: 4px 0; font-weight: 600; }
+        .col-card { aspect-ratio: 2.5/3.5; border-radius: 8px; position: relative; background-color: #222; cursor:pointer; overflow: hidden; }
+        .col-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
         /* --- MODAL --- */
-        .modal-overlay {
-            position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.95);
-            display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
-        }
-        #modal-img { max-width: 80%; max-height: 60vh; border-radius: 18px; margin-bottom: 20px; }
-        
-        #toast {
-            position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
-            background: #333; padding: 10px 20px; border-radius: 20px; font-weight: bold;
-            opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 999;
-        }
+        .modal-overlay { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.95); display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        #modal-img { max-width: 80%; max-height: 60vh; border-radius: 18px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        #toast { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: #333; padding: 10px 20px; border-radius: 20px; font-weight: bold; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 999; }
     </style>
 </head>
 <body>
@@ -238,8 +166,17 @@
     <div id="dynamic-bg"></div>
 
     <div id="loading-overlay">
-        <img id="loading-sprite" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png">
-        <div class="loading-text" id="loading-text">Loading PokéNetwork...</div>
+        <div class="loader-stage">
+            <img id="loading-sprite" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png">
+            <div class="orbit">
+                <div class="orbit-card"></div>
+                <div class="orbit-card"></div>
+                <div class="orbit-card"></div>
+                <div class="orbit-card"></div>
+                <div class="orbit-card"></div>
+            </div>
+        </div>
+        <div class="loading-text" id="loading-text">Loading...</div>
     </div>
 
     <div id="app-container">
@@ -251,7 +188,7 @@
             
             <div style="margin-bottom:15px;">
                 <select id="set-select" onchange="updateSetInfo()">
-                    <option disabled selected>Loading...</option>
+                    <option disabled selected>Loading Sets...</option>
                 </select>
             </div>
 
@@ -263,7 +200,7 @@
                     </div>
                     <div class="pack-body">
                         <div class="pack-art-container">
-                            <img id="pack-icon" class="pack-icon" src="">
+                            <img id="pack-icon" class="pack-icon" src="" onerror="this.src='https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg'">
                         </div>
                         <div id="pack-title" class="pack-title">Set Name</div>
                     </div>
@@ -274,6 +211,7 @@
                 <div id="summary-screen">
                     <h2 style="color:var(--primary); margin:5px 0;">PACK COMPLETE</h2>
                     <div class="rare-pull-list" id="summary-rares"></div>
+                    
                     <div id="cooldown-area">
                         <div id="timer-label" class="subtitle">Next Pack In:</div>
                         <div id="timer-display">00:30</div>
@@ -293,7 +231,7 @@
                 <h1>Binder</h1>
                 <select id="sort-select" style="width:100px; padding:8px;" onchange="renderCollection()">
                     <option value="recent">Newest</option>
-                    <option value="value">High $</option>
+                    <option value="name">Name</option>
                 </select>
             </div>
             <div style="display:flex; gap:10px; margin-bottom:15px;">
@@ -312,10 +250,12 @@
 
     <div id="card-modal" class="modal-overlay">
         <img id="modal-img" src="">
-        <div class="modal-details">
-            <h2 id="modal-name">Name</h2>
-            <div style="color:var(--success); font-weight:bold; font-size:1.5rem; margin-bottom:15px;" id="modal-price">$0.00</div>
-            <button class="btn shop" onclick="buyCard()">Lookup TCGPlayer</button>
+        <div class="modal-details" style="text-align:center; width:100%;">
+            <h2 id="modal-name" style="margin-bottom:5px;">Name</h2>
+            <div id="modal-set-name" style="color:#888; margin-bottom:15px;">Set Name</div>
+            
+            <a id="tcg-link" href="#" target="_blank" class="btn tcg">Check TCGPlayer Price ↗</a>
+            
             <button class="btn secondary" onclick="document.getElementById('card-modal').style.display='none'">Close</button>
         </div>
     </div>
@@ -332,7 +272,6 @@
     <div id="toast">Msg</div>
 
     <script>
-        // --- 0. ANIMATED LOADING SPRITES ---
         const sprites = [25, 1, 4, 7, 150, 151, 6, 9]; 
         let spriteIdx = 0;
         const loaderImg = document.getElementById('loading-sprite');
@@ -343,8 +282,10 @@
 
         function showLoader(text) {
             document.getElementById('loading-text').innerText = text;
-            document.getElementById('loading-overlay').style.display = 'flex';
-            document.getElementById('loading-overlay').style.opacity = '1';
+            const ol = document.getElementById('loading-overlay');
+            ol.style.display = 'flex';
+            ol.style.opacity = '1';
+            setTimeout(() => { if(ol.style.opacity === '1') hideLoader(); }, 8000);
         }
 
         function hideLoader() {
@@ -353,33 +294,23 @@
             setTimeout(() => overlay.style.display = 'none', 300);
         }
 
-        // --- 1. BACKUP DATA ---
         const backupCards = [
-            {id:'bs1-4', name:'Charizard', images:{large:'https://images.pokemontcg.io/base1/4_hires.png'}, rarity:'Rare Holo', tcgplayer:{prices:{holofoil:{market:350}}}},
-            {id:'bs1-2', name:'Blastoise', images:{large:'https://images.pokemontcg.io/base1/2_hires.png'}, rarity:'Rare Holo', tcgplayer:{prices:{holofoil:{market:120}}}},
-            {id:'bs1-15', name:'Venusaur', images:{large:'https://images.pokemontcg.io/base1/15_hires.png'}, rarity:'Rare Holo', tcgplayer:{prices:{holofoil:{market:100}}}},
-            {id:'bs1-58', name:'Pikachu', images:{large:'https://images.pokemontcg.io/base1/58_hires.png'}, rarity:'Common', tcgplayer:{prices:{normal:{market:5}}}},
-            {id:'bs1-63', name:'Squirtle', images:{large:'https://images.pokemontcg.io/base1/63_hires.png'}, rarity:'Common', tcgplayer:{prices:{normal:{market:3}}}},
-            {id:'bs1-46', name:'Charmander', images:{large:'https://images.pokemontcg.io/base1/46_hires.png'}, rarity:'Common', tcgplayer:{prices:{normal:{market:3}}}},
-            {id:'bs1-70', name:'Clefairy Doll', images:{large:'https://images.pokemontcg.io/base1/70_hires.png'}, rarity:'Rare', tcgplayer:{prices:{normal:{market:4}}}},
-            {id:'bs1-72', name:'Devolution Spray', images:{large:'https://images.pokemontcg.io/base1/72_hires.png'}, rarity:'Rare', tcgplayer:{prices:{normal:{market:3}}}},
-            {id:'bs1-74', name:'Item Finder', images:{large:'https://images.pokemontcg.io/base1/74_hires.png'}, rarity:'Rare', tcgplayer:{prices:{normal:{market:10}}}}
+            {id:'base1-4', name:'Charizard', image:'https://assets.tcgdex.net/en/base/base1/4/high.webp', rarity:'Rare Holo'},
+            {id:'base1-2', name:'Blastoise', image:'https://assets.tcgdex.net/en/base/base1/2/high.webp', rarity:'Rare Holo'},
+            {id:'base1-15', name:'Venusaur', image:'https://assets.tcgdex.net/en/base/base1/15/high.webp', rarity:'Rare Holo'},
+            {id:'base1-58', name:'Pikachu', image:'https://assets.tcgdex.net/en/base/base1/58/high.webp', rarity:'Common'},
+            {id:'base1-63', name:'Squirtle', image:'https://assets.tcgdex.net/en/base/base1/63/high.webp', rarity:'Common'},
+            {id:'base1-46', name:'Charmander', image:'https://assets.tcgdex.net/en/base/base1/46/high.webp', rarity:'Common'}
         ];
 
-        // --- 2. STATE ---
         const state = {
             sets: [],
             pool: [],
             setCache: {}, 
-            collection: JSON.parse(localStorage.getItem('pkmnCollection_v22')) || {},
+            collection: JSON.parse(localStorage.getItem('pkmnCollection_v30')) || {},
             filters: { category: [], trainerType: [], energyType: [] },
             modalCardId: null,
-            // Minigame State
-            gameActive: false,
-            flippedCards: [],
-            matchedPairs: 0,
-            cooldownTime: 30, // seconds
-            timerInterval: null
+            gameActive: false, flippedCards: [], matchedPairs: 0, timerInterval: null
         };
 
         const els = {
@@ -391,19 +322,15 @@
             filterPanel: document.getElementById('filter-panel')
         };
 
-        // --- 3. INIT ---
         window.onload = async () => {
             renderFilters();
-            // renderTotalValue() REMOVED
-            
             try {
-                const r = await fetch('https://api.pokemontcg.io/v2/sets?orderBy=-releaseDate&pageSize=250');
+                const r = await fetch('https://api.tcgdex.net/v2/en/sets');
                 const d = await r.json();
-                state.sets = d.data;
-                
+                state.sets = d.reverse();
                 els.setSelect.innerHTML = '<option disabled selected>Select Expansion...</option>';
                 state.sets.forEach(s => {
-                    els.setSelect.innerHTML += `<option value="${s.id}">${s.name} (${s.releaseDate.substring(0,4)})</option>`;
+                    els.setSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
                 });
                 hideLoader();
             } catch (e) {
@@ -414,46 +341,56 @@
             }
         };
 
-        // --- 4. LOAD DATA ---
         async function updateSetInfo() {
             const id = els.setSelect.value;
-            showLoader("Downloading Set...");
+            showLoader("Fetching Cards...");
             resetPackUI();
 
             if(id === 'backup') {
                 state.pool = backupCards;
-                finishLoadingSet(null);
+                finishLoadingSet({name: "Backup Set", logo: ""});
                 return;
             }
 
             if(state.setCache[id]) {
                 state.pool = state.setCache[id];
-                finishLoadingSet(state.sets.find(s => s.id === id));
+                const set = state.sets.find(s => s.id === id);
+                finishLoadingSet(set);
                 return;
             }
 
             try {
-                const r = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${id}&pageSize=250&select=id,name,images,rarity,tcgplayer,supertype,subtypes,types`);
+                const r = await fetch(`https://api.tcgdex.net/v2/en/sets/${id}`);
                 const d = await r.json();
+                if(!d.cards || d.cards.length === 0) throw new Error("Empty Set");
                 
-                if(!d.data || d.data.length === 0) throw new Error("Empty Set");
+                const cards = d.cards.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    image: `${c.image}/high.webp`,
+                    rarity: c.rarity,
+                    set: d.name // Capture set name for link
+                }));
                 
-                state.setCache[id] = d.data;
-                state.pool = d.data;
-                finishLoadingSet(state.sets.find(s => s.id === id));
-                
+                state.setCache[id] = cards;
+                state.pool = cards;
+                finishLoadingSet(d);
             } catch(e) {
-                showToast("Limit Reached. Using Backup.");
+                showToast("Error. Using Backup.");
                 state.pool = backupCards;
                 finishLoadingSet(null);
             }
         }
         
-        function finishLoadingSet(set) {
-            if(set) {
-                document.getElementById('pack-title').innerText = set.name;
-                document.getElementById('pack-icon').src = set.images.symbol;
-                document.getElementById('dynamic-bg').style.backgroundImage = `url('${set.images.logo}')`;
+        function finishLoadingSet(setInfo) {
+            if(setInfo) {
+                document.getElementById('pack-title').innerText = setInfo.name || "Pack";
+                if(setInfo.symbol) {
+                     document.getElementById('pack-icon').src = `${setInfo.symbol}.png`;
+                } else {
+                    document.getElementById('pack-icon').src = 'https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg';
+                }
+                if(setInfo.logo) document.getElementById('dynamic-bg').style.backgroundImage = `url('${setInfo.logo}.png')`;
             }
             setTimeout(() => {
                 els.packWrapper.style.display = 'flex';
@@ -461,7 +398,6 @@
             }, 300);
         }
 
-        // --- 5. PACK OPENING ---
         function ripPack() {
             const msg = document.getElementById('pack-loading-msg');
             msg.style.display = 'flex';
@@ -481,150 +417,38 @@
             
             packCards.forEach((c, i) => {
                 const div = document.createElement('div');
-                const isHolo = (c.rarity?.toLowerCase().includes('holo')) || (c.tcgplayer?.prices?.holofoil);
+                const isHolo = (c.rarity?.toLowerCase().includes('holo') || c.rarity?.includes('Rare'));
                 div.className = `card ${isHolo ? 'holo' : ''}`;
                 
-                const imgUrl = c.images?.large || 'https://images.pokemontcg.io/card-back.png';
+                const imgUrl = c.image || 'https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg';
                 div.style.backgroundImage = `url('${imgUrl}')`;
                 div.style.zIndex = 100 - i;
                 
-                let price = getPrice(c);
-                
                 div.onclick = (e) => {
-                    div.classList.add('swiped');
-                    if(price > 0) showPop(e.clientX, e.clientY, price);
-                    
+                    // RANDOMIZE DIRECTION (Left or Right)
+                    const dir = Math.random() > 0.5 ? 'fly-right' : 'fly-left';
+                    div.classList.add(dir);
+                    div.classList.add('swiped'); // Mark as handled
+
                     const remaining = document.querySelectorAll('.card:not(.swiped)').length;
                     if(remaining <= 1) { 
-                        setTimeout(() => showSummary(packSummary.totalVal, packSummary.rares), 400);
+                        setTimeout(() => showSummary(packSummary.rares), 700);
                     }
                 };
-                
                 els.cardStack.appendChild(div);
             });
-        }
-        
-        // --- 6. MEMORY GAME & COOLDOWN ---
-        function startCooldown() {
-            const btn = document.getElementById('btn-open-another');
-            const display = document.getElementById('timer-display');
-            btn.disabled = true;
-            btn.innerText = "Wait for Timer...";
-            btn.classList.add('secondary');
-            btn.classList.remove('shop'); 
-            
-            let timeLeft = 30; // 30 Seconds
-            display.innerText = `00:${timeLeft}`;
-            
-            if(state.timerInterval) clearInterval(state.timerInterval);
-            state.timerInterval = setInterval(() => {
-                timeLeft--;
-                display.innerText = `00:${timeLeft < 10 ? '0'+timeLeft : timeLeft}`;
-                if(timeLeft <= 0) {
-                    unlockPack();
-                }
-            }, 1000);
-            
-            initMemoryGame();
-        }
-        
-        function unlockPack() {
-            clearInterval(state.timerInterval);
-            const btn = document.getElementById('btn-open-another');
-            const display = document.getElementById('timer-display');
-            
-            display.innerText = "READY!";
-            btn.disabled = false;
-            btn.innerText = "OPEN ANOTHER PACK";
-            btn.classList.remove('secondary');
-            
-            showToast("Pack Unlocked!");
-        }
-        
-        function initMemoryGame() {
-            const grid = document.getElementById('memory-grid');
-            grid.innerHTML = '';
-            
-            const gameSprites = [];
-            for(let i=0; i<6; i++) {
-                const id = Math.floor(Math.random() * 151) + 1;
-                const url = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
-                gameSprites.push({id, url});
-            }
-            
-            let deck = [...gameSprites, ...gameSprites];
-            deck.sort(() => Math.random() - 0.5);
-            
-            state.flippedCards = [];
-            state.matchedPairs = 0;
-            state.gameActive = true;
-            
-            deck.forEach((item, idx) => {
-                const card = document.createElement('div');
-                card.className = 'mem-card';
-                card.dataset.id = item.id;
-                card.dataset.idx = idx;
-                
-                card.innerHTML = `
-                    <div class="mem-back"></div>
-                    <div class="mem-face"><img src="${item.url}" class="mem-sprite"></div>
-                `;
-                
-                card.onclick = () => flipCard(card);
-                grid.appendChild(card);
-            });
-        }
-        
-        function flipCard(card) {
-            if(!state.gameActive) return;
-            if(card.classList.contains('flipped') || card.classList.contains('matched')) return;
-            if(state.flippedCards.length >= 2) return;
-            
-            card.classList.add('flipped');
-            state.flippedCards.push(card);
-            
-            if(state.flippedCards.length === 2) {
-                setTimeout(checkMatch, 600);
-            }
-        }
-        
-        function checkMatch() {
-            const [c1, c2] = state.flippedCards;
-            
-            if(c1.dataset.id === c2.dataset.id) {
-                c1.classList.add('matched');
-                c2.classList.add('matched');
-                state.matchedPairs++;
-                if(state.matchedPairs === 6) {
-                    state.gameActive = false;
-                    unlockPack(); // WINNER!
-                }
-            } else {
-                c1.classList.remove('flipped');
-                c2.classList.remove('flipped');
-            }
-            state.flippedCards = [];
-        }
-
-        // --- CORE LOGIC (Helpers) ---
-        function getPrice(c) {
-            if(c.tcgplayer?.prices) {
-                const p = c.tcgplayer.prices;
-                const variants = [p.holofoil, p.normal, p.reverseHolofoil];
-                for(let v of variants) {
-                    if(v && v.market) return v.market;
-                    if(v && v.mid) return v.mid;
-                }
-            }
-            return 0;
         }
 
         function generatePackData() {
             if(!state.pool || state.pool.length === 0) return backupCards;
-            const common = state.pool.filter(c => c.rarity?.toLowerCase().includes('common'));
-            const uncommon = state.pool.filter(c => c.rarity?.toLowerCase().includes('uncommon'));
-            const rare = state.pool.filter(c => c.rarity?.toLowerCase().includes('rare') || c.rarity?.includes('V') || c.rarity?.includes('Star'));
+            const common = state.pool.filter(c => c.rarity?.includes('Common'));
+            const uncommon = state.pool.filter(c => c.rarity?.includes('Uncommon'));
+            const rare = state.pool.filter(c => !c.rarity?.includes('Common') && !c.rarity?.includes('Uncommon'));
             
+            if(common.length === 0) common.push(...state.pool);
+            if(uncommon.length === 0) uncommon.push(...state.pool);
+            if(rare.length === 0) rare.push(...state.pool);
+
             const pick = (arr, existing) => {
                 if(arr.length === 0) return state.pool[0];
                 const unowned = arr.filter(c => !state.collection[c.id]);
@@ -639,46 +463,27 @@
             };
             
             let pack = [];
-            for(let i=0; i<6; i++) pack.push(pick(common.length ? common : state.pool, pack));
-            for(let i=0; i<3; i++) pack.push(pick(uncommon.length ? uncommon : state.pool, pack));
-            pack.push(pick(rare.length ? rare : state.pool, pack));
+            for(let i=0; i<6; i++) pack.push(pick(common, pack));
+            for(let i=0; i<3; i++) pack.push(pick(uncommon, pack));
+            pack.push(pick(rare, pack));
             return pack;
         }
         
         function saveEntirePack(cards) {
-            let totalVal = 0;
             let rares = [];
-            
             cards.forEach(c => {
-                const price = getPrice(c);
-                totalVal += price;
-                
-                if(price > 2 || (c.rarity && (c.rarity.includes('Rare') || c.rarity.includes('V')))) {
-                    rares.push({img: c.images?.large, id: c.id});
+                if(c.rarity && !c.rarity.includes('Common') && !c.rarity.includes('Uncommon')) {
+                    rares.push({img: c.image, id: c.id});
                 }
-
                 if(!state.collection[c.id]) {
-                    state.collection[c.id] = {
-                        id: c.id,
-                        name: c.name,
-                        img: c.images?.large,
-                        set: c.set?.name,
-                        supertype: c.supertype,
-                        subtypes: c.subtypes || [],
-                        types: c.types || [],
-                        price: price,
-                        count: 0,
-                        date: Date.now()
-                    };
+                    state.collection[c.id] = { id: c.id, name: c.name, img: c.image, set: c.set, count: 0, date: Date.now() };
                 } else {
                     state.collection[c.id].count++;
                     state.collection[c.id].date = Date.now();
                 }
             });
-            
-            localStorage.setItem('pkmnCollection_v22', JSON.stringify(state.collection));
-            // renderTotalValue(); REMOVED
-            return { totalVal, rares };
+            localStorage.setItem('pkmnCollection_v30', JSON.stringify(state.collection));
+            return { rares };
         }
 
         function resetPack() {
@@ -691,97 +496,39 @@
             els.cardStack.style.display = 'none';
             els.summary.style.display = 'none';
         }
-
-        // renderTotalValue() function REMOVED
         
         function renderCollection() {
             const grid = document.getElementById('collection-grid');
             grid.innerHTML = '';
-            
             const sortMode = document.getElementById('sort-select').value;
             const searchTerm = document.getElementById('search-input').value.toLowerCase();
-            
             let cards = Object.values(state.collection);
-            
             cards = cards.filter(c => {
                 if(searchTerm && !c.name.toLowerCase().includes(searchTerm)) return false;
-                if(state.filters.category.length > 0 && !state.filters.category.includes(c.supertype)) return false;
-                if(state.filters.trainerType.length > 0) {
-                     const hasSub = c.subtypes.some(s => state.filters.trainerType.includes(s));
-                     if(!hasSub) return false;
-                }
-                if(state.filters.energyType.length > 0) {
-                     const hasType = c.types.some(t => state.filters.energyType.includes(t));
-                     if(!hasType) return false;
-                }
                 return true;
             });
-            
             cards.sort((a, b) => {
-                if(sortMode === 'value') return b.price - a.price;
+                if(sortMode === 'name') return a.name.localeCompare(b.name);
                 return b.date - a.date; 
             });
-            
             if(cards.length === 0) grid.innerHTML = '<div style="color:#666; grid-column:1/-1; text-align:center;">Binder Empty</div>';
-            
             cards.forEach(c => {
                 const div = document.createElement('div');
                 div.className = 'col-card';
-                div.style.backgroundImage = `url('${c.img}')`;
+                div.innerHTML = `<img src="${c.img}" onerror="this.parentElement.style.display='none'">`;
                 div.onclick = () => openModal(c);
-                
-                if(c.price > 0) {
-                    const price = document.createElement('div');
-                    price.className = 'col-price';
-                    price.innerText = fmtMoney(c.price);
-                    div.appendChild(price);
-                }
-                
                 grid.appendChild(div);
             });
         }
         
         function renderFilters() {
-            const panel = els.filterPanel;
-            const makeChips = (cat, label, opts) => `
-                <div class="filter-group">
-                    <div style="font-size:0.7rem; color:#888; margin-bottom:5px; font-weight:bold;">${label}</div>
-                    <div>${opts.map(o => `<div class="chip" data-cat="${cat}" data-val="${o}" onclick="toggleFilter('${cat}', '${o}', this)">${o}</div>`).join('')}</div>
-                </div>`;
-            
-            panel.innerHTML = 
-                makeChips('category', 'CATEGORY', ['Pokémon','Trainer','Energy']) +
-                makeChips('trainerType', 'SUBTYPES', ['Item','Supporter','Stadium','Pokémon Tool']) +
-                makeChips('energyType', 'TYPE', ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal','Dragon','Colorless']);
-            
-            panel.innerHTML += `<button class="btn secondary" onclick="clearFilters()" style="margin-top:10px; width:auto; padding:8px 16px;">Clear Filters</button>`;
+            els.filterPanel.innerHTML = '<div style="color:#888; text-align:center;">Filters unavailable in Light Mode</div>';
         }
-        
-        window.toggleFilter = (cat, val, el) => {
-            const list = state.filters[cat];
-            const idx = list.indexOf(val);
-            if(idx > -1) list.splice(idx, 1);
-            else list.push(val);
-            el.classList.toggle('active');
-            renderCollection();
-        };
-        
-        window.clearFilters = () => {
-            state.filters = { category: [], trainerType: [], energyType: [] };
-            document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-            renderCollection();
-        };
-        
-        function toggleFilters() {
-            els.filterPanel.style.display = els.filterPanel.style.display === 'block' ? 'none' : 'block';
-        }
+        function toggleFilters() { els.filterPanel.style.display = els.filterPanel.style.display === 'block' ? 'none' : 'block'; }
 
-        // --- 7. HELPER UI ---
-        function showSummary(val, rares) {
+        function showSummary(rares) {
             els.cardStack.style.display = 'none';
             els.summary.style.display = 'flex';
-            // document.getElementById('pack-value').innerText = fmtMoney(val); REMOVED
-            
             const list = document.getElementById('summary-rares');
             list.innerHTML = '';
             if(rares.length === 0) list.innerHTML = '<div style="color:#666">Just bulk...</div>';
@@ -791,62 +538,94 @@
                 d.style.backgroundImage = `url('${r.img}')`;
                 list.appendChild(d);
             });
-            
-            // Start Minigame
             startCooldown();
         }
         
-        function showPop(x, y, val) {
-            const el = document.createElement('div');
-            el.className = 'price-pop';
-            el.innerText = fmtMoney(val);
-            el.style.left = x + 'px';
-            el.style.top = y + 'px';
-            document.body.appendChild(el);
-            setTimeout(() => document.body.removeChild(el), 1000);
+        function startCooldown() {
+            const btn = document.getElementById('btn-open-another');
+            const display = document.getElementById('timer-display');
+            btn.disabled = true; btn.innerText = "Wait for Timer..."; btn.classList.add('secondary'); btn.classList.remove('shop'); 
+            let timeLeft = 30; display.innerText = `00:${timeLeft}`;
+            if(state.timerInterval) clearInterval(state.timerInterval);
+            state.timerInterval = setInterval(() => {
+                timeLeft--; display.innerText = `00:${timeLeft < 10 ? '0'+timeLeft : timeLeft}`;
+                if(timeLeft <= 0) unlockPack();
+            }, 1000);
+            initMemoryGame();
+        }
+        
+        function unlockPack() {
+            clearInterval(state.timerInterval);
+            const btn = document.getElementById('btn-open-another');
+            const display = document.getElementById('timer-display');
+            display.innerText = "READY!"; btn.disabled = false; btn.innerText = "OPEN ANOTHER PACK"; btn.classList.remove('secondary');
+            showToast("Pack Unlocked!");
+        }
+        
+        function initMemoryGame() {
+            const grid = document.getElementById('memory-grid');
+            grid.innerHTML = '';
+            const gameSprites = [];
+            for(let i=0; i<6; i++) {
+                const id = Math.floor(Math.random() * 151) + 1;
+                const url = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+                gameSprites.push({id, url});
+            }
+            let deck = [...gameSprites, ...gameSprites];
+            deck.sort(() => Math.random() - 0.5);
+            state.flippedCards = []; state.matchedPairs = 0; state.gameActive = true;
+            deck.forEach((item, idx) => {
+                const card = document.createElement('div');
+                card.className = 'mem-card'; card.dataset.id = item.id;
+                card.innerHTML = `<div class="mem-back"></div><div class="mem-face"><img src="${item.url}" class="mem-sprite"></div>`;
+                card.onclick = () => flipCard(card);
+                grid.appendChild(card);
+            });
+        }
+        
+        function flipCard(card) {
+            if(!state.gameActive || card.classList.contains('flipped') || card.classList.contains('matched') || state.flippedCards.length >= 2) return;
+            card.classList.add('flipped'); state.flippedCards.push(card);
+            if(state.flippedCards.length === 2) setTimeout(checkMatch, 600);
+        }
+        
+        function checkMatch() {
+            const [c1, c2] = state.flippedCards;
+            if(c1.dataset.id === c2.dataset.id) {
+                c1.classList.add('matched'); c2.classList.add('matched'); state.matchedPairs++;
+                if(state.matchedPairs === 6) { state.gameActive = false; unlockPack(); }
+            } else { c1.classList.remove('flipped'); c2.classList.remove('flipped'); }
+            state.flippedCards = [];
         }
 
         function openModal(c) {
             state.modalCardId = c.id;
             document.getElementById('modal-img').src = c.img;
             document.getElementById('modal-name').innerText = c.name;
-            document.getElementById('modal-price').innerText = c.price > 0 ? fmtMoney(c.price) : 'No Price';
+            const setLabel = c.set || "Unknown Set";
+            document.getElementById('modal-set-name').innerText = setLabel;
+            const searchName = encodeURIComponent(c.name + " " + (c.set || ""));
+            const link = `https://www.tcgplayer.com/search/all/product?q=${searchName}&view=grid`;
+            document.getElementById('tcg-link').href = link;
             document.getElementById('card-modal').style.display = 'flex';
-        }
-        
-        function buyCard() {
-            const c = state.collection[state.modalCardId];
-            if(c) {
-                const q = encodeURIComponent(`${c.name} ${c.set || ''} pokemon`);
-                window.open(`https://www.tcgplayer.com/search/pokemon/all?q=${q}&view=grid`, '_blank');
-            }
         }
         
         function exportCollection() {
             const str = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.collection));
-            const a = document.createElement('a');
-            a.href = str; a.download = 'collection.json'; a.click();
+            const a = document.createElement('a'); a.href = str; a.download = 'collection.json'; a.click();
         }
 
         function switchView(v) {
             document.querySelectorAll('.view').forEach(e => e.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
             document.getElementById(`view-${v}`).classList.add('active');
-            
             if(v === 'home') document.querySelector('.nav-item:nth-child(1)').classList.add('active');
-            else {
-                document.querySelector('.nav-item:nth-child(2)').classList.add('active');
-                renderCollection();
-            }
+            else { document.querySelector('.nav-item:nth-child(2)').classList.add('active'); renderCollection(); }
         }
 
         function showToast(msg) {
-            const t = els.toast;
-            t.innerText = msg; t.style.opacity = '1';
-            setTimeout(() => t.style.opacity = '0', 2000);
+            const t = els.toast; t.innerText = msg; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 2000);
         }
-        
-        function fmtMoney(n) { return new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'}).format(n); }
     </script>
 </body>
 </html>
