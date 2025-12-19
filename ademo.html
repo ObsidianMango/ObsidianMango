@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Fluid Tech Demo</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            touch-action: none; /* Prevents scrolling on mobile */
+            font-family: 'Courier New', Courier, monospace;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">Touch & Drag | Double Tap to Reset</div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let particles = [];
+        
+        // Configuration
+        const PARTICLE_COUNT = 1800; // Lower this if phone lags (e.g. 1000)
+        const FRICTION = 0.96;
+        const BASE_SPEED = 0.5;
+        
+        // Mouse/Touch State
+        let touches = [];
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * BASE_SPEED;
+                this.vy = (Math.random() - 0.5) * BASE_SPEED;
+                this.history = [];
+                this.hue = Math.random() * 60 + 180; // Cyan/Blue range
+                this.size = Math.random() * 2 + 1;
+            }
+
+            update() {
+                // Physics Integration
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Friction
+                this.vx *= FRICTION;
+                this.vy *= FRICTION;
+
+                // Wall bounce with energy loss
+                if (this.x < 0) { this.x = 0; this.vx *= -1; }
+                if (this.x > width) { this.x = width; this.vx *= -1; }
+                if (this.y < 0) { this.y = 0; this.vy *= -1; }
+                if (this.y > height) { this.y = height; this.vy *= -1; }
+
+                // Interaction with Touches (Gravity Wells)
+                if (touches.length > 0) {
+                    touches.forEach(touch => {
+                        const dx = touch.x - this.x;
+                        const dy = touch.y - this.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // Gravitational Pull / Repulsion
+                        if (dist < 400) {
+                            const force = (400 - dist) / 400;
+                            // Pull towards touch
+                            const angle = Math.atan2(dy, dx);
+                            const push = force * 2.5; 
+                            
+                            this.vx += Math.cos(angle) * push;
+                            this.vy += Math.sin(angle) * push;
+                            
+                            // Heat up color when moving fast near touch
+                            this.hue = 320 - (dist / 2); // Shift to pink/purple
+                        }
+                    });
+                } else {
+                    // Drift color back to blue/cyan when idle
+                    if (this.hue > 240) this.hue -= 1;
+                    if (this.hue < 180) this.hue += 1;
+                    
+                    // Add slight noise movement so they don't freeze
+                    this.vx += (Math.random() - 0.5) * 0.1;
+                    this.vy += (Math.random() - 0.5) * 0.1;
+                }
+            }
+
+            draw() {
+                // Draw Particle
+                ctx.fillStyle = `hsl(${this.hue}, 100%, 60%)`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function init() {
+            resize();
+            particles = [];
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                particles.push(new Particle());
+            }
+            animate();
+        }
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        function animate() {
+            // Trail effect (clearing with low opacity creates trails)
+            ctx.fillStyle = 'rgba(5, 5, 5, 0.25)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Additive Blending for "Glow" look
+            ctx.globalCompositeOperation = 'lighter';
+
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            ctx.globalCompositeOperation = 'source-over';
+            requestAnimationFrame(animate);
+        }
+
+        // --- Event Listeners ---
+
+        window.addEventListener('resize', resize);
+
+        // Mouse Support
+        window.addEventListener('mousemove', e => {
+            touches = [{x: e.clientX, y: e.clientY}];
+        });
+        window.addEventListener('mousedown', e => {
+             // Click creates a "shockwave" push
+             particles.forEach(p => {
+                const dx = p.x - e.clientX;
+                const dy = p.y - e.clientY;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 300) {
+                    p.vx += (dx / dist) * 20;
+                    p.vy += (dy / dist) * 20;
+                }
+             });
+        });
+        window.addEventListener('mouseout', () => touches = []);
+
+        // Touch Support (Multi-touch)
+        canvas.addEventListener('touchstart', updateTouches, {passive: false});
+        canvas.addEventListener('touchmove', updateTouches, {passive: false});
+        canvas.addEventListener('touchend', e => {
+            e.preventDefault();
+            touches = [];
+            if (e.touches.length > 0) updateTouches(e);
+        }, {passive: false});
+
+        function updateTouches(e) {
+            e.preventDefault(); // Prevent scrolling
+            touches = [];
+            for (let i = 0; i < e.touches.length; i++) {
+                touches.push({
+                    x: e.touches[i].clientX,
+                    y: e.touches[i].clientY
+                });
+            }
+        }
+
+        // Double tap reset
+        let lastTap = 0;
+        canvas.addEventListener('touchend', function(e) {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+            if (tapLength < 500 && tapLength > 0) {
+                // Double tap detected
+                particles.forEach(p => {
+                    p.vx = (Math.random() - 0.5) * 50; // Explosion
+                    p.vy = (Math.random() - 0.5) * 50;
+                });
+                e.preventDefault();
+            }
+            lastTap = currentTime;
+        });
+
+        init();
+    </script>
+</body>
+</html>
