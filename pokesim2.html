@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PokéBoostSimV38 - QR Trade</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        :root {
+            --primary: #ffcb05; 
+            --primary-dim: #c7a008;
+            --bg: #121212;
+            --surface: #1e1e24;
+            --surface-2: #2a2a35;
+            --text: #ffffff;
+            --text-muted: #8b8b99;
+            --danger: #eb5757;
+            --success: #2ecc71;
+            --card-back: url('https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg');
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        
+        body {
+            margin: 0; background-color: var(--bg); color: var(--text);
+            font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh;
+            display: flex; flex-direction: column; user-select: none;
+        }
+
+        #dynamic-bg {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none; opacity: 0.1; 
+            background-repeat: repeat; background-position: center; background-size: 150px;
+            filter: grayscale(100%); transition: background-image 0.5s ease;
+        }
+
+        /* --- LOADING --- */
+        #loading-overlay {
+            position: fixed; inset: 0; z-index: 9999; background: var(--bg);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.3s ease; perspective: 1000px;
+        }
+        .loader-stage { position: relative; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin-bottom: 30px; }
+        #loading-sprite {
+            width: 90px; height: 90px; object-fit: contain; z-index: 10;
+            filter: drop-shadow(0 0 15px rgba(255, 203, 5, 0.6));
+            animation: bounce 2s infinite ease-in-out;
+        }
+        @keyframes bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+        
+        .orbit { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; transform: translate(-50%, -50%); animation: spin 2.5s linear infinite; }
+        .orbit-card {
+            position: absolute; width: 30px; height: 42px;
+            background-image: var(--card-back); background-size: cover;
+            border-radius: 3px; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .orbit-card:nth-child(1) { top: 0; left: 50%; transform: translate(-50%, -50%); }
+        .orbit-card:nth-child(2) { top: 30%; right: 0%; transform: translate(50%, -50%) rotate(72deg); }
+        .orbit-card:nth-child(3) { bottom: 0%; right: 20%; transform: translate(50%, 50%) rotate(144deg); }
+        .orbit-card:nth-child(4) { bottom: 0%; left: 20%; transform: translate(-50%, 50%) rotate(216deg); }
+        .orbit-card:nth-child(5) { top: 30%; left: 0%; transform: translate(-50%, -50%) rotate(288deg); }
+        @keyframes spin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+        .loading-text { font-weight: 900; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; font-size: 0.8rem; margin-top: 10px; }
+
+        /* --- APP --- */
+        #app-container { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; width: 100%; height: 100%; z-index: 10; }
+        .view { position: absolute; top: 0; left: 0; right: 0; bottom: 90px; display: none; flex-direction: column; padding: 16px; overflow-y: auto; width: 100%; }
+        .view.active { display: flex; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- NAV --- */
+        #nav-bar {
+            height: 90px; background: var(--surface); display: flex;
+            justify-content: space-around; align-items: center;
+            border-top: 1px solid #333; z-index: 100; padding-bottom: 25px;
+            flex-shrink: 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+        }
+        .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 0.75rem; color: var(--text-muted); cursor: pointer; width: 33%; transition: all 0.2s; font-weight: 600; }
+        .nav-item.active { color: var(--primary); transform: translateY(-2px); }
+        .nav-icon { font-size: 1.7rem; margin-bottom: 4px; }
+
+        h1 { margin: 0 0 10px 0; letter-spacing: -0.5px; }
+        .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 10px; font-weight: 600; text-transform: uppercase; }
+
+        .btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+            color: #000; border: none; padding: 14px; border-radius: 12px;
+            font-weight: 800; font-size: 1rem; cursor: pointer; width: 100%;
+            text-align: center; box-shadow: 0 4px 15px rgba(255, 203, 5, 0.2); margin-bottom: 10px;
+            text-decoration: none; display: inline-block; transition: transform 0.1s, box-shadow 0.1s, filter 0.1s;
+        }
+        .btn:active { transform: scale(0.96); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
+        .btn.secondary { background: var(--surface-2); color: white; box-shadow: none; border: 1px solid #444; }
+        .btn.tcg { background: #222; border: 1px solid #48a0dc; color: #48a0dc; }
+        
+        .btn.boost {
+            position: relative;
+            background: linear-gradient(to bottom, #ffeb3b, #fbc02d);
+            color: #422a00; 
+            text-transform: uppercase; font-weight: 900; letter-spacing: 1.2px;
+            border: none; border-radius: 30px; padding: 18px 24px;
+            box-shadow: 0 6px 0 #c49000, 0 8px 25px rgba(255, 203, 5, 0.5), inset 0 2px 3px rgba(255, 255, 255, 0.6); 
+            text-shadow: 0 1px 1px rgba(255,255,255,0.4);
+            overflow: hidden; animation: boost-glow 2.5s infinite ease-in-out;
+        }
+        .btn.boost::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 50%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.5), transparent);
+            border-radius: 30px 30px 0 0; pointer-events: none;
+        }
+        .btn.boost:hover {
+            transform: translateY(-3px); filter: brightness(1.05);
+            box-shadow: 0 9px 0 #c49000, 0 15px 35px rgba(255, 203, 5, 0.7), inset 0 2px 3px rgba(255, 255, 255, 0.7);
+            animation: none;
+        }
+        .btn.boost:active {
+            transform: translateY(3px) scale(0.98);
+            box-shadow: 0 2px 0 #c49000, 0 4px 10px rgba(255, 203, 5, 0.4), inset 0 1px 2px rgba(0,0,0,0.1); 
+             filter: brightness(0.95);
+        }
+        @keyframes boost-glow {
+            0%, 100% { box-shadow: 0 6px 0 #c49000, 0 8px 25px rgba(255, 203, 5, 0.5), inset 0 2px 3px rgba(255, 255, 255, 0.6); }
+            50% { box-shadow: 0 6px 0 #c49000, 0 12px 35px rgba(255, 203, 5, 0.8), inset 0 2px 3px rgba(255, 255, 255, 0.6); }
+        }
+
+        select, input { width: 100%; padding: 12px; background: var(--surface-2); border: 1px solid #444; color: white; border-radius: 10px; font-size: 1rem; margin-bottom: 8px; font-family: inherit; }
+
+        /* --- PACK STAGE --- */
+        #pack-stage { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; position: relative; }
+        .pack-wrapper { width: 280px; height: 392px; position: relative; animation: float 6s ease-in-out infinite; transition: transform 0.3s; cursor: pointer; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        .pack-body { width: 100%; height: 100%; background: linear-gradient(135deg, #1a1a1a, #000); border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 30px 60px rgba(0,0,0,0.8); border: 1px solid #444; overflow: hidden; position: relative; }
+        .pack-art-container { width: 85%; height: 60%; overflow: hidden; border-radius: 10px; z-index: 2; display: flex; align-items: center; justify-content: center; background: #222; }
+        .pack-icon { width: 100%; height: 100%; object-fit: contain; }
+        .pack-title { position: absolute; bottom: 30px; font-size: 1.2rem; font-weight: 900; color: var(--primary); text-align: center; width: 100%; z-index: 6; text-transform: uppercase;}
+        .pack-strip { position: absolute; top: 0; left: 0; width: 100%; height: 60px; background: repeating-linear-gradient(45deg, #c00, #c00 10px, #f00 10px, #f00 20px); z-index: 50; border-radius: 18px 18px 0 0; border-bottom: 2px dashed #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(0,0,0,0.5); pointer-events: none; transition: transform 0.2s; }
+        .tear-text { color: white; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px; }
+        #pack-loading-msg { position: absolute; inset: 0; background: rgba(0,0,0,0.95); display: none; flex-direction: column; align-items: center; justify-content: center; color: var(--primary); font-weight: 900; z-index: 60; font-size: 1.4rem; border-radius: 18px; letter-spacing: 1px; }
+
+        /* --- CARDS & ANIMATIONS --- */
+        .card-stack { width: 280px; height: 392px; position: relative; display: none; z-index: 100; }
+        .card { width: 100%; height: 100%; position: absolute; top: 0; left: 0; border-radius: 14px; background-size: cover; background-position: center; box-shadow: 0 10px 40px rgba(0,0,0,0.9); background-color: #222; border: 1px solid #333; background-image: var(--card-back); cursor: pointer; transition: transform 0.1s; }
+        
+        .card.holo::after { content: ""; position: absolute; inset: 0; border-radius: 14px; background: linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.4) 50%, transparent 70%); mix-blend-mode: overlay; opacity: 0.7; pointer-events: none; }
+
+        .card.fly-right { animation: flyRight 0.6s ease-out forwards; pointer-events: none; }
+        .card.fly-left { animation: flyLeft 0.6s ease-out forwards; pointer-events: none; }
+
+        @keyframes flyRight {
+            0% { transform: scale(1); filter: brightness(1); }
+            15% { transform: scale(1.1); filter: brightness(2); } 
+            100% { transform: translateX(180%) rotate(60deg); opacity: 0; filter: brightness(1); }
+        }
+        @keyframes flyLeft {
+            0% { transform: scale(1); filter: brightness(1); }
+            15% { transform: scale(1.1); filter: brightness(2); } 
+            100% { transform: translateX(-180%) rotate(-60deg); opacity: 0; filter: brightness(1); }
+        }
+
+        /* --- SUMMARY & MEMORY --- */
+        #summary-screen { text-align: center; display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; width: 100%; overflow-y:auto; padding-bottom:100px; }
+        .rare-pull-list { display: flex; gap: 10px; overflow-x: auto; max-width: 100%; padding: 10px; justify-content: center; margin-bottom: 30px; flex-shrink:0; }
+        .mini-card { width: 60px; height: 84px; border-radius: 6px; background-size: cover; flex-shrink: 0; border: 1px solid #555; }
+        
+        /* Memory Game */
+        #memory-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; width: 100%; aspect-ratio: 1/1; }
+        .mem-card { background-color: #222; border-radius: 6px; cursor: pointer; position: relative; transform-style: preserve-3d; transition: transform 0.3s; aspect-ratio: 1/1; }
+        .mem-card.flipped { transform: rotateY(180deg); }
+        .mem-card.matched { opacity: 0.5; pointer-events: none; }
+        .mem-face, .mem-back { position: absolute; inset: 0; backface-visibility: hidden; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+        .mem-back { background: var(--card-back) center/100% 100% no-repeat; }
+        .mem-face { transform: rotateY(180deg); background: #333; }
+        .mem-sprite { width: 80%; height: 80%; image-rendering: pixelated; object-fit: contain; }
+
+        /* --- BINDER --- */
+        #collection-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding-bottom: 20px; }
+        .col-card { aspect-ratio: 2.5/3.5; border-radius: 8px; position: relative; background-color: #222; cursor:pointer; overflow: hidden; }
+        .col-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        /* --- QR TRADE STYLES --- */
+        .trade-toggle-bar { display: flex; gap: 10px; margin-bottom: 15px; }
+        .trade-mode-btn { flex: 1; padding: 10px; background: var(--surface-2); border-radius: 8px; text-align: center; cursor: pointer; font-weight: bold; color: #888; border: 1px solid #444; }
+        .trade-mode-btn.active { background: var(--primary); color: black; border-color: var(--primary); }
+        
+        .qr-output-area { background: white; padding: 20px; border-radius: 12px; margin: 20px 0; display: none; flex-direction: column; align-items: center; }
+        #qr-canvas { margin-bottom: 10px; }
+        
+        #reader { width: 100%; border-radius: 12px; overflow: hidden; background: #000; display:none; }
+        
+        .trade-helper-text { text-align: center; color: var(--text-muted); font-size: 0.9rem; margin: 15px 0; }
+        .scan-result-card { width: 180px; height: 252px; background-size: cover; border-radius: 12px; margin: 20px auto; border: 2px solid var(--primary); box-shadow: 0 0 20px rgba(255,203,5,0.4); }
+
+        /* --- MODAL --- */
+        .modal-overlay { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.95); display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        #modal-img { max-width: 80%; max-height: 60vh; border-radius: 18px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        #toast { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); background: #333; padding: 10px 20px; border-radius: 20px; font-weight: bold; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 999; }
+    </style>
+</head>
+<body>
+
+    <div id="dynamic-bg"></div>
+
+    <div id="loading-overlay">
+        <div class="loader-stage">
+            <img id="loading-sprite" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png">
+            <div class="orbit">
+                <div class="orbit-card"></div>
+                <div class="orbit-card"></div>
+                <div class="orbit-card"></div>
+                <div class="orbit-card"></div>
+                <div class="orbit-card"></div>
+            </div>
+        </div>
+        <div class="loading-text" id="loading-text">Loading...</div>
+    </div>
+
+    <div id="app-container">
+        <div id="view-home" class="view active">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h1><span style="color:var(--primary)">PokéBoost</span>Sim</h1>
+                <button onclick="document.getElementById('settings-modal').style.display='flex'" style="background:none; border:none; font-size:1.5rem; color:white; cursor:pointer;">⚙️</button>
+            </div>
+            
+            <div style="margin-bottom:15px;">
+                <select id="set-select" onchange="updateSetInfo()">
+                    <option disabled selected>Loading Sets...</option>
+                </select>
+            </div>
+
+            <div id="pack-stage">
+                <div id="pack-wrapper" class="pack-wrapper" style="display:none;" onclick="ripPack()">
+                    <div id="pack-loading-msg">
+                        <div>OPENING...</div>
+                        <div id="preload-status" style="font-size:0.8rem; color:white; font-weight:400; margin-top:5px;"></div>
+                    </div>
+                    <div class="pack-strip">
+                        <span class="tear-text">CLICK TO OPEN</span>
+                    </div>
+                    <div class="pack-body">
+                        <div class="pack-art-container">
+                            <img id="pack-icon" class="pack-icon" src="" onerror="this.src='https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg'">
+                        </div>
+                        <div id="pack-title" class="pack-title">Set Name</div>
+                    </div>
+                </div>
+                
+                <div id="card-stack" class="card-stack"></div>
+
+                <div id="summary-screen">
+                    <h2 style="color:var(--primary); margin:5px 0;">PACK COMPLETE</h2>
+                    <div class="rare-pull-list" id="summary-rares"></div>
+                    <div style="width:100%; max-width:320px; padding: 10px;">
+                        <button id="btn-boost" class="btn boost" onclick="resetPack()">
+                             Time For Another Boost ⚡
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-collection" class="view">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h1>Binder</h1>
+                <select id="sort-select" style="width:100px; padding:8px;" onchange="renderCollection()">
+                    <option value="recent">Newest</option>
+                    <option value="name">Name</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input type="text" id="search-input" placeholder="Search..." onkeyup="renderCollection()">
+            </div>
+            <div id="collection-grid"></div>
+        </div>
+
+        <div id="view-trade" class="view">
+            <h1 style="text-align:center;">Link Trade</h1>
+            
+            <div class="trade-toggle-bar">
+                <div id="tab-receive" class="trade-mode-btn" onclick="setTradeMode('receive')">📡 RECEIVE</div>
+                <div id="tab-send" class="trade-mode-btn active" onclick="setTradeMode('send')">📤 SEND</div>
+            </div>
+
+            <div id="trade-send-area">
+                <div class="trade-helper-text">Select a card from your binder to generate a Trade Code.</div>
+                
+                <div id="qr-display" class="qr-output-area">
+                    <div id="qrcode"></div>
+                    <div style="color:black; font-weight:bold; margin-top:10px;">SCAN WITH OTHER DEVICE</div>
+                    <button class="btn secondary" style="margin-top:10px;" onclick="closeQR()">Cancel</button>
+                </div>
+
+                <div id="trade-binder-grid" class="collection-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px;"></div>
+            </div>
+
+            <div id="trade-receive-area" style="display:none; flex-direction:column; align-items:center;">
+                <div id="reader"></div>
+                <div id="scan-feedback" style="display:none; text-align:center;">
+                    <h2 style="color:var(--success)">TRADE SUCCESS!</h2>
+                    <div id="new-card-preview" class="scan-result-card"></div>
+                    <div id="new-card-name" style="font-weight:bold; font-size:1.2rem;"></div>
+                    <button class="btn" onclick="resetScanner()">Scan Another</button>
+                </div>
+                <div class="trade-helper-text" id="cam-permission-text">
+                    Note: Camera requires HTTPS or Localhost.
+                    <br><button class="btn" style="margin-top:10px;" onclick="startScanner()">Start Camera</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="nav-bar">
+        <div class="nav-item active" onclick="switchView('home')"><div class="nav-icon">📦</div><div>Pack</div></div>
+        <div class="nav-item" onclick="switchView('trade')"><div class="nav-icon">🤝</div><div>Trade</div></div>
+        <div class="nav-item" onclick="switchView('collection')"><div class="nav-icon">📕</div><div>Binder</div></div>
+    </div>
+
+    <div id="card-modal" class="modal-overlay">
+        <img id="modal-img" src="">
+        <div class="modal-details" style="text-align:center; width:100%;">
+            <h2 id="modal-name" style="margin-bottom:5px;">Name</h2>
+            <div id="modal-set-name" style="color:#888; margin-bottom:15px;">Set Name</div>
+            <a id="tcg-link" href="#" target="_blank" class="btn tcg">Check TCGPlayer Price ↗</a>
+            <button class="btn secondary" onclick="document.getElementById('card-modal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal-overlay">
+        <div style="background:var(--surface); padding:30px; border-radius:20px; text-align:center; min-width:300px;">
+            <h2>Settings</h2>
+            <button class="btn" style="background:var(--primary); color:black;" onclick="openMemoryGame()">🎮 Play Mini Game</button>
+            <button class="btn secondary" onclick="exportCollection()">Export Collection</button>
+            <button class="btn danger" onclick="if(confirm('Delete All?')){localStorage.clear();location.reload();}">Reset Data</button>
+            <button class="btn secondary" onclick="document.getElementById('settings-modal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <div id="memory-game-modal" class="modal-overlay">
+        <div style="background:var(--surface); padding:20px; border-radius:20px; text-align:center; max-width:90%; width:340px;">
+            <h2 style="color:var(--primary); margin-top:0;">Memory Match</h2>
+            <div id="memory-grid"></div>
+            <button class="btn secondary" style="margin-top:20px;" onclick="document.getElementById('memory-game-modal').style.display='none'">Exit Game</button>
+        </div>
+    </div>
+
+    <div id="toast">Msg</div>
+
+    <script>
+        // --- ASSETS & CONFIG ---
+        const sprites = [25, 1, 4, 7, 150, 151, 6, 9]; 
+        let spriteIdx = 0;
+        const loaderImg = document.getElementById('loading-sprite');
+        const loadInterval = setInterval(() => {
+            spriteIdx = (spriteIdx + 1) % sprites.length;
+            loaderImg.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${sprites[spriteIdx]}.png`;
+        }, 800);
+
+        function showLoader(text) {
+            document.getElementById('loading-text').innerText = text;
+            const ol = document.getElementById('loading-overlay');
+            ol.style.display = 'flex';
+            ol.style.opacity = '1';
+            setTimeout(() => { if(ol.style.opacity === '1') hideLoader(); }, 8000);
+        }
+
+        function hideLoader() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.style.display = 'none', 300);
+        }
+
+        const backupCards = [
+            {id:'base1-4', name:'Charizard', image:'https://assets.tcgdex.net/en/base/base1/4/high.webp', rarity:'Rare Holo'},
+            {id:'base1-2', name:'Blastoise', image:'https://assets.tcgdex.net/en/base/base1/2/high.webp', rarity:'Rare Holo'},
+            {id:'base1-15', name:'Venusaur', image:'https://assets.tcgdex.net/en/base/base1/15/high.webp', rarity:'Rare Holo'},
+            {id:'base1-58', name:'Pikachu', image:'https://assets.tcgdex.net/en/base/base1/58/high.webp', rarity:'Common'},
+            {id:'base1-63', name:'Squirtle', image:'https://assets.tcgdex.net/en/base/base1/63/high.webp', rarity:'Common'},
+            {id:'base1-46', name:'Charmander', image:'https://assets.tcgdex.net/en/base/base1/46/high.webp', rarity:'Common'}
+        ];
+
+        const state = {
+            sets: [],
+            pool: [], 
+            setCache: {}, 
+            collection: JSON.parse(localStorage.getItem('pkmnCollection_v36')) || {},
+            modalCardId: null,
+            gameActive: false, flippedCards: [], matchedPairs: 0,
+            html5QrcodeScanner: null
+        };
+
+        const els = {
+            setSelect: document.getElementById('set-select'),
+            packWrapper: document.getElementById('pack-wrapper'),
+            cardStack: document.getElementById('card-stack'),
+            summary: document.getElementById('summary-screen'),
+            toast: document.getElementById('toast'),
+            loadingMsg: document.getElementById('pack-loading-msg'),
+            preloadStatus: document.getElementById('preload-status')
+        };
+
+        window.onload = async () => {
+            try {
+                const r = await fetch('https://api.tcgdex.net/v2/en/sets');
+                const d = await r.json();
+                state.sets = d.reverse();
+                els.setSelect.innerHTML = '<option disabled selected>Select Expansion...</option>';
+                state.sets.forEach(s => {
+                    els.setSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+                });
+                hideLoader();
+            } catch (e) {
+                console.error(e);
+                showLoader("Offline Mode");
+                els.setSelect.innerHTML = '<option value="backup">Classic (Offline)</option>';
+                setTimeout(hideLoader, 1000);
+            }
+        };
+
+        async function updateSetInfo() {
+            const id = els.setSelect.value;
+            showLoader("Fetching Cards...");
+            resetPackUI();
+
+            if(id === 'backup') {
+                state.pool = backupCards;
+                finishLoadingSet({name: "Backup Set", logo: ""});
+                return;
+            }
+
+            if(state.setCache[id]) {
+                state.pool = state.setCache[id];
+                const set = state.sets.find(s => s.id === id);
+                finishLoadingSet(set);
+                return;
+            }
+
+            try {
+                const r = await fetch(`https://api.tcgdex.net/v2/en/sets/${id}`);
+                const d = await r.json();
+                if(!d.cards || d.cards.length === 0) throw new Error("Empty Set");
+                
+                const cards = d.cards.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    image: `${c.image}/high.webp`,
+                    rarity: c.rarity,
+                    set: d.name
+                }));
+                
+                state.setCache[id] = cards;
+                state.pool = cards;
+                finishLoadingSet(d);
+            } catch(e) {
+                showToast("Error. Using Backup.");
+                state.pool = backupCards;
+                finishLoadingSet(null);
+            }
+        }
+        
+        function finishLoadingSet(setInfo) {
+            if(setInfo) {
+                let displayName = setInfo.name || "Pack";
+                if(setInfo.releaseDate) {
+                    const year = setInfo.releaseDate.split('-')[0];
+                    displayName += ` (${year})`;
+                }
+                document.getElementById('pack-title').innerText = displayName;
+                
+                if(setInfo.symbol) {
+                     document.getElementById('pack-icon').src = `${setInfo.symbol}.png`;
+                } else {
+                    document.getElementById('pack-icon').src = 'https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg';
+                }
+                if(setInfo.logo) document.getElementById('dynamic-bg').style.backgroundImage = `url('${setInfo.logo}.png')`;
+            }
+            setTimeout(() => {
+                els.packWrapper.style.display = 'flex';
+                hideLoader();
+            }, 300);
+        }
+
+        function ripPack() {
+            els.loadingMsg.style.display = 'flex';
+            openPack();
+        }
+
+        async function openPack() {
+            const packCards = generatePackData();
+            const packSummary = saveEntirePack(packCards);
+            
+            const imagesToLoad = packCards.map(c => c.image || 'https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg');
+            
+            const loadImage = (src) => new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve(true);
+                img.onerror = () => resolve(false);
+                img.src = src;
+            });
+
+            els.preloadStatus.innerText = "Loading Images...";
+            await Promise.all(imagesToLoad.map(src => loadImage(src)));
+
+            els.loadingMsg.style.display = 'none';
+            els.packWrapper.style.display = 'none';
+            els.cardStack.style.display = 'block';
+            els.cardStack.innerHTML = '';
+            
+            packCards.forEach((c, i) => {
+                const div = document.createElement('div');
+                const isHolo = (c.rarity?.toLowerCase().includes('holo') || c.rarity?.includes('Rare'));
+                div.className = `card ${isHolo ? 'holo' : ''}`;
+                
+                const imgUrl = c.image || 'https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg';
+                div.style.backgroundImage = `url('${imgUrl}')`;
+                div.style.zIndex = 100 - i;
+                
+                div.onclick = (e) => {
+                    const rect = div.getBoundingClientRect();
+                    const tapX = e.clientX - rect.left;
+                    const dir = tapX > (rect.width / 2) ? 'fly-right' : 'fly-left';
+                    
+                    div.classList.add(dir);
+                    div.classList.add('swiped');
+
+                    const remaining = document.querySelectorAll('.card:not(.swiped)').length;
+                    if(remaining <= 1) { 
+                        setTimeout(() => showSummary(packSummary.rares), 700);
+                    }
+                };
+                els.cardStack.appendChild(div);
+            });
+        }
+
+        function generatePackData() {
+            if(!state.pool || state.pool.length === 0) return backupCards;
+            const common = state.pool.filter(c => c.rarity?.includes('Common'));
+            const uncommon = state.pool.filter(c => c.rarity?.includes('Uncommon'));
+            const rare = state.pool.filter(c => !c.rarity?.includes('Common') && !c.rarity?.includes('Uncommon'));
+            
+            if(common.length === 0) common.push(...state.pool);
+            if(uncommon.length === 0) uncommon.push(...state.pool);
+            if(rare.length === 0) rare.push(...state.pool);
+
+            const pick = (arr, existing) => {
+                if(arr.length === 0) return state.pool[0];
+                const unowned = arr.filter(c => !state.collection[c.id]);
+                const validUnowned = unowned.filter(c => !existing.some(p => p.id === c.id));
+                const validOwned = arr.filter(c => !existing.some(p => p.id === c.id));
+                
+                let chosen;
+                if(validUnowned.length > 0) chosen = validUnowned[Math.floor(Math.random() * validUnowned.length)];
+                else if (validOwned.length > 0) chosen = validOwned[Math.floor(Math.random() * validOwned.length)];
+                else chosen = arr[Math.floor(Math.random() * arr.length)];
+                return {...chosen}; 
+            };
+            
+            let pack = [];
+            for(let i=0; i<6; i++) pack.push(pick(common, pack));
+            for(let i=0; i<3; i++) pack.push(pick(uncommon, pack));
+            pack.push(pick(rare, pack));
+            return pack;
+        }
+        
+        function saveEntirePack(cards) {
+            let rares = [];
+            cards.forEach(c => {
+                if(c.rarity && !c.rarity.includes('Common') && !c.rarity.includes('Uncommon')) {
+                    rares.push({img: c.image, id: c.id});
+                }
+                if(!state.collection[c.id]) {
+                    state.collection[c.id] = { 
+                        id: c.id, 
+                        name: c.name, 
+                        img: c.image, 
+                        set: c.set, 
+                        rarity: c.rarity,
+                        count: 0, 
+                        date: Date.now() 
+                    };
+                } else {
+                    state.collection[c.id].count++;
+                    state.collection[c.id].date = Date.now();
+                }
+            });
+            localStorage.setItem('pkmnCollection_v36', JSON.stringify(state.collection));
+            return { rares };
+        }
+
+        function resetPack() {
+            els.summary.style.display = 'none';
+            els.packWrapper.style.display = 'flex';
+        }
+        
+        function resetPackUI() {
+            els.packWrapper.style.display = 'none';
+            els.cardStack.style.display = 'none';
+            els.summary.style.display = 'none';
+        }
+        
+        function renderCollection() {
+            const grid = document.getElementById('collection-grid');
+            grid.innerHTML = '';
+            const sortMode = document.getElementById('sort-select').value;
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            
+            let cards = Object.values(state.collection);
+            
+            cards = cards.filter(c => {
+                if(searchTerm && !c.name.toLowerCase().includes(searchTerm)) return false;
+                return true;
+            });
+
+            cards.sort((a, b) => {
+                if(sortMode === 'name') return a.name.localeCompare(b.name);
+                return b.date - a.date; 
+            });
+            
+            if(cards.length === 0) grid.innerHTML = '<div style="color:#666; grid-column:1/-1; text-align:center;">Binder Empty</div>';
+            
+            cards.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'col-card';
+                div.innerHTML = `<img src="${c.img}" onerror="this.parentElement.style.display='none'">`;
+                div.onclick = () => openModal(c);
+                grid.appendChild(div);
+            });
+        }
+        
+        function showSummary(rares) {
+            els.cardStack.style.display = 'none';
+            els.summary.style.display = 'flex';
+            const list = document.getElementById('summary-rares');
+            list.innerHTML = '';
+            if(rares.length === 0) list.innerHTML = '<div style="color:#666">Just bulk...</div>';
+            rares.forEach(r => {
+                const d = document.createElement('div');
+                d.className = 'mini-card';
+                d.style.backgroundImage = `url('${r.img}')`;
+                list.appendChild(d);
+            });
+        }
+
+        // --- TRADE (QR) SYSTEM ---
+        function setTradeMode(mode) {
+            document.querySelectorAll('.trade-mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`tab-${mode}`).classList.add('active');
+            
+            if(mode === 'send') {
+                document.getElementById('trade-send-area').style.display = 'block';
+                document.getElementById('trade-receive-area').style.display = 'none';
+                renderTradeBinder();
+                if(state.html5QrcodeScanner) state.html5QrcodeScanner.clear();
+            } else {
+                document.getElementById('trade-send-area').style.display = 'none';
+                document.getElementById('trade-receive-area').style.display = 'flex';
+            }
+        }
+
+        function renderTradeBinder() {
+            const grid = document.getElementById('trade-binder-grid');
+            grid.innerHTML = '';
+            const cards = Object.values(state.collection).sort((a,b) => b.date - a.date);
+            
+            if(cards.length === 0) {
+                grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#666;">Binder Empty</div>';
+                return;
+            }
+
+            cards.forEach(c => {
+                const div = document.createElement('div');
+                div.className = 'col-card';
+                div.innerHTML = `<img src="${c.img}">`;
+                div.onclick = () => generateQR(c);
+                grid.appendChild(div);
+            });
+        }
+
+        function generateQR(card) {
+            const qrArea = document.getElementById('qr-display');
+            const qrDiv = document.getElementById('qrcode');
+            qrDiv.innerHTML = ''; 
+            
+            // Create mini payload to keep QR simple
+            const payload = {
+                id: card.id,
+                n: card.name,
+                i: card.img,
+                r: card.rarity,
+                s: card.set
+            };
+            
+            new QRCode(qrDiv, {
+                text: JSON.stringify(payload),
+                width: 200,
+                height: 200
+            });
+            
+            qrArea.style.display = 'flex';
+            window.scrollTo(0,0);
+        }
+
+        function closeQR() {
+            document.getElementById('qr-display').style.display = 'none';
+        }
+
+        // --- SCANNER LOGIC ---
+        function startScanner() {
+            document.getElementById('cam-permission-text').style.display = 'none';
+            document.getElementById('reader').style.display = 'block';
+            
+            state.html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+            
+            state.html5QrcodeScanner.render((decodedText, decodedResult) => {
+                try {
+                    const data = JSON.parse(decodedText);
+                    if(data.id && data.n && data.i) {
+                        handleSuccessfulScan(data);
+                        state.html5QrcodeScanner.clear();
+                    }
+                } catch(e) {
+                    console.error("Invalid QR");
+                }
+            }, (error) => {
+                // scanning...
+            });
+        }
+
+        function handleSuccessfulScan(data) {
+            // Reconstruct full object
+            const newCard = {
+                id: data.id,
+                name: data.n,
+                img: data.i,
+                rarity: data.r,
+                set: data.s,
+                count: 1,
+                date: Date.now()
+            };
+
+            // Add to collection
+            if(!state.collection[newCard.id]) {
+                state.collection[newCard.id] = newCard;
+            } else {
+                state.collection[newCard.id].count++;
+                state.collection[newCard.id].date = Date.now();
+            }
+            localStorage.setItem('pkmnCollection_v36', JSON.stringify(state.collection));
+
+            // Show UI
+            document.getElementById('reader').style.display = 'none';
+            document.getElementById('scan-feedback').style.display = 'block';
+            document.getElementById('new-card-preview').style.backgroundImage = `url('${newCard.img}')`;
+            document.getElementById('new-card-name').innerText = newCard.name;
+            showToast("Trade Received!");
+        }
+
+        function resetScanner() {
+            document.getElementById('scan-feedback').style.display = 'none';
+            startScanner();
+        }
+        
+        // --- GAME LOGIC ---
+        function openMemoryGame() {
+            document.getElementById('settings-modal').style.display = 'none';
+            document.getElementById('memory-game-modal').style.display = 'flex';
+            initMemoryGame();
+        }
+
+        function initMemoryGame() {
+            const grid = document.getElementById('memory-grid');
+            grid.innerHTML = '';
+            const gameSprites = [];
+            for(let i=0; i<8; i++) { 
+                const id = Math.floor(Math.random() * 151) + 1;
+                const url = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+                gameSprites.push({id, url});
+            }
+            let deck = [...gameSprites, ...gameSprites];
+            deck.sort(() => Math.random() - 0.5);
+            state.flippedCards = []; state.matchedPairs = 0; state.gameActive = true;
+            deck.forEach((item, idx) => {
+                const card = document.createElement('div');
+                card.className = 'mem-card'; card.dataset.id = item.id;
+                card.innerHTML = `<div class="mem-back"></div><div class="mem-face"><img src="${item.url}" class="mem-sprite"></div>`;
+                card.onclick = () => flipCard(card);
+                grid.appendChild(card);
+            });
+        }
+        
+        function flipCard(card) {
+            if(!state.gameActive || card.classList.contains('flipped') || card.classList.contains('matched') || state.flippedCards.length >= 2) return;
+            card.classList.add('flipped'); state.flippedCards.push(card);
+            if(state.flippedCards.length === 2) setTimeout(checkMatch, 600);
+        }
+        
+        function checkMatch() {
+            const [c1, c2] = state.flippedCards;
+            if(c1.dataset.id === c2.dataset.id) {
+                c1.classList.add('matched'); c2.classList.add('matched'); state.matchedPairs++;
+                if(state.matchedPairs === 8) { 
+                    state.gameActive = false; 
+                    showToast("You Won!");
+                    setTimeout(() => document.getElementById('memory-game-modal').style.display='none', 1500);
+                }
+            } else { c1.classList.remove('flipped'); c2.classList.remove('flipped'); }
+            state.flippedCards = [];
+        }
+
+        function openModal(c) {
+            state.modalCardId = c.id;
+            document.getElementById('modal-img').src = c.img;
+            document.getElementById('modal-name').innerText = c.name;
+            const setLabel = c.set || "Unknown Set";
+            document.getElementById('modal-set-name').innerText = setLabel;
+            const searchName = encodeURIComponent(c.name + " " + (c.set || ""));
+            const link = `https://www.tcgplayer.com/search/all/product?q=${searchName}&view=grid`;
+            document.getElementById('tcg-link').href = link;
+            document.getElementById('card-modal').style.display = 'flex';
+        }
+        
+        function exportCollection() {
+            const str = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.collection));
+            const a = document.createElement('a'); a.href = str; a.download = 'collection.json'; a.click();
+        }
+
+        function switchView(v) {
+            document.querySelectorAll('.view').forEach(e => e.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+            document.getElementById(`view-${v}`).classList.add('active');
+            
+            // Nav Highlighting
+            const navs = document.querySelectorAll('.nav-item');
+            if(v === 'home') navs[0].classList.add('active');
+            else if(v === 'trade') { navs[1].classList.add('active'); setTradeMode('send'); }
+            else { navs[2].classList.add('active'); renderCollection(); }
+        }
+
+        function showToast(msg) {
+            const t = els.toast; t.innerText = msg; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 2000);
+        }
+    </script>
+</body>
+</html>
