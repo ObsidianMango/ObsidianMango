@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTG Commander Helper</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .card { transition: transform 0.2s; cursor: pointer; }
+        .card:hover { transform: translateY(-10px); z-index: 50; }
+        .tapped { transform: rotate(90s); filter: brightness(0.7); }
+        .battlefield { min-height: 300px; background-image: radial-gradient(#2a2a2a 1px, transparent 1px); background-size: 20px 20px; }
+    </style>
+</head>
+<body class="bg-zinc-900 text-white font-sans overflow-hidden h-screen flex flex-col">
+
+    <header class="p-4 bg-zinc-800 flex justify-between items-center border-b border-zinc-700">
+        <div>
+            <h1 class="text-xl font-bold text-orange-500">Prosper Digital Opponent</h1>
+            <p class="text-xs text-zinc-400">Manage digital cards alongside your physical game</p>
+        </div>
+        <div class="flex gap-4">
+            <div class="bg-black p-2 rounded border border-zinc-600 text-center min-w-[80px]">
+                <div class="text-xs uppercase">Library</div>
+                <div id="deck-count" class="text-xl font-mono">0</div>
+            </div>
+            <button onclick="drawCard()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold">DRAW</button>
+            <button onclick="resetGame()" class="bg-red-900 hover:bg-red-800 px-4 py-2 rounded text-xs uppercase">Reset</button>
+        </div>
+    </header>
+
+    <main class="flex-grow flex flex-col overflow-hidden">
+        
+        <div class="battlefield p-6 flex-grow overflow-y-auto">
+            <h2 class="text-zinc-500 uppercase tracking-widest text-sm mb-4">Battlefield</h2>
+            <div id="field-zone" class="flex flex-wrap gap-4">
+                </div>
+        </div>
+
+        <div class="bg-zinc-800 h-24 border-t border-zinc-700 p-2 flex items-center gap-4 overflow-x-auto">
+             <div class="text-xs text-zinc-500 vertical-text rotate-180 py-2">GRAVEYARD</div>
+             <div id="grave-zone" class="flex gap-2 opacity-60"></div>
+        </div>
+
+        <div class="bg-zinc-950 p-4 border-t-4 border-orange-600 relative">
+            <h2 class="text-xs text-zinc-500 absolute top-2 left-4">YOUR HAND</h2>
+            <div id="hand-zone" class="flex justify-center gap-2 mt-4 min-h-[150px]">
+                </div>
+        </div>
+    </main>
+
+    <script>
+        const opponentDeckData = [
+            { qty: 1, name: "Prosper, Tome-Bound", type: "Creature", category: "Commander" },
+            { qty: 1, name: "Dockside Extortionist", type: "Creature" },
+            { qty: 1, name: "Professional Face-Breaker", type: "Creature" },
+            { qty: 1, name: "Xorn", type: "Creature" },
+            { qty: 1, name: "Academy Manufactor", type: "Creature" },
+            { qty: 1, name: "Grim Hireling", type: "Creature" },
+            { qty: 1, name: "Mayhem Devil", type: "Creature" },
+            { qty: 1, name: "Marionette Master", type: "Creature" },
+            { qty: 1, name: "Birgi, God of Storytelling", type: "Creature" },
+            { qty: 1, name: "Etali, Primal Storm", type: "Creature" },
+            { qty: 1, name: "Dauthi Voidwalker", type: "Creature" },
+            { qty: 1, name: "Ragavan, Nimble Pilferer", type: "Creature" },
+            { qty: 1, name: "Author of Shadows", type: "Creature" },
+            { qty: 1, name: "Gonti, Lord of Luxury", type: "Creature" },
+            { qty: 1, name: "Dire Fleet Hoarder", type: "Creature" },
+            { qty: 1, name: "Kalain, Reclusive Painter", type: "Creature" },
+            { qty: 1, name: "Magda, Brazen Outlaw", type: "Creature" },
+            { qty: 1, name: "Loyal Apprentice", type: "Creature" },
+            { qty: 1, name: "Goldspan Dragon", type: "Creature" },
+            { qty: 1, name: "Valakut Exploration", type: "Creature" },
+            { qty: 1, name: "Stolen Strategy", type: "Creature" },
+            { qty: 1, name: "Wild-Magic Sorcerer", type: "Creature" },
+            { qty: 1, name: "Dream Devourer", type: "Creature" },
+            { qty: 1, name: "Storm-Kiln Artist", type: "Creature" },
+            { qty: 1, name: "Tectonic Giant", type: "Creature" },
+            { qty: 1, name: "Laelia, the Blade Reforged", type: "Creature" },
+            { qty: 1, name: "Orcish Bowmasters", type: "Creature" },
+            { qty: 1, name: "Opposition Agent", type: "Creature" },
+            { qty: 1, name: "Atsushi, the Blazing Sky", type: "Creature" },
+            { qty: 1, name: "Jeska's Will", type: "Sorcery" },
+            { qty: 1, name: "Light Up the Stage", type: "Sorcery" },
+            { qty: 1, name: "Chaos Warp", type: "Instant" },
+            { qty: 1, name: "Bedevil", type: "Instant" },
+            { qty: 1, name: "Terminate", type: "Instant" },
+            { qty: 1, name: "Vandalblast", type: "Sorcery" },
+            { qty: 1, name: "Toxic Deluge", type: "Sorcery" },
+            { qty: 1, name: "Deadly Rollick", type: "Instant" },
+            { qty: 1, name: "Deflecting Swat", type: "Instant" },
+            { qty: 1, name: "Tibalt's Trickery", type: "Instant" },
+            { qty: 1, name: "Feed the Swarm", type: "Sorcery" },
+            { qty: 1, name: "Night's Whisper", type: "Sorcery" },
+            { qty: 1, name: "Commune with Lava", type: "Instant" },
+            { qty: 1, name: "You Find Some Prisoners", type: "Instant" },
+            { qty: 1, name: "Reckless Impulse", type: "Sorcery" },
+            { qty: 1, name: "Wrenn's Resolve", type: "Sorcery" },
+            { qty: 1, name: "Damnation", type: "Sorcery" },
+            { qty: 1, name: "Blasphemous Act", type: "Sorcery" },
+            { qty: 1, name: "Rakdos Charm", type: "Instant" },
+            { qty: 1, name: "Invert Polarity", type: "Instant" },
+            { qty: 1, name: "Mizzix's Mastery", type: "Sorcery" },
+            { qty: 1, name: "Brass's Bounty", type: "Sorcery" },
+            { qty: 1, name: "Sol Ring", type: "Artifact" },
+            { qty: 1, name: "Arcane Signet", type: "Artifact" },
+            { qty: 1, name: "Rakdos Signet", type: "Artifact" },
+            { qty: 1, name: "Talisman of Indulgence", type: "Artifact" },
+            { qty: 1, name: "Bucknard's Everfull Purse", type: "Artifact" },
+            { qty: 1, name: "Lightning Greaves", type: "Artifact" },
+            { qty: 1, name: "Swiftfoot Boots", type: "Artifact" },
+            { qty: 1, name: "Sensei's Divining Top", type: "Artifact" },
+            { qty: 1, name: "Skullclamp", type: "Artifact" },
+            { qty: 1, name: "Bolas's Citadel", type: "Artifact" },
+            { qty: 1, name: "Aetherflux Reservoir", type: "Artifact" },
+            { qty: 1, name: "Shadowspear", type: "Artifact" },
+            { qty: 1, name: "Revel in Riches", type: "Enchantment" },
+            { qty: 1, name: "Black Market Connections", type: "Enchantment" },
+            { qty: 1, name: "Command Tower", type: "Land" },
+            { qty: 1, name: "Luxury Suite", type: "Land" },
+            { qty: 1, name: "Graven Cairns", type: "Land" },
+            { qty: 1, name: "Dragonskull Summit", type: "Land" },
+            { qty: 1, name: "Mount Doom", type: "Land" },
+            { qty: 1, name: "Bloodstained Mire", type: "Land" },
+            { qty: 1, name: "Badlands", type: "Land" },
+            { qty: 1, name: "Blood Crypt", type: "Land" },
+            { qty: 1, name: "Urborg, Tomb of Yawgmoth", type: "Land" },
+            { qty: 1, name: "Cabal Coffers", type: "Land" },
+            { qty: 1, name: "Ancient Tomb", type: "Land" },
+            { qty: 1, name: "Bojuka Bog", type: "Land" },
+            { qty: 1, name: "Reliquary Tower", type: "Land" },
+            { qty: 11, name: "Mountain", type: "Land" },
+            { qty: 11, name: "Swamp", type: "Land" }
+        ];
+
+        let library = [];
+        let hand = [];
+        let field = [];
+        let graveyard = [];
+
+        function resetGame() {
+            library = [];
+            opponentDeckData.forEach(item => {
+                for(let i=0; i<item.qty; i++) {
+                    library.push({...item, id: Math.random()});
+                }
+            });
+            // Shuffle
+            library.sort(() => Math.random() - 0.5);
+            hand = [];
+            field = [];
+            graveyard = [];
+            render();
+        }
+
+        function drawCard() {
+            if (library.length > 0) {
+                hand.push(library.pop());
+                render();
+            }
+        }
+
+        function playCard(id) {
+            const cardIdx = hand.findIndex(c => c.id === id);
+            const card = hand.splice(cardIdx, 1)[0];
+            if (card.type === "Instant" || card.type === "Sorcery") {
+                graveyard.push(card);
+            } else {
+                field.push(card);
+            }
+            render();
+        }
+
+        function destroyCard(id) {
+            const cardIdx = field.findIndex(c => c.id === id);
+            const card = field.splice(cardIdx, 1)[0];
+            graveyard.push(card);
+            render();
+        }
+
+        function render() {
+            document.getElementById('deck-count').innerText = library.length;
+            
+            // Render Hand
+            const handZone = document.getElementById('hand-zone');
+            handZone.innerHTML = '';
+            hand.forEach(card => {
+                const div = document.createElement('div');
+                div.className = "card bg-zinc-100 text-black w-32 h-44 rounded-lg p-2 flex flex-col justify-between border-2 border-zinc-400 shadow-xl";
+                div.onclick = () => playCard(card.id);
+                div.innerHTML = `
+                    <div class="text-[10px] font-bold uppercase leading-tight">${card.name}</div>
+                    <div class="text-[8px] bg-zinc-300 px-1 self-start rounded">${card.type}</div>
+                    <div class="text-[8px] italic text-zinc-500 text-center">Click to Play</div>
+                `;
+                handZone.appendChild(div);
+            });
+
+            // Render Field
+            const fieldZone = document.getElementById('field-zone');
+            fieldZone.innerHTML = '';
+            field.forEach(card => {
+                const div = document.createElement('div');
+                const isLand = card.type === "Land";
+                div.className = `card ${isLand ? 'bg-amber-100' : 'bg-white'} text-black w-24 h-32 rounded p-2 flex flex-col justify-between border border-zinc-400 shadow-md relative group`;
+                div.innerHTML = `
+                    <div class="text-[9px] font-bold leading-none">${card.name}</div>
+                    <div class="flex flex-col gap-1">
+                        <button onclick="destroyCard(${card.id})" class="hidden group-hover:block bg-red-600 text-white text-[8px] py-1 rounded">Destroy</button>
+                    </div>
+                `;
+                fieldZone.appendChild(div);
+            });
+
+            // Render Grave
+            const graveZone = document.getElementById('grave-zone');
+            graveZone.innerHTML = '';
+            graveyard.slice(-10).forEach(card => {
+                const div = document.createElement('div');
+                div.className = "w-12 h-16 bg-zinc-700 border border-zinc-500 rounded text-[6px] p-1 overflow-hidden";
+                div.innerText = card.name;
+                graveZone.appendChild(div);
+            });
+        }
+
+        // Initialize
+        resetGame();
+    </script>
+</body>
+</html>
