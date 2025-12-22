@@ -2,55 +2,86 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MTG Commander Helper</title>
+    <title>MTG Prosper Digital Partner</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
     <style>
-        .card { transition: transform 0.2s; cursor: pointer; }
-        .card:hover { transform: translateY(-10px); z-index: 50; }
-        .tapped { transform: rotate(90s); filter: brightness(0.7); }
-        .battlefield { min-height: 300px; background-image: radial-gradient(#2a2a2a 1px, transparent 1px); background-size: 20px 20px; }
+        body { background: #0c0c0e; color: #e2e8f0; height: 100vh; overflow: hidden; font-family: sans-serif; }
+        .zone { border: 2px dashed #27272a; border-radius: 8px; min-height: 120px; transition: all 0.2s; display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; overflow-y: auto; }
+        .drop-active { border-color: #f97316; background: rgba(249, 115, 22, 0.1); }
+        .card-container { width: 90px; touch-action: none; position: relative; z-index: 10; transition: transform 0.1s; }
+        .card-img { width: 100%; border-radius: 6px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); pointer-events: none; }
+        .tapped { transform: rotate(90deg); margin: 0 12px; }
+        .counter-badge { position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; border: 2px solid #000; }
+        .card-controls { position: absolute; bottom: -10px; left: 0; right: 0; display: none; justify-content: center; gap: 2px; z-index: 50; }
+        .card-container:hover .card-controls { display: flex; }
+        .control-btn { background: #18181b; border: 1px solid #3f3f46; padding: 2px 5px; border-radius: 4px; font-size: 10px; }
+        .control-btn:hover { background: #27272a; }
     </style>
 </head>
-<body class="bg-zinc-900 text-white font-sans overflow-hidden h-screen flex flex-col">
+<body class="flex flex-col">
 
-    <header class="p-4 bg-zinc-800 flex justify-between items-center border-b border-zinc-700">
-        <div>
-            <h1 class="text-xl font-bold text-orange-500">Prosper Digital Opponent</h1>
-            <p class="text-xs text-zinc-400">Manage digital cards alongside your physical game</p>
-        </div>
-        <div class="flex gap-4">
-            <div class="bg-black p-2 rounded border border-zinc-600 text-center min-w-[80px]">
-                <div class="text-xs uppercase">Library</div>
-                <div id="deck-count" class="text-xl font-mono">0</div>
+    <header class="p-3 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center shadow-xl">
+        <div class="flex items-center gap-6">
+            <h1 class="text-orange-500 font-black italic text-xl tracking-tighter">PROSPER // ENGINE</h1>
+            <div class="flex items-center bg-black rounded-full px-4 py-1 border border-zinc-700">
+                <button onclick="adjLife(-1)" class="text-red-500 font-bold px-2">-</button>
+                <span id="life-display" class="font-mono text-2xl px-2">40</span>
+                <button onclick="adjLife(1)" class="text-green-500 font-bold px-2">+</button>
             </div>
-            <button onclick="drawCard()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded font-bold">DRAW</button>
-            <button onclick="resetGame()" class="bg-red-900 hover:bg-red-800 px-4 py-2 rounded text-xs uppercase">Reset</button>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="openBinder()" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded text-xs font-bold uppercase border border-zinc-600">Search Library</button>
+            <button onclick="drawRandom()" class="bg-orange-600 hover:bg-orange-500 px-4 py-2 rounded text-xs font-bold uppercase shadow-lg shadow-orange-900/20">Draw Random</button>
         </div>
     </header>
 
-    <main class="flex-grow flex flex-col overflow-hidden">
-        
-        <div class="battlefield p-6 flex-grow overflow-y-auto">
-            <h2 class="text-zinc-500 uppercase tracking-widest text-sm mb-4">Battlefield</h2>
-            <div id="field-zone" class="flex flex-wrap gap-4">
-                </div>
+    <main class="flex-grow p-4 grid grid-cols-5 grid-rows-3 gap-4 overflow-hidden">
+        <div class="col-span-4 row-span-2 flex flex-col gap-2">
+            <div class="flex-grow flex flex-col">
+                <span class="text-[10px] uppercase text-zinc-500 font-bold ml-1 mb-1">Permanents (Non-Land)</span>
+                <div id="zone-field" class="zone flex-grow"></div>
+            </div>
+            <div class="h-1/3 flex flex-col">
+                <span class="text-[10px] uppercase text-zinc-500 font-bold ml-1 mb-1">Mana Pool / Lands</span>
+                <div id="zone-lands" class="zone flex-grow"></div>
+            </div>
         </div>
 
-        <div class="bg-zinc-800 h-24 border-t border-zinc-700 p-2 flex items-center gap-4 overflow-x-auto">
-             <div class="text-xs text-zinc-500 vertical-text rotate-180 py-2">GRAVEYARD</div>
-             <div id="grave-zone" class="flex gap-2 opacity-60"></div>
+        <div class="col-span-1 row-span-3 flex flex-col gap-4">
+            <div class="flex-grow flex flex-col">
+                <span class="text-[10px] uppercase text-orange-500 font-bold">Exile (Prosper)</span>
+                <div id="zone-exile" class="zone flex-grow border-orange-900/40 bg-orange-950/5"></div>
+            </div>
+            <div class="h-48 flex flex-col">
+                <span class="text-[10px] uppercase text-zinc-500 font-bold">Graveyard</span>
+                <div id="zone-grave" class="zone h-full opacity-60"></div>
+            </div>
+            <div class="h-32 flex flex-col">
+                <span class="text-[10px] uppercase text-blue-500 font-bold">Commander Zone</span>
+                <div id="zone-commander" class="zone h-full"></div>
+            </div>
         </div>
 
-        <div class="bg-zinc-950 p-4 border-t-4 border-orange-600 relative">
-            <h2 class="text-xs text-zinc-500 absolute top-2 left-4">YOUR HAND</h2>
-            <div id="hand-zone" class="flex justify-center gap-2 mt-4 min-h-[150px]">
-                </div>
+        <div class="col-span-4 row-span-1 flex flex-col">
+            <span class="text-[10px] uppercase text-zinc-500 font-bold ml-1 mb-1">Player Hand</span>
+            <div id="zone-hand" class="zone h-full bg-zinc-900/30 -space-x-12 hover:space-x-2 transition-all border-none justify-center items-center"></div>
         </div>
     </main>
 
+    <div id="binder-modal" class="fixed inset-0 bg-black/95 z-[100] hidden p-8 flex flex-col">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-3xl font-bold text-orange-500">Deck Library</h2>
+            <div class="flex gap-4">
+                <input type="text" id="binder-search" oninput="renderBinder()" placeholder="Search by name..." class="bg-zinc-800 border border-zinc-700 px-4 py-2 rounded w-80">
+                <button onclick="closeBinder()" class="text-4xl">&times;</button>
+            </div>
+        </div>
+        <div id="binder-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 overflow-y-auto pr-4"></div>
+    </div>
+
     <script>
-        const opponentDeckData = [
+        const rawDeckData = [
             { qty: 1, name: "Prosper, Tome-Bound", type: "Creature", category: "Commander" },
             { qty: 1, name: "Dockside Extortionist", type: "Creature" },
             { qty: 1, name: "Professional Face-Breaker", type: "Creature" },
@@ -134,97 +165,140 @@
         ];
 
         let library = [];
-        let hand = [];
-        let field = [];
-        let graveyard = [];
+        let state = { life: 40, hand: [], field: [], lands: [], exile: [], grave: [], commander: [] };
 
-        function resetGame() {
-            library = [];
-            opponentDeckData.forEach(item => {
-                for(let i=0; i<item.qty; i++) {
-                    library.push({...item, id: Math.random()});
+        async function init() {
+            // Unpack deck based on qty
+            let idCounter = 0;
+            rawDeckData.forEach(card => {
+                for(let i=0; i<card.qty; i++) {
+                    library.push({
+                        ...card, 
+                        id: `mtg-${idCounter++}`,
+                        tapped: false,
+                        counters: 0,
+                        img: `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(card.name)}&format=image`
+                    });
                 }
             });
-            // Shuffle
-            library.sort(() => Math.random() - 0.5);
-            hand = [];
-            field = [];
-            graveyard = [];
+            
+            // Move Commander automatically
+            const cmdIdx = library.findIndex(c => c.category === "Commander");
+            state.commander.push(library.splice(cmdIdx, 1)[0]);
+            
             render();
+            setupDND();
         }
 
-        function drawCard() {
-            if (library.length > 0) {
-                hand.push(library.pop());
+        function setupDND() {
+            interact('.card-container').draggable({
+                listeners: {
+                    move(event) {
+                        const t = event.target;
+                        const x = (parseFloat(t.getAttribute('data-x')) || 0) + event.dx;
+                        const y = (parseFloat(t.getAttribute('data-y')) || 0) + event.dy;
+                        t.style.transform = `translate(${x}px, ${y}px)`;
+                        t.setAttribute('data-x', x);
+                        t.setAttribute('data-y', y);
+                        t.style.zIndex = 1000;
+                    },
+                    end(event) {
+                        event.target.style.transform = '';
+                        event.target.setAttribute('data-x', 0);
+                        event.target.setAttribute('data-y', 0);
+                        event.target.style.zIndex = 10;
+                    }
+                }
+            });
+
+            interact('.zone').dropzone({
+                accept: '.card-container',
+                overlap: 0.5,
+                ondragenter: e => e.target.classList.add('drop-active'),
+                ondragleave: e => e.target.classList.remove('drop-active'),
+                ondrop: (event) => {
+                    const cardId = event.relatedTarget.id;
+                    const zoneName = event.target.id.replace('zone-', '');
+                    moveCard(cardId, zoneName);
+                    event.target.classList.remove('drop-active');
+                }
+            });
+        }
+
+        function moveCard(id, toZone) {
+            let card;
+            // Find in current zones
+            ['hand', 'field', 'lands', 'exile', 'grave', 'commander'].forEach(z => {
+                const idx = state[z].findIndex(c => c.id === id);
+                if (idx !== -1) card = state[z].splice(idx, 1)[0];
+            });
+            // Check library if not found
+            if (!card) {
+                const libIdx = library.findIndex(c => c.id === id);
+                if (libIdx !== -1) card = library.splice(libIdx, 1)[0];
+            }
+
+            if (card) {
+                state[toZone].push(card);
                 render();
             }
         }
 
-        function playCard(id) {
-            const cardIdx = hand.findIndex(c => c.id === id);
-            const card = hand.splice(cardIdx, 1)[0];
-            if (card.type === "Instant" || card.type === "Sorcery") {
-                graveyard.push(card);
-            } else {
-                field.push(card);
-            }
+        function toggleTap(id) {
+            ['field', 'lands', 'exile'].forEach(z => {
+                const card = state[z].find(c => c.id === id);
+                if (card) card.tapped = !card.tapped;
+            });
             render();
         }
 
-        function destroyCard(id) {
-            const cardIdx = field.findIndex(c => c.id === id);
-            const card = field.splice(cardIdx, 1)[0];
-            graveyard.push(card);
+        function modCounter(id, amt) {
+            ['field', 'lands', 'exile'].forEach(z => {
+                const card = state[z].find(c => c.id === id);
+                if (card) card.counters = Math.max(0, card.counters + amt);
+            });
             render();
+        }
+
+        function drawRandom() {
+            if (library.length > 0) {
+                const card = library.splice(Math.floor(Math.random() * library.length), 1)[0];
+                state.hand.push(card);
+                render();
+            }
+        }
+
+        function adjLife(n) { state.life += n; render(); }
+        function openBinder() { document.getElementById('binder-modal').classList.remove('hidden'); renderBinder(); }
+        function closeBinder() { document.getElementById('binder-modal').classList.add('hidden'); }
+
+        function renderBinder() {
+            const query = document.getElementById('binder-search').value.toLowerCase();
+            const grid = document.getElementById('binder-grid');
+            grid.innerHTML = library
+                .filter(c => c.name.toLowerCase().includes(query))
+                .map(c => `<img src="${c.img}" class="rounded-lg cursor-pointer hover:scale-110 transition w-full" onclick="moveCard('${c.id}', 'hand'); closeBinder()">`)
+                .join('');
         }
 
         function render() {
-            document.getElementById('deck-count').innerText = library.length;
-            
-            // Render Hand
-            const handZone = document.getElementById('hand-zone');
-            handZone.innerHTML = '';
-            hand.forEach(card => {
-                const div = document.createElement('div');
-                div.className = "card bg-zinc-100 text-black w-32 h-44 rounded-lg p-2 flex flex-col justify-between border-2 border-zinc-400 shadow-xl";
-                div.onclick = () => playCard(card.id);
-                div.innerHTML = `
-                    <div class="text-[10px] font-bold uppercase leading-tight">${card.name}</div>
-                    <div class="text-[8px] bg-zinc-300 px-1 self-start rounded">${card.type}</div>
-                    <div class="text-[8px] italic text-zinc-500 text-center">Click to Play</div>
-                `;
-                handZone.appendChild(div);
-            });
-
-            // Render Field
-            const fieldZone = document.getElementById('field-zone');
-            fieldZone.innerHTML = '';
-            field.forEach(card => {
-                const div = document.createElement('div');
-                const isLand = card.type === "Land";
-                div.className = `card ${isLand ? 'bg-amber-100' : 'bg-white'} text-black w-24 h-32 rounded p-2 flex flex-col justify-between border border-zinc-400 shadow-md relative group`;
-                div.innerHTML = `
-                    <div class="text-[9px] font-bold leading-none">${card.name}</div>
-                    <div class="flex flex-col gap-1">
-                        <button onclick="destroyCard(${card.id})" class="hidden group-hover:block bg-red-600 text-white text-[8px] py-1 rounded">Destroy</button>
+            document.getElementById('life-display').innerText = state.life;
+            ['hand', 'field', 'lands', 'exile', 'grave', 'commander'].forEach(z => {
+                document.getElementById(`zone-${z}`).innerHTML = state[z].map(c => `
+                    <div class="card-container ${c.tapped ? 'tapped' : ''}" id="${c.id}" onclick="if(event.ctrlKey) toggleTap('${c.id}')">
+                        <img src="${c.img}" class="card-img shadow-2xl">
+                        <div class="card-controls">
+                            <button class="control-btn text-blue-400" onclick="toggleTap('${c.id}')">Tap</button>
+                            <button class="control-btn text-green-400" onclick="modCounter('${c.id}', 1)">+</button>
+                            <button class="control-btn text-red-400" onclick="modCounter('${c.id}', -1)">-</button>
+                        </div>
+                        ${c.counters > 0 ? `<div class="counter-badge">${c.counters}</div>` : ''}
                     </div>
-                `;
-                fieldZone.appendChild(div);
-            });
-
-            // Render Grave
-            const graveZone = document.getElementById('grave-zone');
-            graveZone.innerHTML = '';
-            graveyard.slice(-10).forEach(card => {
-                const div = document.createElement('div');
-                div.className = "w-12 h-16 bg-zinc-700 border border-zinc-500 rounded text-[6px] p-1 overflow-hidden";
-                div.innerText = card.name;
-                graveZone.appendChild(div);
+                `).join('');
             });
         }
 
-        // Initialize
-        resetGame();
+        init();
     </script>
 </body>
 </html>
