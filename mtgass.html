@@ -3,92 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Prosper Engine iPad</title>
+    <title>Prosper Engine - iPad Debugged</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
     <style>
-        body { background: #0c0c0e; color: #e2e8f0; height: 100vh; width: 100vw; overflow: hidden; position: fixed; font-family: sans-serif; }
-        .zone { border: 2px solid #27272a; border-radius: 12px; min-height: 80px; display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; overflow-y: auto; background: rgba(255,255,255,0.02); }
+        body { background: #0c0c0e; color: #e2e8f0; height: 100vh; width: 100vw; overflow: hidden; position: fixed; display: grid; grid-template-rows: auto 1fr auto; }
+        
+        /* Zones with internal scrolling only */
+        .zone { border: 1px solid #27272a; border-radius: 8px; background: rgba(255,255,255,0.02); display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; overflow-y: auto; align-content: flex-start; }
         .drop-active { border-color: #f97316; background: rgba(249, 115, 22, 0.1); }
 
-        /* iPad Specific Card Sizing */
-        .card-container { 
-            width: 85px; 
-            touch-action: none; 
-            position: relative; 
-            z-index: 10;
-            transition: transform 0.2s;
-        }
+        /* Card Container Logic */
+        .card-container { width: 80px; touch-action: none; position: relative; z-index: 10; transition: transform 0.2s; }
         
-        /* Tap to Zoom (iPad workaround for no hover) */
-        .card-container.selected { 
-            transform: scale(2.2) translateY(-40px) !important; 
-            z-index: 9999 !important; 
-        }
+        /* Zoom Logic for iPad */
+        .card-container.selected { transform: scale(2.4) !important; z-index: 9999 !important; }
+        .zone-hand .card-container.selected { transform: scale(2.4) translateY(-60px) !important; }
 
-        .card-img { width: 100%; border-radius: 6px; pointer-events: none; border: 1px solid #444; }
-        .tapped { transform: rotate(90deg); margin: 0 15px; }
+        .card-img { width: 100%; border-radius: 6px; pointer-events: none; border: 1px solid #444; display: block; }
+        
+        /* Rotation Logic */
+        .tapped { transform: rotate(90deg); margin: 10px 18px; }
 
-        /* Fixed Controls for Touch */
+        /* Responsive Controls */
         .control-panel { 
-            position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%); 
-            display: flex; gap: 4px; background: #000; padding: 4px 8px; border-radius: 8px; 
-            border: 1px solid #f97316; visibility: hidden; 
+            position: absolute; bottom: -15px; left: 50%; transform: translateX(-50%); 
+            display: flex; gap: 4px; background: #000; padding: 4px; border-radius: 6px; 
+            border: 1px solid #f97316; visibility: hidden; pointer-events: auto;
         }
         .selected .control-panel { visibility: visible; }
-        .btn-ctrl { color: white; font-size: 12px; font-weight: bold; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
         
-        .counter-badge { position: absolute; top: -10px; right: -10px; background: #ef4444; color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; border: 2px solid #000; }
+        /* Shift controls when tapped so they don't go off-screen */
+        .tapped.selected .control-panel { 
+            transform: rotate(-90deg) translate(40px, 30px); 
+            bottom: auto; left: auto;
+        }
+
+        .btn-ctrl { color: white; font-size: 14px; font-weight: bold; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: #18181b; border: 1px solid #3f3f46; }
+        
+        .counter-badge { position: absolute; top: -12px; right: -12px; background: #ef4444; color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; border: 2px solid #000; }
+        
+        h3 { font-size: 9px; text-transform: uppercase; color: #52525b; font-weight: 800; margin-bottom: 2px; letter-spacing: 0.05em; }
     </style>
 </head>
-<body class="flex flex-col">
+<body>
 
-    <header class="p-3 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center z-50">
+    <header class="p-3 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center">
         <div class="flex items-center gap-4">
-            <h1 class="text-orange-500 font-black text-lg">PROSPER</h1>
-            <div class="flex items-center bg-black rounded-lg px-3 py-1 border border-zinc-700">
-                <button onclick="adjStat('life', -1)" class="text-red-500 font-bold text-xl px-2">-</button>
-                <span id="life-display" class="font-mono text-xl px-2">40</span>
-                <button onclick="adjStat('life', 1)" class="text-green-500 font-bold text-xl px-2">+</button>
+            <h1 class="text-orange-500 font-black">PROSPER</h1>
+            <div class="flex bg-black rounded border border-zinc-700 p-1 gap-2 items-center">
+                <button onclick="adjStat('life', -1)" class="text-red-500 w-8 text-xl">-</button>
+                <span id="life-display" class="font-mono text-xl w-8 text-center">40</span>
+                <button onclick="adjStat('life', 1)" class="text-green-500 w-8 text-xl">+</button>
             </div>
-            <div class="flex items-center bg-amber-900/20 rounded-lg px-3 py-1 border border-amber-600/50">
-                <button onclick="adjStat('treasures', -1)" class="text-amber-500 font-bold px-2">-</button>
-                <span id="treasures-display" class="font-mono text-xl px-2 text-amber-400">0</span>
-                <button onclick="adjStat('treasures', 1)" class="text-amber-500 font-bold px-2">+</button>
+            <div class="flex bg-amber-900/20 rounded border border-amber-600/50 p-1 gap-2 items-center">
+                <button onclick="adjStat('treasures', -1)" class="text-amber-500 w-8">-</button>
+                <span id="treasures-display" class="font-mono text-xl w-8 text-center text-amber-400">0</span>
+                <button onclick="adjStat('treasures', 1)" class="text-amber-500 w-8">+</button>
             </div>
         </div>
         <div class="flex gap-2">
-            <button onclick="openBinder()" class="bg-zinc-800 px-4 py-2 rounded text-xs font-bold uppercase">Library</button>
-            <button onclick="drawRandom()" class="bg-orange-600 px-4 py-2 rounded text-xs font-bold uppercase">Draw</button>
+            <button onclick="spawnToken('Tiefling')" class="bg-red-900 px-3 py-1 rounded text-[10px] font-bold">TIEFLING</button>
+            <button onclick="openBinder()" class="bg-zinc-800 px-3 py-1 rounded text-[10px] font-bold">BINDER</button>
+            <button onclick="drawRandom()" class="bg-orange-600 px-3 py-1 rounded text-[10px] font-bold">DRAW</button>
         </div>
     </header>
 
-    <main class="flex-grow p-2 grid grid-cols-6 grid-rows-4 gap-2 overflow-hidden">
-        <div class="col-span-5 row-span-3 flex flex-col gap-2">
-            <div id="zone-field" class="zone flex-grow" data-label="Battlefield"></div>
-            <div id="zone-lands" class="zone h-1/4" data-label="Lands"></div>
+    <main class="grid grid-cols-6 gap-3 p-3 overflow-hidden">
+        <div class="col-span-5 flex flex-col gap-3 overflow-hidden">
+            <div class="flex-grow flex flex-col overflow-hidden">
+                <h3>Battlefield</h3>
+                <div id="zone-field" class="zone flex-grow"></div>
+            </div>
+            <div class="h-1/3 flex flex-col overflow-hidden">
+                <h3>Lands</h3>
+                <div id="zone-lands" class="zone flex-grow"></div>
+            </div>
         </div>
-
-        <div class="col-span-1 row-span-4 flex flex-col gap-2">
-            <div id="zone-exile" class="zone flex-grow border-orange-500/30" data-label="Exile"></div>
-            <div id="zone-grave" class="zone h-1/4" data-label="Grave"></div>
-            <div id="zone-commander" class="zone h-24" data-label="CMD"></div>
-        </div>
-
-        <div class="col-span-5 row-span-1">
-            <div id="zone-hand" class="zone h-full border-none justify-center items-center -space-x-8"></div>
+        <div class="col-span-1 flex flex-col gap-3 overflow-hidden">
+            <div class="flex-grow flex flex-col overflow-hidden">
+                <h3>Exile</h3>
+                <div id="zone-exile" class="zone flex-grow border-orange-500/20"></div>
+            </div>
+            <div class="h-1/4 flex flex-col overflow-hidden">
+                <h3>Grave</h3>
+                <div id="zone-grave" class="zone flex-grow"></div>
+            </div>
+            <div class="h-24 flex flex-col overflow-hidden">
+                <h3>CMD</h3>
+                <div id="zone-commander" class="zone flex-grow"></div>
+            </div>
         </div>
     </main>
 
-    <div id="binder-modal" class="fixed inset-0 bg-black/95 z-[9999] hidden p-6 overflow-y-auto">
-        <div class="flex justify-between items-center mb-6">
-            <input type="text" id="binder-search" oninput="renderBinder()" placeholder="Search..." class="bg-zinc-900 border border-zinc-700 px-4 py-3 rounded-lg w-full mr-4">
-            <button onclick="closeBinder()" class="text-4xl">&times;</button>
+    <footer class="p-3 bg-zinc-950 border-t border-zinc-800">
+        <h3>Hand</h3>
+        <div id="zone-hand" class="zone h-28 border-none justify-center items-center -space-x-8 overflow-visible"></div>
+    </footer>
+
+    <div id="binder-modal" class="fixed inset-0 bg-black/95 z-[9999] hidden p-6">
+        <div class="flex justify-between mb-4">
+            <input type="text" id="binder-search" oninput="renderBinder()" placeholder="Search Library..." class="bg-zinc-900 border border-zinc-700 px-4 py-2 rounded-lg w-full mr-4 text-white">
+            <button onclick="closeBinder()" class="text-3xl">&times;</button>
         </div>
-        <div id="binder-grid" class="grid grid-cols-3 md:grid-cols-6 gap-4"></div>
+        <div id="binder-grid" class="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-8 gap-4 overflow-y-auto max-h-[80vh]"></div>
     </div>
 
     <script>
+        // FULL 100-CARD DECK LIST
         const fullDeck = [
             { qty: 1, name: "Prosper, Tome-Bound", category: "Commander" },
             { qty: 1, name: "Dockside Extortionist" }, { qty: 1, name: "Professional Face-Breaker" },
@@ -135,7 +157,7 @@
         let library = [];
         let state = { life: 40, treasures: 0, hand: [], field: [], lands: [], exile: [], grave: [], commander: [] };
 
-        async function init() {
+        function init() {
             let id = 0;
             fullDeck.forEach(c => {
                 for(let i=0; i<c.qty; i++) {
@@ -151,8 +173,6 @@
 
         function setupInteract() {
             interact('.card-container').draggable({
-                inertia: false,
-                autoScroll: true,
                 listeners: {
                     move(event) {
                         const t = event.target;
@@ -160,7 +180,7 @@
                         const y = (parseFloat(t.getAttribute('data-y')) || 0) + event.dy;
                         t.style.transform = `translate(${x}px, ${y}px)`;
                         t.setAttribute('data-x', x); t.setAttribute('data-y', y);
-                        t.classList.remove('selected'); // Close zoom while dragging
+                        t.classList.remove('selected');
                     },
                     end(event) {
                         event.target.style.transform = '';
@@ -189,6 +209,12 @@
             if(card) { state[to].push(card); render(); }
         }
 
+        function spawnToken(type) {
+            state.field.push({ id: `t-${Date.now()}`, name: type, tapped: false, counters: 0, isToken: true,
+                img: `https://api.scryfall.com/cards/named?exact=${type}&format=image&type=token` });
+            render();
+        }
+
         function toggleTap(id, e) {
             e.stopPropagation();
             ['field','lands','exile','commander'].forEach(z => {
@@ -207,6 +233,18 @@
             render();
         }
 
+        function deleteCard(id, e) {
+            e.stopPropagation();
+            ['field','lands','exile','hand'].forEach(z => {
+                const i = state[z].findIndex(c => c.id === id);
+                if(i !== -1) {
+                    const c = state[z].splice(i, 1)[0];
+                    if(!c.isToken) state.grave.push(c);
+                }
+            });
+            render();
+        }
+
         function adjStat(stat, n) { state[stat] = Math.max(0, state[stat] + n); render(); }
         function drawRandom() { if(library.length) { state.hand.push(library.splice(Math.floor(Math.random()*library.length),1)[0]); render(); } }
         function openBinder() { document.getElementById('binder-modal').classList.remove('hidden'); renderBinder(); }
@@ -214,7 +252,7 @@
         function renderBinder() {
             const q = document.getElementById('binder-search').value.toLowerCase();
             document.getElementById('binder-grid').innerHTML = library.filter(c => c.name.toLowerCase().includes(q))
-                .map(c => `<img src="${c.img}" class="rounded-lg w-full" onclick="moveCard('${c.id}', 'hand'); closeBinder()">`).join('');
+                .map(c => `<img src="${c.img}" class="rounded w-full" onclick="moveCard('${c.id}', 'hand'); closeBinder()">`).join('');
         }
 
         function render() {
@@ -225,9 +263,10 @@
                     <div class="card-container ${c.tapped ? 'tapped' : ''}" id="${c.id}">
                         <img src="${c.img}" class="card-img">
                         <div class="control-panel">
-                            <button class="btn-ctrl bg-blue-600" onclick="toggleTap('${c.id}', event)">T</button>
-                            <button class="btn-ctrl bg-green-600" onclick="modCounter('${c.id}', 1, event)">+</button>
-                            <button class="btn-ctrl bg-red-600" onclick="modCounter('${c.id}', -1, event)">-</button>
+                            <button class="btn-ctrl" onclick="toggleTap('${c.id}', event)">Tap</button>
+                            <button class="btn-ctrl" onclick="modCounter('${c.id}', 1, event)">+</button>
+                            <button class="btn-ctrl" onclick="modCounter('${c.id}', -1, event)">-</button>
+                            <button class="btn-ctrl bg-red-900" onclick="deleteCard('${c.id}', event)">X</button>
                         </div>
                         ${c.counters > 0 ? `<div class="counter-badge">${c.counters}</div>` : ''}
                     </div>
