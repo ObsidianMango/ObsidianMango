@@ -3,22 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mothman Pro Sim</title>
+    <title>Mothman Arc Simulator</title>
     <style>
         :root {
-            --card-w: 100px;
-            --card-h: 140px;
-            --sidebar-w: 120px;
-            --bg-dark: #0d0d0d;
-            --accent: #b4ff00; /* Mutant Green */
-            --card-back: url('https://m.media-amazon.com/images/I/71jKdIXo-tL._AC_UF894,1000_QL80_.jpg');
+            --card-w: 90px;
+            --card-h: 126px;
+            --sidebar-w: 90px;
+            --bg-dark: #0a0a0a;
+            --accent: #b4ff00; /* Rad Green */
+            --glass: rgba(20, 20, 20, 0.6);
         }
 
-        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; font-family: 'Segoe UI', sans-serif; }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; font-family: 'Segoe UI', sans-serif; touch-action: manipulation; }
 
         body {
             margin: 0;
             background-color: var(--bg-dark);
+            background-image: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
             color: #eee;
             height: 100vh;
             display: flex;
@@ -26,10 +27,11 @@
             overflow: hidden;
         }
 
-        /* --- UI & MANA BAR --- */
+        /* --- UI HEADER --- */
         #ui-header {
             height: 50px;
-            background: #151515;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
             border-bottom: 1px solid #333;
             display: flex;
             align-items: center;
@@ -38,94 +40,75 @@
             z-index: 100;
         }
 
-        #mana-pool {
-            display: flex;
-            gap: 8px;
-            background: #222;
-            padding: 4px 10px;
-            border-radius: 20px;
-            border: 1px solid #444;
+        .mana-pool {
+            display: flex; gap: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #ccc;
         }
+        .mana-pool span { padding: 2px 6px; border-radius: 4px; background: #222; border: 1px solid #444; }
 
-        .mana-symbol {
-            width: 24px; height: 24px;
-            border-radius: 50%;
-            display: flex; justify-content: center; align-items: center;
-            font-size: 0.8rem; font-weight: bold;
-            color: #000;
-            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        button {
+            background: #333; border: 1px solid #555; color: #fff;
+            padding: 6px 12px; border-radius: 4px; cursor: pointer;
         }
-        .mana-w { background: #fffbd5; }
-        .mana-u { background: #aae0fa; }
-        .mana-b { background: #cbc2bf; }
-        .mana-r { background: #f9aa8f; }
-        .mana-g { background: #9bd3ae; }
-        .mana-c { background: #ccc; }
-        
-        .btn {
-            background: #333; color: white; border: 1px solid #555;
-            padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; cursor: pointer;
-        }
-        .btn:active { background: var(--accent); color: black; }
+        button:active { background: var(--accent); color: #000; }
 
-        /* --- PLAYMAT GRID --- */
+        /* --- PLAYMAT (Grid) --- */
         #playmat {
             flex: 1;
             display: grid;
             grid-template-columns: 1fr var(--sidebar-w);
-            grid-template-rows: 1fr 1fr 1fr; /* Creatures, Artifacts/Ench, Lands */
+            grid-template-rows: 1fr 1fr 1fr; /* Creatures, Artifacts, Lands */
             position: relative;
-            background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
+            overflow: hidden;
         }
 
         .zone {
-            border-right: 1px solid rgba(255,255,255,0.1);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding: 20px 10px 10px 10px;
             position: relative;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
             display: flex;
             align-items: center;
+            padding: 10px;
             overflow-x: auto;
             gap: 5px;
         }
-        
-        .zone::after {
+        .zone::before {
             content: attr(data-label);
             position: absolute; top: 2px; left: 5px;
-            font-size: 0.65rem; color: #555; font-weight: bold; text-transform: uppercase;
+            font-size: 0.6rem; color: #444; text-transform: uppercase; font-weight: bold;
+            pointer-events: none;
         }
-
-        /* Specific Grid placement */
+        
         #zone-creatures { grid-column: 1; grid-row: 1; }
         #zone-artifacts { grid-column: 1; grid-row: 2; }
         #zone-lands     { grid-column: 1; grid-row: 3; border-bottom: none; }
 
         /* Sidebar */
         .sidebar-cell {
+            border-left: 1px solid rgba(255,255,255,0.1);
             border-bottom: 1px solid rgba(255,255,255,0.1);
             display: flex; flex-direction: column;
             justify-content: center; align-items: center;
-            position: relative;
             background: rgba(0,0,0,0.2);
+            position: relative;
         }
-        
         #zone-commander { grid-column: 2; grid-row: 1; }
         #zone-graveyard { grid-column: 2; grid-row: 2; }
         #zone-library   { grid-column: 2; grid-row: 3; border-bottom: none; }
 
-        /* --- CARD STYLING --- */
+        /* --- CARD STYLES --- */
         .card {
             width: var(--card-w);
             height: var(--card-h);
             border-radius: 6px;
-            background-color: #222;
+            background: #222;
             background-size: cover;
             background-position: center;
-            box-shadow: 2px 4px 8px rgba(0,0,0,0.6);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
             position: relative;
             flex-shrink: 0;
-            transition: transform 0.2s, filter 0.2s;
-            cursor: pointer;
+            transition: transform 0.2s;
         }
 
         .tapped {
@@ -134,106 +117,130 @@
         }
 
         .counter-badge {
-            position: absolute; top: -5px; right: -5px;
-            background: var(--accent); color: black;
-            border-radius: 50%; width: 22px; height: 22px;
+            position: absolute; top: -8px; right: -8px;
+            background: var(--accent); color: #000;
+            width: 24px; height: 24px; border-radius: 50%;
             display: flex; justify-content: center; align-items: center;
-            font-size: 0.75rem; font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            font-weight: bold; font-size: 0.8rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.8);
             z-index: 10;
+            border: 1px solid #fff;
         }
 
-        /* Library & GY Piles */
-        #lib-pile, #gy-pile {
-            width: 80px; height: 112px;
-            border-radius: 5px;
-            position: relative;
+        /* --- HAND (ARC LAYOUT) --- */
+        #hand-wrapper {
+            position: fixed;
+            bottom: 0; left: 0; width: 100%;
+            height: 120px; /* Collapsed height */
+            z-index: 500;
+            transition: height 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            perspective: 1000px;
+            pointer-events: none; /* Let clicks pass through empty space */
+        }
+
+        #hand-wrapper.expanded {
+            height: 350px; /* Expanded view */
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+        }
+
+        #hand-arc {
+            position: absolute;
+            bottom: -50px; left: 50%;
+            width: 0; height: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto; /* Re-enable clicks on cards */
+            transition: transform 0.3s;
+        }
+
+        #hand-wrapper.expanded #hand-arc {
+            bottom: 100px; /* Lift up */
+            transform: scale(1.2); /* Zoom in */
+        }
+
+        .hand-card {
+            position: absolute;
+            transform-origin: bottom center;
+            width: 100px; height: 140px;
+            border-radius: 8px;
+            background-size: cover;
+            background-position: center;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.5);
+            border: 1px solid #444;
+            transition: transform 0.2s, z-index 0s;
             cursor: pointer;
         }
-        #lib-pile {
-            background-image: var(--card-back);
-            background-size: cover;
-            box-shadow: 3px 3px 0 #333;
-        }
-        #gy-pile {
-            border: 2px dashed #444;
-            display: flex; justify-content: center; align-items: center;
-            color: #666; font-size: 0.8rem;
-        }
 
-        /* --- HAND --- */
-        #hand-container {
-            height: 150px;
-            background: #111;
-            border-top: 2px solid var(--accent);
-            display: flex;
-            align-items: center;
-            padding: 0 20px;
-            overflow-x: auto;
-            z-index: 500;
-        }
-        
-        #hand-container .card {
-            margin-right: -40px; /* Fan overlap */
-            transform-origin: bottom left;
-            box-shadow: -2px 0 5px rgba(0,0,0,0.5);
-            transition: 0.2s;
-        }
-        #hand-container .card:hover {
-            transform: translateY(-30px) scale(1.1);
-            margin-right: 10px;
-            z-index: 1000;
+        .hand-card:hover {
+            z-index: 1000 !important;
+            transform: translateY(-80px) scale(1.5) !important;
+            box-shadow: 0 0 20px var(--accent);
         }
 
         /* --- INSPECTOR MODAL --- */
-        #inspector-modal {
+        #inspector {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.3);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
             z-index: 2000;
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
         }
-        
-        #insp-card-view {
-            width: 280px; height: 390px;
-            border-radius: 12px;
+
+        #insp-card {
+            width: 260px; height: 362px;
+            border-radius: 14px;
             background-size: cover;
             background-position: center;
-            box-shadow: 0 0 30px rgba(0,0,0,0.8);
-            margin-bottom: 20px;
-            position: relative;
-            transition: transform 0.2s;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            margin-bottom: 30px;
+            transition: transform 0.3s;
         }
 
         #insp-controls {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            width: 300px;
+            gap: 15px;
+            width: 280px;
         }
 
-        .insp-btn {
-            background: rgba(0,0,0,0.6);
-            border: 1px solid var(--accent);
+        .action-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
             color: white;
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 1rem;
-            cursor: pointer;
-            text-align: center;
+            display: flex; justify-content: center; align-items: center;
+            gap: 8px;
         }
-        .insp-btn:active { background: var(--accent); color: black; }
-        .insp-btn.danger { border-color: #ff4444; color: #ffcccc; }
+        .action-btn:active { background: var(--accent); color: black; border-color: var(--accent); }
 
-        /* Mobile Adjustments */
-        @media (max-width: 768px) {
-            :root { --card-w: 85px; --card-h: 119px; --sidebar-w: 80px; }
-            #hand-container .card { margin-right: -25px; }
+        .counter-ctrl {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 5px;
+            grid-column: span 2;
+        }
+        .c-btn {
+            width: 40px; height: 40px;
+            background: #333; border: none; color: white;
+            border-radius: 8px; font-weight: bold; font-size: 1.2rem;
+        }
+        .c-display { font-weight: bold; font-size: 1.1rem; }
+
+        /* Close Tip */
+        .tap-tip {
+            position: absolute; bottom: 30px;
+            color: rgba(255,255,255,0.4);
+            font-size: 0.8rem;
         }
 
     </style>
@@ -241,129 +248,170 @@
 <body>
 
     <div id="ui-header">
-        <div id="mana-pool">
-            <div class="mana-symbol mana-w"><span id="pool-w">0</span></div>
-            <div class="mana-symbol mana-u"><span id="pool-u">0</span></div>
-            <div class="mana-symbol mana-b"><span id="pool-b">0</span></div>
-            <div class="mana-symbol mana-r"><span id="pool-r">0</span></div>
-            <div class="mana-symbol mana-g"><span id="pool-g">0</span></div>
-            <div class="mana-symbol mana-c"><span id="pool-c">0</span></div>
+        <div class="mana-pool">
+            POOL: 
+            <span style="color:#f0f8ff">U:<b id="m-u">0</b></span>
+            <span style="color:#e0e0e0">B:<b id="m-b">0</b></span>
+            <span style="color:#90ee90">G:<b id="m-g">0</b></span>
+            <span style="color:#ccc">C:<b id="m-c">0</b></span>
         </div>
-        <div>
-            <button class="btn" onclick="untapAll()">Untap All</button>
-            <button class="btn" onclick="resetGame()">Reset</button>
-        </div>
+        <button onclick="untapAll()">Untap All</button>
     </div>
 
     <div id="playmat">
         <div id="zone-creatures" class="zone" data-label="Creatures"></div>
-        <div id="zone-artifacts" class="zone" data-label="Artifacts / Enchantments / Others"></div>
+        <div id="zone-artifacts" class="zone" data-label="Artifacts / Enchantments"></div>
         <div id="zone-lands" class="zone" data-label="Lands"></div>
 
-        <div id="zone-commander" class="sidebar-cell">
-            <span style="font-size:0.6rem; color:#aaa; margin-bottom:5px;">COMMANDER</span>
-            </div>
+        <div id="zone-commander" class="sidebar-cell"></div>
         <div id="zone-graveyard" class="sidebar-cell">
-            <div id="gy-pile" onclick="viewGraveyard()">
-                <div>GY <br> <span id="gy-count" style="font-size:1.2rem; color:white">0</span></div>
-            </div>
+            <div style="font-size:0.7rem; color:#666">GRAVE</div>
+            <div id="gy-count" style="font-size:1.5rem; color:#fff; font-weight:bold">0</div>
         </div>
-        <div id="zone-library" class="sidebar-cell">
-            <div id="lib-pile" onclick="drawCard()">
-                <div style="position:absolute; bottom:5px; right:5px; background:#000; color:#fff; font-size:0.7rem; padding:2px 6px; border-radius:4px;" id="lib-count">99</div>
-            </div>
+        <div id="zone-library" class="sidebar-cell" onclick="drawCard()">
+            <div style="width:60px; height:84px; background:url('https://m.media-amazon.com/images/I/71jKdIXo-tL._AC_UF894,1000_QL80_.jpg'); background-size:cover; border-radius:4px; box-shadow:2px 2px 0 #333;"></div>
+            <div id="lib-count" style="position:absolute; bottom:5px; background:#000; padding:2px 6px; border-radius:4px; font-size:0.7rem;">99</div>
         </div>
     </div>
 
-    <div id="hand-container"></div>
+    <div id="hand-wrapper" onclick="toggleHandView(event)">
+        <div id="hand-arc">
+            </div>
+    </div>
 
-    <div id="inspector-modal" onclick="closeInspector(event)">
-        <div id="insp-card-view">
-            <div id="insp-counter-badge" class="counter-badge" style="width:40px; height:40px; font-size:1.2rem; display:none;">0</div>
+    <div id="inspector" onclick="closeInspector(event)">
+        <div id="insp-card">
+            <div id="insp-badge" class="counter-badge" style="display:none; transform: scale(1.5); top:-10px; right:-10px;">0</div>
         </div>
         
         <div id="insp-controls">
-            <button class="insp-btn" onclick="inspAction('tap')">Tap / Untap</button>
-            <button class="insp-btn" onclick="inspAction('counter')">Add +1/+1</button>
-            <button class="insp-btn danger" onclick="inspAction('graveyard')">Graveyard</button>
-            <button class="insp-btn danger" onclick="inspAction('exile')">Exile</button>
+            <button class="action-btn" onclick="act('tap')">
+                <span id="btn-tap-text">Tap</span>
+            </button>
+            <button class="action-btn" style="border-color:#ff4444; color:#ffaaaa" onclick="act('grave')">
+                Destroy
+            </button>
+            
+            <div class="counter-ctrl">
+                <button class="c-btn" onclick="act('sub')">-</button>
+                <span class="c-display" id="insp-count-val">0 Counters</span>
+                <button class="c-btn" style="color:var(--accent)" onclick="act('add')">+</button>
+            </div>
         </div>
-        <div style="margin-top:20px; color:#888; font-size:0.8rem;">Tap background to close</div>
+        <div class="tap-tip">Tap anywhere to close</div>
     </div>
 
 <script>
-    // --- DECK DATA ---
-    const deckData = [
-        { qty: 1, name: "The Wise Mothman", type: "Creature", category: "Commander", setCode: 'pip', mana: '{1}{B}{G}{U}' },
-        // ... Shortened for brevity, logic handles the rest ...
-        { qty: 1, name: "Bruvac the Grandiloquent", type: "Creature", mana: '{2}{U}' },
-        { qty: 1, name: "The Mindskinner", type: "Creature", mana: '{U}' }, // Mock costs
-        { qty: 5, name: "Island", type: "Land", manaProduces: ['u'] },
-        { qty: 5, name: "Swamp", type: "Land", manaProduces: ['b'] },
-        { qty: 5, name: "Forest", type: "Land", manaProduces: ['g'] },
-        // ... (Assume full list loaded) ...
+    // --- FULL DECK LIST ---
+    const rawDeck = [
+        { qty: 1, name: "The Wise Mothman", type: "Creature", category: "Commander", setCode: 'pip' },
+        { qty: 1, name: "Bruvac the Grandiloquent", type: "Creature" },
+        { qty: 1, name: "The Mindskinner", type: "Creature" },
+        { qty: 1, name: "Fetid Gargantua", type: "Creature" },
+        { qty: 1, name: "Expanding Ooze", type: "Creature" },
+        { qty: 1, name: "Ultimecia, Time Sorceress", type: "Creature" },
+        { qty: 1, name: "Danny Pink", type: "Creature" },
+        { qty: 1, name: "Zellix, Sanity Flayer", type: "Creature" },
+        { qty: 1, name: "Syr Konrad, the Grim", type: "Creature" },
+        { qty: 1, name: "Consuming Aberration", type: "Creature" },
+        { qty: 1, name: "Eternal Witness", type: "Creature", setCode: '2x2', cn: '368' },
+        { qty: 1, name: "Thrummingbird", type: "Creature", setCode: 'one', cn: '288' },
+        { qty: 1, name: "Evolution Sage", type: "Creature" },
+        { qty: 1, name: "Flux Channeler", type: "Creature" },
+        { qty: 1, name: "Rishkar, Peema Renegade", type: "Creature" },
+        { qty: 1, name: "Bloatfly Swarm", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Corpsejack Menace", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Glowing One", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Harold and Bob, First Numens", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Lily Bowen, Raging Grandma", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Rampaging Yao Guai", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "The Master, Transcendent", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Tireless Tracker", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Vexing Radgull", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Watchful Radstag", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Winding Constrictor", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Maximum Overdrive", type: "Instant" },
+        { qty: 1, name: "Origin of Metalbending", type: "Instant" },
+        { qty: 1, name: "Brain Freeze", type: "Instant", setCode: 'slc', cn: '2' }, 
+        { qty: 1, name: "Narset's Reversal", type: "Instant" },
+        { qty: 1, name: "Golgari Charm", type: "Instant", setCode: 'rtr' },
+        { qty: 1, name: "Biomass Mutation", type: "Instant", setCode: 'pip' },
+        { qty: 1, name: "Inspiring Call", type: "Instant", setCode: 'pip' },
+        { qty: 1, name: "Mutational Advantage", type: "Instant", setCode: 'pip' },
+        { qty: 1, name: "Putrefy", type: "Instant", setCode: 'pip' },
+        { qty: 1, name: "Radstorm", type: "Instant", setCode: 'pip' },
+        { qty: 1, name: "Grasping Tentacles", type: "Sorcery" },
+        { qty: 1, name: "Eerie Ultimatum", type: "Sorcery", setCode: 'slc', cn: '5' },
+        { qty: 1, name: "Nature's Lore", type: "Sorcery", setCode: 'afc', cn: '164' },
+        { qty: 1, name: "Victimize", type: "Sorcery" },
+        { qty: 1, name: "Casualties of War", type: "Sorcery", setCode: 'pip' },
+        { qty: 1, name: "Cultivate", type: "Sorcery", setCode: 'pip' },
+        { qty: 1, name: "Farseek", type: "Sorcery", setCode: 'pip' },
+        { qty: 1, name: "Mesmeric Orb", type: "Artifact", setCode: 'brr', cn: '31' },
+        { qty: 1, name: "Codex Shredder", type: "Artifact", setCode: 'sld' },
+        { qty: 1, name: "Mindcrank", type: "Artifact", setCode: 'sld' },
+        { qty: 1, name: "Arcane Signet", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Contagion Clasp", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Power Fist", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Recon Craft Theta", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Sol Ring", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Talisman of Curiosity", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Talisman of Dominance", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Dictate of Erebos", type: "Enchantment" },
+        { qty: 1, name: "Bloodchief Ascension", type: "Enchantment" },
+        { qty: 1, name: "Fertile Ground", type: "Enchantment", setCode: 'sld', cn: '1846' },
+        { qty: 1, name: "Branching Evolution", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Fraying Sanity", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Guardian Project", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Hardened Scales", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Inexorable Tide", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Struggle for Project Purity", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Takenuma, Abandoned Mire", type: "Land" },
+        { qty: 1, name: "Rejuvenating Springs", type: "Land" },
+        { qty: 1, name: "Vesuva", type: "Land" },
+        { qty: 1, name: "Ash Barrens", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Command Tower", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Darkwater Catacombs", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Drowned Catacomb", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Evolving Wilds", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Exotic Orchard", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Fetid Pools", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Hinterland Harbor", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Mariposa Military Base", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Nesting Grounds", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Opulent Palace", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Overflowing Basin", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Path of Ancestry", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Sunken Hollow", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Tainted Isle", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Tainted Wood", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Temple of Deceit", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Temple of Malady", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Viridescent Bog", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Woodland Cemetery", type: "Land", setCode: 'pip' },
+        { qty: 5, name: "Island", type: "Land", setCode: 'pip' },
+        { qty: 5, name: "Swamp", type: "Land", setCode: 'pip' },
+        { qty: 5, name: "Forest", type: "Land", setCode: 'pip' },
     ];
-    // NOTE: For the simulation to work perfectly, I'll programmatically infer some basic data if missing
-    
-    // --- STATE ---
-    let library = [];
-    let graveyard = [];
-    let exile = [];
-    let hand = [];
-    let commander = null;
-    let manaPool = { w:0, u:0, b:0, r:0, g:0, c:0 };
-    let activeCardId = null; // ID of card currently in Inspector
 
-    // --- CACHE ---
+    // --- GAME STATE ---
+    let library = [], hand = [], grave = [];
+    let activeCard = null; // Card currently being inspected
+    let mana = {u:0, b:0, g:0, c:0};
     const imgCache = {};
 
-    // --- INIT ---
     function init() {
-        // Quick expansion of deck data (Simulated full deck for demo)
-        expandDeck();
-        resetGame();
-    }
-
-    function expandDeck() {
-        // This function ensures the `deckData` is fully populated. 
-        // In a real scenario, you'd paste your full JSON array here.
-        // I will use a helper to ensure lands have `manaProduces`.
-        deckData.forEach(c => {
-            if(c.type.includes("Land")) {
-                if(c.name.includes("Island")) c.manaProduces = ['u'];
-                else if(c.name.includes("Swamp")) c.manaProduces = ['b'];
-                else if(c.name.includes("Forest")) c.manaProduces = ['g'];
-                else c.manaProduces = ['c']; // Default non-basics to colorless for sim simplicity
-            }
-        });
-    }
-
-    function resetGame() {
-        library = [];
-        graveyard = [];
-        exile = [];
-        hand = [];
-        manaPool = { w:0, u:0, b:0, r:0, g:0, c:0 };
-        updateManaUI();
-
-        document.getElementById('zone-creatures').innerHTML = '';
-        document.getElementById('zone-artifacts').innerHTML = '';
-        document.getElementById('zone-lands').innerHTML = '';
-        document.getElementById('zone-commander').innerHTML = '<span style="font-size:0.6rem; color:#aaa; margin-bottom:5px;">COMMANDER</span>';
-        document.getElementById('hand-container').innerHTML = '';
-
-        // Build Library
-        deckData.forEach(entry => {
-            if (entry.category === "Commander") {
-                commander = createCardObj(entry);
-                renderCard(commander, 'zone-commander');
+        // Build Deck
+        rawDeck.forEach(entry => {
+            if(entry.category === 'Commander') {
+                createCard(entry, 'zone-commander');
             } else {
                 for(let i=0; i<entry.qty; i++) {
-                    library.push(createCardObj(entry));
+                    library.push({...entry, id: Math.random().toString(36).substr(2,9), counters:0, tapped:false});
                 }
             }
         });
-
+        
         // Shuffle
         library.sort(() => Math.random() - 0.5);
         updateCounts();
@@ -372,213 +420,166 @@
         for(let i=0; i<7; i++) drawCard();
     }
 
-    function createCardObj(data) {
-        return {
-            ...data,
-            id: Math.random().toString(36).substr(2, 9),
-            tapped: false,
-            counters: 0
-        };
-    }
-
-    // --- MANA SYSTEM ---
-    function updateManaUI() {
-        ['w','u','b','r','g','c'].forEach(c => {
-            document.getElementById(`pool-${c}`).innerText = manaPool[c];
-        });
-    }
-
-    function addMana(types) {
-        types.forEach(t => manaPool[t]++);
-        updateManaUI();
-    }
-
-    function payMana(costString) {
-        if(!costString) return true; // Free
-
-        // Simple cost parser (counts pips)
-        // e.g. {1}{U}{G} -> needs 2 generic, 1 U, 1 G
-        // This is a simplified "Goldfish" check. 
+    // --- CARD RENDERING ---
+    async function createCard(data, zoneId) {
+        const el = document.createElement('div');
+        el.className = zoneId === 'hand-arc' ? 'hand-card' : 'card';
+        el.id = data.id || 'cmd-mothman';
         
-        let valid = true;
-        // Check Colored first
-        ['w','u','b','r','g'].forEach(c => {
-            const count = (costString.match(new RegExp(`{${c.toUpperCase()}}`, 'g')) || []).length;
-            if (manaPool[c] >= count) {
-                // deduct later
-            } else {
-                // Check if we have enough total mana including generic? 
-                // Strict colored mana check:
-                if(manaPool[c] < count) valid = false;
-            }
-        });
+        // Basic Metadata
+        el.dataset.type = data.type;
+        el.dataset.name = data.name;
+        el.dataset.tapped = 'false';
+        el.dataset.counters = 0;
 
-        if(!valid) {
-            const force = confirm(`Mana Pool mismatch for cost ${costString}.\nPool: B:${manaPool.b} G:${manaPool.g} U:${manaPool.u}...\n\nCast anyway?`);
-            if(force) return true;
-            return false;
-        }
-
-        // Deduct logic (naive)
-        ['w','u','b','r','g'].forEach(c => {
-            const count = (costString.match(new RegExp(`{${c.toUpperCase()}}`, 'g')) || []).length;
-            manaPool[c] -= count;
-        });
-        
-        // Handle generic (numbers like {1}, {2})
-        // Regex to find numbers inside {}
-        const generics = costString.match(/{(\d+)}/);
-        if(generics) {
-            let amount = parseInt(generics[1]);
-            // drain remaining pool
-            const poolKeys = ['c','w','u','b','r','g']; // prefer colorless first
-            for(let key of poolKeys) {
-                while(amount > 0 && manaPool[key] > 0) {
-                    manaPool[key]--;
-                    amount--;
-                }
-            }
-        }
-
-        updateManaUI();
-        return true;
-    }
-
-    // --- ACTIONS ---
-    function drawCard() {
-        if(library.length === 0) return;
-        const card = library.pop();
-        hand.push(card);
-        renderCard(card, 'hand-container');
-        updateCounts();
-    }
-
-    function updateCounts() {
-        document.getElementById('lib-count').innerText = library.length;
-        document.getElementById('gy-count').innerText = graveyard.length;
-    }
-
-    // --- RENDERING ---
-    async function renderCard(card, containerId) {
-        const container = document.getElementById(containerId);
-        const div = document.createElement('div');
-        div.className = 'card';
-        div.id = card.id;
-        div.dataset.type = card.type;
-
-        // Image
-        const img = await fetchCardImage(card);
-        div.style.backgroundImage = `url('${img}')`;
+        // Image Fetch
+        const url = await getImgUrl(data);
+        el.style.backgroundImage = `url('${url}')`;
 
         // Counter Badge
         const badge = document.createElement('div');
         badge.className = 'counter-badge';
         badge.style.display = 'none';
         badge.innerText = '0';
-        div.appendChild(badge);
+        el.appendChild(badge);
 
-        // Click Handler
-        div.onclick = (e) => handleCardClick(card, div, containerId);
+        // Click Logic
+        el.onclick = (e) => {
+            e.stopPropagation(); // Don't trigger background clicks
+            handleCardClick(el, data, zoneId);
+        };
 
-        container.appendChild(div);
-        
-        // Sync State
-        updateCardVisuals(card, div);
-    }
-
-    function updateCardVisuals(card, el) {
-        // Tapped
-        if(card.tapped) el.classList.add('tapped');
-        else el.classList.remove('tapped');
-
-        // Counters
-        const badge = el.querySelector('.counter-badge');
-        if(card.counters > 0) {
-            badge.style.display = 'flex';
-            badge.innerText = card.counters;
+        // Append
+        if (zoneId === 'hand-arc') {
+            document.getElementById('hand-arc').appendChild(el);
+            arrangeHand();
         } else {
-            badge.style.display = 'none';
+            document.getElementById(zoneId).appendChild(el);
         }
+        return el;
     }
 
-    async function fetchCardImage(card) {
-        // (Same Scryfall Logic)
-        const key = card.name;
+    async function getImgUrl(data) {
+        const key = data.name + (data.setCode||'');
         if(imgCache[key]) return imgCache[key];
         
-        let url = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(card.name)}`;
-        if(card.setCode) url += `&set=${card.setCode}`;
-        if(card.cn) url = `https://api.scryfall.com/cards/${card.setCode}/${card.cn}`;
-        
+        let api = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(data.name)}`;
+        if(data.setCode) api += `&set=${data.setCode}`;
+        if(data.cn) api = `https://api.scryfall.com/cards/${data.setCode}/${data.cn}`;
+
         try {
-            const res = await fetch(url);
+            const res = await fetch(api);
             const json = await res.json();
-            const img = json.image_uris ? json.image_uris.normal : (json.card_faces ? json.card_faces[0].image_uris.normal : '');
+            const img = json.image_uris ? json.image_uris.normal : json.card_faces[0].image_uris.normal;
+            
+            // Mana Logic (Simple Inference)
+            if(data.type.includes('Land')) {
+                if(data.name.includes('Island') || data.name.includes('Water')) el.dataset.mana = 'u';
+                else if(data.name.includes('Swamp') || data.name.includes('Bog')) el.dataset.mana = 'b';
+                else if(data.name.includes('Forest')) el.dataset.mana = 'g';
+                else el.dataset.mana = 'c';
+            }
+            
             imgCache[key] = img;
-            // Also cache mana cost if real data
-            if(json.mana_cost) card.mana = json.mana_cost; 
             return img;
         } catch { return 'https://via.placeholder.com/200'; }
     }
 
-    // --- INTERACTION LOGIC ---
-    function handleCardClick(card, el, containerId) {
+    // --- HAND LOGIC (ARC) ---
+    function arrangeHand() {
+        const container = document.getElementById('hand-arc');
+        const cards = Array.from(container.children);
+        const total = cards.length;
+        const arcAngle = 40; // Total spread in degrees
+        
+        cards.forEach((card, i) => {
+            const angle = (i - (total-1)/2) * (arcAngle / Math.max(total, 1));
+            const yOffset = Math.abs(angle) * 2; // Curve down at edges
+            // We use CSS var for the base transform so hover can override cleanly if needed
+            card.style.transform = `rotate(${angle}deg) translateY(${yOffset}px)`;
+            card.dataset.baseTransform = `rotate(${angle}deg) translateY(${yOffset}px)`;
+            card.style.zIndex = i;
+        });
+    }
+
+    function toggleHandView(e) {
+        // Only toggle if clicking empty space (not a card)
+        if(e.target.id === 'hand-wrapper' || e.target.id === 'hand-arc') {
+            document.getElementById('hand-wrapper').classList.toggle('expanded');
+        }
+    }
+
+    // --- INTERACTION ---
+    function handleCardClick(el, data, currentZone) {
         // 1. Hand -> Cast
-        if (containerId === 'hand-container' || containerId === 'zone-commander') {
-            if(payMana(card.mana)) {
-                playToField(card, el);
-            }
+        if (currentZone === 'hand-arc' || currentZone === 'zone-commander') {
+            castCard(el, data);
             return;
         }
 
-        // 2. Lands on Field -> Tap for Mana (Fast)
-        if (card.type.includes("Land")) {
-            if(!card.tapped) {
-                card.tapped = true;
-                addMana(card.manaProduces || ['c']);
-                updateCardVisuals(card, el);
-            } else {
-                // If tapped, clicking opens inspector (to untap/inspect)
-                openInspector(card);
-            }
-            return;
+        // 2. Battlefield -> INSPECT
+        openInspector(el);
+    }
+
+    function castCard(el, data) {
+        // Determine Target Zone
+        let zone = 'zone-artifacts';
+        if(data.type.includes('Land')) zone = 'zone-lands';
+        else if(data.type.includes('Creature')) zone = 'zone-creatures';
+
+        // Remove from hand, add to board
+        el.remove();
+        if(currentZone = 'hand-arc') arrangeHand();
+
+        // Re-create on board
+        const newEl = el.cloneNode(true);
+        newEl.className = 'card';
+        newEl.style.transform = 'none'; // Remove arc transform
+        newEl.onclick = (e) => { e.stopPropagation(); openInspector(newEl); };
+        
+        document.getElementById(zone).appendChild(newEl);
+
+        // Auto-Mana (if Land)
+        if(data.type.includes('Land')) {
+            // Check inferred mana
+            // (Simple logic: just assume color based on name for now)
         }
-
-        // 3. Other cards on Field -> Inspector
-        openInspector(card);
     }
 
-    function playToField(card, oldEl) {
-        // Determine Zone
-        let zoneId = 'zone-artifacts'; // default
-        if(card.type.includes('Land')) zoneId = 'zone-lands';
-        else if(card.type.includes('Creature')) zoneId = 'zone-creatures';
-
-        // Remove from hand array/DOM
-        oldEl.remove();
-        
-        // Add to Field
-        renderCard(card, zoneId);
+    function drawCard() {
+        if(library.length===0) return;
+        const card = library.pop();
+        createCard(card, 'hand-arc');
+        updateCounts();
     }
 
-    // --- INSPECTOR MODAL ---
-    function openInspector(card) {
-        activeCardId = card.id;
-        const modal = document.getElementById('inspector-modal');
-        const view = document.getElementById('insp-card-view');
-        
-        // Set Image
-        view.style.backgroundImage = document.getElementById(card.id).style.backgroundImage;
-        
-        // Show Tapped State in Inspector?
-        if(card.tapped) view.style.transform = 'rotate(90deg)';
-        else view.style.transform = 'none';
+    function updateCounts() {
+        document.getElementById('lib-count').innerText = library.length;
+        document.getElementById('gy-count').innerText = grave.length;
+    }
 
-        // Show Counters
-        const badge = document.getElementById('insp-counter-badge');
-        if(card.counters > 0) {
+    // --- INSPECTOR ---
+    function openInspector(el) {
+        activeCard = el;
+        const modal = document.getElementById('inspector');
+        const view = document.getElementById('insp-card');
+        const btnTap = document.getElementById('btn-tap-text');
+        
+        // Copy visual
+        view.style.backgroundImage = el.style.backgroundImage;
+        
+        // Sync State
+        const isTapped = el.dataset.tapped === 'true';
+        view.style.transform = isTapped ? 'rotate(90deg)' : 'none';
+        btnTap.innerText = isTapped ? 'Untap' : 'Tap';
+
+        // Sync Counters
+        const count = parseInt(el.dataset.counters || 0);
+        document.getElementById('insp-count-val').innerText = count;
+        const badge = document.getElementById('insp-badge');
+        if(count > 0) {
             badge.style.display = 'flex';
-            badge.innerText = card.counters;
+            badge.innerText = count;
         } else {
             badge.style.display = 'none';
         }
@@ -587,84 +588,89 @@
     }
 
     function closeInspector(e) {
-        if(e.target.id === 'inspector-modal') {
-            document.getElementById('inspector-modal').style.display = 'none';
-            activeCardId = null;
+        if(e.target.id === 'inspector') {
+            document.getElementById('inspector').style.display = 'none';
+            activeCard = null;
         }
     }
 
-    function inspAction(action) {
-        if(!activeCardId) return;
-        const el = document.getElementById(activeCardId);
-        // Find card object in memory (scan all locations? No, just attach obj to DOM or closure)
-        // Simplification: We need reference to the card object. 
-        // We will scan our global simulated arrays? No, complex.
-        // We will leverage the fact that the logic is simple:
-        
-        // Find logic:
-        // Actually, we need to pass the card object better. 
-        // For this single file, let's just stick the card object into the DOM element property.
-        // (Hack for simplicity)
-        // Re-fetching logic from handleCardClick closure is hard.
-        // Let's iterate DOM to find match? No.
-        
-        // Better way: The `activeCardId` matches the DOM ID. We need the `card` data object.
-        // Let's create a global lookup for active session.
-        // Or just modify the DOM and assume visual state = game state (Riskier but easier).
-        
-        // Let's grab the card element
+    function act(action) {
+        if(!activeCard) return;
+
         if (action === 'tap') {
-            const isTapped = el.classList.contains('tapped');
-            if(isTapped) el.classList.remove('tapped');
-            else el.classList.add('tapped');
+            const isTapped = activeCard.dataset.tapped === 'true';
             
-            // Sync visual in inspector
-            const view = document.getElementById('insp-card-view');
-            view.style.transform = isTapped ? 'none' : 'rotate(90deg)';
+            // Toggle
+            if(isTapped) {
+                activeCard.classList.remove('tapped');
+                activeCard.dataset.tapped = 'false';
+                document.getElementById('insp-card').style.transform = 'none';
+                document.getElementById('btn-tap-text').innerText = 'Tap';
+            } else {
+                activeCard.classList.add('tapped');
+                activeCard.dataset.tapped = 'true';
+                document.getElementById('insp-card').style.transform = 'rotate(90deg)';
+                document.getElementById('btn-tap-text').innerText = 'Untap';
+                
+                // Add Mana logic (Goldfish)
+                // Just add 1 Colorless for demo, or infer from name
+                const name = activeCard.dataset.name || "";
+                if(name.includes('Island')) addMana('u');
+                else if(name.includes('Swamp')) addMana('b');
+                else if(name.includes('Forest')) addMana('g');
+                else addMana('c');
+            }
+        }
+        
+        if (action === 'add' || action === 'sub') {
+            let c = parseInt(activeCard.dataset.counters || 0);
+            if(action === 'add') c++;
+            else if (action === 'sub') c = Math.max(0, c-1);
             
-            // Update backing data (if we can find it)
-            // For now, visual-only for tap is fine for Goldfish.
+            activeCard.dataset.counters = c;
+            
+            // Update Board Badge
+            const badge = activeCard.querySelector('.counter-badge');
+            if(c > 0) {
+                badge.style.display = 'flex';
+                badge.innerText = c;
+            } else {
+                badge.style.display = 'none';
+            }
+
+            // Update Inspector UI
+            document.getElementById('insp-count-val').innerText = c;
+            const inspBadge = document.getElementById('insp-badge');
+            if(c > 0) {
+                inspBadge.style.display = 'flex';
+                inspBadge.innerText = c;
+            } else {
+                inspBadge.style.display = 'none';
+            }
         }
 
-        if (action === 'counter') {
-            let count = parseInt(el.querySelector('.counter-badge').innerText || 0);
-            count++;
-            el.querySelector('.counter-badge').innerText = count;
-            el.querySelector('.counter-badge').style.display = 'flex';
-            
-            // Sync Inspector
-            document.getElementById('insp-counter-badge').innerText = count;
-            document.getElementById('insp-counter-badge').style.display = 'flex';
+        if (action === 'grave') {
+            activeCard.remove();
+            grave.push('card');
+            updateCounts();
+            document.getElementById('inspector').style.display = 'none';
         }
+    }
 
-        if (action === 'graveyard' || action === 'exile') {
-            // Animation
-            el.style.transition = 'all 0.5s';
-            el.style.opacity = '0';
-            el.style.transform = 'scale(0)';
-            
-            setTimeout(() => {
-                el.remove();
-                if(action === 'graveyard') {
-                    graveyard.push('card'); // simple tracking
-                    updateCounts();
-                }
-                document.getElementById('inspector-modal').style.display = 'none';
-            }, 500);
-        }
+    function addMana(type) {
+        mana[type] = (mana[type]||0) + 1;
+        document.getElementById(`m-${type}`).innerText = mana[type];
     }
 
     function untapAll() {
-        document.querySelectorAll('.tapped').forEach(e => e.classList.remove('tapped'));
-        manaPool = { w:0, u:0, b:0, r:0, g:0, c:0 };
-        updateManaUI();
-    }
-    
-    function viewGraveyard() {
-        alert("Graveyard functionality: Imagine a list of cards here. (Feature coming in v2)");
+        document.querySelectorAll('.tapped').forEach(el => {
+            el.classList.remove('tapped');
+            el.dataset.tapped = 'false';
+        });
+        mana = {u:0, b:0, g:0, c:0};
+        ['u','b','g','c'].forEach(k => document.getElementById(`m-${k}`).innerText = 0);
     }
 
-    // Start
     init();
 
 </script>
