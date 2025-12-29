@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTG Holo-Battle Engine</title>
+    <style>
+        :root {
+            --card-w: 200px;
+            --card-h: 280px;
+            --bg-color: #121212;
+            --accent: #00d2ff;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000 100%);
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            perspective: 1000px;
+        }
+
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            pointer-events: none;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .stat-box {
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #333;
+            padding: 10px 20px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            pointer-events: auto;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+        }
+
+        .mana-display span {
+            margin-right: 10px;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        /* The Board */
+        #game-board {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            transform-style: preserve-3d;
+            padding-bottom: 220px; /* Space for hand */
+        }
+
+        #battlefield {
+            width: 90%;
+            height: 400px;
+            border: 2px dashed #333;
+            border-radius: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            transition: border-color 0.3s;
+        }
+
+        #battlefield.active {
+            border-color: var(--accent);
+            background: rgba(0, 210, 255, 0.05);
+        }
+
+        /* The Hand */
+        #hand-container {
+            position: fixed;
+            bottom: -50px;
+            left: 0;
+            width: 100%;
+            height: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            z-index: 50;
+            padding-bottom: 60px;
+        }
+
+        /* CARD STYLES */
+        .card {
+            width: var(--card-w);
+            height: var(--card-h);
+            background: #222;
+            border-radius: 12px;
+            position: relative;
+            transition: transform 0.1s ease-out, bottom 0.3s;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            user-select: none;
+            transform-style: preserve-3d;
+            border: 1px solid #444;
+            margin: 0 -30px; /* Fan effect */
+        }
+
+        .card:hover {
+            z-index: 100;
+            margin: 0 10px;
+            bottom: 40px; /* Pop up */
+        }
+
+        .card-inner {
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            pointer-events: none;
+        }
+
+        /* Card Art */
+        .card-art {
+            height: 50%;
+            background: #333;
+            border-bottom: 2px solid #000;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card-art img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .art-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 4rem;
+        }
+
+        /* Card Text */
+        .card-content {
+            padding: 10px;
+            flex: 1;
+            background: #1a1a1a;
+            position: relative;
+        }
+
+        .card-title {
+            font-weight: bold;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #444;
+            padding-bottom: 4px;
+            margin-bottom: 4px;
+        }
+
+        .card-type {
+            font-size: 0.7rem;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+
+        .card-text {
+            font-size: 0.75rem;
+            line-height: 1.2;
+            color: #ddd;
+        }
+
+        .pt-box {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background: #111;
+            border: 1px solid #555;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        /* Dynamic Foil Layer */
+        .foil-layer {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border-radius: 12px;
+            background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,0.3) 25%, transparent 30%, transparent 70%, rgba(255,255,255,0.3) 75%, transparent 80%);
+            opacity: 0;
+            mix-blend-mode: overlay;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+        
+        .card:hover .foil-layer {
+            opacity: 1;
+        }
+
+        /* Canvas for particles */
+        #particle-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 200;
+        }
+
+        /* Tapped State */
+        .tapped {
+            transform: rotate(90deg) !important;
+            filter: grayscale(0.5);
+        }
+
+        /* On Battlefield */
+        #battlefield .card {
+            margin: 5px;
+            transform: scale(0.8);
+            position: relative;
+            bottom: auto;
+        }
+        
+        #battlefield .card:hover {
+            transform: scale(1.0) translateY(-10px) rotateX(10deg);
+            z-index: 20;
+            margin: 5px;
+        }
+
+        /* Colors */
+        .frame-blue { border: 2px solid #0077ff; box-shadow: inset 0 0 20px rgba(0,119,255,0.2); }
+        .frame-red { border: 2px solid #ff3300; box-shadow: inset 0 0 20px rgba(255,51,0,0.2); }
+        .frame-green { border: 2px solid #00cc44; box-shadow: inset 0 0 20px rgba(0,204,68,0.2); }
+        .frame-land { border: 2px solid #aa8866; }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="particle-canvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="stat-box">
+            <div>Player Health: <span style="color:red">20</span></div>
+        </div>
+        <div class="stat-box mana-display">
+            Pool: 
+            <span style="color: #ff3300">R:<span id="mana-r">0</span></span>
+            <span style="color: #0077ff">U:<span id="mana-u">0</span></span>
+            <span style="color: #00cc44">G:<span id="mana-g">0</span></span>
+        </div>
+        <div class="stat-box">
+            <button onclick="resetGame()" style="background:none; border:none; color:white; cursor:pointer;">Reset Game</button>
+        </div>
+    </div>
+
+    <div id="game-board">
+        <div id="battlefield">
+            </div>
+    </div>
+
+    <div id="hand-container">
+        </div>
+
+<script>
+    // --- GAME ENGINE ---
+
+    const handContainer = document.getElementById('hand-container');
+    const battlefield = document.getElementById('battlefield');
+    const canvas = document.getElementById('particle-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    let canvasW, canvasH;
+
+    // Resize Canvas
+    function resize() {
+        canvasW = canvas.width = window.innerWidth;
+        canvasH = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Game State
+    let mana = { r: 0, u: 0, g: 0 };
+    
+    // Card Database (Mock Data)
+    const cardDB = [
+        { id: 1, name: "Volcanic Island", type: "Land", color: "land", text: "Tap: Add R or U", cost: "", art: "🌋", frame: "frame-land", manaProduces: ['r', 'u'] },
+        { id: 2, name: "Forest", type: "Land", color: "land", text: "Tap: Add G", cost: "", art: "🌲", frame: "frame-land", manaProduces: ['g'] },
+        { id: 3, name: "Cyber Dragon", type: "Creature", color: "red", cost: {r:1, any:1}, power: 2, tough: 2, text: "Haste, Flying", art: "🐉", frame: "frame-red" },
+        { id: 4, name: "Logic Knot", type: "Instant", color: "blue", cost: {u:2}, text: "Counter target spell.", art: "🧬", frame: "frame-blue" },
+        { id: 5, name: "Behemoth", type: "Creature", color: "green", cost: {g:3}, power: 6, tough: 6, text: "Trample", art: "🦖", frame: "frame-green" },
+        { id: 6, name: "Lightning Bolt", type: "Instant", color: "red", cost: {r:1}, text: "Deal 3 damage.", art: "⚡", frame: "frame-red" },
+        { id: 7, name: "Ancient Tomb", type: "Land", color: "land", text: "Tap: Add 2. Take 2 dmg.", art: "🏛️", frame: "frame-land", manaProduces: ['c'] }
+    ];
+
+    // Initialize Hand
+    function initGame() {
+        handContainer.innerHTML = '';
+        battlefield.innerHTML = '';
+        mana = { r:0, u:0, g:0 };
+        updateManaUI();
+
+        // Deal 7 random cards
+        for(let i=0; i<7; i++) {
+            const randomCard = cardDB[Math.floor(Math.random() * cardDB.length)];
+            createCardElement(randomCard, handContainer, 'hand');
+        }
+    }
+
+    // Update Mana UI
+    function updateManaUI() {
+        document.getElementById('mana-r').innerText = mana.r;
+        document.getElementById('mana-u').innerText = mana.u;
+        document.getElementById('mana-g').innerText = mana.g;
+    }
+
+    // Create Card DOM
+    function createCardElement(data, container, location) {
+        const el = document.createElement('div');
+        el.className = `card ${data.frame}`;
+        
+        // Internal Structure
+        el.innerHTML = `
+            <div class="card-inner">
+                <div class="foil-layer"></div>
+                <div class="card-art">
+                    <div class="art-placeholder" style="background:${getArtBg(data.color)}">${data.art}</div>
+                </div>
+                <div class="card-content">
+                    <div class="card-title">
+                        <span>${data.name}</span>
+                        <span>${formatCost(data.cost)}</span>
+                    </div>
+                    <div class="card-type">${data.type}</div>
+                    <div class="card-text">${data.text}</div>
+                    ${data.power ? `<div class="pt-box">${data.power}/${data.tough}</div>` : ''}
+                </div>
+            </div>
+        `;
+
+        // 3D Tilt Effect
+        el.addEventListener('mousemove', (e) => {
+            const rect = el.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            const rotateX = ((y - centerY) / centerY) * -15; // Max 15deg
+            const rotateY = ((x - centerX) / centerX) * 15;
+
+            // Apply transform (ignore tapped state for hover calc, handled in click)
+            if(!el.classList.contains('tapped')) {
+                el.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.1)`;
+            }
+            
+            // Move Foil Gradient
+            const foil = el.querySelector('.foil-layer');
+            foil.style.background = `linear-gradient(${115 + rotateY * 2}deg, transparent 20%, rgba(255,255,255,0.4) ${40 + rotateX}%, transparent 60%)`;
+        });
+
+        el.addEventListener('mouseleave', () => {
+            if(!el.classList.contains('tapped')) {
+                // Return to location specific base state
+                if(location === 'hand') el.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) scale(1)';
+                else el.style.transform = 'scale(0.8)';
+            }
+        });
+
+        // Click Logic
+        el.addEventListener('click', (e) => {
+            if (location === 'hand') {
+                tryToPlayCard(el, data);
+            } else if (location === 'battlefield') {
+                toggleTap(el, data);
+            }
+        });
+
+        container.appendChild(el);
+        return el;
+    }
+
+    function getArtBg(color) {
+        if(color === 'red') return 'linear-gradient(45deg, #550000, #aa0000)';
+        if(color === 'blue') return 'linear-gradient(45deg, #000055, #0000aa)';
+        if(color === 'green') return 'linear-gradient(45deg, #005500, #00aa00)';
+        return 'linear-gradient(45deg, #444, #666)';
+    }
+
+    function formatCost(cost) {
+        if(!cost) return "";
+        let str = "";
+        if(cost.any) str += `(${cost.any})`;
+        if(cost.g) str += "🌳".repeat(cost.g);
+        if(cost.u) str += "💧".repeat(cost.u);
+        if(cost.r) str += "🔥".repeat(cost.r);
+        return str;
+    }
+
+    // --- LOGIC ---
+
+    function toggleTap(el, data) {
+        if (data.type === "Land" && !el.classList.contains('tapped')) {
+            el.classList.add('tapped');
+            // Add mana based on type (simple logic for demo)
+            if(data.manaProduces.includes('r')) mana.r++;
+            else if(data.manaProduces.includes('u')) mana.u++;
+            else if(data.manaProduces.includes('g')) mana.g++;
+            else if(data.manaProduces.includes('c')) {
+                // generic adds to lowest pool for visual demo
+                mana.r++; 
+            }
+            createParticles(el.getBoundingClientRect().left + 100, el.getBoundingClientRect().top + 140, getParticleColor(data.color));
+            updateManaUI();
+        } else if (el.classList.contains('tapped')) {
+            // Untap logic (omitted for simple demo, just visually untap but don't refund mana)
+             el.classList.remove('tapped');
+             el.style.transform = 'scale(0.8)';
+        } else {
+            // Creature attack tap
+             el.classList.add('tapped');
+        }
+    }
+
+    function tryToPlayCard(el, data) {
+        // Simple Mana Check
+        let canCast = true;
+        
+        // Lands are free
+        if (data.type === "Land") {
+            playCardAnimation(el, data);
+            return;
+        }
+
+        // Check Mana cost (Simplified: Just check total vs pools)
+        let costR = data.cost.r || 0;
+        let costU = data.cost.u || 0;
+        let costG = data.cost.g || 0;
+        let generic = data.cost.any || 0;
+
+        if (mana.r >= costR && mana.u >= costU && mana.g >= costG) {
+            // Deduct colored
+            mana.r -= costR;
+            mana.u -= costU;
+            mana.g -= costG;
+            
+            // Deduct generic (naive implementation)
+            let totalRemaining = mana.r + mana.u + mana.g;
+            if (totalRemaining >= generic) {
+                // Naive generic deduction
+                for(let i=0; i<generic; i++){
+                    if(mana.r > 0) mana.r--;
+                    else if(mana.u > 0) mana.u--;
+                    else mana.g--;
+                }
+                updateManaUI();
+                playCardAnimation(el, data);
+            } else {
+                alert("Not enough generic mana!");
+            }
+        } else {
+            el.style.boxShadow = "0 0 20px red";
+            setTimeout(() => el.style.boxShadow = "", 500);
+        }
+    }
+
+    function playCardAnimation(el, data) {
+        const rect = el.getBoundingClientRect();
+        
+        // Create a clone for the battlefield
+        el.remove(); // Remove from hand
+        
+        // Create new element on battlefield
+        const newEl = createCardElement(data, battlefield, 'battlefield');
+        
+        // Trigger Effects
+        createParticles(rect.left + (rect.width/2), rect.top + (rect.height/2), getParticleColor(data.color));
+    }
+
+    function getParticleColor(color) {
+        if(color === 'red') return '#ff3300';
+        if(color === 'blue') return '#0077ff';
+        if(color === 'green') return '#00cc44';
+        return '#ffffff';
+    }
+
+    function resetGame() {
+        initGame();
+    }
+
+    // --- PARTICLE SYSTEM ---
+    const particles = [];
+
+    function createParticles(x, y, color) {
+        for(let i=0; i<30; i++) {
+            particles.push({
+                x: x,
+                y: y,
+                vx: (Math.random() - 0.5) * 10,
+                vy: (Math.random() - 0.5) * 10,
+                life: 1.0,
+                color: color,
+                size: Math.random() * 4 + 2
+            });
+        }
+    }
+
+    function updateParticles() {
+        ctx.clearRect(0, 0, canvasW, canvasH);
+        
+        for(let i=particles.length-1; i>=0; i--) {
+            let p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.2; // gravity
+            p.life -= 0.02;
+
+            if(p.life <= 0) {
+                particles.splice(i, 1);
+            } else {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        requestAnimationFrame(updateParticles);
+    }
+    updateParticles();
+
+    // Start
+    initGame();
+
+</script>
+</body>
+</html>
