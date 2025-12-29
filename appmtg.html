@@ -2,610 +2,541 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MTG Omni-Dex Engine</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mothman Goldfish Sim</title>
     <style>
         :root {
-            --card-w: 200px;
-            --card-h: 280px;
-            --accent: #00e5ff;
-            --bg-dark: #0a0a0a;
-            --panel-bg: rgba(20, 20, 20, 0.9);
+            --card-w: 140px; /* Base size, adjusted via media queries */
+            --card-h: 196px;
+            --bg-dark: #121212;
+            --accent: #4caf50; /* Mutant Green */
         }
+
+        * { box-sizing: border-box; }
 
         body {
             margin: 0;
             background-color: var(--bg-dark);
-            background-image: radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000 100%);
-            color: white;
-            font-family: 'Segoe UI', sans-serif;
-            overflow: hidden;
+            background-image: radial-gradient(circle at 50% 30%, #1e251e 0%, #0a0a0a 100%);
+            color: #eee;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             height: 100vh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            user-select: none;
         }
 
-        /* --- UI CONTROLS --- */
+        /* --- UI TOP BAR --- */
         #ui-bar {
-            position: absolute;
-            top: 0; left: 0; width: 100%;
-            padding: 10px;
-            background: rgba(0,0,0,0.8);
+            height: 50px;
+            background: rgba(20, 20, 20, 0.95);
             border-bottom: 1px solid #333;
-            z-index: 1000;
             display: flex;
-            gap: 10px;
             align-items: center;
+            padding: 0 10px;
+            gap: 10px;
+            z-index: 1000;
         }
 
-        input, button, textarea {
-            background: #222;
-            border: 1px solid #444;
-            color: #fff;
-            padding: 8px 12px;
+        .btn {
+            background: #333;
+            border: 1px solid #555;
+            color: white;
+            padding: 6px 12px;
             border-radius: 4px;
-            font-family: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+            white-space: nowrap;
         }
+        .btn:active { background: var(--accent); border-color: var(--accent); }
         
-        button:hover { background: #333; cursor: pointer; border-color: var(--accent); }
-        button:active { transform: scale(0.98); }
+        .stat-display { font-weight: bold; font-size: 0.9rem; color: #aaa; margin-left: auto; }
+        .stat-val { color: var(--accent); }
 
-        #deck-modal {
-            position: fixed;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            width: 400px;
-            background: var(--panel-bg);
-            border: 1px solid var(--accent);
-            padding: 20px;
-            z-index: 2000;
-            display: none;
-            box-shadow: 0 0 50px rgba(0,0,0,0.8);
-            border-radius: 8px;
-            backdrop-filter: blur(10px);
-        }
-
-        #deck-modal textarea {
-            width: 100%;
-            height: 200px;
-            margin: 10px 0;
-            resize: none;
-        }
-
-        /* --- PLAY AREA --- */
-        #play-area {
+        /* --- LAYOUT --- */
+        #game-area {
             flex: 1;
             position: relative;
-            perspective: 1200px;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
+        /* Battlefield (Scrollable) */
         #battlefield {
             flex: 1;
-            padding: 20px;
+            padding: 15px;
+            overflow-y: auto;
+            overflow-x: hidden;
             display: flex;
             flex-wrap: wrap;
             align-content: flex-start;
-            gap: 10px;
-            overflow-y: auto;
-            transform-style: preserve-3d;
+            gap: 8px;
+            -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
+            padding-bottom: 160px; /* Space so hand doesn't cover bottom cards */
         }
 
-        #hand-area {
-            height: 240px;
-            position: relative;
-            z-index: 100;
+        /* Hand (Fixed Bottom) */
+        #hand-container {
+            height: 160px;
+            background: linear-gradient(to top, rgba(0,0,0,0.95) 60%, transparent);
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            z-index: 500;
+            display: flex;
+            align-items: flex-end;
+            padding: 10px;
+            overflow-x: auto; /* Horizontal scroll */
+            gap: 5px;
+            /* Hide Scrollbar but keep functionality */
+            scrollbar-width: none; 
+        }
+        #hand-container::-webkit-scrollbar { display: none; }
+
+        /* COMMAND ZONE (Floating) */
+        #command-zone {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 100px;
+            height: 140px;
+            border: 2px dashed var(--accent);
+            border-radius: 8px;
             display: flex;
             justify-content: center;
-            align-items: flex-end;
-            padding-bottom: 20px;
+            align-items: center;
+            opacity: 0.8;
+            z-index: 10;
+            transition: 0.3s;
         }
+        #command-zone::after { content: 'Commander'; position: absolute; top: -20px; font-size: 0.7rem; color: var(--accent); }
+        #command-zone.empty { border-color: #444; }
 
-        /* --- CARD OBJECTS --- */
-        .card-slot {
+        /* --- CARD STYLING --- */
+        .card {
             width: var(--card-w);
             height: var(--card-h);
-            position: relative;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            transform-style: preserve-3d;
-            cursor: pointer;
-        }
-
-        /* Image Layer */
-        .card-face {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0; left: 0;
-            border-radius: 10px;
+            border-radius: 8px;
+            background-color: #222;
             background-size: cover;
             background-position: center;
-            background-color: #151515; /* Fallback */
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-            backface-visibility: hidden;
+            position: relative;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            flex-shrink: 0; /* Don't squish in hand */
+            border: 1px solid #000;
         }
 
-        .card-back {
-            background-image: url('https://upload.wikimedia.org/wikipedia/en/a/a4/Magic_the_gathering-card_back.jpg');
-            transform: rotateY(180deg);
+        /* Hover/Active Effects */
+        .card:active { transform: scale(0.95); }
+
+        /* Tapped State */
+        .tapped {
+            transform: rotate(90deg);
+            filter: brightness(0.7);
         }
 
-        /* Holo Foil Shader */
-        .foil-sheen {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            border-radius: 10px;
-            background: linear-gradient(125deg, 
-                rgba(255,255,255,0) 0%, 
-                rgba(255,255,255,0) 40%, 
-                rgba(255,255,255,0.2) 45%, 
-                rgba(255,255,255,0.6) 50%, 
-                rgba(255,255,255,0.2) 55%, 
-                rgba(255,255,255,0) 60%, 
-                rgba(255,255,255,0) 100%
-            );
-            opacity: 0;
-            mix-blend-mode: overlay;
-            pointer-events: none;
-            transition: opacity 0.2s;
-            z-index: 2;
-        }
-
-        /* Hand Layout */
-        #hand-area .card-slot {
-            margin-left: -60px; /* Fan overlap */
+        /* Hand Logic */
+        #hand-container .card {
+            width: 110px; /* Slightly smaller in hand */
+            height: 154px;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.5);
             transform-origin: bottom center;
-            box-shadow: -5px 0 10px rgba(0,0,0,0.5);
         }
         
-        #hand-area .card-slot:hover {
-            transform: translateY(-80px) scale(1.2) !important;
-            z-index: 500;
-            margin: 0 20px;
-        }
-
-        #hand-area .card-slot:hover .foil-sheen {
-            opacity: 1;
-        }
-
-        /* Battlefield Layout */
-        #battlefield .card-slot {
-            transform: scale(0.7);
-            margin: -30px -20px;
-        }
-        
-        #battlefield .card-slot:hover {
-            transform: scale(0.75) translateZ(20px);
-            z-index: 50;
+        #hand-container .card:hover {
+            transform: translateY(-20px) scale(1.1);
+            z-index: 600;
             box-shadow: 0 0 15px var(--accent);
         }
 
-        .tapped {
-            transform: scale(0.7) rotate(90deg) !important;
-            filter: brightness(0.8);
-        }
+        /* Loading Skeleton */
+        .card.loading { background: #333; display: flex; align-items: center; justify-content: center; }
+        .card.loading::after { content: '...'; color: #666; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
 
         /* LIBRARY & GRAVEYARD PILES */
-        .zone-pile {
-            width: 140px;
-            height: 196px;
-            border: 2px dashed #444;
-            border-radius: 10px;
-            position: fixed;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: #666;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        #library { bottom: 20px; right: 20px; background: #111; z-index: 200; }
-        #graveyard { bottom: 20px; right: 180px; z-index: 200; }
-        
-        .zone-pile:hover { border-color: var(--accent); color: var(--accent); }
-
-        /* INSPECTOR MODAL */
-        #inspector {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85);
-            z-index: 3000;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(5px);
-        }
-        
-        #inspector-content {
-            display: flex;
-            gap: 40px;
-            max-width: 800px;
-            background: #111;
-            padding: 30px;
-            border-radius: 12px;
-            border: 1px solid #333;
-        }
-
-        #inspector-img { width: 300px; border-radius: 14px; }
-        #inspector-text { color: #ddd; max-width: 300px; }
-        #inspector-text h2 { color: var(--accent); margin-top: 0; }
-        .stat-row { display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding: 5px 0; }
-
-        /* CANVAS */
-        #fx-canvas {
+        .pile {
             position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            pointer-events: none;
-            z-index: 900;
+            width: 90px;
+            height: 126px;
+            border-radius: 6px;
+            bottom: 170px; /* Above hand */
+            right: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        #library {
+            background: #222 url('https://upload.wikimedia.org/wikipedia/en/a/a4/Magic_the_gathering-card_back.jpg') center/cover;
+            border: 1px solid #555;
+            right: 10px;
         }
         
-        /* Loading Spinner */
-        .loader {
-            border: 3px solid #333;
-            border-top: 3px solid var(--accent);
-            border-radius: 50%;
-            width: 20px; height: 20px;
-            animation: spin 1s linear infinite;
-            display: none;
+        #graveyard {
+            background: rgba(0,0,0,0.5);
+            border: 2px dashed #666;
+            right: 110px;
+            color: #aaa;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+        /* Count badge */
+        .badge {
+            position: absolute;
+            top: -10px; right: -10px;
+            background: var(--accent);
+            color: black;
+            border-radius: 50%;
+            width: 24px; height: 24px;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        /* --- MOBILE ADJUSTMENTS --- */
+        @media (max-width: 768px) {
+            :root {
+                --card-w: 100px;
+                --card-h: 140px;
+            }
+            #battlefield {
+                padding-top: 160px; /* Push down below commander zone */
+            }
+            #command-zone {
+                top: 10px; left: 50%;
+                transform: translateX(-50%);
+                width: 90px; height: 126px;
+            }
+        }
     </style>
 </head>
 <body>
 
-    <canvas id="fx-canvas"></canvas>
-
     <div id="ui-bar">
-        <span style="font-weight:bold; color:var(--accent)">MTG OMNI-DEX</span>
-        <button onclick="toggleDeckModal()">Edit Deck</button>
-        <button onclick="shuffleLibrary()">Shuffle</button>
-        <button onclick="resetGame()">Reset Board</button>
-        <div class="loader" id="api-loader"></div>
-        <div style="flex:1"></div>
-        <input type="text" id="quick-add" placeholder="Quick add card name..." onkeypress="handleQuickAdd(event)">
+        <div style="font-weight: bold; color: var(--accent);">MOTHMAN</div>
+        <button class="btn" onclick="startTurn()">Untap All</button>
+        <button class="btn" onclick="shuffleAndReset()">New Game</button>
+        <div class="stat-display">Life: <span class="stat-val" id="life-total">40</span></div>
     </div>
 
-    <div id="deck-modal">
-        <h3>Build Your Deck</h3>
-        <p style="font-size:0.8rem; color:#888;">Enter card names, one per line.</p>
-        <textarea id="deck-list">
-Sol Ring
-Arcane Signet
-Command Tower
-The Wise Mothman
-Forest
-Island
-Swamp
-Radstorm
-        </textarea>
-        <div style="text-align:right">
-            <button onclick="loadDeck()">Load Deck & Shuffle</button>
-            <button onclick="toggleDeckModal()">Close</button>
-        </div>
-    </div>
-
-    <div id="play-area">
-        <div id="battlefield">
+    <div id="game-area">
+        
+        <div id="command-zone" onclick="castCommander()">
             </div>
 
-        <div id="hand-area">
-            </div>
-    </div>
+        <div id="battlefield"></div>
 
-    <div id="graveyard" class="zone-pile" onclick="alert('Graveyard: Cards destroyed appear here (Visual todo)')">Graveyard</div>
-    <div id="library" class="zone-pile" onclick="drawCard()">
-        <div style="text-align:center">
-            <div>LIBRARY</div>
-            <div id="deck-count" style="font-size:2rem; color:white">0</div>
+        <div id="graveyard" class="pile" onclick="alert('Graveyard contains destroyed cards.')">
+            GY
+            <div id="gy-count" class="badge" style="background:#555; color:white">0</div>
         </div>
-        <div style="position:absolute; width:100%; height:100%; border:2px solid #555; background:#222; border-radius:10px; z-index:-1; top:-5px; left:-5px;"></div>
-        <div style="position:absolute; width:100%; height:100%; border:2px solid #555; background:#222; border-radius:10px; z-index:-2; top:-10px; left:-10px;"></div>
-    </div>
+        
+        <div id="library" class="pile" onclick="drawCard()">
+            <div id="lib-count" class="badge">99</div>
+        </div>
 
-    <div id="inspector" onclick="this.style.display='none'">
-        <div id="inspector-content" onclick="event.stopPropagation()">
-            <img id="inspector-img" src="" alt="Card">
-            <div id="inspector-text">
-                <h2 id="insp-name">Card Name</h2>
-                <div class="stat-row"><span>Type:</span> <span id="insp-type"></span></div>
-                <div class="stat-row"><span>Cost:</span> <span id="insp-cost"></span></div>
-                <br>
-                <div id="insp-oracle" style="line-height:1.5; font-size:0.9rem; white-space: pre-wrap;"></div>
-                <br>
-                <div class="stat-row" id="insp-pt-row"><span>P/T:</span> <span id="insp-pt"></span></div>
-            </div>
-        </div>
+        <div id="hand-container"></div>
     </div>
 
 <script>
+    // --- DECK DATA ---
+    const rawDeckData = [
+        { qty: 1, name: "The Wise Mothman", type: "Creature", category: "Commander", setCode: 'pip' },
+        { qty: 1, name: "Bruvac the Grandiloquent", type: "Creature" },
+        { qty: 1, name: "The Mindskinner", type: "Creature" },
+        { qty: 1, name: "Fetid Gargantua", type: "Creature" },
+        { qty: 1, name: "Expanding Ooze", type: "Creature" },
+        { qty: 1, name: "Ultimecia, Time Sorceress", type: "Creature" },
+        { qty: 1, name: "Danny Pink", type: "Creature" },
+        { qty: 1, name: "Zellix, Sanity Flayer", type: "Creature" },
+        { qty: 1, name: "Syr Konrad, the Grim", type: "Creature" },
+        { qty: 1, name: "Consuming Aberration", type: "Creature" },
+        { qty: 1, name: "Eternal Witness", type: "Creature", setCode: '2x2', cn: '368' },
+        { qty: 1, name: "Thrummingbird", type: "Creature", setCode: 'one', cn: '288' },
+        { qty: 1, name: "Evolution Sage", type: "Creature" },
+        { qty: 1, name: "Flux Channeler", type: "Creature" },
+        { qty: 1, name: "Rishkar, Peema Renegade", type: "Creature" },
+        { qty: 1, name: "Bloatfly Swarm", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Corpsejack Menace", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Glowing One", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Harold and Bob, First Numens", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Lily Bowen, Raging Grandma", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Rampaging Yao Guai", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "The Master, Transcendent", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Tireless Tracker", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Vexing Radgull", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Watchful Radstag", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Winding Constrictor", type: "Creature", setCode: 'pip' },
+        { qty: 1, name: "Maximum Overdrive", type: "Instant" },
+        { qty: 1, name: "Origin of Metalbending", type: "Instant" },
+        { qty: 1, name: "Brain Freeze", type: "Instant", setCode: 'slc', cn: '2' }, 
+        { qty: 1, name: "Narset's Reversal", type: "Instant" },
+        { qty: 1, name: "Golgari Charm", type: "Instant", setCode: 'rtr' },
+        { qty: 1, name: "Biomass Mutation", type: "Instant", setCode: 'pip' },
+        { qty: 1, name: "Inspiring Call", type: "Instant", setCode: 'pip' },
+        { qty: 1, name: "Mutational Advantage", type: "Instant", setCode: 'pip' },
+        { qty: 1, name: "Putrefy", type: "Instant", setCode: 'pip' },
+        { qty: 1, name: "Radstorm", type: "Instant", setCode: 'pip' },
+        { qty: 1, name: "Grasping Tentacles", type: "Sorcery" },
+        { qty: 1, name: "Eerie Ultimatum", type: "Sorcery", setCode: 'slc', cn: '5' },
+        { qty: 1, name: "Nature's Lore", type: "Sorcery", setCode: 'afc', cn: '164' },
+        { qty: 1, name: "Victimize", type: "Sorcery" },
+        { qty: 1, name: "Casualties of War", type: "Sorcery", setCode: 'pip' },
+        { qty: 1, name: "Cultivate", type: "Sorcery", setCode: 'pip' },
+        { qty: 1, name: "Farseek", type: "Sorcery", setCode: 'pip' },
+        { qty: 1, name: "Mesmeric Orb", type: "Artifact", setCode: 'brr', cn: '31' },
+        { qty: 1, name: "Codex Shredder", type: "Artifact", setCode: 'sld' },
+        { qty: 1, name: "Mindcrank", type: "Artifact", setCode: 'sld' },
+        { qty: 1, name: "Arcane Signet", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Contagion Clasp", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Power Fist", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Recon Craft Theta", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Sol Ring", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Talisman of Curiosity", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Talisman of Dominance", type: "Artifact", setCode: 'pip' },
+        { qty: 1, name: "Dictate of Erebos", type: "Enchantment" },
+        { qty: 1, name: "Bloodchief Ascension", type: "Enchantment" },
+        { qty: 1, name: "Fertile Ground", type: "Enchantment", setCode: 'sld', cn: '1846' },
+        { qty: 1, name: "Branching Evolution", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Fraying Sanity", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Guardian Project", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Hardened Scales", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Inexorable Tide", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Struggle for Project Purity", type: "Enchantment", setCode: 'pip' },
+        { qty: 1, name: "Takenuma, Abandoned Mire", type: "Land" },
+        { qty: 1, name: "Rejuvenating Springs", type: "Land" },
+        { qty: 1, name: "Vesuva", type: "Land" },
+        { qty: 1, name: "Ash Barrens", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Command Tower", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Darkwater Catacombs", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Drowned Catacomb", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Evolving Wilds", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Exotic Orchard", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Fetid Pools", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Hinterland Harbor", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Mariposa Military Base", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Nesting Grounds", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Opulent Palace", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Overflowing Basin", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Path of Ancestry", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Sunken Hollow", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Tainted Isle", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Tainted Wood", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Temple of Deceit", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Temple of Malady", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Viridescent Bog", type: "Land", setCode: 'pip' },
+        { qty: 1, name: "Woodland Cemetery", type: "Land", setCode: 'pip' },
+        { qty: 5, name: "Island", type: "Land", setCode: 'pip' },
+        { qty: 5, name: "Swamp", type: "Land", setCode: 'pip' },
+        { qty: 5, name: "Forest", type: "Land", setCode: 'pip' },
+    ];
+
     // --- STATE ---
-    let deck = [];
-    let hand = [];
+    let library = [];
     let graveyard = [];
-    
-    // --- CACHE ---
-    // We cache API responses to avoid banning
-    const cardCache = {}; 
+    let commander = null;
+    let cardCache = {}; // Cache image URLs to prevent re-fetching
 
     // --- ELEMENTS ---
-    const handEl = document.getElementById('hand-area');
-    const battleEl = document.getElementById('battlefield');
-    const deckCountEl = document.getElementById('deck-count');
-    const loader = document.getElementById('api-loader');
-    const canvas = document.getElementById('fx-canvas');
-    const ctx = canvas.getContext('2d');
-
-    // Resize Canvas
-    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-    window.addEventListener('resize', resize);
-    resize();
+    const handContainer = document.getElementById('hand-container');
+    const battlefield = document.getElementById('battlefield');
+    const commandZone = document.getElementById('command-zone');
+    const libCountEl = document.getElementById('lib-count');
+    const gyCountEl = document.getElementById('gy-count');
 
     // --- INITIALIZATION ---
     function init() {
-        loadDeck();
+        processDeck();
+        shuffleAndReset();
     }
 
-    function toggleDeckModal() {
-        const modal = document.getElementById('deck-modal');
-        modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
-    }
+    // Expand "Qty: 5" into 5 individual objects and separate Commander
+    function processDeck() {
+        library = [];
+        commander = null;
 
-    function handleQuickAdd(e) {
-        if(e.key === 'Enter') {
-            const name = e.target.value;
-            if(name) {
-                fetchAndCreateCard(name, 'hand');
-                e.target.value = '';
-            }
-        }
-    }
-
-    // --- DECK MANAGEMENT ---
-    function loadDeck() {
-        const text = document.getElementById('deck-list').value;
-        const lines = text.split('\n').filter(line => line.trim() !== '');
-        deck = lines; // Just names for now, we fetch on draw to save bandwidth
-        updateDeckCount();
-        toggleDeckModal();
-        shuffleLibrary();
-        
-        // Clear board
-        handEl.innerHTML = '';
-        battleEl.innerHTML = '';
-    }
-
-    function shuffleLibrary() {
-        for (let i = deck.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [deck[i], deck[j]] = [deck[j], deck[i]];
-        }
-        // Visual feedback
-        createParticles(window.innerWidth - 100, window.innerHeight - 100, '#00e5ff');
-    }
-
-    function updateDeckCount() {
-        deckCountEl.innerText = deck.length;
-    }
-
-    // --- API & CARD CREATION ---
-    async function drawCard() {
-        if (deck.length === 0) {
-            alert("Library Empty!");
-            return;
-        }
-        const cardName = deck.pop();
-        updateDeckCount();
-        await fetchAndCreateCard(cardName, 'hand');
-    }
-
-    async function fetchAndCreateCard(name, zone) {
-        loader.style.display = 'block';
-        
-        let data = cardCache[name.toLowerCase()];
-
-        if (!data) {
-            try {
-                // Fuzzy search to be forgiving on spelling
-                const res = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
-                if (!res.ok) throw new Error('Card not found');
-                const json = await res.json();
-                
-                // Parse Data
-                data = {
-                    name: json.name,
-                    img: json.image_uris ? json.image_uris.large : (json.card_faces ? json.card_faces[0].image_uris.large : ''),
-                    mana: json.mana_cost,
-                    type: json.type_line,
-                    text: json.oracle_text || (json.card_faces ? json.card_faces[0].oracle_text : ''),
-                    pt: json.power ? `${json.power}/${json.toughness}` : null,
-                    color: json.colors ? json.colors[0] : 'C' // Simple color logic for particles
-                };
-                
-                cardCache[name.toLowerCase()] = data;
-            } catch (err) {
-                console.error(err);
-                loader.style.display = 'none';
+        rawDeckData.forEach(entry => {
+            // Is this the commander?
+            if (entry.category === "Commander") {
+                commander = { ...entry, id: 'cmd-' + Math.random().toString(36).substr(2, 9) };
                 return;
             }
+
+            // Add copies to library
+            for (let i = 0; i < entry.qty; i++) {
+                library.push({
+                    ...entry,
+                    id: Math.random().toString(36).substr(2, 9)
+                });
+            }
+        });
+    }
+
+    function shuffleAndReset() {
+        // Clear board
+        handContainer.innerHTML = '';
+        battlefield.innerHTML = '';
+        commandZone.innerHTML = '';
+        graveyard = [];
+        
+        // Reset Library
+        processDeck(); // Re-populate library
+        
+        // Fisher-Yates Shuffle
+        for (let i = library.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [library[i], library[j]] = [library[j], library[i]];
         }
-        
-        loader.style.display = 'none';
-        createCardDOM(data, zone);
+
+        updateCounts();
+
+        // Load Commander
+        createCardElement(commander, commandZone, 'commander');
+
+        // Draw Opening Hand (7)
+        for(let i=0; i<7; i++) drawCard();
     }
 
-    function createCardDOM(data, zone) {
-        const div = document.createElement('div');
-        div.className = 'card-slot';
-        
-        div.innerHTML = `
-            <div class="card-face" style="background-image: url('${data.img}')"></div>
-            <div class="foil-sheen"></div>
-        `;
+    function updateCounts() {
+        libCountEl.innerText = library.length;
+        gyCountEl.innerText = graveyard.length;
+    }
 
-        // Interaction Logic
-        div.onmousemove = (e) => handleTilt(e, div);
-        div.onmouseleave = () => resetTilt(div);
+    // --- CARD LOGIC ---
+    function drawCard() {
+        if (library.length === 0) return alert("Empty Library!");
+        const cardData = library.pop();
+        updateCounts();
+        createCardElement(cardData, handContainer, 'hand');
+    }
+
+    function castCommander() {
+        if (!commandZone.querySelector('.card')) return;
+        const cardEl = commandZone.querySelector('.card');
         
-        // Left Click Actions
-        div.onclick = (e) => {
-            if (div.parentElement === handEl) {
-                // Cast: Move to Battlefield
-                playCard(div, data);
-            } else if (div.parentElement === battleEl) {
-                // Tap logic
-                div.classList.toggle('tapped');
+        // Move to battlefield
+        moveCardToZone(cardEl, battlefield);
+        commandZone.classList.add('empty');
+    }
+
+    async function fetchCardImage(cardData) {
+        // Check cache
+        const cacheKey = `${cardData.name}-${cardData.setCode || 'default'}-${cardData.cn || ''}`;
+        if (cardCache[cacheKey]) return cardCache[cacheKey];
+
+        // Construct API URL
+        let url;
+        if (cardData.setCode && cardData.cn) {
+            url = `https://api.scryfall.com/cards/${cardData.setCode}/${cardData.cn}`;
+        } else if (cardData.setCode) {
+            url = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cardData.name)}&set=${cardData.setCode}`;
+        } else {
+            url = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardData.name)}`;
+        }
+
+        try {
+            const res = await fetch(url);
+            const json = await res.json();
+            
+            let imgUrl = '';
+            if (json.image_uris) imgUrl = json.image_uris.normal;
+            else if (json.card_faces) imgUrl = json.card_faces[0].image_uris.normal;
+            else imgUrl = 'https://via.placeholder.com/200x280?text=No+Img';
+
+            cardCache[cacheKey] = imgUrl;
+            return imgUrl;
+        } catch (e) {
+            console.error("Fetch failed", e);
+            return 'https://via.placeholder.com/200x280?text=Error';
+        }
+    }
+
+    async function createCardElement(data, container, zone) {
+        const el = document.createElement('div');
+        el.className = 'card loading';
+        el.id = data.id;
+        
+        // Attach logic
+        attachCardEvents(el, zone);
+        container.appendChild(el);
+
+        // Load Image
+        const imgUrl = await fetchCardImage(data);
+        el.style.backgroundImage = `url('${imgUrl}')`;
+        el.classList.remove('loading');
+    }
+
+    function attachCardEvents(el, zone) {
+        // Click Logic
+        el.onclick = () => {
+            if (el.parentElement === handContainer) {
+                // Play from Hand
+                moveCardToZone(el, battlefield);
+            } else if (el.parentElement === battlefield) {
+                // Tap/Untap
+                el.classList.toggle('tapped');
             }
         };
 
-        // Right Click Actions (Context Menu / Inspect)
-        div.oncontextmenu = (e) => {
+        // Right Click / Long Press to Destroy
+        el.oncontextmenu = (e) => {
             e.preventDefault();
-            if (div.parentElement === battleEl) {
-                // Destroy logic
-                destroyCard(div);
-            } else {
-                // Inspect Logic
-                inspectCard(data);
+            if (el.parentElement === battlefield) {
+                destroyCard(el);
             }
         };
-
-        if (zone === 'hand') handEl.appendChild(div);
-        else battleEl.appendChild(div);
-
-        // Entrance animation
-        createParticles(window.innerWidth/2, window.innerHeight, '#ffffff');
     }
 
-    function playCard(el, data) {
-        // Remove from hand, add to battlefield
-        // We clone to reset transforms
-        el.remove();
+    function moveCardToZone(el, newContainer) {
+        // Animation helper
+        el.style.transition = 'none'; // reset
         
-        const newEl = document.createElement('div');
-        newEl.className = 'card-slot';
-        newEl.innerHTML = el.innerHTML;
+        // If moving to battlefield, reset style from hand (width/height are css handled, but transforms need clearing)
+        el.style.transform = ''; 
         
-        // Reattach listeners
-        newEl.onmousemove = (e) => handleTilt(e, newEl);
-        newEl.onmouseleave = () => resetTilt(newEl);
-        newEl.onclick = () => newEl.classList.toggle('tapped');
-        newEl.oncontextmenu = (e) => {
-            e.preventDefault();
-            if(e.shiftKey) inspectCard(data); // Shift+RightClick to inspect on board
-            else destroyCard(newEl);
-        };
-
-        battleEl.appendChild(newEl);
+        // Re-append to new parent
+        newContainer.appendChild(el);
         
-        // VFX
-        const rect = newEl.getBoundingClientRect();
-        const colorHex = getColorHex(data.color);
-        createParticles(rect.left + 100, rect.top + 140, colorHex);
+        // Scroll battlefield to bottom to see new card if overflow
+        if (newContainer === battlefield) {
+            newContainer.scrollTop = newContainer.scrollHeight;
+        }
     }
 
     function destroyCard(el) {
-        el.style.transition = "transform 0.5s, opacity 0.5s";
-        el.style.transform = "scale(0) rotate(180deg)";
-        el.style.opacity = "0";
-        setTimeout(() => el.remove(), 500);
+        graveyard.push(el.id); // minimal tracking
+        updateCounts();
+        el.remove();
     }
 
-    function inspectCard(data) {
-        document.getElementById('inspector').style.display = 'flex';
-        document.getElementById('inspector-img').src = data.img;
-        document.getElementById('insp-name').innerText = data.name;
-        document.getElementById('insp-type').innerText = data.type;
-        document.getElementById('insp-cost').innerText = data.mana || "";
-        document.getElementById('insp-oracle').innerText = data.text;
+    // --- GAMEPLAY TOOLS ---
+    function startTurn() {
+        // Untap all cards in battlefield
+        const tapped = battlefield.querySelectorAll('.tapped');
+        tapped.forEach(c => c.classList.remove('tapped'));
         
-        if(data.pt) {
-            document.getElementById('insp-pt-row').style.display = 'flex';
-            document.getElementById('insp-pt').innerText = data.pt;
-        } else {
-            document.getElementById('insp-pt-row').style.display = 'none';
-        }
+        // Untap commander if active
+        const cmd = battlefield.querySelector(`[id^="cmd-"]`);
+        if(cmd) cmd.classList.remove('tapped');
+
+        // Draw
+        drawCard();
     }
 
-    function getColorHex(code) {
-        const map = { 'W': '#fffbd5', 'U': '#00aaff', 'B': '#a0a0a0', 'R': '#ff4400', 'G': '#00dd44' };
-        return map[code] || '#ffffff';
-    }
-
-    function resetGame() {
-        handEl.innerHTML = '';
-        battleEl.innerHTML = '';
-        deck = [];
-        updateDeckCount();
-    }
-
-    // --- VISUAL FX (TILT) ---
-    function handleTilt(e, el) {
-        if(el.classList.contains('tapped')) return;
-        
-        const rect = el.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const cx = rect.width / 2;
-        const cy = rect.height / 2;
-        
-        // Calculate rotation (max 20deg)
-        const rx = ((y - cy) / cy) * -20; 
-        const ry = ((x - cx) / cx) * 20;
-
-        el.style.transform = `perspective(1000px) rotateX(${rx}deg) rotateY(${ry}deg) scale(1.1)`;
-        
-        // Foil gradient
-        const sheen = el.querySelector('.foil-sheen');
-        if(sheen) {
-            sheen.style.background = `linear-gradient(${115 + ry}deg, transparent 20%, rgba(255,255,255,0.4) ${40 + rx}%, transparent 80%)`;
-        }
-    }
-
-    function resetTilt(el) {
-        if(!el.classList.contains('tapped')) {
-             // If in battlefield, scale down, else reset
-             if(el.parentElement === battleEl) el.style.transform = 'scale(0.7)';
-             else el.style.transform = 'scale(1) rotateX(0) rotateY(0)';
-        }
-    }
-
-    // --- PARTICLES ---
-    const particles = [];
-    function createParticles(x, y, color) {
-        for(let i=0; i<20; i++) {
-            particles.push({
-                x: x, y: y,
-                vx: (Math.random() - 0.5) * 15,
-                vy: (Math.random() - 0.5) * 15,
-                life: 1.0, color: color, size: Math.random() * 5 + 2
-            });
-        }
-    }
-
-    function loop() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        for(let i=particles.length-1; i>=0; i--) {
-            let p = particles[i];
-            p.x += p.vx; p.y += p.vy;
-            p.life -= 0.03;
-            if(p.life <= 0) particles.splice(i, 1);
-            else {
-                ctx.globalAlpha = p.life;
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-                ctx.fill();
-            }
-        }
-        requestAnimationFrame(loop);
-    }
-    loop();
+    // Prevent Zoom on double tap on iOS
+    document.addEventListener('dblclick', function(event) {
+        event.preventDefault();
+    }, { passive: false });
 
     // Start
     init();
