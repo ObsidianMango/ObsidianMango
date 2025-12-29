@@ -3,553 +3,612 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MTG Holo-Battle Engine</title>
+    <title>MTG Omni-Dex Engine</title>
     <style>
         :root {
             --card-w: 200px;
             --card-h: 280px;
-            --bg-color: #121212;
-            --accent: #00d2ff;
+            --accent: #00e5ff;
+            --bg-dark: #0a0a0a;
+            --panel-bg: rgba(20, 20, 20, 0.9);
         }
 
         body {
             margin: 0;
-            background-color: var(--bg-color);
-            background-image: 
-                radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000 100%);
+            background-color: var(--bg-dark);
+            background-image: radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000 100%);
             color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             overflow: hidden;
             height: 100vh;
             display: flex;
             flex-direction: column;
-            perspective: 1000px;
+            user-select: none;
         }
 
-        /* UI Overlay */
-        #ui-layer {
+        /* --- UI CONTROLS --- */
+        #ui-bar {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            padding: 20px;
-            pointer-events: none;
-            z-index: 100;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .stat-box {
+            top: 0; left: 0; width: 100%;
+            padding: 10px;
             background: rgba(0,0,0,0.8);
-            border: 1px solid #333;
-            padding: 10px 20px;
+            border-bottom: 1px solid #333;
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        input, button, textarea {
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        
+        button:hover { background: #333; cursor: pointer; border-color: var(--accent); }
+        button:active { transform: scale(0.98); }
+
+        #deck-modal {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            background: var(--panel-bg);
+            border: 1px solid var(--accent);
+            padding: 20px;
+            z-index: 2000;
+            display: none;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
             border-radius: 8px;
-            backdrop-filter: blur(5px);
-            pointer-events: auto;
-            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+            backdrop-filter: blur(10px);
         }
 
-        .mana-display span {
-            margin-right: 10px;
-            font-weight: bold;
-            font-size: 1.2rem;
+        #deck-modal textarea {
+            width: 100%;
+            height: 200px;
+            margin: 10px 0;
+            resize: none;
         }
 
-        /* The Board */
-        #game-board {
+        /* --- PLAY AREA --- */
+        #play-area {
             flex: 1;
+            position: relative;
+            perspective: 1200px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            transform-style: preserve-3d;
-            padding-bottom: 220px; /* Space for hand */
         }
 
         #battlefield {
-            width: 90%;
-            height: 400px;
-            border: 2px dashed #333;
-            border-radius: 20px;
+            flex: 1;
+            padding: 20px;
             display: flex;
             flex-wrap: wrap;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            transition: border-color 0.3s;
+            align-content: flex-start;
+            gap: 10px;
+            overflow-y: auto;
+            transform-style: preserve-3d;
         }
 
-        #battlefield.active {
-            border-color: var(--accent);
-            background: rgba(0, 210, 255, 0.05);
-        }
-
-        /* The Hand */
-        #hand-container {
-            position: fixed;
-            bottom: -50px;
-            left: 0;
-            width: 100%;
-            height: 250px;
+        #hand-area {
+            height: 240px;
+            position: relative;
+            z-index: 100;
             display: flex;
             justify-content: center;
             align-items: flex-end;
-            z-index: 50;
-            padding-bottom: 60px;
+            padding-bottom: 20px;
         }
 
-        /* CARD STYLES */
-        .card {
+        /* --- CARD OBJECTS --- */
+        .card-slot {
             width: var(--card-w);
             height: var(--card-h);
-            background: #222;
-            border-radius: 12px;
             position: relative;
-            transition: transform 0.1s ease-out, bottom 0.3s;
-            cursor: pointer;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            user-select: none;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
             transform-style: preserve-3d;
-            border: 1px solid #444;
-            margin: 0 -30px; /* Fan effect */
+            cursor: pointer;
         }
 
-        .card:hover {
-            z-index: 100;
-            margin: 0 10px;
-            bottom: 40px; /* Pop up */
-        }
-
-        .card-inner {
+        /* Image Layer */
+        .card-face {
             width: 100%;
             height: 100%;
-            border-radius: 12px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            pointer-events: none;
-        }
-
-        /* Card Art */
-        .card-art {
-            height: 50%;
-            background: #333;
-            border-bottom: 2px solid #000;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .card-art img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .art-placeholder {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 4rem;
-        }
-
-        /* Card Text */
-        .card-content {
-            padding: 10px;
-            flex: 1;
-            background: #1a1a1a;
-            position: relative;
-        }
-
-        .card-title {
-            font-weight: bold;
-            font-size: 0.9rem;
-            display: flex;
-            justify-content: space-between;
-            border-bottom: 1px solid #444;
-            padding-bottom: 4px;
-            margin-bottom: 4px;
-        }
-
-        .card-type {
-            font-size: 0.7rem;
-            color: #aaa;
-            margin-bottom: 5px;
-        }
-
-        .card-text {
-            font-size: 0.75rem;
-            line-height: 1.2;
-            color: #ddd;
-        }
-
-        .pt-box {
             position: absolute;
-            bottom: 5px;
-            right: 5px;
-            background: #111;
-            border: 1px solid #555;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: bold;
+            top: 0; left: 0;
+            border-radius: 10px;
+            background-size: cover;
+            background-position: center;
+            background-color: #151515; /* Fallback */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            backface-visibility: hidden;
         }
 
-        /* Dynamic Foil Layer */
-        .foil-layer {
+        .card-back {
+            background-image: url('https://upload.wikimedia.org/wikipedia/en/a/a4/Magic_the_gathering-card_back.jpg');
+            transform: rotateY(180deg);
+        }
+
+        /* Holo Foil Shader */
+        .foil-sheen {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            border-radius: 12px;
-            background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,0.3) 25%, transparent 30%, transparent 70%, rgba(255,255,255,0.3) 75%, transparent 80%);
+            border-radius: 10px;
+            background: linear-gradient(125deg, 
+                rgba(255,255,255,0) 0%, 
+                rgba(255,255,255,0) 40%, 
+                rgba(255,255,255,0.2) 45%, 
+                rgba(255,255,255,0.6) 50%, 
+                rgba(255,255,255,0.2) 55%, 
+                rgba(255,255,255,0) 60%, 
+                rgba(255,255,255,0) 100%
+            );
             opacity: 0;
             mix-blend-mode: overlay;
             pointer-events: none;
             transition: opacity 0.2s;
-            z-index: 10;
+            z-index: 2;
+        }
+
+        /* Hand Layout */
+        #hand-area .card-slot {
+            margin-left: -60px; /* Fan overlap */
+            transform-origin: bottom center;
+            box-shadow: -5px 0 10px rgba(0,0,0,0.5);
         }
         
-        .card:hover .foil-layer {
+        #hand-area .card-slot:hover {
+            transform: translateY(-80px) scale(1.2) !important;
+            z-index: 500;
+            margin: 0 20px;
+        }
+
+        #hand-area .card-slot:hover .foil-sheen {
             opacity: 1;
         }
 
-        /* Canvas for particles */
-        #particle-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 200;
-        }
-
-        /* Tapped State */
-        .tapped {
-            transform: rotate(90deg) !important;
-            filter: grayscale(0.5);
-        }
-
-        /* On Battlefield */
-        #battlefield .card {
-            margin: 5px;
-            transform: scale(0.8);
-            position: relative;
-            bottom: auto;
+        /* Battlefield Layout */
+        #battlefield .card-slot {
+            transform: scale(0.7);
+            margin: -30px -20px;
         }
         
-        #battlefield .card:hover {
-            transform: scale(1.0) translateY(-10px) rotateX(10deg);
-            z-index: 20;
-            margin: 5px;
+        #battlefield .card-slot:hover {
+            transform: scale(0.75) translateZ(20px);
+            z-index: 50;
+            box-shadow: 0 0 15px var(--accent);
         }
 
-        /* Colors */
-        .frame-blue { border: 2px solid #0077ff; box-shadow: inset 0 0 20px rgba(0,119,255,0.2); }
-        .frame-red { border: 2px solid #ff3300; box-shadow: inset 0 0 20px rgba(255,51,0,0.2); }
-        .frame-green { border: 2px solid #00cc44; box-shadow: inset 0 0 20px rgba(0,204,68,0.2); }
-        .frame-land { border: 2px solid #aa8866; }
+        .tapped {
+            transform: scale(0.7) rotate(90deg) !important;
+            filter: brightness(0.8);
+        }
+
+        /* LIBRARY & GRAVEYARD PILES */
+        .zone-pile {
+            width: 140px;
+            height: 196px;
+            border: 2px dashed #444;
+            border-radius: 10px;
+            position: fixed;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #666;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        #library { bottom: 20px; right: 20px; background: #111; z-index: 200; }
+        #graveyard { bottom: 20px; right: 180px; z-index: 200; }
+        
+        .zone-pile:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* INSPECTOR MODAL */
+        #inspector {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        
+        #inspector-content {
+            display: flex;
+            gap: 40px;
+            max-width: 800px;
+            background: #111;
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid #333;
+        }
+
+        #inspector-img { width: 300px; border-radius: 14px; }
+        #inspector-text { color: #ddd; max-width: 300px; }
+        #inspector-text h2 { color: var(--accent); margin-top: 0; }
+        .stat-row { display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding: 5px 0; }
+
+        /* CANVAS */
+        #fx-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 900;
+        }
+        
+        /* Loading Spinner */
+        .loader {
+            border: 3px solid #333;
+            border-top: 3px solid var(--accent);
+            border-radius: 50%;
+            width: 20px; height: 20px;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
     </style>
 </head>
 <body>
 
-    <canvas id="particle-canvas"></canvas>
+    <canvas id="fx-canvas"></canvas>
 
-    <div id="ui-layer">
-        <div class="stat-box">
-            <div>Player Health: <span style="color:red">20</span></div>
-        </div>
-        <div class="stat-box mana-display">
-            Pool: 
-            <span style="color: #ff3300">R:<span id="mana-r">0</span></span>
-            <span style="color: #0077ff">U:<span id="mana-u">0</span></span>
-            <span style="color: #00cc44">G:<span id="mana-g">0</span></span>
-        </div>
-        <div class="stat-box">
-            <button onclick="resetGame()" style="background:none; border:none; color:white; cursor:pointer;">Reset Game</button>
+    <div id="ui-bar">
+        <span style="font-weight:bold; color:var(--accent)">MTG OMNI-DEX</span>
+        <button onclick="toggleDeckModal()">Edit Deck</button>
+        <button onclick="shuffleLibrary()">Shuffle</button>
+        <button onclick="resetGame()">Reset Board</button>
+        <div class="loader" id="api-loader"></div>
+        <div style="flex:1"></div>
+        <input type="text" id="quick-add" placeholder="Quick add card name..." onkeypress="handleQuickAdd(event)">
+    </div>
+
+    <div id="deck-modal">
+        <h3>Build Your Deck</h3>
+        <p style="font-size:0.8rem; color:#888;">Enter card names, one per line.</p>
+        <textarea id="deck-list">
+Sol Ring
+Arcane Signet
+Command Tower
+The Wise Mothman
+Forest
+Island
+Swamp
+Radstorm
+        </textarea>
+        <div style="text-align:right">
+            <button onclick="loadDeck()">Load Deck & Shuffle</button>
+            <button onclick="toggleDeckModal()">Close</button>
         </div>
     </div>
 
-    <div id="game-board">
+    <div id="play-area">
         <div id="battlefield">
+            </div>
+
+        <div id="hand-area">
             </div>
     </div>
 
-    <div id="hand-container">
+    <div id="graveyard" class="zone-pile" onclick="alert('Graveyard: Cards destroyed appear here (Visual todo)')">Graveyard</div>
+    <div id="library" class="zone-pile" onclick="drawCard()">
+        <div style="text-align:center">
+            <div>LIBRARY</div>
+            <div id="deck-count" style="font-size:2rem; color:white">0</div>
         </div>
+        <div style="position:absolute; width:100%; height:100%; border:2px solid #555; background:#222; border-radius:10px; z-index:-1; top:-5px; left:-5px;"></div>
+        <div style="position:absolute; width:100%; height:100%; border:2px solid #555; background:#222; border-radius:10px; z-index:-2; top:-10px; left:-10px;"></div>
+    </div>
+
+    <div id="inspector" onclick="this.style.display='none'">
+        <div id="inspector-content" onclick="event.stopPropagation()">
+            <img id="inspector-img" src="" alt="Card">
+            <div id="inspector-text">
+                <h2 id="insp-name">Card Name</h2>
+                <div class="stat-row"><span>Type:</span> <span id="insp-type"></span></div>
+                <div class="stat-row"><span>Cost:</span> <span id="insp-cost"></span></div>
+                <br>
+                <div id="insp-oracle" style="line-height:1.5; font-size:0.9rem; white-space: pre-wrap;"></div>
+                <br>
+                <div class="stat-row" id="insp-pt-row"><span>P/T:</span> <span id="insp-pt"></span></div>
+            </div>
+        </div>
+    </div>
 
 <script>
-    // --- GAME ENGINE ---
-
-    const handContainer = document.getElementById('hand-container');
-    const battlefield = document.getElementById('battlefield');
-    const canvas = document.getElementById('particle-canvas');
-    const ctx = canvas.getContext('2d');
+    // --- STATE ---
+    let deck = [];
+    let hand = [];
+    let graveyard = [];
     
-    let canvasW, canvasH;
+    // --- CACHE ---
+    // We cache API responses to avoid banning
+    const cardCache = {}; 
+
+    // --- ELEMENTS ---
+    const handEl = document.getElementById('hand-area');
+    const battleEl = document.getElementById('battlefield');
+    const deckCountEl = document.getElementById('deck-count');
+    const loader = document.getElementById('api-loader');
+    const canvas = document.getElementById('fx-canvas');
+    const ctx = canvas.getContext('2d');
 
     // Resize Canvas
-    function resize() {
-        canvasW = canvas.width = window.innerWidth;
-        canvasH = canvas.height = window.innerHeight;
-    }
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
     window.addEventListener('resize', resize);
     resize();
 
-    // Game State
-    let mana = { r: 0, u: 0, g: 0 };
-    
-    // Card Database (Mock Data)
-    const cardDB = [
-        { id: 1, name: "Volcanic Island", type: "Land", color: "land", text: "Tap: Add R or U", cost: "", art: "🌋", frame: "frame-land", manaProduces: ['r', 'u'] },
-        { id: 2, name: "Forest", type: "Land", color: "land", text: "Tap: Add G", cost: "", art: "🌲", frame: "frame-land", manaProduces: ['g'] },
-        { id: 3, name: "Cyber Dragon", type: "Creature", color: "red", cost: {r:1, any:1}, power: 2, tough: 2, text: "Haste, Flying", art: "🐉", frame: "frame-red" },
-        { id: 4, name: "Logic Knot", type: "Instant", color: "blue", cost: {u:2}, text: "Counter target spell.", art: "🧬", frame: "frame-blue" },
-        { id: 5, name: "Behemoth", type: "Creature", color: "green", cost: {g:3}, power: 6, tough: 6, text: "Trample", art: "🦖", frame: "frame-green" },
-        { id: 6, name: "Lightning Bolt", type: "Instant", color: "red", cost: {r:1}, text: "Deal 3 damage.", art: "⚡", frame: "frame-red" },
-        { id: 7, name: "Ancient Tomb", type: "Land", color: "land", text: "Tap: Add 2. Take 2 dmg.", art: "🏛️", frame: "frame-land", manaProduces: ['c'] }
-    ];
+    // --- INITIALIZATION ---
+    function init() {
+        loadDeck();
+    }
 
-    // Initialize Hand
-    function initGame() {
-        handContainer.innerHTML = '';
-        battlefield.innerHTML = '';
-        mana = { r:0, u:0, g:0 };
-        updateManaUI();
+    function toggleDeckModal() {
+        const modal = document.getElementById('deck-modal');
+        modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+    }
 
-        // Deal 7 random cards
-        for(let i=0; i<7; i++) {
-            const randomCard = cardDB[Math.floor(Math.random() * cardDB.length)];
-            createCardElement(randomCard, handContainer, 'hand');
+    function handleQuickAdd(e) {
+        if(e.key === 'Enter') {
+            const name = e.target.value;
+            if(name) {
+                fetchAndCreateCard(name, 'hand');
+                e.target.value = '';
+            }
         }
     }
 
-    // Update Mana UI
-    function updateManaUI() {
-        document.getElementById('mana-r').innerText = mana.r;
-        document.getElementById('mana-u').innerText = mana.u;
-        document.getElementById('mana-g').innerText = mana.g;
-    }
-
-    // Create Card DOM
-    function createCardElement(data, container, location) {
-        const el = document.createElement('div');
-        el.className = `card ${data.frame}`;
+    // --- DECK MANAGEMENT ---
+    function loadDeck() {
+        const text = document.getElementById('deck-list').value;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        deck = lines; // Just names for now, we fetch on draw to save bandwidth
+        updateDeckCount();
+        toggleDeckModal();
+        shuffleLibrary();
         
-        // Internal Structure
-        el.innerHTML = `
-            <div class="card-inner">
-                <div class="foil-layer"></div>
-                <div class="card-art">
-                    <div class="art-placeholder" style="background:${getArtBg(data.color)}">${data.art}</div>
-                </div>
-                <div class="card-content">
-                    <div class="card-title">
-                        <span>${data.name}</span>
-                        <span>${formatCost(data.cost)}</span>
-                    </div>
-                    <div class="card-type">${data.type}</div>
-                    <div class="card-text">${data.text}</div>
-                    ${data.power ? `<div class="pt-box">${data.power}/${data.tough}</div>` : ''}
-                </div>
-            </div>
-        `;
-
-        // 3D Tilt Effect
-        el.addEventListener('mousemove', (e) => {
-            const rect = el.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            const centerX = rect.width / 2;
-            const centerY = rect.height / 2;
-            
-            const rotateX = ((y - centerY) / centerY) * -15; // Max 15deg
-            const rotateY = ((x - centerX) / centerX) * 15;
-
-            // Apply transform (ignore tapped state for hover calc, handled in click)
-            if(!el.classList.contains('tapped')) {
-                el.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.1)`;
-            }
-            
-            // Move Foil Gradient
-            const foil = el.querySelector('.foil-layer');
-            foil.style.background = `linear-gradient(${115 + rotateY * 2}deg, transparent 20%, rgba(255,255,255,0.4) ${40 + rotateX}%, transparent 60%)`;
-        });
-
-        el.addEventListener('mouseleave', () => {
-            if(!el.classList.contains('tapped')) {
-                // Return to location specific base state
-                if(location === 'hand') el.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) scale(1)';
-                else el.style.transform = 'scale(0.8)';
-            }
-        });
-
-        // Click Logic
-        el.addEventListener('click', (e) => {
-            if (location === 'hand') {
-                tryToPlayCard(el, data);
-            } else if (location === 'battlefield') {
-                toggleTap(el, data);
-            }
-        });
-
-        container.appendChild(el);
-        return el;
+        // Clear board
+        handEl.innerHTML = '';
+        battleEl.innerHTML = '';
     }
 
-    function getArtBg(color) {
-        if(color === 'red') return 'linear-gradient(45deg, #550000, #aa0000)';
-        if(color === 'blue') return 'linear-gradient(45deg, #000055, #0000aa)';
-        if(color === 'green') return 'linear-gradient(45deg, #005500, #00aa00)';
-        return 'linear-gradient(45deg, #444, #666)';
-    }
-
-    function formatCost(cost) {
-        if(!cost) return "";
-        let str = "";
-        if(cost.any) str += `(${cost.any})`;
-        if(cost.g) str += "🌳".repeat(cost.g);
-        if(cost.u) str += "💧".repeat(cost.u);
-        if(cost.r) str += "🔥".repeat(cost.r);
-        return str;
-    }
-
-    // --- LOGIC ---
-
-    function toggleTap(el, data) {
-        if (data.type === "Land" && !el.classList.contains('tapped')) {
-            el.classList.add('tapped');
-            // Add mana based on type (simple logic for demo)
-            if(data.manaProduces.includes('r')) mana.r++;
-            else if(data.manaProduces.includes('u')) mana.u++;
-            else if(data.manaProduces.includes('g')) mana.g++;
-            else if(data.manaProduces.includes('c')) {
-                // generic adds to lowest pool for visual demo
-                mana.r++; 
-            }
-            createParticles(el.getBoundingClientRect().left + 100, el.getBoundingClientRect().top + 140, getParticleColor(data.color));
-            updateManaUI();
-        } else if (el.classList.contains('tapped')) {
-            // Untap logic (omitted for simple demo, just visually untap but don't refund mana)
-             el.classList.remove('tapped');
-             el.style.transform = 'scale(0.8)';
-        } else {
-            // Creature attack tap
-             el.classList.add('tapped');
+    function shuffleLibrary() {
+        for (let i = deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [deck[i], deck[j]] = [deck[j], deck[i]];
         }
+        // Visual feedback
+        createParticles(window.innerWidth - 100, window.innerHeight - 100, '#00e5ff');
     }
 
-    function tryToPlayCard(el, data) {
-        // Simple Mana Check
-        let canCast = true;
-        
-        // Lands are free
-        if (data.type === "Land") {
-            playCardAnimation(el, data);
+    function updateDeckCount() {
+        deckCountEl.innerText = deck.length;
+    }
+
+    // --- API & CARD CREATION ---
+    async function drawCard() {
+        if (deck.length === 0) {
+            alert("Library Empty!");
             return;
         }
+        const cardName = deck.pop();
+        updateDeckCount();
+        await fetchAndCreateCard(cardName, 'hand');
+    }
 
-        // Check Mana cost (Simplified: Just check total vs pools)
-        let costR = data.cost.r || 0;
-        let costU = data.cost.u || 0;
-        let costG = data.cost.g || 0;
-        let generic = data.cost.any || 0;
+    async function fetchAndCreateCard(name, zone) {
+        loader.style.display = 'block';
+        
+        let data = cardCache[name.toLowerCase()];
 
-        if (mana.r >= costR && mana.u >= costU && mana.g >= costG) {
-            // Deduct colored
-            mana.r -= costR;
-            mana.u -= costU;
-            mana.g -= costG;
-            
-            // Deduct generic (naive implementation)
-            let totalRemaining = mana.r + mana.u + mana.g;
-            if (totalRemaining >= generic) {
-                // Naive generic deduction
-                for(let i=0; i<generic; i++){
-                    if(mana.r > 0) mana.r--;
-                    else if(mana.u > 0) mana.u--;
-                    else mana.g--;
-                }
-                updateManaUI();
-                playCardAnimation(el, data);
-            } else {
-                alert("Not enough generic mana!");
+        if (!data) {
+            try {
+                // Fuzzy search to be forgiving on spelling
+                const res = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`);
+                if (!res.ok) throw new Error('Card not found');
+                const json = await res.json();
+                
+                // Parse Data
+                data = {
+                    name: json.name,
+                    img: json.image_uris ? json.image_uris.large : (json.card_faces ? json.card_faces[0].image_uris.large : ''),
+                    mana: json.mana_cost,
+                    type: json.type_line,
+                    text: json.oracle_text || (json.card_faces ? json.card_faces[0].oracle_text : ''),
+                    pt: json.power ? `${json.power}/${json.toughness}` : null,
+                    color: json.colors ? json.colors[0] : 'C' // Simple color logic for particles
+                };
+                
+                cardCache[name.toLowerCase()] = data;
+            } catch (err) {
+                console.error(err);
+                loader.style.display = 'none';
+                return;
             }
+        }
+        
+        loader.style.display = 'none';
+        createCardDOM(data, zone);
+    }
+
+    function createCardDOM(data, zone) {
+        const div = document.createElement('div');
+        div.className = 'card-slot';
+        
+        div.innerHTML = `
+            <div class="card-face" style="background-image: url('${data.img}')"></div>
+            <div class="foil-sheen"></div>
+        `;
+
+        // Interaction Logic
+        div.onmousemove = (e) => handleTilt(e, div);
+        div.onmouseleave = () => resetTilt(div);
+        
+        // Left Click Actions
+        div.onclick = (e) => {
+            if (div.parentElement === handEl) {
+                // Cast: Move to Battlefield
+                playCard(div, data);
+            } else if (div.parentElement === battleEl) {
+                // Tap logic
+                div.classList.toggle('tapped');
+            }
+        };
+
+        // Right Click Actions (Context Menu / Inspect)
+        div.oncontextmenu = (e) => {
+            e.preventDefault();
+            if (div.parentElement === battleEl) {
+                // Destroy logic
+                destroyCard(div);
+            } else {
+                // Inspect Logic
+                inspectCard(data);
+            }
+        };
+
+        if (zone === 'hand') handEl.appendChild(div);
+        else battleEl.appendChild(div);
+
+        // Entrance animation
+        createParticles(window.innerWidth/2, window.innerHeight, '#ffffff');
+    }
+
+    function playCard(el, data) {
+        // Remove from hand, add to battlefield
+        // We clone to reset transforms
+        el.remove();
+        
+        const newEl = document.createElement('div');
+        newEl.className = 'card-slot';
+        newEl.innerHTML = el.innerHTML;
+        
+        // Reattach listeners
+        newEl.onmousemove = (e) => handleTilt(e, newEl);
+        newEl.onmouseleave = () => resetTilt(newEl);
+        newEl.onclick = () => newEl.classList.toggle('tapped');
+        newEl.oncontextmenu = (e) => {
+            e.preventDefault();
+            if(e.shiftKey) inspectCard(data); // Shift+RightClick to inspect on board
+            else destroyCard(newEl);
+        };
+
+        battleEl.appendChild(newEl);
+        
+        // VFX
+        const rect = newEl.getBoundingClientRect();
+        const colorHex = getColorHex(data.color);
+        createParticles(rect.left + 100, rect.top + 140, colorHex);
+    }
+
+    function destroyCard(el) {
+        el.style.transition = "transform 0.5s, opacity 0.5s";
+        el.style.transform = "scale(0) rotate(180deg)";
+        el.style.opacity = "0";
+        setTimeout(() => el.remove(), 500);
+    }
+
+    function inspectCard(data) {
+        document.getElementById('inspector').style.display = 'flex';
+        document.getElementById('inspector-img').src = data.img;
+        document.getElementById('insp-name').innerText = data.name;
+        document.getElementById('insp-type').innerText = data.type;
+        document.getElementById('insp-cost').innerText = data.mana || "";
+        document.getElementById('insp-oracle').innerText = data.text;
+        
+        if(data.pt) {
+            document.getElementById('insp-pt-row').style.display = 'flex';
+            document.getElementById('insp-pt').innerText = data.pt;
         } else {
-            el.style.boxShadow = "0 0 20px red";
-            setTimeout(() => el.style.boxShadow = "", 500);
+            document.getElementById('insp-pt-row').style.display = 'none';
         }
     }
 
-    function playCardAnimation(el, data) {
-        const rect = el.getBoundingClientRect();
-        
-        // Create a clone for the battlefield
-        el.remove(); // Remove from hand
-        
-        // Create new element on battlefield
-        const newEl = createCardElement(data, battlefield, 'battlefield');
-        
-        // Trigger Effects
-        createParticles(rect.left + (rect.width/2), rect.top + (rect.height/2), getParticleColor(data.color));
-    }
-
-    function getParticleColor(color) {
-        if(color === 'red') return '#ff3300';
-        if(color === 'blue') return '#0077ff';
-        if(color === 'green') return '#00cc44';
-        return '#ffffff';
+    function getColorHex(code) {
+        const map = { 'W': '#fffbd5', 'U': '#00aaff', 'B': '#a0a0a0', 'R': '#ff4400', 'G': '#00dd44' };
+        return map[code] || '#ffffff';
     }
 
     function resetGame() {
-        initGame();
+        handEl.innerHTML = '';
+        battleEl.innerHTML = '';
+        deck = [];
+        updateDeckCount();
     }
 
-    // --- PARTICLE SYSTEM ---
-    const particles = [];
+    // --- VISUAL FX (TILT) ---
+    function handleTilt(e, el) {
+        if(el.classList.contains('tapped')) return;
+        
+        const rect = el.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+        
+        // Calculate rotation (max 20deg)
+        const rx = ((y - cy) / cy) * -20; 
+        const ry = ((x - cx) / cx) * 20;
 
+        el.style.transform = `perspective(1000px) rotateX(${rx}deg) rotateY(${ry}deg) scale(1.1)`;
+        
+        // Foil gradient
+        const sheen = el.querySelector('.foil-sheen');
+        if(sheen) {
+            sheen.style.background = `linear-gradient(${115 + ry}deg, transparent 20%, rgba(255,255,255,0.4) ${40 + rx}%, transparent 80%)`;
+        }
+    }
+
+    function resetTilt(el) {
+        if(!el.classList.contains('tapped')) {
+             // If in battlefield, scale down, else reset
+             if(el.parentElement === battleEl) el.style.transform = 'scale(0.7)';
+             else el.style.transform = 'scale(1) rotateX(0) rotateY(0)';
+        }
+    }
+
+    // --- PARTICLES ---
+    const particles = [];
     function createParticles(x, y, color) {
-        for(let i=0; i<30; i++) {
+        for(let i=0; i<20; i++) {
             particles.push({
-                x: x,
-                y: y,
-                vx: (Math.random() - 0.5) * 10,
-                vy: (Math.random() - 0.5) * 10,
-                life: 1.0,
-                color: color,
-                size: Math.random() * 4 + 2
+                x: x, y: y,
+                vx: (Math.random() - 0.5) * 15,
+                vy: (Math.random() - 0.5) * 15,
+                life: 1.0, color: color, size: Math.random() * 5 + 2
             });
         }
     }
 
-    function updateParticles() {
-        ctx.clearRect(0, 0, canvasW, canvasH);
-        
+    function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         for(let i=particles.length-1; i>=0; i--) {
             let p = particles[i];
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vy += 0.2; // gravity
-            p.life -= 0.02;
-
-            if(p.life <= 0) {
-                particles.splice(i, 1);
-            } else {
+            p.x += p.vx; p.y += p.vy;
+            p.life -= 0.03;
+            if(p.life <= 0) particles.splice(i, 1);
+            else {
                 ctx.globalAlpha = p.life;
                 ctx.fillStyle = p.color;
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
                 ctx.fill();
             }
         }
-        requestAnimationFrame(updateParticles);
+        requestAnimationFrame(loop);
     }
-    updateParticles();
+    loop();
 
     // Start
-    initGame();
+    init();
 
 </script>
 </body>
