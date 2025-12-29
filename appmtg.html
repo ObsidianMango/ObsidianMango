@@ -3,255 +3,243 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mothman Goldfish Sim</title>
+    <title>Mothman Playmat Sim</title>
     <style>
         :root {
-            --card-w: 140px; /* Base size, adjusted via media queries */
-            --card-h: 196px;
-            --bg-dark: #121212;
-            --accent: #4caf50; /* Mutant Green */
+            --card-w: 110px;
+            --card-h: 154px;
+            --sidebar-w: 130px;
+            --bg-dark: #0d0d0d;
+            --zone-bg: rgba(255, 255, 255, 0.03);
+            --border-color: #333;
+            --accent: #b4ff00; /* Mothman Green */
+            --card-back-url: url('https://m.media-amazon.com/images/I/71jKdIXo-tL._AC_UF894,1000_QL80_.jpg');
         }
 
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
 
         body {
             margin: 0;
             background-color: var(--bg-dark);
-            background-image: radial-gradient(circle at 50% 30%, #1e251e 0%, #0a0a0a 100%);
             color: #eee;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             height: 100vh;
-            overflow: hidden;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
         }
 
-        /* --- UI TOP BAR --- */
+        /* --- UI BAR --- */
         #ui-bar {
-            height: 50px;
-            background: rgba(20, 20, 20, 0.95);
-            border-bottom: 1px solid #333;
+            height: 40px;
+            background: #111;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             padding: 0 10px;
-            gap: 10px;
-            z-index: 1000;
+            justify-content: space-between;
+            z-index: 100;
         }
-
-        .btn {
-            background: #333;
-            border: 1px solid #555;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            cursor: pointer;
-            white-space: nowrap;
-        }
-        .btn:active { background: var(--accent); border-color: var(--accent); }
         
-        .stat-display { font-weight: bold; font-size: 0.9rem; color: #aaa; margin-left: auto; }
-        .stat-val { color: var(--accent); }
+        button {
+            background: #333; border: 1px solid #555; color: #fff;
+            padding: 4px 10px; border-radius: 4px; cursor: pointer;
+        }
+        button:active { background: var(--accent); color: #000; }
 
-        /* --- LAYOUT --- */
-        #game-area {
+        /* --- MAIN GRID LAYOUT --- */
+        #playmat {
             flex: 1;
+            display: grid;
+            grid-template-columns: 1fr var(--sidebar-w);
+            grid-template-rows: 1fr 1fr 1fr; /* Creatures, Artifacts, Lands */
+            height: calc(100vh - 180px); /* Subtract Header + Hand */
+        }
+
+        /* --- ZONES --- */
+        .zone {
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
             position: relative;
+            padding: 25px 10px 10px 10px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: var(--zone-bg);
+        }
+
+        .zone::before {
+            content: attr(data-label);
+            position: absolute;
+            top: 5px; left: 10px;
+            font-size: 0.7rem;
+            color: #555;
+            text-transform: uppercase;
+            font-weight: bold;
+            pointer-events: none;
+        }
+
+        /* Specific Zones */
+        #zone-creatures { grid-column: 1; grid-row: 1; }
+        #zone-artifacts { grid-column: 1; grid-row: 2; }
+        #zone-lands     { grid-column: 1; grid-row: 3; border-bottom: none; }
+
+        /* Sidebar Zones */
+        .sidebar-zone {
             display: flex;
             flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* Battlefield (Scrollable) */
-        #battlefield {
-            flex: 1;
-            padding: 15px;
-            overflow-y: auto;
-            overflow-x: hidden;
-            display: flex;
-            flex-wrap: wrap;
-            align-content: flex-start;
-            gap: 8px;
-            -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
-            padding-bottom: 160px; /* Space so hand doesn't cover bottom cards */
-        }
-
-        /* Hand (Fixed Bottom) */
-        #hand-container {
-            height: 160px;
-            background: linear-gradient(to top, rgba(0,0,0,0.95) 60%, transparent);
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            z-index: 500;
-            display: flex;
-            align-items: flex-end;
-            padding: 10px;
-            overflow-x: auto; /* Horizontal scroll */
-            gap: 5px;
-            /* Hide Scrollbar but keep functionality */
-            scrollbar-width: none; 
-        }
-        #hand-container::-webkit-scrollbar { display: none; }
-
-        /* COMMAND ZONE (Floating) */
-        #command-zone {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            width: 100px;
-            height: 140px;
-            border: 2px dashed var(--accent);
-            border-radius: 8px;
-            display: flex;
             justify-content: center;
             align-items: center;
-            opacity: 0.8;
-            z-index: 10;
-            transition: 0.3s;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(0,0,0,0.3);
+            position: relative;
         }
-        #command-zone::after { content: 'Commander'; position: absolute; top: -20px; font-size: 0.7rem; color: var(--accent); }
-        #command-zone.empty { border-color: #444; }
+        
+        #zone-commander { grid-column: 2; grid-row: 1; }
+        #zone-graveyard { grid-column: 2; grid-row: 2; }
+        #zone-library   { grid-column: 2; grid-row: 3; border-bottom: none; }
+
+        /* --- HAND (Fixed Bottom) --- */
+        #hand-container {
+            height: 140px;
+            background: #080808;
+            border-top: 1px solid var(--accent);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            overflow-x: auto;
+            gap: -10px; /* Overlap */
+            z-index: 500;
+        }
 
         /* --- CARD STYLING --- */
         .card {
             width: var(--card-w);
             height: var(--card-h);
-            border-radius: 8px;
+            border-radius: 6px;
             background-color: #222;
             background-size: cover;
             background-position: center;
-            position: relative;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
-            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
             cursor: pointer;
-            flex-shrink: 0; /* Don't squish in hand */
-            border: 1px solid #000;
-        }
-
-        /* Hover/Active Effects */
-        .card:active { transform: scale(0.95); }
-
-        /* Tapped State */
-        .tapped {
-            transform: rotate(90deg);
-            filter: brightness(0.7);
+            position: relative;
+            flex-shrink: 0;
+            border: 1px solid #111;
         }
 
         /* Hand Logic */
         #hand-container .card {
-            width: 110px; /* Slightly smaller in hand */
-            height: 154px;
-            box-shadow: -2px 0 5px rgba(0,0,0,0.5);
             transform-origin: bottom center;
+            margin-right: -40px; /* Fan effect */
+            transition: margin 0.2s, transform 0.2s;
         }
-        
         #hand-container .card:hover {
-            transform: translateY(-20px) scale(1.1);
-            z-index: 600;
+            transform: translateY(-30px) scale(1.2);
+            z-index: 999;
+            margin-right: 10px;
             box-shadow: 0 0 15px var(--accent);
         }
 
-        /* Loading Skeleton */
-        .card.loading { background: #333; display: flex; align-items: center; justify-content: center; }
-        .card.loading::after { content: '...'; color: #666; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0; } }
-
-        /* LIBRARY & GRAVEYARD PILES */
-        .pile {
-            position: absolute;
-            width: 90px;
-            height: 126px;
-            border-radius: 6px;
-            bottom: 170px; /* Above hand */
-            right: 10px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 0.8rem;
-            font-weight: bold;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-            cursor: pointer;
+        /* Battlefield Logic */
+        .zone .card:hover {
+            transform: scale(1.05);
             z-index: 100;
         }
 
-        #library {
-            background: #222 url('https://upload.wikimedia.org/wikipedia/en/a/a4/Magic_the_gathering-card_back.jpg') center/cover;
-            border: 1px solid #555;
-            right: 10px;
+        .tapped {
+            transform: rotate(90deg) !important;
+            filter: brightness(0.7);
+        }
+
+        /* Library & Face Down */
+        .card-back {
+            background-image: var(--card-back-url);
+            background-size: cover;
+            background-position: center;
+            width: 100%; height: 100%;
+            border-radius: 6px;
+        }
+
+        #library-pile {
+            width: 80px; height: 112px;
+            border-radius: 5px;
+            background-image: var(--card-back-url);
+            background-size: cover;
+            box-shadow: 2px 2px 0 #333, 4px 4px 0 #222;
+            cursor: pointer;
+            position: relative;
         }
         
-        #graveyard {
-            background: rgba(0,0,0,0.5);
-            border: 2px dashed #666;
-            right: 110px;
-            color: #aaa;
-        }
-
-        /* Count badge */
-        .badge {
+        /* Counters */
+        .counter {
             position: absolute;
-            top: -10px; right: -10px;
             background: var(--accent);
-            color: black;
-            border-radius: 50%;
-            width: 24px; height: 24px;
-            display: flex; justify-content: center; align-items: center;
-            font-size: 0.75rem;
+            color: #000;
             font-weight: bold;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            font-size: 0.8rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            bottom: -8px; right: -8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
 
-        /* --- MOBILE ADJUSTMENTS --- */
+        /* Loading State */
+        .loading { opacity: 0.5; animation: pulse 1s infinite; }
+        @keyframes pulse { 50% { opacity: 0.2; } }
+
+        /* Mobile Tweak */
         @media (max-width: 768px) {
-            :root {
-                --card-w: 100px;
-                --card-h: 140px;
-            }
-            #battlefield {
-                padding-top: 160px; /* Push down below commander zone */
-            }
-            #command-zone {
-                top: 10px; left: 50%;
-                transform: translateX(-50%);
-                width: 90px; height: 126px;
-            }
+            :root { --card-w: 80px; --card-h: 112px; --sidebar-w: 90px; }
+            #hand-container .card { margin-right: -25px; }
         }
+
     </style>
 </head>
 <body>
 
     <div id="ui-bar">
-        <div style="font-weight: bold; color: var(--accent);">MOTHMAN</div>
-        <button class="btn" onclick="startTurn()">Untap All</button>
-        <button class="btn" onclick="shuffleAndReset()">New Game</button>
-        <div class="stat-display">Life: <span class="stat-val" id="life-total">40</span></div>
+        <span style="color:var(--accent); font-weight:bold;">MOTHMAN SIM</span>
+        <div>
+            <button onclick="untapAll()">Untap All</button>
+            <button onclick="resetGame()">Reset</button>
+        </div>
     </div>
 
-    <div id="game-area">
+    <div id="playmat">
+        <div id="zone-creatures" class="zone" data-label="Creatures"></div>
+        <div id="zone-artifacts" class="zone" data-label="Artifacts / Enchantments"></div>
+        <div id="zone-lands" class="zone" data-label="Lands"></div>
+
+        <div id="zone-commander" class="sidebar-zone">
+            <span style="font-size:0.6rem; color:#666; position:absolute; top:5px;">COMMANDER</span>
+        </div>
         
-        <div id="command-zone" onclick="castCommander()">
+        <div id="zone-graveyard" class="sidebar-zone">
+            <span style="font-size:0.6rem; color:#666; position:absolute; top:5px;">GRAVEYARD</span>
+            <div id="gy-pile" style="width:80%; height:70%; border:2px dashed #444; border-radius:6px; display:flex; justify-content:center; align-items:center; color:#444;">
+                GY <span id="gy-count" style="margin-left:5px">0</span>
             </div>
-
-        <div id="battlefield"></div>
-
-        <div id="graveyard" class="pile" onclick="alert('Graveyard contains destroyed cards.')">
-            GY
-            <div id="gy-count" class="badge" style="background:#555; color:white">0</div>
         </div>
         
-        <div id="library" class="pile" onclick="drawCard()">
-            <div id="lib-count" class="badge">99</div>
+        <div id="zone-library" class="sidebar-zone">
+            <div id="library-pile" onclick="drawCard()">
+                <div id="lib-count" class="counter">99</div>
+            </div>
+            <span style="font-size:0.6rem; color:#666; margin-top:5px;">LIBRARY</span>
         </div>
-
-        <div id="hand-container"></div>
     </div>
+
+    <div id="hand-container">
+        </div>
 
 <script>
-    // --- DECK DATA ---
-    const rawDeckData = [
+    // --- DATA ---
+    const deckList = [
         { qty: 1, name: "The Wise Mothman", type: "Creature", category: "Commander", setCode: 'pip' },
+        // ... (Using the same list structure as before, condensed for brevity in logic)
         { qty: 1, name: "Bruvac the Grandiloquent", type: "Creature" },
         { qty: 1, name: "The Mindskinner", type: "Creature" },
         { qty: 1, name: "Fetid Gargantua", type: "Creature" },
@@ -345,202 +333,145 @@
     let library = [];
     let graveyard = [];
     let commander = null;
-    let cardCache = {}; // Cache image URLs to prevent re-fetching
-
-    // --- ELEMENTS ---
-    const handContainer = document.getElementById('hand-container');
-    const battlefield = document.getElementById('battlefield');
-    const commandZone = document.getElementById('command-zone');
-    const libCountEl = document.getElementById('lib-count');
-    const gyCountEl = document.getElementById('gy-count');
+    let cardCache = {}; 
 
     // --- INITIALIZATION ---
     function init() {
-        processDeck();
-        shuffleAndReset();
+        resetGame();
     }
 
-    // Expand "Qty: 5" into 5 individual objects and separate Commander
-    function processDeck() {
+    function resetGame() {
         library = [];
-        commander = null;
+        graveyard = [];
+        document.getElementById('zone-creatures').innerHTML = '';
+        document.getElementById('zone-artifacts').innerHTML = '';
+        document.getElementById('zone-lands').innerHTML = '';
+        document.getElementById('zone-commander').innerHTML = '<span style="font-size:0.6rem; color:#666; position:absolute; top:5px;">COMMANDER</span>';
+        document.getElementById('hand-container').innerHTML = '';
+        
+        processDeck();
+        shuffleLibrary();
+        
+        // Spawn Commander
+        createCard(commander, document.getElementById('zone-commander'), 'commander');
+        
+        // Draw 7
+        for(let i=0; i<7; i++) drawCard();
+    }
 
-        rawDeckData.forEach(entry => {
-            // Is this the commander?
+    function processDeck() {
+        deckList.forEach(entry => {
             if (entry.category === "Commander") {
-                commander = { ...entry, id: 'cmd-' + Math.random().toString(36).substr(2, 9) };
-                return;
-            }
-
-            // Add copies to library
-            for (let i = 0; i < entry.qty; i++) {
-                library.push({
-                    ...entry,
-                    id: Math.random().toString(36).substr(2, 9)
-                });
+                commander = { ...entry, id: 'cmd' };
+            } else {
+                for (let i = 0; i < entry.qty; i++) {
+                    library.push({ ...entry, id: Math.random().toString(36).substr(2,9) });
+                }
             }
         });
+        updateCounts();
     }
 
-    function shuffleAndReset() {
-        // Clear board
-        handContainer.innerHTML = '';
-        battlefield.innerHTML = '';
-        commandZone.innerHTML = '';
-        graveyard = [];
-        
-        // Reset Library
-        processDeck(); // Re-populate library
-        
-        // Fisher-Yates Shuffle
+    function shuffleLibrary() {
         for (let i = library.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [library[i], library[j]] = [library[j], library[i]];
         }
+    }
 
+    function drawCard() {
+        if(library.length === 0) return;
+        const data = library.pop();
         updateCounts();
-
-        // Load Commander
-        createCardElement(commander, commandZone, 'commander');
-
-        // Draw Opening Hand (7)
-        for(let i=0; i<7; i++) drawCard();
+        createCard(data, document.getElementById('hand-container'), 'hand');
     }
 
     function updateCounts() {
-        libCountEl.innerText = library.length;
-        gyCountEl.innerText = graveyard.length;
+        document.getElementById('lib-count').innerText = library.length;
+        document.getElementById('gy-count').innerText = graveyard.length;
     }
 
-    // --- CARD LOGIC ---
-    function drawCard() {
-        if (library.length === 0) return alert("Empty Library!");
-        const cardData = library.pop();
-        updateCounts();
-        createCardElement(cardData, handContainer, 'hand');
-    }
-
-    function castCommander() {
-        if (!commandZone.querySelector('.card')) return;
-        const cardEl = commandZone.querySelector('.card');
-        
-        // Move to battlefield
-        moveCardToZone(cardEl, battlefield);
-        commandZone.classList.add('empty');
-    }
-
-    async function fetchCardImage(cardData) {
-        // Check cache
-        const cacheKey = `${cardData.name}-${cardData.setCode || 'default'}-${cardData.cn || ''}`;
-        if (cardCache[cacheKey]) return cardCache[cacheKey];
-
-        // Construct API URL
-        let url;
-        if (cardData.setCode && cardData.cn) {
-            url = `https://api.scryfall.com/cards/${cardData.setCode}/${cardData.cn}`;
-        } else if (cardData.setCode) {
-            url = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cardData.name)}&set=${cardData.setCode}`;
-        } else {
-            url = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardData.name)}`;
-        }
-
-        try {
-            const res = await fetch(url);
-            const json = await res.json();
-            
-            let imgUrl = '';
-            if (json.image_uris) imgUrl = json.image_uris.normal;
-            else if (json.card_faces) imgUrl = json.card_faces[0].image_uris.normal;
-            else imgUrl = 'https://via.placeholder.com/200x280?text=No+Img';
-
-            cardCache[cacheKey] = imgUrl;
-            return imgUrl;
-        } catch (e) {
-            console.error("Fetch failed", e);
-            return 'https://via.placeholder.com/200x280?text=Error';
-        }
-    }
-
-    async function createCardElement(data, container, zone) {
+    async function createCard(data, container, zone) {
         const el = document.createElement('div');
         el.className = 'card loading';
         el.id = data.id;
         
-        // Attach logic
-        attachCardEvents(el, zone);
-        container.appendChild(el);
-
-        // Load Image
-        const imgUrl = await fetchCardImage(data);
+        // Image Logic
+        let imgUrl = await getCardImage(data);
         el.style.backgroundImage = `url('${imgUrl}')`;
         el.classList.remove('loading');
+
+        // Events
+        el.onclick = () => handleCardClick(el, data, container);
+        el.oncontextmenu = (e) => { e.preventDefault(); moveToGraveyard(el); };
+
+        container.appendChild(el);
     }
 
-    function attachCardEvents(el, zone) {
-        // Click Logic
-        el.onclick = () => {
-            if (el.parentElement === handContainer) {
-                // Play from Hand
-                moveCardToZone(el, battlefield);
-            } else if (el.parentElement === battlefield) {
-                // Tap/Untap
-                el.classList.toggle('tapped');
-            }
-        };
+    async function getCardImage(data) {
+        const key = data.name + (data.setCode || '');
+        if(cardCache[key]) return cardCache[key];
 
-        // Right Click / Long Press to Destroy
-        el.oncontextmenu = (e) => {
-            e.preventDefault();
-            if (el.parentElement === battlefield) {
-                destroyCard(el);
-            }
-        };
-    }
+        let url = data.setCode 
+            ? `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(data.name)}&set=${data.setCode}`
+            : `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(data.name)}`;
+        
+        if(data.cn && data.setCode) url = `https://api.scryfall.com/cards/${data.setCode}/${data.cn}`;
 
-    function moveCardToZone(el, newContainer) {
-        // Animation helper
-        el.style.transition = 'none'; // reset
-        
-        // If moving to battlefield, reset style from hand (width/height are css handled, but transforms need clearing)
-        el.style.transform = ''; 
-        
-        // Re-append to new parent
-        newContainer.appendChild(el);
-        
-        // Scroll battlefield to bottom to see new card if overflow
-        if (newContainer === battlefield) {
-            newContainer.scrollTop = newContainer.scrollHeight;
+        try {
+            const res = await fetch(url);
+            const json = await res.json();
+            let img = json.image_uris ? json.image_uris.normal : json.card_faces[0].image_uris.normal;
+            cardCache[key] = img;
+            return img;
+        } catch {
+            return 'https://via.placeholder.com/200';
         }
     }
 
-    function destroyCard(el) {
-        graveyard.push(el.id); // minimal tracking
-        updateCounts();
-        el.remove();
+    function handleCardClick(el, data, currentContainer) {
+        // If in Hand or Commander Zone -> Play to Field
+        if (currentContainer.id === 'hand-container' || currentContainer.id === 'zone-commander') {
+            playCard(el, data);
+        } else {
+            // If on field -> Tap
+            el.classList.toggle('tapped');
+        }
     }
 
-    // --- GAMEPLAY TOOLS ---
-    function startTurn() {
-        // Untap all cards in battlefield
-        const tapped = battlefield.querySelectorAll('.tapped');
-        tapped.forEach(c => c.classList.remove('tapped'));
+    function playCard(el, data) {
+        el.classList.remove('tapped'); // Reset state
+        el.style.transform = 'none'; // Reset hover/hand transforms
         
-        // Untap commander if active
-        const cmd = battlefield.querySelector(`[id^="cmd-"]`);
-        if(cmd) cmd.classList.remove('tapped');
-
-        // Draw
-        drawCard();
+        // Auto-Sort Logic
+        let targetId = 'zone-artifacts';
+        if (data.type.includes('Land')) targetId = 'zone-lands';
+        else if (data.type.includes('Creature')) targetId = 'zone-creatures';
+        
+        document.getElementById(targetId).appendChild(el);
     }
 
-    // Prevent Zoom on double tap on iOS
-    document.addEventListener('dblclick', function(event) {
-        event.preventDefault();
-    }, { passive: false });
+    function moveToGraveyard(el) {
+        graveyard.push(el.id);
+        updateCounts();
+        
+        // Visual feedback (shrink into GY pile)
+        el.style.transition = 'all 0.5s';
+        const gyRect = document.getElementById('gy-pile').getBoundingClientRect();
+        const cardRect = el.getBoundingClientRect();
+        
+        // Calculate translation to GY center
+        // Since we are removing element, we just destroy it for now visually
+        el.style.opacity = '0';
+        el.style.transform = 'scale(0)';
+        setTimeout(() => el.remove(), 500);
+    }
 
-    // Start
+    function untapAll() {
+        document.querySelectorAll('.tapped').forEach(c => c.classList.remove('tapped'));
+    }
+
     init();
-
 </script>
 </body>
 </html>
