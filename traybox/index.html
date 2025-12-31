@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D File Browser</title>
     <script type="importmap">
         {
@@ -14,12 +14,11 @@
     </script>
     <style>
         :root {
-            --bg: #121212;
-            --card-bg: #1e1e1e;
+            --bg: #1a1a1a;
+            --card-bg: #2d2d2d;
             --text: #ffffff;
-            --text-secondary: #b3b3b3;
-            --accent: #BB86FC;
-            --border-radius: 16px;
+            --accent: #007aff;
+            --border-radius: 12px;
         }
 
         body {
@@ -27,242 +26,207 @@
             background: var(--bg);
             color: var(--text);
             margin: 0;
-            /* Padding for the fixed color dock at bottom */
-            padding-bottom: 90px; 
-            -webkit-tap-highlight-color: transparent;
+            padding-bottom: 80px; /* Space for fixed bottom bar */
         }
 
-        /* --- Navigation Tabs --- */
+        /* Navigation Tabs */
         .nav-tabs {
             position: sticky;
             top: 0;
-            background: rgba(18, 18, 18, 0.95);
+            background: rgba(26, 26, 26, 0.95);
             backdrop-filter: blur(10px);
             display: flex;
             justify-content: center;
-            padding: 15px 0;
+            padding: 15px;
             z-index: 100;
             border-bottom: 1px solid #333;
-            gap: 30px;
+            gap: 20px;
         }
 
         .tab-btn {
             background: transparent;
             border: none;
-            color: var(--text-secondary);
-            font-size: 1.2rem;
+            color: #888;
+            font-size: 1.1rem;
             font-weight: 600;
-            padding: 8px 12px;
+            padding: 8px 16px;
             cursor: pointer;
-            position: relative;
-            transition: 0.3s color;
+            transition: 0.3s;
         }
 
         .tab-btn.active {
-            color: var(--accent);
-        }
-        
-        .tab-btn.active::after {
-            content: '';
-            position: absolute;
-            bottom: -16px;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: var(--accent);
-            border-radius: 3px 3px 0 0;
+            color: var(--text);
+            border-bottom: 2px solid var(--accent);
         }
 
-        /* --- Main Grid Layout --- */
+        /* Grid Layout */
         .container {
-            max-width: 1400px;
-            margin: 20px auto;
-            padding: 0 20px;
-            display: none;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            display: none; /* Hidden by default */
         }
 
         .container.active {
             display: grid;
-            /* Responsive grid that looks good on mobile and desktop */
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 25px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
         }
 
-        /* --- Cards --- */
+        /* Cards */
         .card {
             background: var(--card-bg);
             border-radius: var(--border-radius);
             overflow: hidden;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            border: 1px solid #333;
-            position: relative;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
         }
 
-        .card:active {
-            transform: scale(0.98);
-        }
-
-        /* Aspect ratio box to ensure consistent height */
-        .card-media-wrapper {
-            position: relative;
-            width: 100%;
-            aspect-ratio: 4 / 3; /* Standard pleasing ratio */
+        .preview-area {
+            height: 250px;
             background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             overflow: hidden;
         }
 
-        .card-img {
+        .preview-img {
             width: 100%;
             height: 100%;
-            /* Key change: makes image fill the space cleanly */
-            object-fit: cover; 
+            object-fit: cover;
             transition: opacity 0.3s;
         }
 
-        /* The container for inline 3D if no image exists */
-        .inline-3d-container {
+        .viewer-container {
+            width: 100%;
+            height: 100%;
             position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
+            top: 0;
+            left: 0;
+            z-index: 10;
         }
 
         .card-content {
             padding: 15px;
-            background: linear-gradient(to top, rgba(30,30,30,1), rgba(30,30,30,0.8));
-            position: absolute;
-            bottom: 0;
-            width: 100%;
-            box-sizing: border-box;
         }
 
         .card-title {
-            margin: 0;
+            margin: 0 0 10px 0;
             font-size: 1.1rem;
-            font-weight: 500;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            text-transform: capitalize;
         }
 
-        /* --- Full Screen Modal --- */
-        .full-modal {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg);
-            z-index: 1000;
-            display: none; /* Hidden by default */
-            flex-direction: column;
-        }
-
-        .modal-header {
-            padding: 15px 20px;
+        /* Controls */
+        .controls {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(18,18,18,0.9);
-            border-bottom: 1px solid #333;
+            gap: 10px;
+            margin-top: 10px;
         }
 
-        .modal-title { margin: 0; font-size: 1.2rem; }
-        
-        .close-btn {
-            background: #333;
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
             border: none;
-            color: white;
-            width: 36px; height: 36px;
-            border-radius: 50%;
-            font-size: 20px;
+            font-weight: 600;
             cursor: pointer;
+            transition: 0.2s;
         }
 
-        .modal-viewer-area {
-            flex: 1; /* Takes remaining height */
-            position: relative;
-            background: radial-gradient(circle at center, #333 0%, #000 100%);
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #444;
+            color: white;
         }
 
-        .modal-controls-area {
-            padding: 20px;
-            background: var(--card-bg);
-            border-top: 1px solid #333;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        /* Styled Select Dropdown */
         .file-select {
             width: 100%;
-            padding: 12px;
-            background: #333;
-            color: var(--text);
+            padding: 8px;
+            background: #444;
+            color: white;
             border: 1px solid #555;
-            border-radius: 8px;
-            font-size: 1rem;
-            outline: none;
-            -webkit-appearance: none; /* Removes default iOS styling */
-            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2087.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%20100c3.6-3.6%205.4-7.8%205.4-12.8%200-5-1.8-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E");
-            background-repeat: no-repeat;
-            background-position: right 15px top 50%;
-            background-size: 12px auto;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            display: none; /* Hidden if only 1 file */
         }
 
-        /* --- Color Picker Dock --- */
-        /* Ensure it rests at bottom of main screen OR modal */
-        .color-dock-container {
-            width: 100%;
-            overflow-x: auto;
-            -ms-overflow-style: none; scrollbar-width: none; /* Hide scrollbars */
-        }
-        .color-dock-container::-webkit-scrollbar { display: none; }
-
+        /* Color Picker Footer */
         .color-dock {
-            display: flex;
-            gap: 15px;
-            padding: 5px;
-        }
-
-        /* Position when on main screen */
-        body > .color-dock-container {
             position: fixed;
-            bottom: 0; left: 0;
-            background: rgba(18, 18, 18, 0.95);
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(45, 45, 45, 0.95);
             backdrop-filter: blur(10px);
-            padding: 20px;
-            border-top: 1px solid #333;
-            z-index: 90;
+            padding: 15px;
+            overflow-x: auto;
+            display: flex;
+            gap: 12px;
+            z-index: 200;
+            border-top: 1px solid #444;
+            /* Hide scrollbar */
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .color-dock::-webkit-scrollbar {
+            display: none;
         }
 
         .color-swatch {
-            min-width: 45px; height: 45px;
+            min-width: 40px;
+            height: 40px;
             border-radius: 50%;
-            border: 2px solid #444;
+            border: 2px solid #555;
             cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-            transition: transform 0.2s, border-color 0.2s;
-            flex-shrink: 0; /* Prevent squishing */
+            position: relative;
+            transition: transform 0.2s;
         }
 
         .color-swatch.active {
             border-color: white;
-            transform: scale(1.15);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            transform: scale(1.1);
         }
 
+        .color-swatch::after {
+            content: attr(data-name);
+            position: absolute;
+            bottom: 45px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: black;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
 
-        /* --- Loading Spinner --- */
+        .color-swatch:hover::after, .color-swatch.active::after {
+            opacity: 1;
+        }
+
+        /* Loading Spinner */
         .loader {
-            border: 4px solid rgba(255,255,255,0.1);
-            border-top: 4px solid var(--accent);
+            border: 3px solid #333;
+            border-top: 3px solid var(--accent);
             border-radius: 50%;
-            width: 40px; height: 40px;
-            animation: spin 0s linear infinite;
-            position: absolute; top: 50%; left: 50%;
-            margin: -20px 0 0 -20px;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            position: absolute;
             display: none;
-            z-index: 20;
         }
 
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -279,27 +243,8 @@
     <div id="trays-section" class="container active"></div>
     <div id="boxes-section" class="container"></div>
 
-    <div class="color-dock-container" id="main-color-container">
-        <div class="color-dock" id="color-dock">
-            </div>
-    </div>
-
-
-    <div id="full-modal" class="full-modal">
-        <div class="modal-header">
-            <h3 class="modal-title" id="modal-title">Viewer</h3>
-            <button class="close-btn" id="modal-close-btn">&times;</button>
+    <div class="color-dock" id="color-dock">
         </div>
-        
-        <div class="modal-viewer-area" id="modal-3d-container">
-            </div>
-
-        <div class="modal-controls-area" id="modal-controls">
-            <div id="modal-file-select-container"></div>
-            <div id="modal-color-container-target"></div>
-        </div>
-    </div>
-
 
     <script type="module">
         import * as THREE from 'three';
@@ -310,196 +255,273 @@
 
         const colorPalette = [
             { name: "White", hex: 0xFFFFFF, type: 'standard' },
-            { name: "Wood", hex: 0xDEB887, type: 'matte' },
-            { name: "Grey Silk", hex: 0xDDDDDD, type: 'silk' },
+            { name: "Wood", hex: 0xDEB887, type: 'matte' }, // Tan/Light Brown
+            { name: "Grey Silk", hex: 0xDDDDDD, type: 'silk' }, // Shiny Grey
             { name: "Light Grass Green", hex: 0x90EE90, type: 'standard' },
-            { name: "Purple Silk", hex: 0x800080, type: 'silk' },
+            { name: "Purple Silk", hex: 0x800080, type: 'silk' }, // Shiny Purple
             { name: "Light Blue", hex: 0xADD8E6, type: 'standard' },
             { name: "Yellow", hex: 0xFFFF00, type: 'standard' },
             { name: "Dark Blue", hex: 0x00008B, type: 'standard' },
             { name: "Red", hex: 0xFF0000, type: 'standard' },
             { name: "Purple", hex: 0x663399, type: 'standard' },
             { name: "Black", hex: 0x111111, type: 'standard' },
-            { name: "Tricolor Red Blue Green", hex: 0xffffff, type: 'tricolor' },
+            { name: "Tricolor", hex: 0xffffff, type: 'tricolor' }, // Special shader
             { name: "Gold", hex: 0xFFD700, type: 'silk' }
         ];
 
-        // Data structure mapped to your folders
+        // Mapped from your provided tree
         const inventory = {
             trays: [
-                { name: "EDH Tray Deboss", folder: "traybox/files/trays", files: ["edh tray deboss.stl"], image: "traybox/files/pics/edh tray deboss.jpeg" },
-                { name: "EDH Tray Standard", folder: "traybox/files/trays", files: ["edh-tray.stl"], image: "traybox/files/pics/edh-tray.jpeg" },
-                { name: "EDH Command Tray", folder: "traybox/files/trays", files: ["edhcommand-tray (1).stl"], image: "traybox/files/pics/edhcommand-tray (1).jpeg" }
+                {
+                    name: "EDH Tray Deboss",
+                    folder: "traybox/files/trays",
+                    files: ["edh tray deboss.stl"],
+                    image: "traybox/files/pics/edh tray deboss.jpeg"
+                },
+                {
+                    name: "EDH Tray Standard",
+                    folder: "traybox/files/trays",
+                    files: ["edh-tray.stl"],
+                    image: "traybox/files/pics/edh-tray.jpeg"
+                },
+                {
+                    name: "EDH Command Tray",
+                    folder: "traybox/files/trays",
+                    files: ["edhcommand-tray (1).stl"],
+                    image: "traybox/files/pics/edhcommand-tray (1).jpeg"
+                }
             ],
             boxes: [
-                { name: "Deck Box 100+ Sleeve & Dice", folder: "traybox/files/boxes/deck_box_100sleeve_plusdice", files: ["deck_box_100sleeve_plusdice_bottom.stl", "deck_box_100sleeve_plusdice_lid.stl"], image: "traybox/files/pics/deck_box_100sleeve_plusdice.jpeg" },
-                { name: "Deckbox Variations", folder: "traybox/files/boxes/deckbox", files: ["deckbox-bottom.stl", "deckbox-top-blank.stl", "AC Valhalla Lid.stl", "ac-ezio-deck-lid.stl", "autobot-lid.stl", "decepticon-lid.stl", "doctor-who-deck-lid.stl", "fallout-lid.stl", "jurassic-lid.stl", "masters-of-evil-deck-lid.stl"], image: null }, // TEST CASE: No Image
-                { name: "Egg Box", folder: "traybox/files/boxes/egg", files: ["mtg-egg-box-bottom.stl", "mtg-egg-box-top.stl"], image: null },
-                { name: "Fallout Vault Tec", folder: "traybox/files/boxes/fallout", files: ["mtg_fallout_vault_tec_deck_box.stl"], image: "traybox/files/pics/mtg_fallout_vault_tec_deck_box.jpeg" },
-                { name: "Companion Cube Commander", folder: "traybox/files/boxes/Magic The Gathering Deck Box Companion Cube - Commander size", files: ["Magic_Cube.stl", "Magic_Cube_Lid-Phyrexian.STL", "Magic_Cube_Lid-Phyrexian-thicker-rim_.stl", "Red-mana_lid-normal_thickness.stl"], image: "traybox/files/pics/Magic The Gathering Deck Box Companion Cube - Commander size.jpeg" },
-                { name: "Mega MTG Box", folder: "traybox/files/boxes/mega_mtg", files: ["mega_mtg_lid_commander.stl", "mega_mtg_01_divider.stl", "mega_mtg_11_divider.stl", "mega_mtg_31_divider.stl"], image: "traybox/files/pics/mega_mtg.jpeg" },
-                { name: "MTG All Logos", folder: "traybox/files/boxes/mtgboxalllogos", files: ["mtgboxalllogos.stl", "mtgboxalllogos_lid.stl"], image: "traybox/files/pics/mtgboxalllogos.jpeg" },
-                { name: "Ryan Deck Box", folder: "traybox/files/boxes/ryan-deck-box", files: ["mtg-ryan-deck-box-commander.stl", "mtg-ryan-lid.stl", "mtg-ryan-dice-base-1.stl"], image: "traybox/files/pics/ryan-deck-box.jpeg" },
-                { name: "Tomb Box", folder: "traybox/files/boxes/tomb", files: ["MtG_Card_Box_Ultrapro.stl"], image: null },
-                { name: "Tome Book Box", folder: "traybox/files/boxes/Tome_v1.0", files: ["Tome.stl", "Pages_RollTray.stl"], image: null }
+                {
+                    name: "Deck Box 100+ Sleeve & Dice",
+                    folder: "traybox/files/boxes/deck_box_100sleeve_plusdice",
+                    files: ["deck_box_100sleeve_plusdice_bottom.stl", "deck_box_100sleeve_plusdice_lid.stl"],
+                    image: "traybox/files/pics/deck_box_100sleeve_plusdice.jpeg"
+                },
+                {
+                    name: "Deckbox Variations",
+                    folder: "traybox/files/boxes/deckbox",
+                    files: [
+                        "deckbox-bottom.stl", 
+                        "deckbox-top-blank.stl",
+                        "AC Valhalla Lid.stl",
+                        "ac-ezio-deck-lid.stl",
+                        "autobot-lid.stl",
+                        "decepticon-lid.stl",
+                        "doctor-who-deck-lid.stl",
+                        "fallout-lid.stl",
+                        "jurassic-lid.stl",
+                        "masters-of-evil-deck-lid.stl"
+                    ],
+                    image: null // AUTO LOAD
+                },
+                {
+                    name: "Egg Box",
+                    folder: "traybox/files/boxes/egg",
+                    files: ["mtg-egg-box-bottom.stl", "mtg-egg-box-top.stl"],
+                    image: null // AUTO LOAD
+                },
+                {
+                    name: "Fallout Vault Tec",
+                    folder: "traybox/files/boxes/fallout",
+                    files: ["mtg_fallout_vault_tec_deck_box.stl"],
+                    image: "traybox/files/pics/mtg_fallout_vault_tec_deck_box.jpeg"
+                },
+                {
+                    name: "Companion Cube Commander",
+                    folder: "traybox/files/boxes/Magic The Gathering Deck Box Companion Cube - Commander size",
+                    files: ["Magic_Cube.stl", "Magic_Cube_Lid-Phyrexian.STL", "Magic_Cube_Lid-Phyrexian-thicker-rim_.stl", "Red-mana_lid-normal_thickness.stl"],
+                    image: "traybox/files/pics/Magic The Gathering Deck Box Companion Cube - Commander size.jpeg"
+                },
+                {
+                    name: "Mega MTG Box",
+                    folder: "traybox/files/boxes/mega_mtg",
+                    files: ["mega_mtg_lid_commander.stl", "mega_mtg_01_divider.stl", "mega_mtg_11_divider.stl", "mega_mtg_31_divider.stl"],
+                    image: "traybox/files/pics/mega_mtg.jpeg"
+                },
+                {
+                    name: "MTG All Logos",
+                    folder: "traybox/files/boxes/mtgboxalllogos",
+                    files: ["mtgboxalllogos.stl", "mtgboxalllogos_lid.stl"],
+                    image: "traybox/files/pics/mtgboxalllogos.jpeg"
+                },
+                {
+                    name: "Ryan Deck Box",
+                    folder: "traybox/files/boxes/ryan-deck-box",
+                    files: ["mtg-ryan-deck-box-commander.stl", "mtg-ryan-lid.stl", "mtg-ryan-dice-base-1.stl"],
+                    image: "traybox/files/pics/ryan-deck-box.jpeg"
+                },
+                {
+                    name: "Tomb Box",
+                    folder: "traybox/files/boxes/tomb",
+                    files: ["MtG_Card_Box_Ultrapro.stl"],
+                    image: null // AUTO LOAD
+                },
+                {
+                    name: "Tome Book Box",
+                    folder: "traybox/files/boxes/Tome_v1.0",
+                    files: ["Tome.stl", "Pages_RollTray.stl"],
+                    image: null // AUTO LOAD
+                }
             ]
         };
 
-        // State
-        let currentMaterial;
-        // We need to keep track of active scenes to update colors dynamically
-        let activeScenes = []; 
+        let currentMaterial = getMaterial('White');
+        let currentHex = 0xffffff;
 
         // --- Initialization ---
 
         function init() {
-            generateColorDock();
-            // Set default color
-            updateGlobalMaterial(colorPalette[0]);
-
-            renderGridSection('trays', inventory.trays);
-            renderGridSection('boxes', inventory.boxes);
-
-            // Modal Close handlers
-            document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+            renderColorDock();
+            renderSection('trays', inventory.trays);
+            renderSection('boxes', inventory.boxes);
+            
+            // Set default color active
+            updateMaterialChoice(colorPalette[0]);
         }
 
-        function generateColorDock() {
+        function renderColorDock() {
             const dock = document.getElementById('color-dock');
-            colorPalette.forEach((col, index) => {
+            colorPalette.forEach(col => {
                 const swatch = document.createElement('div');
-                swatch.className = `color-swatch ${index === 0 ? 'active' : ''}`;
+                swatch.className = 'color-swatch';
+                swatch.setAttribute('data-name', col.name);
                 
-                if (col.type === 'tricolor') {
-                    swatch.style.background = 'linear-gradient(135deg, #ff0000, #00ff00, #0000ff)';
+                // Visual representation
+                if (col.name === 'Tricolor') {
+                    swatch.style.background = 'linear-gradient(135deg, red, blue, green)';
                 } else {
                     swatch.style.backgroundColor = '#' + col.hex.toString(16).padStart(6, '0');
                 }
 
-                swatch.onclick = (e) => {
-                    // prevent triggering card click if on main screen
-                    e.stopPropagation(); 
+                swatch.onclick = () => {
                     document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
                     swatch.classList.add('active');
-                    updateGlobalMaterial(col);
+                    updateMaterialChoice(col);
                 };
                 dock.appendChild(swatch);
             });
+            // highlight first
+            dock.children[0].classList.add('active');
         }
 
-        // --- 3D Material Logic ---
+        // --- 3D Logic ---
 
-        function updateGlobalMaterial(colorObj) {
-            let newMat;
-            if (colorObj.type === 'tricolor') {
-                newMat = new THREE.MeshNormalMaterial();
-            } else {
-                const opts = { color: colorObj.hex };
-                if (colorObj.type === 'silk') { opts.metalness = 0.6; opts.roughness = 0.2; }
-                else if (colorObj.type === 'matte') { opts.roughness = 0.9; opts.metalness = 0.0; }
-                else { opts.roughness = 0.5; opts.metalness = 0.1; } // Standard
-                newMat = new THREE.MeshStandardMaterial(opts);
+        function getMaterial(type, hex) {
+            if (type === 'tricolor') {
+                return new THREE.MeshNormalMaterial();
             }
-            currentMaterial = newMat;
 
-            // Update any currently visible 3D objects
-            activeScenes.forEach(scene => {
-                scene.traverse((child) => {
-                    if (child.isMesh) child.material = currentMaterial;
-                });
+            const opts = { color: hex };
+            
+            if (type === 'silk') {
+                opts.metalness = 0.6;
+                opts.roughness = 0.2;
+                return new THREE.MeshStandardMaterial(opts);
+            } else if (type === 'matte') {
+                opts.roughness = 0.9;
+                return new THREE.MeshStandardMaterial(opts);
+            } else {
+                // Standard PLA
+                opts.roughness = 0.5;
+                opts.metalness = 0.1;
+                return new THREE.MeshStandardMaterial(opts);
+            }
+        }
+
+        function updateMaterialChoice(colorObj) {
+            currentHex = colorObj.hex;
+            
+            // Update the global current material definition
+            if (colorObj.name === 'Tricolor') {
+                currentMaterial = new THREE.MeshNormalMaterial();
+            } else {
+                const type = colorObj.type;
+                const opts = { color: colorObj.hex };
+                if (type === 'silk') { opts.metalness = 0.6; opts.roughness = 0.2; }
+                else if (type === 'matte') { opts.roughness = 0.9; }
+                else { opts.roughness = 0.5; opts.metalness = 0.1; }
+                
+                currentMaterial = new THREE.MeshStandardMaterial(opts);
+            }
+
+            // Update all active viewers immediately
+            document.querySelectorAll('.viewer-container').forEach(container => {
+                if (container.sceneRef) {
+                    container.sceneRef.traverse((child) => {
+                        if (child.isMesh) {
+                            child.material = currentMaterial;
+                        }
+                    });
+                }
             });
         }
 
-        // --- 3D Viewer Core ---
-
-        async function loadSTL(container, fileUrl, isMiniature = false) {
-            // Clean up existing viewer in this container if any
-            dispose3DContainer(container);
+        async function init3DViewer(container, fileUrl) {
+            // Clear previous content in this container
+            container.innerHTML = '';
+            const loaderDiv = document.createElement('div');
+            loaderDiv.className = 'loader';
+            loaderDiv.style.display = 'block';
+            loaderDiv.style.top = '50%';
+            loaderDiv.style.left = '50%';
+            container.appendChild(loaderDiv);
 
             const width = container.clientWidth;
             const height = container.clientHeight;
 
-            // Setup Scene
             const scene = new THREE.Scene();
-            // Keep track of scene for color updates
-            activeScenes.push(scene);
-            container.sceneRef = scene; 
+            scene.background = new THREE.Color(0x2d2d2d); // Matches card bg
+            container.sceneRef = scene; // Attach to DOM for updates
 
-            if(!isMiniature) {
-                // Radial gradient background for full screen modal
-                scene.background = new THREE.Color(0x111111); 
-            }
+            const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            camera.position.set(100, 100, 100);
 
-            const camera = new THREE.PerspectiveCamera(isMiniature ? 50 : 45, width / height, 0.1, 1000);
             const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(width, height);
-            renderer.setPixelRatio(window.devicePixelRatio);
             container.appendChild(renderer.domElement);
-            container.rendererRef = renderer; // Track for disposal
 
             // Lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(1, 1, 1);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(50, 50, 50);
             scene.add(dirLight);
-            const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
-            backLight.position.set(-1, 0.5, -1);
-            scene.add(backLight);
 
-            // Controls
             const controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
-            controls.dampingFactor = 0.1;
-            if (isMiniature) {
-                controls.autoRotate = true;
-                controls.autoRotateSpeed = 1.5;
-                controls.enableZoom = false; // Disable zoom on tiny cards
-                controls.enablePan = false;
-            }
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 2.0;
 
-            // Loading Indicator
-            let loaderSpinner = container.querySelector('.loader');
-            if(!loaderSpinner) {
-                 loaderSpinner = document.createElement('div');
-                 loaderSpinner.className = 'loader';
-                 container.appendChild(loaderSpinner);
-            }
-            loaderSpinner.style.display = 'block';
-            
             const loader = new STLLoader();
+            
             try {
-                const geometry = await loader.loadAsync(fileUrl);
-                loaderSpinner.style.display = 'none';
+                const geometry = await new Promise((resolve, reject) => {
+                    loader.load(fileUrl, resolve, undefined, reject);
+                });
 
-                // Center and optimize geometry
-                geometry.center();
-                geometry.computeVertexNormals();
+                loaderDiv.style.display = 'none';
 
+                geometry.center(); // Center geometry
+                geometry.computeBoundingBox();
+                
                 const mesh = new THREE.Mesh(geometry, currentMaterial);
-                // Default orientation fix for many STLs
-                mesh.rotation.x = -Math.PI / 2; 
+                mesh.rotation.x = -Math.PI / 2; // Fix typical STL orientation
                 scene.add(mesh);
 
-                // Fit Camera to Object
-                const boundingBox = new THREE.Box3().setFromObject(mesh);
-                const center = boundingBox.getCenter(new THREE.Vector3());
-                const size = boundingBox.getSize(new THREE.Vector3());
-                const maxDim = Math.max(size.x, size.y, size.z);
-                const fov = camera.fov * (Math.PI / 180);
-                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-                
-                // Adjust zoom distance based on context
-                cameraZ *= isMiniature ? 1.8 : 1.3; 
+                // Fit camera
+                const box = new THREE.Box3().setFromObject(mesh);
+                const size = box.getSize(new THREE.Vector3()).length();
+                const center = box.getCenter(new THREE.Vector3());
 
-                camera.position.set(center.x + cameraZ, center.y + (cameraZ*0.5), center.z + cameraZ);
-                controls.target = center;
+                camera.position.copy(center);
+                camera.position.x += size;
+                camera.position.y += size / 2;
+                camera.position.z += size;
                 camera.lookAt(center);
-                controls.update();
 
-                // Animation Loop
+                // Animation Loop specific to this viewer
                 function animate() {
-                    if (!container.rendererRef) return; // Stop if disposed
                     requestAnimationFrame(animate);
                     controls.update();
                     renderer.render(scene, camera);
@@ -507,176 +529,108 @@
                 animate();
 
             } catch (err) {
-                console.error("Error loading STL:", err);
-                loaderSpinner.style.display = 'none';
-                container.innerHTML += '<p style="position:absolute;top:50%;width:100%;text-align:center;color:red">Failed to load 3D file.</p>';
+                console.error("Failed to load STL:", err);
+                loaderDiv.style.display = 'none';
+                container.innerHTML = '<div style="color:white; padding:20px;">Error loading file</div>';
             }
         }
 
-        // Helper to clean up WebGL context (crucial for mobile)
-        function dispose3DContainer(container) {
-            if (container.rendererRef) {
-                 // Remove from active scenes list
-                activeScenes = activeScenes.filter(s => s !== container.sceneRef);
-                
-                container.rendererRef.dispose();
-                container.sceneRef.traverse(object => {
-                    if (object.isMesh) {
-                        object.geometry.dispose();
-                        // Don't dispose main shared materials, but if we cloned them:
-                        if(object.material.isMaterial) object.material.dispose();
-                    }
-                });
-                container.sceneRef = null;
-                container.rendererRef = null;
-            }
-            container.innerHTML = ''; // Clear canvas
-        }
+        // --- UI Rendering ---
 
-
-        // --- UI Rendering & Interaction ---
-
-        function renderGridSection(sectionId, items) {
-            const container = document.getElementById(`${sectionId}-section`);
+        function renderSection(id, items) {
+            const container = document.getElementById(`${id}-section`);
             
             items.forEach(item => {
                 const card = document.createElement('div');
                 card.className = 'card';
-                
-                const hasImage = item.image !== null;
-                const defaultFile = `${item.folder}/${item.files[0]}`;
-                const cardId = `card-${item.name.replace(/\s/g,'-')}`;
+
+                // Setup Dropdown options if multiple files
+                let selectHtml = '';
+                if (item.files.length > 1) {
+                    selectHtml = `<select class="file-select">
+                        ${item.files.map(f => `<option value="${item.folder}/${f}">${f.replace('.stl','')}</option>`).join('')}
+                    </select>`;
+                }
+
+                const initialFile = `${item.folder}/${item.files[0]}`;
+                const initialImage = item.image ? item.image : null;
+                const hasImage = !!initialImage;
 
                 card.innerHTML = `
-                    <div class="card-media-wrapper" id="${cardId}-media">
-                        ${hasImage ? `<img src="${item.image}" class="card-img" alt="${item.name}">` : ''}
-                        <div class="inline-3d-container"></div>
-                         <div class="loader"></div>
+                    <div class="preview-area" id="preview-${item.name.replace(/\s/g,'')}">
+                        ${initialImage ? `<img src="${initialImage}" class="preview-img" alt="${item.name}">` : ''}
+                        <div class="viewer-container"></div>
                     </div>
                     <div class="card-content">
                         <h3 class="card-title">${item.name}</h3>
+                        ${selectHtml}
+                        <div class="controls">
+                            <button class="btn btn-primary" id="btn-3d-${item.name.replace(/\s/g,'')}" style="${!hasImage ? 'display:none' : ''}">View 3D</button>
+                            ${hasImage ? `<button class="btn btn-secondary" id="btn-img-${item.name.replace(/\s/g,'')}">Image</button>` : ''}
+                        </div>
                     </div>
                 `;
 
-                // Card Click Handler -> Open Modal
-                card.onclick = () => openFullScreenModal(item);
                 container.appendChild(card);
 
-                // Auto-load 3D if no image exists
-                if (!hasImage) {
-                    const inlineContainer = card.querySelector('.inline-3d-container');
-                    // Use setTimeout to let layout settle before rendering 3D
+                // Event Listeners
+                const previewArea = card.querySelector('.viewer-container');
+                const btn3d = card.querySelector(`#btn-3d-${item.name.replace(/\s/g,'')}`);
+                const btnImg = card.querySelector(`#btn-img-${item.name.replace(/\s/g,'')}`);
+                const select = card.querySelector('select');
+
+                let currentStlPath = initialFile;
+
+                // Handle Dropdown changes
+                if (select) {
+                    select.style.display = 'block';
+                    select.addEventListener('change', (e) => {
+                        currentStlPath = e.target.value;
+                        // If 3D view is active (or auto-loaded), reload it
+                        if (previewArea.children.length > 0) {
+                            init3DViewer(previewArea, currentStlPath);
+                        }
+                    });
+                }
+
+                // Setup 3D loading
+                if (hasImage) {
+                    // Manual Click
+                    btn3d.onclick = () => {
+                        init3DViewer(previewArea, currentStlPath);
+                    };
+                    // Back to Image
+                    if (btnImg) {
+                        btnImg.onclick = () => {
+                            previewArea.innerHTML = ''; // Kill 3D
+                        };
+                    }
+                } else {
+                    // Auto Load immediately if no image
+                    // Small delay to ensure DOM is ready
                     setTimeout(() => {
-                         loadSTL(inlineContainer, defaultFile, true /* isMiniature */);
+                        init3DViewer(previewArea, currentStlPath);
                     }, 100);
                 }
             });
         }
 
-
-        // --- Modal Logic ---
-
-        function openFullScreenModal(itemData) {
-            const modal = document.getElementById('full-modal');
-            const modalTitle = document.getElementById('modal-title');
-            const modal3DCont = document.getElementById('modal-3d-container');
-            const fileSelectCont = document.getElementById('modal-file-select-container');
-            const colorTarget = document.getElementById('modal-color-container-target');
-            const mainColorContainer = document.getElementById('main-color-container');
-            const colorDock = document.getElementById('color-dock');
-
-            modalTitle.textContent = itemData.name;
-            fileSelectCont.innerHTML = ''; // Clear previous Select
-            
-            // 1. Move Color Dock into Modal
-            colorTarget.appendChild(colorDock);
-            mainColorContainer.style.display = 'none'; // Hide empty bottom bar
-
-            // 2. Setup File Selector if multiple files
-            let currentFilePath = `${itemData.folder}/${itemData.files[0]}`;
-
-            if (itemData.files.length > 1) {
-                const select = document.createElement('select');
-                select.className = 'file-select';
-                itemData.files.forEach(f => {
-                    const opt = document.createElement('option');
-                    opt.value = `${itemData.folder}/${f}`;
-                    opt.textContent = f.replace('.stl', '').replace(/[-_]/g, ' ');
-                    select.appendChild(opt);
-                });
-                
-                select.onchange = (e) => {
-                    loadSTL(modal3DCont, e.target.value, false);
-                };
-                fileSelectCont.appendChild(select);
-            }
-
-            // 3. Show Modal & Load 3D
-            modal.style.display = 'flex';
-            // Small delay to ensure modal layout exists before Three.js attaches
-            setTimeout(() => {
-                loadSTL(modal3DCont, currentFilePath, false /* full screen */);
-            }, 50);
-        }
-
-        function closeModal() {
-            const modal = document.getElementById('full-modal');
-            const modal3DCont = document.getElementById('modal-3d-container');
-            const mainColorContainer = document.getElementById('main-color-container');
-            const colorDock = document.getElementById('color-dock');
-
-            // 1. Clean up 3D resources!!! Important!
-            dispose3DContainer(modal3DCont);
-
-            // 2. Move color dock back to main screen
-            mainColorContainer.appendChild(colorDock);
-            mainColorContainer.style.display = 'block';
-
-            // 3. Hide modal
-            modal.style.display = 'none';
-        }
-
-        // Initialize app
+        // Initialize
         init();
 
-        // Handle window resize for 3D views
-        window.addEventListener('resize', () => {
-            activeScenes.forEach(scene => {
-                // Find the container belonging to this scene
-                const container = document.querySelectorAll('.modal-viewer-area, .inline-3d-container');
-                container.forEach(cont => {
-                    if(cont.sceneRef === scene && cont.rendererRef) {
-                        const width = cont.clientWidth;
-                        const height = cont.clientHeight;
-                        cont.rendererRef.setSize(width, height);
-                        const camera = scene.children.find(c => c.isCamera);
-                        if(camera) {
-                             camera.aspect = width / height;
-                             camera.updateProjectionMatrix();
-                        }
-                    }
-                });
-            })
-        });
-
     </script>
-
     <script>
+        // Global Tabs Logic (Outside Module)
         function switchTab(tabName) {
             document.querySelectorAll('.container').forEach(c => c.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             
             document.getElementById(`${tabName}-section`).classList.add('active');
-            // Find button with text matching tabName and set active
+            // Find button with text matching tabName
             const btns = document.querySelectorAll('.tab-btn');
             btns.forEach(btn => {
-                if(btn.textContent.toLowerCase().includes(tabName.toLowerCase())) {
-                    btn.classList.add('active');
-                }
+                if(btn.textContent.toLowerCase().includes(tabName)) btn.classList.add('active');
             });
-            
-            // Trigger resize event so inline 3D views recalculate size after tab switch changes layout
-            window.dispatchEvent(new Event('resize'));
         }
     </script>
 </body>
