@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D File Browser</title>
+    <title>MTG STL Viewer</title>
+    
     <script type="importmap">
         {
             "imports": {
@@ -12,626 +13,601 @@
             }
         }
     </script>
+
     <style>
         :root {
-            --bg: #1a1a1a;
-            --card-bg: #2d2d2d;
-            --text: #ffffff;
-            --accent: #007aff;
-            --border-radius: 12px;
+            --bg: #121212;
+            --card: #1e1e1e;
+            --text: #e0e0e0;
+            --accent: #bb86fc;
+            --border: #333;
         }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            margin: 0;
-            padding-bottom: 80px; /* Space for fixed bottom bar */
+        body { 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: var(--bg); 
+            color: var(--text); 
+            padding-bottom: 120px; /* Space for color dock */
         }
-
-        /* Navigation Tabs */
-        .nav-tabs {
-            position: sticky;
-            top: 0;
-            background: rgba(26, 26, 26, 0.95);
-            backdrop-filter: blur(10px);
-            display: flex;
-            justify-content: center;
-            padding: 15px;
+        
+        /* Sticky Navigation */
+        .nav {
+            position: sticky; 
+            top: 0; 
+            background: rgba(18,18,18,0.95); 
             z-index: 100;
-            border-bottom: 1px solid #333;
+            display: flex; 
+            justify-content: center; 
+            padding: 15px; 
             gap: 20px;
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(10px);
         }
 
-        .tab-btn {
-            background: transparent;
-            border: none;
-            color: #888;
-            font-size: 1.1rem;
+        .nav-btn {
+            background: none; 
+            border: none; 
+            color: #888; 
+            font-size: 1.1rem; 
             font-weight: 600;
-            padding: 8px 16px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-
-        .tab-btn.active {
-            color: var(--text);
-            border-bottom: 2px solid var(--accent);
-        }
-
-        /* Grid Layout */
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            display: none; /* Hidden by default */
-        }
-
-        .container.active {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
-
-        /* Cards */
-        .card {
-            background: var(--card-bg);
-            border-radius: var(--border-radius);
-            overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            display: flex;
-            flex-direction: column;
-        }
-
-        .preview-area {
-            height: 250px;
-            background: #000;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-
-        .preview-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transition: opacity 0.3s;
-        }
-
-        .viewer-container {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 10;
-        }
-
-        .card-content {
-            padding: 15px;
-        }
-
-        .card-title {
-            margin: 0 0 10px 0;
-            font-size: 1.1rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            text-transform: capitalize;
-        }
-
-        /* Controls */
-        .controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .btn {
-            flex: 1;
-            padding: 10px;
-            border-radius: 8px;
-            border: none;
-            font-weight: 600;
+            padding: 8px 16px; 
             cursor: pointer;
             transition: 0.2s;
         }
 
-        .btn-primary {
-            background: var(--accent);
-            color: white;
+        .nav-btn.active { 
+            color: var(--accent); 
+            border-bottom: 2px solid var(--accent); 
+        }
+
+        /* Responsive Grid */
+        .grid {
+            display: none; 
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
+            gap: 20px;
+            padding: 20px; 
+            max-width: 1200px; 
+            margin: 0 auto;
+        }
+
+        .grid.active { 
+            display: grid; 
+        }
+
+        /* File Card */
+        .card { 
+            background: var(--card); 
+            border-radius: 12px; 
+            overflow: hidden; 
+            border: 1px solid var(--border); 
+            display: flex;
+            flex-direction: column;
         }
         
-        .btn-secondary {
-            background: #444;
-            color: white;
+        .view-box {
+            height: 280px; 
+            background: #000; 
+            position: relative;
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            overflow: hidden;
         }
 
-        .file-select {
-            width: 100%;
-            padding: 8px;
-            background: #444;
-            color: white;
-            border: 1px solid #555;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            display: none; /* Hidden if only 1 file */
+        .preview-img { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
         }
 
-        /* Color Picker Footer */
-        .color-dock {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background: rgba(45, 45, 45, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 15px;
-            overflow-x: auto;
+        /* 3D Viewer Canvas Container */
+        .viewer-canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 10; 
+        }
+
+        .controls { 
+            padding: 15px; 
+            flex-grow: 1;
             display: flex;
-            gap: 12px;
-            z-index: 200;
-            border-top: 1px solid #444;
-            /* Hide scrollbar */
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-        .color-dock::-webkit-scrollbar {
-            display: none;
+            flex-direction: column;
         }
 
-        .color-swatch {
-            min-width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border: 2px solid #555;
+        h3 { 
+            margin: 0 0 10px 0; 
+            font-size: 1.1rem; 
+            color: #fff; 
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        select {
+            width: 100%; 
+            padding: 10px; 
+            background: #2d2d2d; 
+            color: white;
+            border: 1px solid #444; 
+            border-radius: 6px; 
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+        
+        .btn-row { 
+            display: flex; 
+            gap: 10px; 
+            margin-top: auto; 
+        }
+
+        button {
+            flex: 1; 
+            padding: 10px; 
+            border-radius: 6px; 
+            border: none; 
+            font-weight: 600; 
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        button:active { opacity: 0.8; }
+
+        .btn-3d { 
+            background: var(--accent); 
+            color: #000; 
+        }
+
+        .btn-img { 
+            background: #333; 
+            color: #fff; 
+        }
+
+        /* Color Dock Footer */
+        .dock {
+            position: fixed; 
+            bottom: 0; 
+            left: 0; 
+            width: 100%; 
+            background: rgba(30, 30, 30, 0.95);
+            padding: 15px 10px; 
+            display: flex; 
+            gap: 12px; 
+            overflow-x: auto;
+            border-top: 1px solid var(--border); 
+            z-index: 200;
+            backdrop-filter: blur(5px);
+            /* Hide scrollbars */
+            scrollbar-width: none; 
+            -ms-overflow-style: none;
+        }
+        .dock::-webkit-scrollbar { display: none; }
+
+        .swatch {
+            min-width: 45px; 
+            height: 45px; 
+            border-radius: 50%; 
+            border: 2px solid #555; 
             cursor: pointer;
             position: relative;
             transition: transform 0.2s;
+            flex-shrink: 0;
         }
 
-        .color-swatch.active {
-            border-color: white;
-            transform: scale(1.1);
+        .swatch.active { 
+            border-color: white; 
+            transform: scale(1.15); 
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
 
-        .color-swatch::after {
-            content: attr(data-name);
-            position: absolute;
-            bottom: 45px;
-            left: 50%;
+        .swatch::after {
+            content: attr(data-label); 
+            position: absolute; 
+            bottom: 55px; 
+            left: 50%; 
             transform: translateX(-50%);
-            background: black;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            white-space: nowrap;
-            opacity: 0;
+            background: #000; 
+            color: #fff;
+            padding: 4px 8px; 
+            font-size: 11px; 
+            border-radius: 4px; 
+            opacity: 0; 
             pointer-events: none;
             transition: opacity 0.2s;
+            white-space: nowrap;
         }
 
-        .color-swatch:hover::after, .color-swatch.active::after {
-            opacity: 1;
-        }
+        .swatch:hover::after, .swatch.active::after { opacity: 1; }
 
-        /* Loading Spinner */
+        /* Loader */
         .loader {
-            border: 3px solid #333;
+            width: 30px; 
+            height: 30px; 
+            border: 3px solid #333; 
             border-top: 3px solid var(--accent);
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
+            border-radius: 50%; 
+            animation: spin 0.8s linear infinite; 
             position: absolute;
-            display: none;
         }
-
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
 
     </style>
 </head>
 <body>
 
-    <nav class="nav-tabs">
-        <button class="tab-btn active" onclick="switchTab('trays')">Trays</button>
-        <button class="tab-btn" onclick="switchTab('boxes')">Boxes</button>
-    </nav>
+<div class="nav">
+    <button class="nav-btn active" onclick="setTab('trays')">Trays</button>
+    <button class="nav-btn" onclick="setTab('boxes')">Boxes</button>
+</div>
 
-    <div id="trays-section" class="container active"></div>
-    <div id="boxes-section" class="container"></div>
+<div id="trays-grid" class="grid active"></div>
+<div id="boxes-grid" class="grid"></div>
 
-    <div class="color-dock" id="color-dock">
-        </div>
+<div class="dock" id="color-dock"></div>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+<script type="module">
+import * as THREE from 'three';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // --- Data Configuration ---
+// --- CONFIGURATION ---
 
-        const colorPalette = [
-            { name: "White", hex: 0xFFFFFF, type: 'standard' },
-            { name: "Wood", hex: 0xDEB887, type: 'matte' }, // Tan/Light Brown
-            { name: "Grey Silk", hex: 0xDDDDDD, type: 'silk' }, // Shiny Grey
-            { name: "Light Grass Green", hex: 0x90EE90, type: 'standard' },
-            { name: "Purple Silk", hex: 0x800080, type: 'silk' }, // Shiny Purple
-            { name: "Light Blue", hex: 0xADD8E6, type: 'standard' },
-            { name: "Yellow", hex: 0xFFFF00, type: 'standard' },
-            { name: "Dark Blue", hex: 0x00008B, type: 'standard' },
-            { name: "Red", hex: 0xFF0000, type: 'standard' },
-            { name: "Purple", hex: 0x663399, type: 'standard' },
-            { name: "Black", hex: 0x111111, type: 'standard' },
-            { name: "Tricolor", hex: 0xffffff, type: 'tricolor' }, // Special shader
-            { name: "Gold", hex: 0xFFD700, type: 'silk' }
-        ];
+const colors = [
+    { name: "White", hex: 0xFFFFFF, type: 'std' },
+    { name: "Wood", hex: 0xDEB887, type: 'matte' },
+    { name: "Grey Silk", hex: 0xBBBBBB, type: 'silk' },
+    { name: "Light Grass Green", hex: 0x90EE90, type: 'std' },
+    { name: "Purple Silk", hex: 0x800080, type: 'silk' },
+    { name: "Light Blue", hex: 0xADD8E6, type: 'std' },
+    { name: "Yellow", hex: 0xFFFF00, type: 'std' },
+    { name: "Dark Blue", hex: 0x00008B, type: 'std' },
+    { name: "Red", hex: 0xFF0000, type: 'std' },
+    { name: "Purple", hex: 0x663399, type: 'std' },
+    { name: "Black", hex: 0x111111, type: 'std' },
+    { name: "Tricolor", hex: 0xffffff, type: 'tri' }, // Special shader
+    { name: "Gold", hex: 0xFFD700, type: 'silk' }
+];
 
-        // Mapped from your provided tree
-        const inventory = {
-            trays: [
-                {
-                    name: "EDH Tray Deboss",
-                    folder: "traybox/files/trays",
-                    files: ["edh tray deboss.stl"],
-                    image: "traybox/files/pics/edh tray deboss.jpeg"
-                },
-                {
-                    name: "EDH Tray Standard",
-                    folder: "traybox/files/trays",
-                    files: ["edh-tray.stl"],
-                    image: "traybox/files/pics/edh-tray.jpeg"
-                },
-                {
-                    name: "EDH Command Tray",
-                    folder: "traybox/files/trays",
-                    files: ["edhcommand-tray (1).stl"],
-                    image: "traybox/files/pics/edhcommand-tray (1).jpeg"
-                }
+// NOTE: 'folder' is relative to where this index.html file is.
+// Since index.html is in 'traybox', we look into 'files/...' and 'pics/...'
+const data = {
+    trays: [
+        {
+            name: "EDH Tray Deboss",
+            folder: "files/trays",
+            files: ["edh tray deboss.stl"],
+            img: "pics/edh tray deboss.jpeg"
+        },
+        {
+            name: "EDH Tray Standard",
+            folder: "files/trays",
+            files: ["edh-tray.stl"],
+            img: "pics/edh-tray.jpeg"
+        },
+        {
+            name: "EDH Command Tray",
+            folder: "files/trays",
+            files: ["edhcommand-tray (1).stl"],
+            img: "pics/edhcommand-tray (1).jpeg"
+        }
+    ],
+    boxes: [
+        {
+            name: "Deck Box 100+",
+            folder: "files/boxes/deck_box_100sleeve_plusdice",
+            files: [
+                "deck_box_100sleeve_plusdice_lid.stl",
+                "deck_box_100sleeve_plusdice_bottom.stl"
             ],
-            boxes: [
-                {
-                    name: "Deck Box 100+ Sleeve & Dice",
-                    folder: "traybox/files/boxes/deck_box_100sleeve_plusdice",
-                    files: ["deck_box_100sleeve_plusdice_bottom.stl", "deck_box_100sleeve_plusdice_lid.stl"],
-                    image: "traybox/files/pics/deck_box_100sleeve_plusdice.jpeg"
-                },
-                {
-                    name: "Deckbox Variations",
-                    folder: "traybox/files/boxes/deckbox",
-                    files: [
-                        "deckbox-bottom.stl", 
-                        "deckbox-top-blank.stl",
-                        "AC Valhalla Lid.stl",
-                        "ac-ezio-deck-lid.stl",
-                        "autobot-lid.stl",
-                        "decepticon-lid.stl",
-                        "doctor-who-deck-lid.stl",
-                        "fallout-lid.stl",
-                        "jurassic-lid.stl",
-                        "masters-of-evil-deck-lid.stl"
-                    ],
-                    image: null // AUTO LOAD
-                },
-                {
-                    name: "Egg Box",
-                    folder: "traybox/files/boxes/egg",
-                    files: ["mtg-egg-box-bottom.stl", "mtg-egg-box-top.stl"],
-                    image: null // AUTO LOAD
-                },
-                {
-                    name: "Fallout Vault Tec",
-                    folder: "traybox/files/boxes/fallout",
-                    files: ["mtg_fallout_vault_tec_deck_box.stl"],
-                    image: "traybox/files/pics/mtg_fallout_vault_tec_deck_box.jpeg"
-                },
-                {
-                    name: "Companion Cube Commander",
-                    folder: "traybox/files/boxes/Magic The Gathering Deck Box Companion Cube - Commander size",
-                    files: ["Magic_Cube.stl", "Magic_Cube_Lid-Phyrexian.STL", "Magic_Cube_Lid-Phyrexian-thicker-rim_.stl", "Red-mana_lid-normal_thickness.stl"],
-                    image: "traybox/files/pics/Magic The Gathering Deck Box Companion Cube - Commander size.jpeg"
-                },
-                {
-                    name: "Mega MTG Box",
-                    folder: "traybox/files/boxes/mega_mtg",
-                    files: ["mega_mtg_lid_commander.stl", "mega_mtg_01_divider.stl", "mega_mtg_11_divider.stl", "mega_mtg_31_divider.stl"],
-                    image: "traybox/files/pics/mega_mtg.jpeg"
-                },
-                {
-                    name: "MTG All Logos",
-                    folder: "traybox/files/boxes/mtgboxalllogos",
-                    files: ["mtgboxalllogos.stl", "mtgboxalllogos_lid.stl"],
-                    image: "traybox/files/pics/mtgboxalllogos.jpeg"
-                },
-                {
-                    name: "Ryan Deck Box",
-                    folder: "traybox/files/boxes/ryan-deck-box",
-                    files: ["mtg-ryan-deck-box-commander.stl", "mtg-ryan-lid.stl", "mtg-ryan-dice-base-1.stl"],
-                    image: "traybox/files/pics/ryan-deck-box.jpeg"
-                },
-                {
-                    name: "Tomb Box",
-                    folder: "traybox/files/boxes/tomb",
-                    files: ["MtG_Card_Box_Ultrapro.stl"],
-                    image: null // AUTO LOAD
-                },
-                {
-                    name: "Tome Book Box",
-                    folder: "traybox/files/boxes/Tome_v1.0",
-                    files: ["Tome.stl", "Pages_RollTray.stl"],
-                    image: null // AUTO LOAD
-                }
-            ]
+            img: "pics/deck_box_100sleeve_plusdice.jpeg"
+        },
+        {
+            name: "Deckbox Variations",
+            folder: "files/boxes/deckbox",
+            files: [
+                "deckbox-bottom.stl",
+                "deckbox-top-blank.stl",
+                "AC Valhalla Lid.stl",
+                "ac-ezio-deck-lid.stl",
+                "autobot-lid.stl",
+                "decepticon-lid.stl",
+                "doctor-who-deck-lid.stl",
+                "fallout-lid.stl",
+                "jurassic-lid.stl",
+                "masters-of-evil-deck-lid.stl"
+            ],
+            img: null 
+        },
+        {
+            name: "Egg Box",
+            folder: "files/boxes/egg",
+            files: ["mtg-egg-box-top.stl", "mtg-egg-box-bottom.stl"],
+            img: null
+        },
+        {
+            name: "Fallout Vault Tec",
+            folder: "files/boxes/fallout",
+            files: ["mtg_fallout_vault_tec_deck_box.stl"],
+            img: "pics/mtg_fallout_vault_tec_deck_box.jpeg"
+        },
+        {
+            name: "Companion Cube",
+            folder: "files/boxes/Magic The Gathering Deck Box Companion Cube - Commander size",
+            files: [
+                "Magic_Cube.stl",
+                "Magic_Cube_Lid-Phyrexian.STL", 
+                "Magic_Cube_Lid-Phyrexian-thicker-rim_.stl",
+                "Red-mana_lid-normal_thickness.stl"
+            ],
+            img: "pics/Magic The Gathering Deck Box Companion Cube - Commander size.jpeg"
+        },
+        {
+            name: "Mega MTG Box",
+            folder: "files/boxes/mega_mtg",
+            files: [
+                "mega_mtg_lid_commander.stl",
+                "mega_mtg_01_divider.stl",
+                "mega_mtg_11_divider.stl",
+                "mega_mtg_31_divider.stl"
+            ],
+            img: "pics/mega_mtg.jpeg"
+        },
+        {
+            name: "MTG All Logos",
+            folder: "files/boxes/mtgboxalllogos",
+            files: ["mtgboxalllogos.stl", "mtgboxalllogos_lid.stl"],
+            img: "pics/mtgboxalllogos.jpeg"
+        },
+        {
+            name: "Ryan Deck Box",
+            folder: "files/boxes/ryan-deck-box",
+            files: [
+                "mtg-ryan-deck-box-commander.stl",
+                "mtg-ryan-lid.stl",
+                "mtg-ryan-dice-base-1.stl"
+            ],
+            img: "pics/ryan-deck-box.jpeg"
+        },
+        {
+            name: "Tomb Box",
+            folder: "files/boxes/tomb",
+            files: ["MtG_Card_Box_Ultrapro.stl"],
+            img: null
+        },
+        {
+            name: "Tome Book Box",
+            folder: "files/boxes/Tome_v1.0",
+            files: ["Tome.stl", "Pages_RollTray.stl"],
+            img: null
+        }
+    ]
+};
+
+let currentMat = null;
+
+// --- INITIALIZATION ---
+
+function init() {
+    renderGrid('trays', data.trays);
+    renderGrid('boxes', data.boxes);
+    renderColors();
+    updateMaterial(colors[0]); // Default to White
+}
+
+function renderColors() {
+    const dock = document.getElementById('color-dock');
+    colors.forEach(col => {
+        const d = document.createElement('div');
+        d.className = 'swatch';
+        d.setAttribute('data-label', col.name);
+        
+        if (col.name === 'Tricolor') {
+            d.style.background = 'linear-gradient(135deg, red, blue, green)';
+        } else {
+            d.style.backgroundColor = '#' + col.hex.toString(16).padStart(6,'0');
+        }
+
+        d.onclick = () => {
+            document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+            d.classList.add('active');
+            updateMaterial(col);
         };
+        dock.appendChild(d);
+    });
+    // Set first active
+    dock.children[0].classList.add('active');
+}
 
-        let currentMaterial = getMaterial('White');
-        let currentHex = 0xffffff;
-
-        // --- Initialization ---
-
-        function init() {
-            renderColorDock();
-            renderSection('trays', inventory.trays);
-            renderSection('boxes', inventory.boxes);
-            
-            // Set default color active
-            updateMaterialChoice(colorPalette[0]);
+function updateMaterial(col) {
+    if (col.type === 'tri') {
+        currentMat = new THREE.MeshNormalMaterial();
+    } else {
+        const opts = { color: col.hex };
+        
+        if (col.type === 'silk') { 
+            opts.metalness = 0.6; 
+            opts.roughness = 0.25; 
+        } else if (col.type === 'matte') { 
+            opts.roughness = 1.0; 
+            opts.metalness = 0.0;
+        } else { 
+            // Standard
+            opts.roughness = 0.5; 
+            opts.metalness = 0.1; 
         }
+        
+        currentMat = new THREE.MeshStandardMaterial(opts);
+    }
 
-        function renderColorDock() {
-            const dock = document.getElementById('color-dock');
-            colorPalette.forEach(col => {
-                const swatch = document.createElement('div');
-                swatch.className = 'color-swatch';
-                swatch.setAttribute('data-name', col.name);
-                
-                // Visual representation
-                if (col.name === 'Tricolor') {
-                    swatch.style.background = 'linear-gradient(135deg, red, blue, green)';
-                } else {
-                    swatch.style.backgroundColor = '#' + col.hex.toString(16).padStart(6, '0');
-                }
-
-                swatch.onclick = () => {
-                    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-                    swatch.classList.add('active');
-                    updateMaterialChoice(col);
-                };
-                dock.appendChild(swatch);
+    // Update active 3D scenes
+    document.querySelectorAll('canvas').forEach(canvas => {
+        if(canvas.sceneRef) {
+            canvas.sceneRef.traverse(child => {
+                if (child.isMesh) child.material = currentMat;
             });
-            // highlight first
-            dock.children[0].classList.add('active');
+        }
+    });
+}
+
+function renderGrid(type, items) {
+    const container = document.getElementById(`${type}-grid`);
+    
+    items.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'card';
+        
+        // Generate Dropdown if multiple files
+        let selectHtml = '';
+        if (item.files.length > 1) {
+            selectHtml = `<select id="sel-${clean(item.name)}">
+                ${item.files.map(f => `<option value="${item.folder}/${f}">${f}</option>`).join('')}
+            </select>`;
         }
 
-        // --- 3D Logic ---
+        const firstFile = `${item.folder}/${item.files[0]}`;
+        const hasImg = !!item.img;
 
-        function getMaterial(type, hex) {
-            if (type === 'tricolor') {
-                return new THREE.MeshNormalMaterial();
-            }
+        el.innerHTML = `
+            <div class="view-box" id="view-${clean(item.name)}">
+                ${hasImg ? `<img src="${item.img}" class="preview-img">` : '<span style="color:#555">No Preview Image</span>'}
+            </div>
+            <div class="controls">
+                <h3>${item.name}</h3>
+                ${selectHtml}
+                <div class="btn-row">
+                    <button class="btn-3d" id="btn3d-${clean(item.name)}">View 3D</button>
+                    ${hasImg ? `<button class="btn-img" id="btnimg-${clean(item.name)}">Image</button>` : ''}
+                </div>
+            </div>
+        `;
+        container.appendChild(el);
 
-            const opts = { color: hex };
-            
-            if (type === 'silk') {
-                opts.metalness = 0.6;
-                opts.roughness = 0.2;
-                return new THREE.MeshStandardMaterial(opts);
-            } else if (type === 'matte') {
-                opts.roughness = 0.9;
-                return new THREE.MeshStandardMaterial(opts);
-            } else {
-                // Standard PLA
-                opts.roughness = 0.5;
-                opts.metalness = 0.1;
-                return new THREE.MeshStandardMaterial(opts);
-            }
-        }
+        // Attach Listeners
+        const viewer = el.querySelector('.view-box');
+        const btn3d = el.querySelector(`#btn3d-${clean(item.name)}`);
+        const btnImg = el.querySelector(`#btnimg-${clean(item.name)}`);
+        const sel = el.querySelector('select');
+        
+        let activeFile = firstFile;
 
-        function updateMaterialChoice(colorObj) {
-            currentHex = colorObj.hex;
-            
-            // Update the global current material definition
-            if (colorObj.name === 'Tricolor') {
-                currentMaterial = new THREE.MeshNormalMaterial();
-            } else {
-                const type = colorObj.type;
-                const opts = { color: colorObj.hex };
-                if (type === 'silk') { opts.metalness = 0.6; opts.roughness = 0.2; }
-                else if (type === 'matte') { opts.roughness = 0.9; }
-                else { opts.roughness = 0.5; opts.metalness = 0.1; }
-                
-                currentMaterial = new THREE.MeshStandardMaterial(opts);
-            }
-
-            // Update all active viewers immediately
-            document.querySelectorAll('.viewer-container').forEach(container => {
-                if (container.sceneRef) {
-                    container.sceneRef.traverse((child) => {
-                        if (child.isMesh) {
-                            child.material = currentMaterial;
-                        }
-                    });
-                }
+        if (sel) {
+            sel.addEventListener('change', (e) => {
+                activeFile = e.target.value;
+                // If 3D is already running, reload it
+                if(viewer.querySelector('canvas')) loadSTL(viewer, activeFile);
             });
         }
 
-        async function init3DViewer(container, fileUrl) {
-            // Clear previous content in this container
-            container.innerHTML = '';
-            const loaderDiv = document.createElement('div');
-            loaderDiv.className = 'loader';
-            loaderDiv.style.display = 'block';
-            loaderDiv.style.top = '50%';
-            loaderDiv.style.left = '50%';
-            container.appendChild(loaderDiv);
-
-            const width = container.clientWidth;
-            const height = container.clientHeight;
-
-            const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x2d2d2d); // Matches card bg
-            container.sceneRef = scene; // Attach to DOM for updates
-
-            const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-            camera.position.set(100, 100, 100);
-
-            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(width, height);
-            container.appendChild(renderer.domElement);
-
-            // Lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-            dirLight.position.set(50, 50, 50);
-            scene.add(dirLight);
-
-            const controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.autoRotate = true;
-            controls.autoRotateSpeed = 2.0;
-
-            const loader = new STLLoader();
-            
-            try {
-                const geometry = await new Promise((resolve, reject) => {
-                    loader.load(fileUrl, resolve, undefined, reject);
-                });
-
-                loaderDiv.style.display = 'none';
-
-                geometry.center(); // Center geometry
-                geometry.computeBoundingBox();
-                
-                const mesh = new THREE.Mesh(geometry, currentMaterial);
-                mesh.rotation.x = -Math.PI / 2; // Fix typical STL orientation
-                scene.add(mesh);
-
-                // Fit camera
-                const box = new THREE.Box3().setFromObject(mesh);
-                const size = box.getSize(new THREE.Vector3()).length();
-                const center = box.getCenter(new THREE.Vector3());
-
-                camera.position.copy(center);
-                camera.position.x += size;
-                camera.position.y += size / 2;
-                camera.position.z += size;
-                camera.lookAt(center);
-
-                // Animation Loop specific to this viewer
-                function animate() {
-                    requestAnimationFrame(animate);
-                    controls.update();
-                    renderer.render(scene, camera);
-                }
-                animate();
-
-            } catch (err) {
-                console.error("Failed to load STL:", err);
-                loaderDiv.style.display = 'none';
-                container.innerHTML = '<div style="color:white; padding:20px;">Error loading file</div>';
-            }
+        btn3d.onclick = () => loadSTL(viewer, activeFile);
+        
+        if (btnImg) {
+            btnImg.onclick = () => {
+                // Kill 3D, restore image
+                viewer.innerHTML = `<img src="${item.img}" class="preview-img">`;
+            };
         }
+    });
+}
 
-        // --- UI Rendering ---
+async function loadSTL(container, url) {
+    // Clear and show loader
+    container.innerHTML = '<div class="loader"></div>';
+    
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000); // Black background for viewer
+    
+    const camera = new THREE.PerspectiveCamera(45, w/h, 0.1, 1000);
+    camera.position.set(100, 100, 100);
+    
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(w, h);
+    container.appendChild(renderer.domElement);
+    renderer.domElement.sceneRef = scene; // Hook for color updates
 
-        function renderSection(id, items) {
-            const container = document.getElementById(`${id}-section`);
-            
-            items.forEach(item => {
-                const card = document.createElement('div');
-                card.className = 'card';
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.2);
+    dl.position.set(50, 100, 50);
+    scene.add(dl);
+    const dl2 = new THREE.DirectionalLight(0xffffff, 0.5);
+    dl2.position.set(-50, -50, -50);
+    scene.add(dl2);
 
-                // Setup Dropdown options if multiple files
-                let selectHtml = '';
-                if (item.files.length > 1) {
-                    selectHtml = `<select class="file-select">
-                        ${item.files.map(f => `<option value="${item.folder}/${f}">${f.replace('.stl','')}</option>`).join('')}
-                    </select>`;
-                }
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 3.0;
+    controls.enableDamping = true;
 
-                const initialFile = `${item.folder}/${item.files[0]}`;
-                const initialImage = item.image ? item.image : null;
-                const hasImage = !!initialImage;
+    const loader = new STLLoader();
+    
+    try {
+        const geo = await new Promise((res, rej) => loader.load(url, res, undefined, rej));
+        
+        // Remove loader
+        const l = container.querySelector('.loader');
+        if (l) l.remove();
 
-                card.innerHTML = `
-                    <div class="preview-area" id="preview-${item.name.replace(/\s/g,'')}">
-                        ${initialImage ? `<img src="${initialImage}" class="preview-img" alt="${item.name}">` : ''}
-                        <div class="viewer-container"></div>
-                    </div>
-                    <div class="card-content">
-                        <h3 class="card-title">${item.name}</h3>
-                        ${selectHtml}
-                        <div class="controls">
-                            <button class="btn btn-primary" id="btn-3d-${item.name.replace(/\s/g,'')}" style="${!hasImage ? 'display:none' : ''}">View 3D</button>
-                            ${hasImage ? `<button class="btn btn-secondary" id="btn-img-${item.name.replace(/\s/g,'')}">Image</button>` : ''}
-                        </div>
-                    </div>
-                `;
+        geo.center();
+        
+        // Bounding Box Logic to fit camera
+        geo.computeBoundingBox();
+        const box = geo.boundingBox;
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        
+        const mesh = new THREE.Mesh(geo, currentMat);
+        mesh.rotation.x = -Math.PI / 2; // STL standard orientation fix
+        scene.add(mesh);
 
-                container.appendChild(card);
+        // Adjust camera based on object size
+        const fov = camera.fov * (Math.PI / 180);
+        const cameraZ = Math.abs(maxDim / 2 * Math.tan(fov * 2)); // rough estimate
+        
+        camera.position.set(maxDim * 1.5, maxDim, maxDim * 1.5);
+        camera.lookAt(0,0,0);
 
-                // Event Listeners
-                const previewArea = card.querySelector('.viewer-container');
-                const btn3d = card.querySelector(`#btn-3d-${item.name.replace(/\s/g,'')}`);
-                const btnImg = card.querySelector(`#btn-img-${item.name.replace(/\s/g,'')}`);
-                const select = card.querySelector('select');
-
-                let currentStlPath = initialFile;
-
-                // Handle Dropdown changes
-                if (select) {
-                    select.style.display = 'block';
-                    select.addEventListener('change', (e) => {
-                        currentStlPath = e.target.value;
-                        // If 3D view is active (or auto-loaded), reload it
-                        if (previewArea.children.length > 0) {
-                            init3DViewer(previewArea, currentStlPath);
-                        }
-                    });
-                }
-
-                // Setup 3D loading
-                if (hasImage) {
-                    // Manual Click
-                    btn3d.onclick = () => {
-                        init3DViewer(previewArea, currentStlPath);
-                    };
-                    // Back to Image
-                    if (btnImg) {
-                        btnImg.onclick = () => {
-                            previewArea.innerHTML = ''; // Kill 3D
-                        };
-                    }
-                } else {
-                    // Auto Load immediately if no image
-                    // Small delay to ensure DOM is ready
-                    setTimeout(() => {
-                        init3DViewer(previewArea, currentStlPath);
-                    }, 100);
-                }
-            });
+        function animate() {
+            if(!container.querySelector('canvas')) return; // Stop if removed
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
         }
+        animate();
 
-        // Initialize
-        init();
+    } catch (e) {
+        console.error("STL Load Error:", e);
+        container.innerHTML = '<div style="color:red; text-align:center;">Error loading file.<br>Use Local Server.</div>';
+    }
+}
 
-    </script>
-    <script>
-        // Global Tabs Logic (Outside Module)
-        function switchTab(tabName) {
-            document.querySelectorAll('.container').forEach(c => c.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            
-            document.getElementById(`${tabName}-section`).classList.add('active');
-            // Find button with text matching tabName
-            const btns = document.querySelectorAll('.tab-btn');
-            btns.forEach(btn => {
-                if(btn.textContent.toLowerCase().includes(tabName)) btn.classList.add('active');
-            });
+function clean(str) { return str.replace(/[^a-zA-Z0-9]/g, ''); }
+
+init();
+
+</script>
+
+<script>
+// Global Tab Switching
+window.setTab = function(t) {
+    document.querySelectorAll('.grid').forEach(g => g.classList.remove('active'));
+    document.getElementById(`${t}-grid`).classList.add('active');
+    
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    // Highlight the clicked button
+    const buttons = document.querySelectorAll('.nav-btn');
+    for (let btn of buttons) {
+        if(btn.innerText.toLowerCase().includes(t.substring(0,4))) {
+            btn.classList.add('active');
         }
-    </script>
+    }
+}
+</script>
 </body>
 </html>
