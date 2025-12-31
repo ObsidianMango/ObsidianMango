@@ -132,8 +132,15 @@
             height: 100%; 
             object-fit: contain; 
             display: none; 
+            position: relative; z-index: 10;
         }
         .preview-img.active { display: block; }
+        
+        .no-img-text {
+            color: #555;
+            position: absolute;
+            z-index: 1;
+        }
 
         /* Carousel Controls */
         .carousel-btn {
@@ -281,9 +288,32 @@
             background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer;
         }
         .cart-item {
-            display: flex; justify-content: space-between;
-            padding: 10px; border-bottom: 1px solid #333;
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0; 
+            border-bottom: 1px solid #333;
         }
+        .cart-details { display: flex; flex-direction: column; }
+        
+        /* Quantity Controls */
+        .qty-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #2d2d2d;
+            padding: 5px;
+            border-radius: 6px;
+        }
+        .qty-btn {
+            background: #444; color: #fff;
+            border: none; width: 25px; height: 25px;
+            border-radius: 4px; cursor: pointer;
+            font-weight: bold;
+        }
+        .qty-btn:hover { background: #555; }
+        .qty-val { width: 20px; text-align: center; font-weight: bold; }
+
         .copy-btn {
             background: var(--accent); color: #000; width: 100%;
             padding: 12px; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold;
@@ -296,6 +326,7 @@
             border: 3px solid #333; border-top: 3px solid var(--accent);
             border-radius: 50%; animation: spin 0.8s linear infinite;
             position: absolute;
+            z-index: 50;
         }
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
@@ -517,7 +548,7 @@ function renderGrid(type, items) {
         const firstFile = encodeURI(`${item.folder}/${item.files[0]}`);
         
         // Image Carousel Logic
-        let imgHtml = '<span style="color:#555">No Image</span>';
+        let imgHtml = '<div class="no-img-text">No Image</div>';
         let controlsHtml = '';
 
         if (item.imgs && item.imgs.length > 0) {
@@ -578,10 +609,16 @@ function renderGrid(type, items) {
                 const canvas = viewBox.querySelector('canvas');
                 if(canvas) canvas.remove();
                 
-                // Show first image
+                // Show text if no images, or show images
+                const noImgTxt = viewBox.querySelector('.no-img-text');
+                if(noImgTxt) noImgTxt.style.display = 'block';
+
                 const imgs = viewBox.querySelectorAll('.preview-img');
                 imgs.forEach(img => img.classList.remove('active'));
-                if(imgs.length>0) imgs[0].classList.add('active');
+                if(imgs.length>0) {
+                    imgs[0].classList.add('active');
+                    if(noImgTxt) noImgTxt.style.display = 'none';
+                }
             };
         }
 
@@ -641,9 +678,7 @@ function renderGrid(type, items) {
         };
 
         // 7. AUTO-LOAD 3D IF NO IMAGES
-        // This is the new logic added
         if (!item.imgs || item.imgs.length === 0) {
-            // Trigger loadSTL immediately
             loadSTL(viewBox, activeFile);
         }
     });
@@ -652,8 +687,12 @@ function renderGrid(type, items) {
 // --- 3D LOGIC ---
 
 async function loadSTL(container, url) {
-    // Clean container of previous 3D or images (hide images)
+    // Hide Images AND No Image Text
     container.querySelectorAll('.preview-img').forEach(img => img.classList.remove('active'));
+    const noImgTxt = container.querySelector('.no-img-text');
+    if (noImgTxt) noImgTxt.style.display = 'none';
+
+    // Remove old canvas
     const oldCanvas = container.querySelector('canvas');
     if(oldCanvas) oldCanvas.remove();
 
@@ -735,14 +774,36 @@ function clean(str) { return str.replace(/[^a-zA-Z0-9]/g, ''); }
 // --- CART LOGIC ---
 
 window.addToCart = function(itemName, color) {
-    cart.push({ item: itemName, color: color });
+    // Check if exists
+    const existingItem = cart.find(c => c.item === itemName && c.color === color);
+    
+    if (existingItem) {
+        existingItem.qty += 1;
+    } else {
+        cart.push({ item: itemName, color: color, qty: 1 });
+    }
+    
     updateCartDisplay();
 }
 
+window.changeQty = function(index, delta) {
+    cart[index].qty += delta;
+    if (cart[index].qty <= 0) {
+        cart.splice(index, 1);
+    }
+    updateCartDisplay();
+    // Refresh modal UI immediately
+    toggleCart(); 
+    setTimeout(toggleCart, 0); 
+}
+
 function updateCartDisplay() {
-    const count = document.getElementById('cart-count');
-    count.innerText = cart.length;
-    count.style.display = cart.length > 0 ? 'block' : 'none';
+    const countEl = document.getElementById('cart-count');
+    // Sum all quantities
+    const total = cart.reduce((sum, item) => sum + item.qty, 0);
+    
+    countEl.innerText = total;
+    countEl.style.display = total > 0 ? 'block' : 'none';
 }
 
 window.toggleCart = function() {
@@ -752,14 +813,21 @@ window.toggleCart = function() {
     if (modal.classList.contains('active')) {
         modal.classList.remove('active');
     } else {
-        // Build cart HTML
+        // Build cart HTML with Quantity Controls
         if (cart.length === 0) {
             itemsDiv.innerHTML = 'Your cart is empty.';
         } else {
             itemsDiv.innerHTML = cart.map((c, i) => `
                 <div class="cart-item">
-                    <span>${c.item} <br><small style="color:#888">${c.color}</small></span>
-                    <button onclick="removeFromCart(${i})" style="background:none;border:none;color:red;cursor:pointer;">&times;</button>
+                    <div class="cart-details">
+                        <span style="font-weight:bold;color:#fff">${c.item}</span>
+                        <small style="color:#888">${c.color}</small>
+                    </div>
+                    <div class="qty-controls">
+                        <button class="qty-btn" onclick="changeQty(${i}, -1)">-</button>
+                        <span class="qty-val">${c.qty}</span>
+                        <button class="qty-btn" onclick="changeQty(${i}, 1)">+</button>
+                    </div>
                 </div>
             `).join('');
         }
@@ -767,19 +835,12 @@ window.toggleCart = function() {
     }
 }
 
-window.removeFromCart = function(index) {
-    cart.splice(index, 1);
-    updateCartDisplay();
-    toggleCart(); // Refresh modal
-    setTimeout(toggleCart, 0); // Hack to keep it open
-}
-
 window.checkout = function() {
     if (cart.length === 0) return;
     
     let text = "I would like to order:\n";
     cart.forEach(c => {
-        text += `- ${c.item} (${c.color})\n`;
+        text += `- ${c.qty}x ${c.item} (${c.color})\n`;
     });
     
     navigator.clipboard.writeText(text).then(() => {
