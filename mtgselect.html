@@ -17,7 +17,9 @@
 
         h1 { margin-top: 0; }
 
+        /* Search Container Relative for Dropdown positioning */
         .controls {
+            position: relative; 
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
@@ -33,6 +35,7 @@
             color: #1eff00;
             font-family: monospace;
             font-size: 1.1rem;
+            outline: none;
         }
 
         button {
@@ -44,8 +47,34 @@
             cursor: pointer;
             font-family: monospace;
         }
-
         button:hover { opacity: 0.8; }
+
+        /* --- AUTOCOMPLETE DROPDOWN --- */
+        .suggestions-box {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: calc(100% - 140px); /* Adjust for button width approx */
+            background: #000;
+            border: 1px solid #1eff00;
+            border-top: none;
+            z-index: 1000;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none; /* Hidden by default */
+            box-shadow: 0 10px 20px rgba(0,0,0,0.8);
+        }
+
+        .suggestion-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #333;
+        }
+
+        .suggestion-item:hover {
+            background: #1eff00;
+            color: #000;
+        }
 
         /* The Output Box */
         #code-output-container {
@@ -59,7 +88,7 @@
             max-width: 800px;
             margin-bottom: 20px;
             box-shadow: 0 0 20px rgba(30, 255, 0, 0.2);
-            display: none; /* Hidden until needed */
+            display: none; 
         }
 
         .output-label {
@@ -95,26 +124,30 @@
             transition: transform 0.2s;
             border: 2px solid transparent;
             padding: 5px;
+            background: #1a1a1a;
         }
 
         .card-option:hover {
             transform: scale(1.05);
             border-color: #1eff00;
+            z-index: 10;
         }
 
         .card-option img {
             width: 100%;
             border-radius: 10px;
+            display: block;
         }
 
         .card-details {
             text-align: center;
             font-size: 0.8rem;
-            margin-top: 5px;
+            margin-top: 8px;
             color: #888;
+            padding-bottom: 5px;
         }
 
-        .set-name { color: #fff; }
+        .set-name { color: #fff; font-weight: bold; margin-bottom: 3px; }
         .cn { color: #1eff00; }
 
     </style>
@@ -124,29 +157,92 @@
     <h1>MTG Art Selector</h1>
 
     <div class="controls">
-        <input type="text" id="search-input" placeholder="Enter Card Name (e.g. Decanter of Endless Water)" onkeydown="if(event.key === 'Enter') searchCards()">
-        <button onclick="searchCards()">FETCH PRINTS</button>
+        <input type="text" id="search-input" placeholder="Start typing card name..." autocomplete="off">
+        <div id="suggestions" class="suggestions-box"></div>
+        <button onclick="triggerSearch()">FETCH ART</button>
     </div>
 
     <div id="code-output-container">
-        <span class="output-label">SUCCESS! Copy this line into your code:</span>
+        <span class="output-label">SUCCESS! Copy this line:</span>
         <textarea id="result-text" readonly onclick="this.select()"></textarea>
     </div>
 
     <div id="grid" class="grid"></div>
 
 <script>
-    async function searchCards() {
-        const query = document.getElementById('search-input').value.trim();
+    const input = document.getElementById('search-input');
+    const suggestionsBox = document.getElementById('suggestions');
+    let debounceTimer;
+
+    // --- 1. LIVE AUTOCOMPLETE ---
+    input.addEventListener('input', function() {
+        const query = this.value.trim();
+        
+        // Clear previous timer
+        clearTimeout(debounceTimer);
+
+        if (query.length < 2) {
+            suggestionsBox.style.display = 'none';
+            return;
+        }
+
+        // Wait 300ms after typing stops before hitting API
+        debounceTimer = setTimeout(() => {
+            fetchSuggestions(query);
+        }, 300);
+    });
+
+    async function fetchSuggestions(query) {
+        try {
+            const res = await fetch(`https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            
+            if (data.data && data.data.length > 0) {
+                renderSuggestions(data.data);
+            } else {
+                suggestionsBox.style.display = 'none';
+            }
+        } catch (e) {
+            console.error("Autocomplete Error", e);
+        }
+    }
+
+    function renderSuggestions(names) {
+        suggestionsBox.innerHTML = '';
+        names.forEach(name => {
+            const div = document.createElement('div');
+            div.className = 'suggestion-item';
+            div.innerText = name;
+            div.onclick = () => {
+                input.value = name;
+                suggestionsBox.style.display = 'none';
+                triggerSearch(); // Auto-search on click
+            };
+            suggestionsBox.appendChild(div);
+        });
+        suggestionsBox.style.display = 'block';
+    }
+
+    // Hide suggestions if clicking outside
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && e.target !== suggestionsBox) {
+            suggestionsBox.style.display = 'none';
+        }
+    });
+
+
+    // --- 2. FETCH CARD ART VARIANTS ---
+    async function triggerSearch() {
+        const query = input.value.trim();
         if (!query) return;
 
+        suggestionsBox.style.display = 'none'; // Close dropdown if open
         const grid = document.getElementById('grid');
-        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center;">Scanning Scryfall Database...</div>';
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center;">Scanning Scryfall Database for prints...</div>';
         document.getElementById('code-output-container').style.display = 'none';
 
         try {
-            // Search for all unique prints of the card
-            // unique=prints ensures we get every art variant
+            // Search for all unique prints (unique=prints)
             const url = `https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(query)}"&unique=prints`;
             
             const response = await fetch(url);
@@ -157,18 +253,19 @@
                 return;
             }
 
-            grid.innerHTML = ''; // Clear loading message
+            grid.innerHTML = ''; 
 
             data.data.forEach(card => {
-                // Determine image URI
                 let imgUri = 'https://placehold.co/200x280?text=No+Image';
+                
+                // Handle single face vs double face cards
                 if (card.image_uris) {
                     imgUri = card.image_uris.normal;
                 } else if (card.card_faces && card.card_faces[0].image_uris) {
                     imgUri = card.card_faces[0].image_uris.normal;
                 }
 
-                // Determine simple Type (Creature, Artifact, etc)
+                // Determine simple Type
                 let simpleType = "Unknown";
                 const typeLine = card.type_line;
                 if (typeLine.includes("Land")) simpleType = "Land";
@@ -186,15 +283,14 @@
                 div.innerHTML = `
                     <img src="${imgUri}" alt="${card.name}">
                     <div class="card-details">
-                        <div class="set-name">${card.set_name} (${card.set.toUpperCase()})</div>
-                        <div class="cn">CN: ${card.collector_number}</div>
+                        <div class="set-name">${card.set_name}</div>
+                        <div class="cn">SET: ${card.set.toUpperCase()} | CN: ${card.collector_number}</div>
                     </div>
                 `;
 
-                // ON CLICK: Generate the code
                 div.onclick = () => {
                     generateCode(card, simpleType);
-                    // Visual feedback
+                    // Visual Select
                     document.querySelectorAll('.card-option').forEach(el => el.style.borderColor = 'transparent');
                     div.style.borderColor = '#1eff00';
                 };
@@ -209,11 +305,10 @@
     }
 
     function generateCode(card, type) {
-        // Format: { qty: 1, name: "Name", type: "Type", category: "Upgraded", setCode: 'xxx', cn: '123' },
-        
+        // Output Format matches your deckData structure
         const setCode = card.set;
         const cn = card.collector_number;
-        const name = card.name.replace(/"/g, '\\"'); // Escape quotes just in case
+        const name = card.name.replace(/"/g, '\\"'); 
 
         const codeString = `{ qty: 1, name: "${name}", type: "${type}", category: "Upgraded", setCode: '${setCode}', cn: '${cn}' },`;
 
@@ -224,7 +319,6 @@
         textarea.value = codeString;
         textarea.select();
         
-        // Scroll to top to show user the code
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 </script>
