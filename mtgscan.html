@@ -2,539 +2,551 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Art-Specific MTG Deck Builder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MTG Deck Builder & Scanner</title>
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <style>
         :root {
             --bg-color: #121212;
             --surface-color: #1e1e1e;
             --primary-color: #bb86fc;
+            --secondary-color: #03dac6;
             --text-color: #e0e0e0;
             --border-color: #333;
-            --accent-green: #03dac6;
-            --accent-red: #cf6679;
+            --danger-color: #cf6679;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            height: 100vh;
             display: flex;
             flex-direction: column;
-            height: 100vh;
-            box-sizing: border-box;
+            overflow: hidden; /* Prevent body scroll, handle inside panels */
         }
 
-        h1, h2 { margin-top: 0; }
+        /* Header */
+        header {
+            background-color: var(--surface-color);
+            padding: 15px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-        /* Layout */
+        h1 { margin: 0; font-size: 1.2rem; color: var(--primary-color); }
+        
+        /* Main Layout */
         .container {
             display: flex;
-            gap: 20px;
             flex: 1;
             overflow: hidden;
+            position: relative;
         }
 
         .panel {
-            background-color: var(--surface-color);
-            border-radius: 8px;
-            padding: 20px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
-            border: 1px solid var(--border-color);
+            overflow-y: auto;
+            border-right: 1px solid var(--border-color);
         }
 
-        .left-panel { flex: 2; overflow-y: auto; }
-        .right-panel { flex: 1; min-width: 300px; display: flex; flex-direction: column; }
+        .left-panel { flex: 6; } /* Search Results */
+        .right-panel { flex: 4; min-width: 300px; background: #181818; } /* Deck List */
 
-        /* Search Bar */
+        /* Mobile Layout Handling */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .panel {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .left-panel { flex: 1; order: 2; display: none; } /* Hidden by default on mobile tabs */
+            .right-panel { flex: 1; order: 2; display: none; }
+            
+            /* Show active panel */
+            .panel.active { display: flex; height: 100%; }
+
+            /* Mobile Tab Bar */
+            .mobile-tabs {
+                display: flex;
+                flex-shrink: 0;
+                background: var(--surface-color);
+                border-top: 1px solid var(--border-color);
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+            .tab-btn {
+                flex: 1;
+                padding: 15px;
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 1rem;
+                font-weight: bold;
+                cursor: pointer;
+            }
+            .tab-btn.active {
+                color: var(--primary-color);
+                border-top: 2px solid var(--primary-color);
+                background: rgba(187, 134, 252, 0.05);
+            }
+        }
+        
+        /* Desktop: Hide mobile tabs */
+        @media (min-width: 769px) {
+            .mobile-tabs { display: none; }
+        }
+
+        /* Controls */
         .search-box {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
-
+        
         input[type="text"] {
             flex: 1;
-            padding: 10px;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #444;
             background: #2c2c2c;
             color: white;
             font-size: 16px;
         }
-
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            background-color: var(--primary-color);
-            color: #000;
-            transition: opacity 0.2s;
-        }
-        button:hover { opacity: 0.9; }
         
-        button.secondary { background-color: #444; color: white; }
-        button.danger { background-color: var(--accent-red); color: black; }
-        button.success { background-color: var(--accent-green); color: black; }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
 
-        /* Card Results Grid */
+        .btn-primary { background-color: var(--primary-color); color: #000; }
+        .btn-secondary { background-color: #444; color: #fff; }
+        .btn-success { background-color: var(--secondary-color); color: #000; }
+        .btn-danger { background-color: var(--danger-color); color: #000; }
+        .btn-icon { padding: 10px; font-size: 1.2rem; }
+
+        /* Card Grid */
         .results-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Smaller for mobile */
+            gap: 10px;
+            padding-bottom: 20px;
         }
 
         .card-option {
             position: relative;
             cursor: pointer;
-            transition: transform 0.2s;
-            border-radius: 4.5%;
+            border-radius: 4%;
             overflow: hidden;
+            aspect-ratio: 2.5/3.5;
         }
-
-        .card-option:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 15px var(--primary-color);
-            z-index: 10;
-        }
-
-        .card-option img {
-            width: 100%;
-            display: block;
-            border-radius: 4.5%;
-        }
-
-        .card-info-overlay {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(0,0,0,0.8);
-            padding: 5px;
-            font-size: 0.8rem;
+        .card-option img { width: 100%; height: 100%; object-fit: cover; }
+        .card-overlay {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 4px;
+            font-size: 0.7rem;
             text-align: center;
-            opacity: 0; /* Hidden by default */
-            transition: opacity 0.2s;
-        }
-        .card-option:hover .card-info-overlay { opacity: 1; }
-
-        /* Deck List */
-        .deck-list {
-            flex: 1;
-            overflow-y: auto;
-            margin-top: 10px;
-            border-top: 1px solid var(--border-color);
         }
 
+        /* Deck List Items */
         .deck-item {
             display: flex;
             align-items: center;
             padding: 8px;
-            border-bottom: 1px solid var(--border-color);
+            background: #252525;
+            margin-bottom: 8px;
+            border-radius: 6px;
             gap: 10px;
         }
-
-        .deck-item:hover { background-color: #2a2a2a; }
-
-        .deck-item-thumb {
-            width: 40px;
-            height: 56px; /* Approx card ratio */
-            border-radius: 2px;
-            background-size: cover;
-            background-position: center;
-            background-color: #333;
+        .deck-thumb {
+            width: 40px; height: 56px;
+            background-size: cover; background-position: center;
+            border-radius: 3px;
+            flex-shrink: 0;
         }
+        .deck-info { flex: 1; overflow: hidden; }
+        .deck-name { font-weight: bold; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .deck-set { font-size: 0.75rem; color: #aaa; }
+        
+        .qty-controls { display: flex; align-items: center; gap: 8px; }
+        .qty-btn { width: 28px; height: 28px; padding: 0; border-radius: 50%; font-size: 1.1rem; background: #444; color: white;}
 
-        .deck-item-details { flex: 1; }
-        .deck-item-name { font-weight: bold; font-size: 0.95rem; }
-        .deck-item-set { font-size: 0.8rem; color: #aaa; }
-
-        .qty-controls {
-            display: flex;
-            align-items: center;
-            gap: 5px;
+        /* Scanner Overlay */
+        #scannerModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 1000;
+            display: none; flex-direction: column;
         }
-        .qty-btn {
-            background: #444;
-            color: white;
-            width: 24px;
-            height: 24px;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1rem;
+        #videoFeed { width: 100%; height: 100%; object-fit: cover; }
+        .scan-overlay-ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 20px; box-sizing: border-box; pointer-events: none;
         }
-        .qty-btn:hover { background: #666; }
-
-        /* Toast Notification */
-        #toast {
-            visibility: hidden;
-            min-width: 250px;
-            margin-left: -125px;
-            background-color: var(--accent-green);
-            color: black;
-            text-align: center;
-            border-radius: 2px;
-            padding: 16px;
-            position: fixed;
-            z-index: 100;
-            left: 50%;
-            bottom: 30px;
-            font-size: 17px;
-            font-weight: bold;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        .scan-guide-box {
+            border: 2px solid var(--secondary-color);
+            background: rgba(3, 218, 198, 0.1);
+            height: 60px; /* Focus on title bar */
+            width: 80%;
+            margin: 100px auto 0 auto;
+            border-radius: 8px;
+            position: relative;
+            box-shadow: 0 0 0 1000px rgba(0,0,0,0.6); /* Dim surroundings */
         }
-        #toast.show {
-            visibility: visible;
-            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        .scan-controls {
+            pointer-events: auto;
+            display: flex; gap: 20px; justify-content: center; padding-bottom: 30px;
         }
         
-        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
-        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
-
-        /* Stats */
-        .deck-stats {
-            margin-top: 10px;
-            font-size: 0.9rem;
-            color: #aaa;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        /* Loading Spinner */
-        .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border-left-color: var(--primary-color);
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-            display: none;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* Modal for Export */
+        /* Modal General */
         .modal {
-            display: none; 
-            position: fixed; 
-            z-index: 200; 
-            left: 0; top: 0; 
-            width: 100%; height: 100%; 
-            background-color: rgba(0,0,0,0.7); 
-            justify-content: center; 
-            align-items: center;
+            display: none; position: fixed; z-index: 500;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            justify-content: center; align-items: center;
+            padding: 20px; box-sizing: border-box;
         }
         .modal-content {
             background-color: var(--surface-color);
-            padding: 20px;
-            border-radius: 8px;
-            width: 80%;
-            max-width: 600px;
+            padding: 20px; border-radius: 12px;
+            width: 100%; max-width: 500px;
             border: 1px solid var(--border-color);
+            display: flex; flex-direction: column; gap: 15px;
         }
-        textarea {
-            width: 100%;
-            height: 200px;
-            background: #111;
-            color: #ddd;
-            border: 1px solid #444;
-            padding: 10px;
-            box-sizing: border-box;
-            font-family: monospace;
-            margin: 10px 0;
-        }
+        textarea { width: 100%; height: 150px; background: #111; color: #fff; border: 1px solid #444; padding: 10px; }
+
+        /* Spinner */
+        .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid var(--primary-color); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
     </style>
 </head>
 <body>
 
-    <h1 style="text-align: center; color: var(--primary-color);">Deck Builder with Art Selector</h1>
+    <header>
+        <div style="font-weight: bold; display: flex; align-items: center; gap: 10px;">
+            <span>MTG Builder</span>
+            <div id="globalSpinner" class="spinner"></div>
+        </div>
+        <div style="font-size: 0.8rem; color: #888;" id="deckStats">0 Cards</div>
+    </header>
 
     <div class="container">
-        <div class="panel left-panel">
+        <div id="searchPanel" class="panel left-panel active">
             <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Enter card name (e.g. Sol Ring)..." onkeypress="handleEnter(event)">
-                <button onclick="searchCards()">Search Prints</button>
+                <input type="text" id="searchInput" placeholder="Card name..." onkeypress="handleEnter(event)">
+                <button class="btn-secondary btn-icon" onclick="openScanner()" title="Scan Card Title">📷</button>
+                <button class="btn-primary" onclick="searchCards()">Search</button>
             </div>
             
-            <div id="loadingSpinner" class="spinner"></div>
             <div id="searchResults" class="results-grid"></div>
-            <div id="introText" style="text-align: center; color: #777; margin-top: 50px;">
-                <p>Search for a card to see all available art and printing options.</p>
-                <p>Click a card image to add that specific version to your deck.</p>
-            </div>
-        </div>
-
-        <div class="panel right-panel">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2>My Deck</h2>
-                <button class="danger" style="padding: 5px 10px; font-size: 0.8rem;" onclick="clearDeck()">Clear</button>
-            </div>
             
-            <div class="deck-stats">
-                <span id="cardCount">0 Cards</span>
+            <div id="emptyState" style="text-align: center; color: #666; margin-top: 40px;">
+                <p>Type a name or scan a card.</p>
+                <p style="font-size: 0.8rem;">To scan: Aim camera at the card <b>Title</b>.</p>
             </div>
-
-            <div id="deckList" class="deck-list">
-                </div>
-
-            <button class="success" style="margin-top: 15px;" onclick="openExportModal()">Export List</button>
         </div>
+
+        <div id="deckPanel" class="panel right-panel">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                <h2 style="margin:0; font-size: 1.2rem;">Deck List</h2>
+                <div style="display: gap: 5px;">
+                    <button class="btn-danger" style="padding: 5px 10px; font-size: 0.8rem;" onclick="clearDeck()">Clear</button>
+                </div>
+            </div>
+            <div id="deckList" style="flex:1; overflow-y:auto;"></div>
+            <button class="btn-success" style="width: 100%; margin-top: 10px;" onclick="openExportModal()">Export List</button>
+        </div>
+    </div>
+
+    <nav class="mobile-tabs">
+        <button class="tab-btn active" onclick="switchTab('search')">Search / Scan</button>
+        <button class="tab-btn" onclick="switchTab('deck')">My Deck <span id="mobileCount">(0)</span></button>
+    </nav>
+
+    <div id="scannerModal">
+        <video id="videoFeed" autoplay playsinline muted></video>
+        <div class="scan-overlay-ui">
+            <div style="text-align: center; margin-top: 20px; color: white; text-shadow: 0 1px 4px black;">
+                <h3>Scan Card Title</h3>
+                <p>Align the card NAME inside the box below.</p>
+            </div>
+            <div class="scan-guide-box"></div>
+            <div class="scan-controls">
+                <button class="btn-secondary" onclick="closeScanner()">Cancel</button>
+                <button class="btn-primary" onclick="captureAndRead()">Capture & Read</button>
+            </div>
+        </div>
+        <canvas id="scanCanvas" style="display:none;"></canvas>
     </div>
 
     <div id="exportModal" class="modal">
         <div class="modal-content">
-            <h3 style="margin-top: 0;">Export Deck List</h3>
-            <p style="font-size: 0.9rem; color: #aaa;">Copy this text. It includes the Set Code and Collector Number, so apps like Moxfield, Archidekt, and Arena will load the correct art.</p>
+            <h3>Export Deck</h3>
             <textarea id="exportText" readonly></textarea>
-            <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="secondary" onclick="closeExportModal()">Close</button>
-                <button onclick="copyToClipboard()">Copy to Clipboard</button>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn-secondary" onclick="document.getElementById('exportModal').style.display='none'">Close</button>
+                <button class="btn-primary" onclick="copyToClipboard()">Copy</button>
             </div>
         </div>
     </div>
 
-    <div id="toast">Added to Deck!</div>
-
     <script>
         // State
-        let deck = [];
+        let deck = JSON.parse(localStorage.getItem('my_mtg_deck_v2') || '[]');
+        let videoStream = null;
 
-        // Load deck from local storage on startup
-        window.onload = function() {
-            const savedDeck = localStorage.getItem('my_mtg_deck');
-            if (savedDeck) {
-                deck = JSON.parse(savedDeck);
-                renderDeck();
-            }
-        };
+        window.onload = () => { renderDeck(); };
 
-        // Handle Enter Key in Search
-        function handleEnter(e) {
-            if (e.key === 'Enter') {
-                searchCards();
+        // --- NAVIGATION ---
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            
+            if(tab === 'search') {
+                document.getElementById('searchPanel').classList.add('active');
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            } else {
+                document.getElementById('deckPanel').classList.add('active');
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
             }
         }
 
-        // --- SCRYFALL API SEARCH ---
-        async function searchCards() {
-            const query = document.getElementById('searchInput').value.trim();
-            if (!query) return;
+        // --- SEARCH ---
+        function handleEnter(e) { if(e.key === 'Enter') searchCards(); }
 
-            const resultsContainer = document.getElementById('searchResults');
-            const spinner = document.getElementById('loadingSpinner');
-            const intro = document.getElementById('introText');
-
-            // Reset UI
-            resultsContainer.innerHTML = '';
-            intro.style.display = 'none';
+        async function searchCards(overrideQuery = null) {
+            const query = overrideQuery || document.getElementById('searchInput').value.trim();
+            if(!query) return;
+            
+            const resultsDiv = document.getElementById('searchResults');
+            const spinner = document.getElementById('globalSpinner');
+            const emptyState = document.getElementById('emptyState');
+            
+            resultsDiv.innerHTML = '';
+            emptyState.style.display = 'none';
             spinner.style.display = 'block';
 
             try {
-                // We use 'unique=prints' to get every single version of the card
-                // We use 'q=!"name"' for exact search if possible, but to allow flexibility we start with general query
-                // If the user types "Sol Ring", we want ALL Sol Rings.
-                // Using exact name match logic: `!"${query}"`
-                
-                const encodedQuery = encodeURIComponent(`!"${query}"`);
-                const response = await fetch(`https://api.scryfall.com/cards/search?q=${encodedQuery}&unique=prints&order=released&dir=desc`);
-                
-                if (!response.ok) {
-                    // Fallback: If exact quote search fails (user typed partial name), try general search
-                    // But general search with unique=prints might return too much (e.g. "Thalia" returns two different legends).
-                    // We will try a fuzzy search for the name first to get the real name, then search prints.
-                    const fuzzyResponse = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(query)}`);
-                    if (!fuzzyResponse.ok) {
-                        throw new Error("Card not found");
-                    }
-                    const fuzzyData = await fuzzyResponse.json();
-                    const realName = fuzzyData.name;
-                    
-                    // Now search again with the corrected full name
-                    const retryResponse = await fetch(`https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(realName)}"&unique=prints&order=released&dir=desc`);
-                    if(!retryResponse.ok) throw new Error("Could not fetch prints");
-                    
-                    const data = await retryResponse.json();
-                    renderResults(data.data);
-                } else {
-                    const data = await response.json();
-                    renderResults(data.data);
-                }
+                // First try fuzzy name match to get exact card name
+                const fuzzyRes = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(query)}`);
+                if(!fuzzyRes.ok) throw new Error("Card not found");
+                const fuzzyData = await fuzzyRes.json();
+                const realName = fuzzyData.name;
 
-            } catch (error) {
-                resultsContainer.innerHTML = `<p style="color: #cf6679; text-align: center;">${error.message || "Error fetching cards."}</p>`;
+                // Then get all prints
+                const searchRes = await fetch(`https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(realName)}"&unique=prints&order=released&dir=desc`);
+                const data = await searchRes.json();
+                
+                renderResults(data.data || []);
+            } catch (err) {
+                resultsDiv.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 20px;">No cards found for "${query}"</div>`;
             } finally {
                 spinner.style.display = 'none';
             }
         }
 
         function renderResults(cards) {
-            const container = document.getElementById('searchResults');
-            
-            if (!cards || cards.length === 0) {
-                container.innerHTML = '<p>No cards found.</p>';
-                return;
-            }
+            const div = document.getElementById('searchResults');
+            if(!cards.length) return;
 
             cards.forEach(card => {
-                // Handle double-faced cards or weird layouts
-                let imgUrl = 'https://c1.scryfall.com/file/scryfall-cards/normal/front/6/d/6da045f8-6278-4c84-9d39-00e5406fe609.jpg'; // fallback card back
-                
-                if (card.image_uris && card.image_uris.normal) {
-                    imgUrl = card.image_uris.normal;
-                } else if (card.card_faces && card.card_faces[0].image_uris) {
-                    imgUrl = card.card_faces[0].image_uris.normal;
-                }
+                let img = card.image_uris ? card.image_uris.normal : (card.card_faces ? card.card_faces[0].image_uris.normal : '');
+                if(!img) return;
 
-                // Create the card element
-                const div = document.createElement('div');
-                div.className = 'card-option';
-                div.onclick = () => addCardToDeck(card, imgUrl);
-
-                div.innerHTML = `
-                    <img src="${imgUrl}" alt="${card.name}" loading="lazy">
-                    <div class="card-info-overlay">
-                        ${card.set_name} (${card.set.toUpperCase()})<br>
-                        #${card.collector_number}
-                    </div>
+                const el = document.createElement('div');
+                el.className = 'card-option';
+                el.onclick = () => addToDeck(card, img);
+                el.innerHTML = `
+                    <img src="${img}" loading="lazy">
+                    <div class="card-overlay">${card.set.toUpperCase()} #${card.collector_number}</div>
                 `;
-                container.appendChild(div);
+                div.appendChild(el);
             });
         }
 
-        // --- DECK MANAGEMENT ---
-
-        function addCardToDeck(card, imgUrl) {
-            // Check if this specific version is already in deck
-            const existing = deck.find(c => c.id === card.id);
-
-            if (existing) {
-                existing.qty++;
-            } else {
-                deck.push({
-                    id: card.id,
-                    name: card.name,
-                    set: card.set.toUpperCase(),
-                    collector_number: card.collector_number,
-                    img: imgUrl,
-                    qty: 1
+        // --- SCANNER (OCR) ---
+        async function openScanner() {
+            const modal = document.getElementById('scannerModal');
+            const video = document.getElementById('videoFeed');
+            
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } // Rear camera
                 });
-            }
-
-            saveAndRender();
-            showToast(`Added: ${card.name} (${card.set.toUpperCase()})`);
-        }
-
-        function removeCard(id) {
-            const index = deck.findIndex(c => c.id === id);
-            if (index !== -1) {
-                deck.splice(index, 1);
-                saveAndRender();
+                video.srcObject = videoStream;
+                modal.style.display = 'flex';
+            } catch (err) {
+                alert("Camera access denied or unavailable.");
             }
         }
 
-        function updateQty(id, change) {
-            const card = deck.find(c => c.id === id);
-            if (card) {
-                card.qty += change;
-                if (card.qty <= 0) {
-                    removeCard(id);
+        function closeScanner() {
+            const modal = document.getElementById('scannerModal');
+            modal.style.display = 'none';
+            if(videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+        }
+
+        async function captureAndRead() {
+            const video = document.getElementById('videoFeed');
+            const canvas = document.getElementById('scanCanvas');
+            const context = canvas.getContext('2d');
+            const spinner = document.getElementById('globalSpinner');
+
+            // Set canvas to video dimensions
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // We only want to read the area inside the "guide box".
+            // The box is approx 20% from top, 80% width, 10% height roughly.
+            // Let's crop a strip from the top-middle where titles usually are.
+            // Simplified: Crop the top 30% of the image.
+            const cropX = 0;
+            const cropY = canvas.height * 0.15; // Start slightly down
+            const cropW = canvas.width;
+            const cropH = canvas.height * 0.25; // 25% height strip
+
+            // Extract that image data
+            const imageData = context.getImageData(cropX, cropY, cropW, cropH);
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = cropW;
+            tempCanvas.height = cropH;
+            tempCanvas.getContext('2d').putImageData(imageData, 0, 0);
+            
+            // Show Loading
+            closeScanner(); // Close camera immediately
+            spinner.style.display = 'block';
+            document.getElementById('searchInput').value = "Scanning...";
+
+            try {
+                // Tesseract
+                const { data: { text } } = await Tesseract.recognize(tempCanvas, 'eng');
+                
+                // Clean Text: remove newlines, weird symbols, keep letters
+                let cleanText = text.replace(/[^a-zA-Z\s,']/g, '').trim();
+                cleanText = cleanText.split('\n')[0]; // Take first line only
+
+                if(cleanText.length > 2) {
+                    document.getElementById('searchInput').value = cleanText;
+                    searchCards(cleanText);
                 } else {
-                    saveAndRender();
+                    alert("Could not read text. Try again with better lighting.");
+                    document.getElementById('searchInput').value = "";
                 }
+            } catch (e) {
+                console.error(e);
+                alert("Scan failed.");
+            } finally {
+                spinner.style.display = 'none';
             }
+        }
+
+        // --- DECK LOGIC ---
+        function addToDeck(card, img) {
+            const existing = deck.find(c => c.id === card.id);
+            if(existing) existing.qty++;
+            else deck.push({
+                id: card.id, name: card.name, set: card.set.toUpperCase(), 
+                cn: card.collector_number, img: img, qty: 1 
+            });
+            
+            saveDeck();
+            
+            // Animation feedback
+            if(window.innerWidth < 768) {
+               // Flash the tab on mobile
+               const tab = document.querySelectorAll('.tab-btn')[1];
+               tab.style.color = '#fff';
+               setTimeout(() => tab.style.color = '', 300);
+            }
+        }
+
+        function updateQty(id, delta) {
+            const card = deck.find(c => c.id === id);
+            if(!card) return;
+            card.qty += delta;
+            if(card.qty <= 0) deck = deck.filter(c => c.id !== id);
+            saveDeck();
         }
 
         function clearDeck() {
-            if(confirm("Are you sure you want to clear the deck?")) {
+            if(confirm("Clear entire deck?")) {
                 deck = [];
-                saveAndRender();
+                saveDeck();
             }
         }
 
-        function saveAndRender() {
-            localStorage.setItem('my_mtg_deck', JSON.stringify(deck));
+        function saveDeck() {
+            localStorage.setItem('my_mtg_deck_v2', JSON.stringify(deck));
             renderDeck();
         }
 
         function renderDeck() {
             const list = document.getElementById('deckList');
-            const countLabel = document.getElementById('cardCount');
+            const countEl = document.getElementById('deckStats');
+            const mobileCount = document.getElementById('mobileCount');
             
             list.innerHTML = '';
-            
-            let totalCount = 0;
+            let total = 0;
 
-            deck.forEach(card => {
-                totalCount += card.qty;
-                
-                const item = document.createElement('div');
-                item.className = 'deck-item';
-                item.innerHTML = `
-                    <div class="deck-item-thumb" style="background-image: url('${card.img}')"></div>
-                    <div class="deck-item-details">
-                        <div class="deck-item-name">${card.name}</div>
-                        <div class="deck-item-set">${card.set} #${card.collector_number}</div>
+            deck.forEach(c => {
+                total += c.qty;
+                const div = document.createElement('div');
+                div.className = 'deck-item';
+                div.innerHTML = `
+                    <div class="deck-thumb" style="background-image: url('${c.img}')"></div>
+                    <div class="deck-info">
+                        <div class="deck-name">${c.name}</div>
+                        <div class="deck-set">${c.set} #${c.cn}</div>
                     </div>
                     <div class="qty-controls">
-                        <button class="qty-btn" onclick="updateQty('${card.id}', -1)">-</button>
-                        <span>${card.qty}</span>
-                        <button class="qty-btn" onclick="updateQty('${card.id}', 1)">+</button>
+                        <button class="qty-btn" onclick="updateQty('${c.id}', -1)">-</button>
+                        <span>${c.qty}</span>
+                        <button class="qty-btn" onclick="updateQty('${c.id}', 1)">+</button>
                     </div>
                 `;
-                list.appendChild(item);
+                list.appendChild(div);
             });
 
-            countLabel.innerText = `${totalCount} Cards`;
+            countEl.innerText = `${total} Cards`;
+            mobileCount.innerText = `(${total})`;
         }
 
         // --- EXPORT ---
-
         function openExportModal() {
-            const modal = document.getElementById('exportModal');
-            const textarea = document.getElementById('exportText');
-            
-            // Format: Qty Name (SET) CN
-            // This is the standard "MTG Arena" / Moxfield import format that preserves art.
-            const exportString = deck.map(c => {
-                return `${c.qty} ${c.name} (${c.set}) ${c.collector_number}`;
-            }).join('\n');
-
-            textarea.value = exportString;
-            modal.style.display = 'flex';
-        }
-
-        function closeExportModal() {
-            document.getElementById('exportModal').style.display = 'none';
+            const txt = deck.map(c => `${c.qty} ${c.name} (${c.set}) ${c.cn}`).join('\n');
+            document.getElementById('exportText').value = txt;
+            document.getElementById('exportModal').style.display = 'flex';
         }
 
         function copyToClipboard() {
-            const textarea = document.getElementById('exportText');
-            textarea.select();
+            document.getElementById('exportText').select();
             document.execCommand('copy');
-            alert("Copied to clipboard!");
-        }
-
-        // --- UTILS ---
-        function showToast(message) {
-            const toast = document.getElementById("toast");
-            toast.innerText = message;
-            toast.className = "show";
-            setTimeout(function(){ toast.className = toast.className.replace("show", ""); }, 3000);
-        }
-
-        // Close modal if clicking outside box
-        window.onclick = function(event) {
-            const modal = document.getElementById('exportModal');
-            if (event.target == modal) {
-                closeExportModal();
-            }
+            alert("Copied!");
         }
     </script>
 </body>
