@@ -3,527 +3,397 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Deck Builder & Scanner</title>
+    <title>MTG Photo Scanner & Builder</title>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <style>
         :root {
             --bg-color: #121212;
-            --surface-color: #1e1e1e;
-            --primary-color: #bb86fc;
-            --secondary-color: #03dac6;
-            --text-color: #e0e0e0;
-            --border-color: #333;
-            --danger-color: #cf6679;
+            --surface: #1e1e1e;
+            --primary: #bb86fc;
+            --secondary: #03dac6;
+            --text: #e0e0e0;
         }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
-            color: var(--text-color);
+            color: var(--text);
             margin: 0;
             padding: 0;
-            height: 100vh;
             display: flex;
             flex-direction: column;
-            overflow: hidden; /* Prevent body scroll, handle inside panels */
+            height: 100vh;
         }
 
-        /* Header */
+        /* --- HEADER --- */
         header {
-            background-color: var(--surface-color);
+            background: var(--surface);
             padding: 15px;
             text-align: center;
-            border-bottom: 1px solid var(--border-color);
-            flex-shrink: 0;
-            display: flex;
+            border-bottom: 1px solid #333;
+            display: flex; 
             justify-content: space-between;
             align-items: center;
         }
+        h1 { margin: 0; font-size: 1.1rem; color: var(--primary); }
+        .deck-count { color: #888; font-size: 0.9rem; }
 
-        h1 { margin: 0; font-size: 1.2rem; color: var(--primary-color); }
+        /* --- MAIN LAYOUT --- */
+        .container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         
-        /* Main Layout */
-        .container {
+        /* Tabs for Mobile */
+        .tabs {
             display: flex;
-            flex: 1;
-            overflow: hidden;
-            position: relative;
+            background: var(--surface);
+            border-bottom: 1px solid #333;
         }
-
-        .panel {
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-            border-right: 1px solid var(--border-color);
+        .tab {
+            flex: 1; text-align: center; padding: 15px;
+            color: #888; font-weight: bold; cursor: pointer;
+            border-bottom: 3px solid transparent;
         }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 
-        .left-panel { flex: 6; } /* Search Results */
-        .right-panel { flex: 4; min-width: 300px; background: #181818; } /* Deck List */
+        /* Panels */
+        .panel { flex: 1; overflow-y: auto; padding: 15px; display: none; }
+        .panel.active { display: block; }
 
-        /* Mobile Layout Handling */
-        @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-            .panel {
-                width: 100%;
-                border-right: none;
-                border-bottom: 1px solid var(--border-color);
-            }
-            .left-panel { flex: 1; order: 2; display: none; } /* Hidden by default on mobile tabs */
-            .right-panel { flex: 1; order: 2; display: none; }
-            
-            /* Show active panel */
-            .panel.active { display: flex; height: 100%; }
-
-            /* Mobile Tab Bar */
-            .mobile-tabs {
-                display: flex;
-                flex-shrink: 0;
-                background: var(--surface-color);
-                border-top: 1px solid var(--border-color);
-                padding-bottom: env(safe-area-inset-bottom);
-            }
-            .tab-btn {
-                flex: 1;
-                padding: 15px;
-                background: none;
-                border: none;
-                color: #888;
-                font-size: 1rem;
-                font-weight: bold;
-                cursor: pointer;
-            }
-            .tab-btn.active {
-                color: var(--primary-color);
-                border-top: 2px solid var(--primary-color);
-                background: rgba(187, 134, 252, 0.05);
-            }
-        }
-        
-        /* Desktop: Hide mobile tabs */
-        @media (min-width: 769px) {
-            .mobile-tabs { display: none; }
-        }
-
-        /* Controls */
-        .search-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        
+        /* --- SEARCH & SCAN UI --- */
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
         input[type="text"] {
-            flex: 1;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #444;
-            background: #2c2c2c;
-            color: white;
-            font-size: 16px;
+            flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #444;
+            background: #252525; color: white; font-size: 16px;
         }
-        
         button {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
+            padding: 10px 15px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer;
         }
-
-        .btn-primary { background-color: var(--primary-color); color: #000; }
-        .btn-secondary { background-color: #444; color: #fff; }
-        .btn-success { background-color: var(--secondary-color); color: #000; }
-        .btn-danger { background-color: var(--danger-color); color: #000; }
-        .btn-icon { padding: 10px; font-size: 1.2rem; }
-
-        /* Card Grid */
-        .results-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Smaller for mobile */
-            gap: 10px;
-            padding-bottom: 20px;
-        }
-
-        .card-option {
-            position: relative;
-            cursor: pointer;
-            border-radius: 4%;
-            overflow: hidden;
-            aspect-ratio: 2.5/3.5;
-        }
-        .card-option img { width: 100%; height: 100%; object-fit: cover; }
-        .card-overlay {
-            position: absolute; bottom: 0; left: 0; right: 0;
-            background: rgba(0,0,0,0.85);
-            color: #fff;
-            padding: 4px;
-            font-size: 0.7rem;
-            text-align: center;
-        }
-
-        /* Deck List Items */
-        .deck-item {
-            display: flex;
-            align-items: center;
-            padding: 8px;
-            background: #252525;
-            margin-bottom: 8px;
-            border-radius: 6px;
-            gap: 10px;
-        }
-        .deck-thumb {
-            width: 40px; height: 56px;
-            background-size: cover; background-position: center;
-            border-radius: 3px;
-            flex-shrink: 0;
-        }
-        .deck-info { flex: 1; overflow: hidden; }
-        .deck-name { font-weight: bold; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .deck-set { font-size: 0.75rem; color: #aaa; }
+        .btn-search { background: var(--primary); color: black; }
+        .btn-camera { background: var(--secondary); color: black; position: relative; overflow: hidden; }
         
-        .qty-controls { display: flex; align-items: center; gap: 8px; }
-        .qty-btn { width: 28px; height: 28px; padding: 0; border-radius: 50%; font-size: 1.1rem; background: #444; color: white;}
+        /* Hidden file input for camera */
+        #cameraInput { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            opacity: 0; cursor: pointer;
+        }
 
-        /* Scanner Overlay */
-        #scannerModal {
+        /* Debug Image Area */
+        #debugArea {
+            margin: 10px 0; padding: 10px; background: #222; border-radius: 8px;
+            display: none; text-align: center;
+        }
+        #debugArea img { max-width: 100%; height: auto; border: 1px solid #555; }
+        .debug-text { color: #aaa; font-size: 0.8rem; margin-top: 5px; }
+
+        /* --- CARD GRID --- */
+        .grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+        }
+        .card-item { position: relative; border-radius: 8px; overflow: hidden; }
+        .card-item img { width: 100%; display: block; aspect-ratio: 2.5/3.5; object-fit: cover; }
+        .card-label {
+            position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.8);
+            color: white; font-size: 0.7rem; padding: 4px; text-align: center;
+        }
+
+        /* --- DECK LIST --- */
+        .deck-row {
+            display: flex; align-items: center; gap: 10px; padding: 10px;
+            background: #252525; border-radius: 6px; margin-bottom: 8px;
+        }
+        .deck-thumb { width: 40px; height: 56px; background-size: cover; background-position: center; border-radius: 4px; }
+        .deck-info { flex: 1; }
+        .deck-name { font-weight: bold; font-size: 0.95rem; }
+        .deck-set { color: #888; font-size: 0.8rem; }
+        .qty-box { display: flex; align-items: center; gap: 8px; }
+        .qty-btn { width: 30px; height: 30px; background: #444; color: white; font-size: 1.2rem; padding: 0; }
+
+        /* --- TOAST & SPINNER --- */
+        .toast {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: var(--secondary); color: black; padding: 12px 24px;
+            border-radius: 30px; font-weight: bold; display: none; z-index: 100;
+        }
+        
+        .spinner-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 1000;
-            display: none; flex-direction: column;
+            background: rgba(0,0,0,0.7); display: none;
+            justify-content: center; align-items: center; z-index: 200; flex-direction: column;
         }
-        #videoFeed { width: 100%; height: 100%; object-fit: cover; }
-        .scan-overlay-ui {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; flex-direction: column; justify-content: space-between;
-            padding: 20px; box-sizing: border-box; pointer-events: none;
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid #444;
+            border-top: 4px solid var(--primary); border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 10px;
         }
-        .scan-guide-box {
-            border: 2px solid var(--secondary-color);
-            background: rgba(3, 218, 198, 0.1);
-            height: 60px; /* Focus on title bar */
-            width: 80%;
-            margin: 100px auto 0 auto;
-            border-radius: 8px;
-            position: relative;
-            box-shadow: 0 0 0 1000px rgba(0,0,0,0.6); /* Dim surroundings */
-        }
-        .scan-controls {
-            pointer-events: auto;
-            display: flex; gap: 20px; justify-content: center; padding-bottom: 30px;
-        }
-        
-        /* Modal General */
-        .modal {
-            display: none; position: fixed; z-index: 500;
-            left: 0; top: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.8);
-            justify-content: center; align-items: center;
-            padding: 20px; box-sizing: border-box;
-        }
-        .modal-content {
-            background-color: var(--surface-color);
-            padding: 20px; border-radius: 12px;
-            width: 100%; max-width: 500px;
-            border: 1px solid var(--border-color);
-            display: flex; flex-direction: column; gap: 15px;
-        }
-        textarea { width: 100%; height: 150px; background: #111; color: #fff; border: 1px solid #444; padding: 10px; }
-
-        /* Spinner */
-        .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid var(--primary-color); border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: none; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Export Modal */
+        .modal { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 300; justify-content: center; align-items: center; padding: 20px;
+        }
+        .modal-box { background: var(--surface); padding: 20px; border-radius: 8px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 10px;}
+        textarea { width: 100%; height: 150px; background: #111; color: white; border: 1px solid #444; padding: 10px; }
 
     </style>
 </head>
 <body>
 
     <header>
-        <div style="font-weight: bold; display: flex; align-items: center; gap: 10px;">
-            <span>MTG Builder</span>
-            <div id="globalSpinner" class="spinner"></div>
-        </div>
-        <div style="font-size: 0.8rem; color: #888;" id="deckStats">0 Cards</div>
+        <h1>MTG Scanner</h1>
+        <div class="deck-count" id="headerCount">0 Cards</div>
     </header>
 
+    <div class="tabs">
+        <div class="tab active" onclick="setTab('search')">Search / Scan</div>
+        <div class="tab" onclick="setTab('deck')">My Deck</div>
+    </div>
+
     <div class="container">
-        <div id="searchPanel" class="panel left-panel active">
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Card name..." onkeypress="handleEnter(event)">
-                <button class="btn-secondary btn-icon" onclick="openScanner()" title="Scan Card Title">📷</button>
-                <button class="btn-primary" onclick="searchCards()">Search</button>
+        <div id="tab-search" class="panel active">
+            <div class="input-group">
+                <input type="text" id="searchInput" placeholder="Card name..." onkeypress="if(event.key==='Enter') doSearch()">
+                
+                <button class="btn-camera">
+                    📷
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="handlePhoto(this)">
+                </button>
+                
+                <button class="btn-search" onclick="doSearch()">Go</button>
             </div>
-            
-            <div id="searchResults" class="results-grid"></div>
-            
-            <div id="emptyState" style="text-align: center; color: #666; margin-top: 40px;">
-                <p>Type a name or scan a card.</p>
-                <p style="font-size: 0.8rem;">To scan: Aim camera at the card <b>Title</b>.</p>
+
+            <div id="debugArea">
+                <div class="debug-text">Scanning this area:</div>
+                <img id="cropPreview" />
+                <div class="debug-text" id="statusText">Processing...</div>
+            </div>
+
+            <div id="results" class="grid"></div>
+            <div id="emptyMsg" style="text-align:center; color:#666; margin-top:50px;">
+                <p>Type a name or tap the 📷 icon to take a picture.</p>
+                <p style="font-size: 0.8rem;">(If scanning: Make sure the card title is clear!)</p>
             </div>
         </div>
 
-        <div id="deckPanel" class="panel right-panel">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
-                <h2 style="margin:0; font-size: 1.2rem;">Deck List</h2>
-                <div style="display: gap: 5px;">
-                    <button class="btn-danger" style="padding: 5px 10px; font-size: 0.8rem;" onclick="clearDeck()">Clear</button>
-                </div>
+        <div id="tab-deck" class="panel">
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                <h2>Current Deck</h2>
+                <button onclick="clearDeck()" style="background:#cf6679; color:white;">Clear</button>
             </div>
-            <div id="deckList" style="flex:1; overflow-y:auto;"></div>
-            <button class="btn-success" style="width: 100%; margin-top: 10px;" onclick="openExportModal()">Export List</button>
+            <div id="deckList"></div>
+            <button onclick="openExport()" style="width:100%; margin-top:20px; background:var(--secondary); color:black;">Export List</button>
         </div>
     </div>
 
-    <nav class="mobile-tabs">
-        <button class="tab-btn active" onclick="switchTab('search')">Search / Scan</button>
-        <button class="tab-btn" onclick="switchTab('deck')">My Deck <span id="mobileCount">(0)</span></button>
-    </nav>
-
-    <div id="scannerModal">
-        <video id="videoFeed" autoplay playsinline muted></video>
-        <div class="scan-overlay-ui">
-            <div style="text-align: center; margin-top: 20px; color: white; text-shadow: 0 1px 4px black;">
-                <h3>Scan Card Title</h3>
-                <p>Align the card NAME inside the box below.</p>
-            </div>
-            <div class="scan-guide-box"></div>
-            <div class="scan-controls">
-                <button class="btn-secondary" onclick="closeScanner()">Cancel</button>
-                <button class="btn-primary" onclick="captureAndRead()">Capture & Read</button>
-            </div>
-        </div>
-        <canvas id="scanCanvas" style="display:none;"></canvas>
+    <div id="loading" class="spinner-overlay">
+        <div class="spinner"></div>
+        <div style="color:white; font-weight:bold;" id="loadingText">Searching...</div>
     </div>
+    <div id="toast" class="toast">Added!</div>
 
     <div id="exportModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-box">
             <h3>Export Deck</h3>
-            <textarea id="exportText" readonly></textarea>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button class="btn-secondary" onclick="document.getElementById('exportModal').style.display='none'">Close</button>
-                <button class="btn-primary" onclick="copyToClipboard()">Copy</button>
-            </div>
+            <textarea id="exportArea" readonly></textarea>
+            <button onclick="closeExport()" style="background:#444; color:white;">Close</button>
+            <button onclick="copyExport()" style="background:var(--primary); color:black;">Copy</button>
         </div>
     </div>
 
     <script>
-        // State
-        let deck = JSON.parse(localStorage.getItem('my_mtg_deck_v2') || '[]');
-        let videoStream = null;
-
-        window.onload = () => { renderDeck(); };
+        // --- STATE ---
+        let deck = JSON.parse(localStorage.getItem('mtg_deck_photo') || '[]');
+        renderDeck();
 
         // --- NAVIGATION ---
-        function switchTab(tab) {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        function setTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
             
-            if(tab === 'search') {
-                document.getElementById('searchPanel').classList.add('active');
-                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            if (name === 'search') {
+                document.querySelector('.tabs .tab:nth-child(1)').classList.add('active');
+                document.getElementById('tab-search').classList.add('active');
             } else {
-                document.getElementById('deckPanel').classList.add('active');
-                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.querySelector('.tabs .tab:nth-child(2)').classList.add('active');
+                document.getElementById('tab-deck').classList.add('active');
             }
         }
 
-        // --- SEARCH ---
-        function handleEnter(e) { if(e.key === 'Enter') searchCards(); }
+        // --- SEARCH LOGIC ---
+        async function doSearch(overrideTerm = null) {
+            const term = overrideTerm || document.getElementById('searchInput').value.trim();
+            if (!term) return;
 
-        async function searchCards(overrideQuery = null) {
-            const query = overrideQuery || document.getElementById('searchInput').value.trim();
-            if(!query) return;
-            
-            const resultsDiv = document.getElementById('searchResults');
-            const spinner = document.getElementById('globalSpinner');
-            const emptyState = document.getElementById('emptyState');
-            
-            resultsDiv.innerHTML = '';
-            emptyState.style.display = 'none';
-            spinner.style.display = 'block';
+            showLoading(true, "Searching Scryfall...");
+            const grid = document.getElementById('results');
+            document.getElementById('emptyMsg').style.display = 'none';
+            grid.innerHTML = '';
 
             try {
-                // First try fuzzy name match to get exact card name
-                const fuzzyRes = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(query)}`);
-                if(!fuzzyRes.ok) throw new Error("Card not found");
-                const fuzzyData = await fuzzyRes.json();
-                const realName = fuzzyData.name;
-
-                // Then get all prints
-                const searchRes = await fetch(`https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(realName)}"&unique=prints&order=released&dir=desc`);
-                const data = await searchRes.json();
+                // 1. Fuzzy Search to get real name
+                const fuzzyReq = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(term)}`);
+                if(!fuzzyReq.ok) throw new Error("Card not found");
+                const fuzzyData = await fuzzyReq.json();
                 
-                renderResults(data.data || []);
-            } catch (err) {
-                resultsDiv.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 20px;">No cards found for "${query}"</div>`;
-            } finally {
-                spinner.style.display = 'none';
-            }
-        }
+                // 2. Search Prints
+                const printsReq = await fetch(`https://api.scryfall.com/cards/search?q=!"${encodeURIComponent(fuzzyData.name)}"&unique=prints&order=released&dir=desc`);
+                const printsData = await printsReq.json();
 
-        function renderResults(cards) {
-            const div = document.getElementById('searchResults');
-            if(!cards.length) return;
-
-            cards.forEach(card => {
-                let img = card.image_uris ? card.image_uris.normal : (card.card_faces ? card.card_faces[0].image_uris.normal : '');
-                if(!img) return;
-
-                const el = document.createElement('div');
-                el.className = 'card-option';
-                el.onclick = () => addToDeck(card, img);
-                el.innerHTML = `
-                    <img src="${img}" loading="lazy">
-                    <div class="card-overlay">${card.set.toUpperCase()} #${card.collector_number}</div>
-                `;
-                div.appendChild(el);
-            });
-        }
-
-        // --- SCANNER (OCR) ---
-        async function openScanner() {
-            const modal = document.getElementById('scannerModal');
-            const video = document.getElementById('videoFeed');
-            
-            try {
-                videoStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' } // Rear camera
-                });
-                video.srcObject = videoStream;
-                modal.style.display = 'flex';
-            } catch (err) {
-                alert("Camera access denied or unavailable.");
-            }
-        }
-
-        function closeScanner() {
-            const modal = document.getElementById('scannerModal');
-            modal.style.display = 'none';
-            if(videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-                videoStream = null;
-            }
-        }
-
-        async function captureAndRead() {
-            const video = document.getElementById('videoFeed');
-            const canvas = document.getElementById('scanCanvas');
-            const context = canvas.getContext('2d');
-            const spinner = document.getElementById('globalSpinner');
-
-            // Set canvas to video dimensions
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            // We only want to read the area inside the "guide box".
-            // The box is approx 20% from top, 80% width, 10% height roughly.
-            // Let's crop a strip from the top-middle where titles usually are.
-            // Simplified: Crop the top 30% of the image.
-            const cropX = 0;
-            const cropY = canvas.height * 0.15; // Start slightly down
-            const cropW = canvas.width;
-            const cropH = canvas.height * 0.25; // 25% height strip
-
-            // Extract that image data
-            const imageData = context.getImageData(cropX, cropY, cropW, cropH);
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = cropW;
-            tempCanvas.height = cropH;
-            tempCanvas.getContext('2d').putImageData(imageData, 0, 0);
-            
-            // Show Loading
-            closeScanner(); // Close camera immediately
-            spinner.style.display = 'block';
-            document.getElementById('searchInput').value = "Scanning...";
-
-            try {
-                // Tesseract
-                const { data: { text } } = await Tesseract.recognize(tempCanvas, 'eng');
-                
-                // Clean Text: remove newlines, weird symbols, keep letters
-                let cleanText = text.replace(/[^a-zA-Z\s,']/g, '').trim();
-                cleanText = cleanText.split('\n')[0]; // Take first line only
-
-                if(cleanText.length > 2) {
-                    document.getElementById('searchInput').value = cleanText;
-                    searchCards(cleanText);
-                } else {
-                    alert("Could not read text. Try again with better lighting.");
-                    document.getElementById('searchInput').value = "";
+                // 3. Render
+                if (printsData.data) {
+                    printsData.data.forEach(card => {
+                        let img = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
+                        if(img) {
+                            const el = document.createElement('div');
+                            el.className = 'card-item';
+                            el.onclick = () => addToDeck(card, img);
+                            el.innerHTML = `
+                                <img src="${img}">
+                                <div class="card-label">${card.set.toUpperCase()} #${card.collector_number}</div>
+                            `;
+                            grid.appendChild(el);
+                        }
+                    });
                 }
             } catch (e) {
-                console.error(e);
-                alert("Scan failed.");
+                grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:20px;">No cards found for "${term}"</div>`;
             } finally {
-                spinner.style.display = 'none';
+                showLoading(false);
             }
+        }
+
+        // --- PHOTO HANDLING (THE FIX) ---
+        function handlePhoto(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const reader = new FileReader();
+                
+                showLoading(true, "Processing Image...");
+                
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        processImageForOCR(img);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function processImageForOCR(img) {
+            // Create a canvas to crop the top of the card (Title area)
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // We assume the user took a photo of the WHOLE card. 
+            // The title is usually in the top 10-15%.
+            const cropX = img.width * 0.05; // skip 5% left edge
+            const cropY = img.width * 0.05; // skip 5% top edge
+            const cropW = img.width * 0.90; // 90% width
+            const cropH = img.height * 0.15; // Top 15% height contains title
+
+            canvas.width = cropW;
+            canvas.height = cropH;
+
+            // Draw cropped image
+            ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+            // Convert to grayscale & high contrast for better OCR
+            const imgData = ctx.getImageData(0, 0, cropW, cropH);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                const color = avg > 100 ? 255 : 0; // Simple threshold
+                data[i] = color;
+                data[i + 1] = color;
+                data[i + 2] = color;
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            // Show user what we are scanning
+            const debugArea = document.getElementById('debugArea');
+            const preview = document.getElementById('cropPreview');
+            const status = document.getElementById('statusText');
+            
+            debugArea.style.display = 'block';
+            preview.src = canvas.toDataURL();
+            status.innerText = "Reading text...";
+
+            // Run Tesseract
+            Tesseract.recognize(canvas, 'eng')
+                .then(({ data: { text } }) => {
+                    // Clean text: keep only letters
+                    const clean = text.replace(/[^a-zA-Z\s]/g, '').trim().split('\n')[0];
+                    status.innerText = `Read: "${clean}"`;
+                    
+                    if (clean.length > 2) {
+                        document.getElementById('searchInput').value = clean;
+                        doSearch(clean);
+                    } else {
+                        status.innerText = "Text unclear. Try searching manually.";
+                        showLoading(false);
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    status.innerText = "Error reading text.";
+                    showLoading(false);
+                });
         }
 
         // --- DECK LOGIC ---
         function addToDeck(card, img) {
             const existing = deck.find(c => c.id === card.id);
             if(existing) existing.qty++;
-            else deck.push({
+            else deck.push({ 
                 id: card.id, name: card.name, set: card.set.toUpperCase(), 
                 cn: card.collector_number, img: img, qty: 1 
             });
-            
             saveDeck();
             
-            // Animation feedback
-            if(window.innerWidth < 768) {
-               // Flash the tab on mobile
-               const tab = document.querySelectorAll('.tab-btn')[1];
-               tab.style.color = '#fff';
-               setTimeout(() => tab.style.color = '', 300);
-            }
+            const toast = document.getElementById('toast');
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 2000);
         }
 
         function updateQty(id, delta) {
-            const card = deck.find(c => c.id === id);
-            if(!card) return;
-            card.qty += delta;
-            if(card.qty <= 0) deck = deck.filter(c => c.id !== id);
-            saveDeck();
+            const c = deck.find(x => x.id === id);
+            if(c) {
+                c.qty += delta;
+                if(c.qty <= 0) deck = deck.filter(x => x.id !== id);
+                saveDeck();
+            }
         }
 
         function clearDeck() {
-            if(confirm("Clear entire deck?")) {
+            if(confirm("Clear deck?")) {
                 deck = [];
                 saveDeck();
             }
         }
 
         function saveDeck() {
-            localStorage.setItem('my_mtg_deck_v2', JSON.stringify(deck));
+            localStorage.setItem('mtg_deck_photo', JSON.stringify(deck));
             renderDeck();
         }
 
         function renderDeck() {
             const list = document.getElementById('deckList');
-            const countEl = document.getElementById('deckStats');
-            const mobileCount = document.getElementById('mobileCount');
-            
             list.innerHTML = '';
-            let total = 0;
-
+            let count = 0;
+            
             deck.forEach(c => {
-                total += c.qty;
+                count += c.qty;
                 const div = document.createElement('div');
-                div.className = 'deck-item';
+                div.className = 'deck-row';
                 div.innerHTML = `
-                    <div class="deck-thumb" style="background-image: url('${c.img}')"></div>
+                    <div class="deck-thumb" style="background-image:url('${c.img}')"></div>
                     <div class="deck-info">
                         <div class="deck-name">${c.name}</div>
                         <div class="deck-set">${c.set} #${c.cn}</div>
                     </div>
-                    <div class="qty-controls">
+                    <div class="qty-box">
                         <button class="qty-btn" onclick="updateQty('${c.id}', -1)">-</button>
                         <span>${c.qty}</span>
                         <button class="qty-btn" onclick="updateQty('${c.id}', 1)">+</button>
@@ -531,23 +401,28 @@
                 `;
                 list.appendChild(div);
             });
+            document.getElementById('headerCount').innerText = `${count} Cards`;
+        }
 
-            countEl.innerText = `${total} Cards`;
-            mobileCount.innerText = `(${total})`;
+        function showLoading(show, text="Loading...") {
+            const el = document.getElementById('loading');
+            document.getElementById('loadingText').innerText = text;
+            el.style.display = show ? 'flex' : 'none';
         }
 
         // --- EXPORT ---
-        function openExportModal() {
+        function openExport() {
             const txt = deck.map(c => `${c.qty} ${c.name} (${c.set}) ${c.cn}`).join('\n');
-            document.getElementById('exportText').value = txt;
+            document.getElementById('exportArea').value = txt;
             document.getElementById('exportModal').style.display = 'flex';
         }
-
-        function copyToClipboard() {
-            document.getElementById('exportText').select();
+        function closeExport() { document.getElementById('exportModal').style.display = 'none'; }
+        function copyExport() {
+            document.getElementById('exportArea').select();
             document.execCommand('copy');
             alert("Copied!");
         }
+
     </script>
 </body>
 </html>
