@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Opponent Effects Board (Mothman Deck)</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --panel:#121a24;
+      --panel2:#0f1620;
+      --text:#e8eef7;
+      --muted:#aab6c6;
+      --line:rgba(255,255,255,.10);
+      --btn:#1a2a3f;
+      --btn2:#243a55;
+      --bad:#ff6b6b;
+      --warn:#ffcc66;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --r:18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background:
+        radial-gradient(1200px 700px at 50% -20%, rgba(60,140,255,.22), transparent 55%),
+        radial-gradient(900px 600px at 100% 10%, rgba(36,209,139,.14), transparent 55%),
+        var(--bg);
+      color:var(--text);
+    }
+    header{
+      position:sticky; top:0; z-index:10;
+      background: rgba(11,15,20,.82);
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--line);
+      padding:14px 16px;
+    }
+    .wrap{max-width:1200px; margin:0 auto; padding:16px}
+    .titleRow{display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-end}
+    h1{margin:0; font-size:18px; font-weight:900; letter-spacing:.4px}
+    .sub{color:var(--muted); font-size:12px; margin-top:4px}
+    .panel{
+      background: linear-gradient(180deg, rgba(18,26,36,.95), rgba(15,22,32,.95));
+      border:1px solid var(--line);
+      border-radius: var(--r);
+      box-shadow: var(--shadow);
+      padding:12px;
+    }
+    label{font-size:12px; color:var(--muted); display:block; margin:0 0 6px 2px;}
+    input, select, textarea{
+      width:100%;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.12);
+      color:var(--text);
+      padding:12px;
+      border-radius:14px;
+      outline:none;
+      font-size:16px;
+    }
+    textarea{min-height:70px; resize:vertical}
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    .grid{display:grid; grid-template-columns:1fr; gap:14px}
+    @media (min-width: 980px){ .grid{grid-template-columns: 420px 1fr;} }
+
+    .btn{
+      background: linear-gradient(180deg, var(--btn2), var(--btn));
+      border:1px solid rgba(255,255,255,.14);
+      color:var(--text);
+      padding:12px 14px;
+      border-radius:14px;
+      font-size:15px;
+      font-weight:800;
+      cursor:pointer;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn.small{padding:9px 10px; font-size:13px; border-radius:12px}
+    .btn.ghost{background:transparent}
+    .btn.bad{background: linear-gradient(180deg, rgba(255,107,107,.25), rgba(255,107,107,.12)); border-color: rgba(255,107,107,.25)}
+    .btn.warn{background: linear-gradient(180deg, rgba(255,204,102,.22), rgba(255,204,102,.10)); border-color: rgba(255,204,102,.25)}
+    .divider{height:1px; background:var(--line); margin:10px 0}
+
+    .effects{display:grid; grid-template-columns:1fr; gap:12px}
+    @media (min-width: 980px){ .effects{grid-template-columns: 1fr 1fr;} }
+
+    .card{
+      background: linear-gradient(180deg, rgba(18,26,36,.92), rgba(13,18,27,.92));
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:18px;
+      padding:12px;
+      box-shadow: 0 10px 22px rgba(0,0,0,.28);
+    }
+    .cardHeader{display:flex; justify-content:space-between; gap:10px; align-items:flex-start}
+    .name{font-size:16px; font-weight:900; line-height:1.1}
+    .meta{color:var(--muted); font-size:12px; margin-top:2px}
+    .desc{
+      margin:10px 0;
+      padding:10px 12px;
+      background: rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:14px;
+      font-size:14px;
+      line-height:1.35;
+      white-space: pre-wrap;
+    }
+    .pillRow{display:flex; gap:8px; flex-wrap:wrap}
+    .pill{
+      padding:8px 10px;
+      border-radius:999px;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.10);
+      display:flex; gap:8px; align-items:center;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pill input{width:18px; height:18px; margin:0; accent-color:#4ea1ff}
+    .pill span{font-size:14px}
+    .counter{
+      display:flex; gap:8px; align-items:center;
+      background: rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:14px;
+      padding:8px 10px;
+    }
+    .counter .val{font-weight:900; font-size:16px; min-width:26px; text-align:center}
+    .footerRow{display:flex; gap:10px; flex-wrap:wrap; justify-content:space-between; color:var(--muted); font-size:12px; margin-top:10px}
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="wrap">
+    <div class="titleRow">
+      <div>
+        <h1>Opponent Effects Board</h1>
+        <div class="sub">Auto-builds a dropdown from your deck — only cards that can affect other players (or their stuff).</div>
+      </div>
+      <div class="row">
+        <button class="btn small ghost" id="refreshBtn">Refresh Cards</button>
+        <button class="btn small ghost" id="saveBtn">Save</button>
+        <button class="btn small ghost" id="loadBtn">Load</button>
+        <button class="btn small bad" id="resetBtn">Reset</button>
+        <span class="sub" id="status"></span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="grid">
+    <!-- LEFT -->
+    <section class="panel">
+      <div class="row" style="justify-content:space-between">
+        <div style="font-weight:900">Setup</div>
+        <div class="sub" id="progress">0 / 0</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <label>Players (rename)</label>
+      <div class="row">
+        <input id="p1" value="You" />
+        <input id="p2" value="Opponent 1" />
+      </div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <input id="p3" value="Opponent 2" />
+        <input id="p4" value="Opponent 3" />
+      </div>
+
+      <div class="divider"></div>
+
+      <label>Filter</label>
+      <div class="row">
+        <select id="typeFilter" style="flex:1"></select>
+        <input id="search" style="flex:1" placeholder="Search (orb, rad, opponent...)" />
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div class="row">
+        <label style="display:flex; align-items:center; gap:10px; margin:0; width:100%">
+          <input type="checkbox" id="includeTargeted" checked style="width:18px; height:18px; accent-color:#4ea1ff" />
+          <span class="sub" style="color:var(--text)">Include targeted interaction (Putrefy, Casualties, etc.)</span>
+        </label>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <label>Card (auto: only affects other players)</label>
+      <select id="cardSelect"></select>
+
+      <div style="height:10px"></div>
+
+      <div class="row">
+        <button class="btn warn" id="addBtn" style="flex:1">Add to Board</button>
+        <button class="btn ghost" id="customBtn" style="flex:1">+ Custom</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <label>Default affected players when adding</label>
+      <div class="pillRow" id="defaultAffects"></div>
+
+      <div class="divider"></div>
+
+      <div class="sub">
+        Works offline after first refresh (cards are cached on the iPad). If a card name fails to fetch, use + Custom.
+      </div>
+    </section>
+
+    <!-- RIGHT -->
+    <section class="panel">
+      <div class="row" style="justify-content:space-between; align-items:flex-end">
+        <div>
+          <div style="font-weight:900">Active Effects</div>
+          <div class="sub">Tap EOT for temporary stuff; remove when done.</div>
+        </div>
+        <div class="sub" id="countText">0 active</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="effects" id="effects"></div>
+
+      <div class="footerRow">
+        <div>Data source: Scryfall API</div>
+        <div>Local cache: on</div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+/* ----------------------- DECK LIST (names only) ----------------------- */
+const DECK_NAMES = [
+  "Arcane Signet",
+  "Ash Barrens",
+  "Biomass Mutation",
+  "Bloatfly Swarm",
+  "Bloodchief Ascension",
+  "Brain Freeze",
+  "Branching Evolution",
+  "Bruvac the Grandiloquent",
+  "Casualties of War",
+  "Codex Shredder",
+  "Command Tower",
+  "Consuming Aberration",
+  "Contagion Clasp",
+  "Corpsejack Menace",
+  "Cultivate",
+  "Danny Pink",
+  "Darkwater Catacombs",
+  "Decanter of Endless Water",
+  "Dictate of Erebos",
+  "Drowned Catacomb",
+  "Eternal Witness",
+  "Evolution Sage",
+  "Evolving Wilds",
+  "Exotic Orchard",
+  "Expanding Ooze",
+  "Farseek",
+  "Fertile Ground",
+  "Fetid Pools",
+  "Flux Channeler",
+  "Glowing One",
+  "Golgari Charm",
+  "Grasping Tentacles",
+  "Guardian Project",
+  "Hardened Scales",
+  "Harold and Bob, First Numens",
+  "Hinterland Harbor",
+  "Inexorable Tide",
+  "Inspiring Call",
+  "Lily Bowen, Raging Grandma",
+  "Mariposa Military Base",
+  "Maximum Overdrive",
+  "Mesmeric Orb",
+  "Mindcrank",
+  "Mutational Advantage",
+  "Narset's Reversal",
+  "Nature's Lore",
+  "Nesting Grounds",
+  "Opulent Palace",
+  "Origin of Metalbending",
+  "Overflowing Basin",
+  "Path of Ancestry",
+  "Power Fist",
+  "Putrefy",
+  "Radstorm",
+  "Rampaging Yao Guai",
+  "Recon Craft Theta",
+  "Rejuvenating Springs",
+  "Rishkar, Peema Renegade",
+  "Sol Ring",
+  "Struggle for Project Purity",
+  "Sunken Hollow",
+  "Syr Konrad, the Grim",
+  "Tainted Isle",
+  "Tainted Wood",
+  "Takenuma, Abandoned Mire",
+  "Talisman of Curiosity",
+  "Talisman of Dominance",
+  "Temple of Deceit",
+  "Temple of Malady",
+  "The Master, Transcendent",
+  "The Mindskinner",
+  "The Wise Mothman",
+  "Thrummingbird",
+  "Tireless Tracker",
+  "Ultimecia, Time Sorceress",
+  "Undergrowth Stadium",
+  "Vesuva",
+  "Vexing Radgull",
+  "Victimize",
+  "Viridescent Bog",
+  "Watchful Radstag",
+  "Winding Constrictor",
+  "Woodland Cemetery",
+  "Yavimaya Coast",
+  "Zellix, Sanity Flayer"
+];
+
+/* ----------------------- STATE / STORAGE ----------------------- */
+const STORAGE_KEY = "mothman_opponent_effects_board_v2";
+const CARD_CACHE_KEY = "mothman_card_cache_v2";
+
+let state = {
+  playerNames: ["You", "Opponent 1", "Opponent 2", "Opponent 3"],
+  defaultAffected: [false, true, true, true],
+  active: [],
+  // cache snapshot for convenience
+  lastBuildAt: null
+};
+
+let cardCache = {};  // name -> {name, type_line, oracle_text, keywords, legalities...}
+let builtList = [];  // filtered list for dropdown
+
+const els = {
+  status: document.getElementById("status"),
+  progress: document.getElementById("progress"),
+  typeFilter: document.getElementById("typeFilter"),
+  search: document.getElementById("search"),
+  includeTargeted: document.getElementById("includeTargeted"),
+  cardSelect: document.getElementById("cardSelect"),
+  addBtn: document.getElementById("addBtn"),
+  customBtn: document.getElementById("customBtn"),
+  effects: document.getElementById("effects"),
+  countText: document.getElementById("countText"),
+  defaultAffects: document.getElementById("defaultAffects"),
+  refreshBtn: document.getElementById("refreshBtn"),
+  saveBtn: document.getElementById("saveBtn"),
+  loadBtn: document.getElementById("loadBtn"),
+  resetBtn: document.getElementById("resetBtn"),
+  p1: document.getElementById("p1"),
+  p2: document.getElementById("p2"),
+  p3: document.getElementById("p3"),
+  p4: document.getElementById("p4"),
+};
+
+function uid(){
+  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+function setStatus(msg, ms=1400){
+  els.status.textContent = msg;
+  if(ms){
+    clearTimeout(setStatus._t);
+    setStatus._t = setTimeout(()=> els.status.textContent = "", ms);
+  }
+}
+
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  setStatus("Saved.");
+}
+function loadState(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(!raw){ setStatus("No saved state."); return; }
+  try{
+    state = JSON.parse(raw) || state;
+    if(!state.playerNames) state.playerNames = ["You","Opponent 1","Opponent 2","Opponent 3"];
+    if(!state.defaultAffected) state.defaultAffected = [false,true,true,true];
+    if(!state.active) state.active = [];
+    syncNameInputs();
+    renderDefaultAffects();
+    renderBoard();
+    setStatus("Loaded.");
+  }catch(e){
+    setStatus("Load failed.", 2200);
+  }
+}
+function resetAll(){
+  if(!confirm("Reset everything (active effects + names + saved state)?")) return;
+  state = { playerNames:["You","Opponent 1","Opponent 2","Opponent 3"], defaultAffected:[false,true,true,true], active:[], lastBuildAt:null };
+  syncNameInputs();
+  renderDefaultAffects();
+  renderBoard();
+  saveState();
+  setStatus("Reset.");
+}
+
+function loadCardCache(){
+  try{
+    const raw = localStorage.getItem(CARD_CACHE_KEY);
+    if(raw) cardCache = JSON.parse(raw) || {};
+  }catch(e){
+    cardCache = {};
+  }
+}
+function saveCardCache(){
+  localStorage.setItem(CARD_CACHE_KEY, JSON.stringify(cardCache));
+}
+
+/* ----------------------- SCRYFALL FETCH ----------------------- */
+async function fetchCardExact(name){
+  const url = "https://api.scryfall.com/cards/named?exact=" + encodeURIComponent(name);
+  const res = await fetch(url, { headers: { "Accept": "application/json" } });
+  if(!res.ok) throw new Error("HTTP " + res.status);
+  return await res.json();
+}
+
+async function refreshCards(){
+  setStatus("Refreshing card texts...");
+  const total = DECK_NAMES.length;
+  let done = 0;
+
+  for(const name of DECK_NAMES){
+    els.progress.textContent = `${done} / ${total}`;
+    // Keep cache if already present
+    if(cardCache[name] && cardCache[name].oracle_text){
+      done++;
+      continue;
+    }
+    try{
+      const data = await fetchCardExact(name);
+      // normalize oracle text for DFCs / split cards
+      let oracle = data.oracle_text || "";
+      if(!oracle && Array.isArray(data.card_faces)){
+        oracle = data.card_faces.map(f => (f.name + " —\n" + (f.oracle_text || ""))).join("\n\n");
+      }
+      cardCache[name] = {
+        name: data.name,
+        type_line: data.type_line || "",
+        oracle_text: oracle || "",
+        keywords: data.keywords || [],
+        scryfall_uri: data.scryfall_uri || ""
+      };
+    }catch(e){
+      // store failure so we don't hammer it forever
+      cardCache[name] = cardCache[name] || { name, type_line:"", oracle_text:"", error:true };
+    }
+    done++;
+    // small delay (polite + avoids spiky throttling)
+    await new Promise(r => setTimeout(r, 60));
+  }
+
+  els.progress.textContent = `${total} / ${total}`;
+  saveCardCache();
+
+  state.lastBuildAt = new Date().toISOString();
+  saveState();
+
+  buildDropdownList();
+  fillTypeFilter();
+  fillCardSelect();
+  setStatus("Refresh complete.");
+}
+
+/* ----------------------- FILTER: "Affects other players" ----------------------- */
+function normalizeText(s){ return (s || "").toLowerCase(); }
+
+function mightAffectOthers(card, includeTargeted){
+  const t = normalizeText(card.oracle_text);
+  const tl = normalizeText(card.type_line);
+
+  // If no text, can't decide — exclude (user can add custom)
+  if(!t) return false;
+
+  // Explicit table/opponent language
+  const explicit =
+    /\beach opponent\b/.test(t) ||
+    /\ban opponent\b/.test(t) ||
+    /\bopponents\b/.test(t) ||
+    /\bopponent\b/.test(t) ||
+    /\beach player\b/.test(t) ||
+    /\btarget player\b/.test(t) ||
+    /\bdefending player\b/.test(t) ||
+    /\bplayers?\b/.test(t) && /\bmills?\b/.test(t); // common in mill text
+
+  if(explicit) return true;
+
+  // Targeted interaction: removal/counter/bounce/steal, etc.
+  // This will catch lots of "target creature/artifact/enchantment/spell/permanent".
+  if(includeTargeted){
+    const hasTarget = /\btarget\b/.test(t);
+    if(hasTarget){
+      // If it ONLY targets something you control, exclude.
+      // (Simple heuristic: "target ... you control" appears)
+      const onlyYours = /\btarget\b.*\byou control\b/.test(t);
+      if(!onlyYours) return true;
+    }
+  }
+
+  // Global static rules that commonly impact everyone without saying "opponent"
+  // (rare, but helps)
+  if(tl.includes("enchantment") || tl.includes("artifact")){
+    const globalHints = /\bwhenever\b/.test(t) && /\bplayer\b/.test(t);
+    if(globalHints) return true;
+  }
+
+  return false;
+}
+
+function mainType(type_line){
+  // e.g. "Legendary Creature — Mutant" -> "Creature"
+  const base = (type_line || "").split("—")[0].trim();
+  const parts = base.split(/\s+/);
+  const known = ["Creature","Enchantment","Artifact","Instant","Sorcery","Planeswalker","Land","Battle"];
+  for(const k of known){
+    if(parts.includes(k)) return k;
+  }
+  return parts[parts.length - 1] || "Other";
+}
+
+/* ----------------------- BUILD DROPDOWN ----------------------- */
+function buildDropdownList(){
+  const includeTargeted = !!els.includeTargeted.checked;
+  const items = [];
+
+  for(const name of DECK_NAMES){
+    const c = cardCache[name];
+    if(!c || c.error) continue;
+    if(mightAffectOthers(c, includeTargeted)){
+      items.push({
+        name: c.name,
+        type: mainType(c.type_line),
+        type_line: c.type_line,
+        oracle_text: c.oracle_text,
+        scryfall_uri: c.scryfall_uri || ""
+      });
+    }
+  }
+
+  // Sort by type then name
+  items.sort((a,b) => (a.type.localeCompare(b.type) || a.name.localeCompare(b.name)));
+  builtList = items;
+}
+
+function fillTypeFilter(){
+  const set = new Set(["All"]);
+  for(const c of builtList) set.add(c.type);
+  const types = Array.from(set);
+  els.typeFilter.innerHTML = "";
+  for(const t of types){
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    els.typeFilter.appendChild(opt);
+  }
+}
+
+function filteredBuiltList(){
+  const q = normalizeText(els.search.value || "").trim();
+  const tf = els.typeFilter.value || "All";
+  return builtList.filter(c => (tf === "All" ? true : c.type === tf))
+                  .filter(c => !q ? true : (normalizeText(c.name).includes(q) || normalizeText(c.oracle_text).includes(q)));
+}
+
+function fillCardSelect(){
+  const cards = filteredBuiltList();
+  els.cardSelect.innerHTML = "";
+
+  if(cards.length === 0){
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "(no matches — try Refresh or + Custom)";
+    els.cardSelect.appendChild(opt);
+    return;
+  }
+
+  for(const c of cards){
+    const opt = document.createElement("option");
+    opt.value = c.name;
+    opt.textContent = `${c.name}  —  ${c.type}`;
+    els.cardSelect.appendChild(opt);
+  }
+}
+
+/* ----------------------- BOARD (active tiles) ----------------------- */
+function renderDefaultAffects(){
+  els.defaultAffects.innerHTML = "";
+  state.playerNames.forEach((pn,i) => {
+    const pill = document.createElement("label");
+    pill.className = "pill";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !!state.defaultAffected[i];
+    cb.addEventListener("change", () => {
+      state.defaultAffected[i] = cb.checked;
+      saveState();
+    });
+    const sp = document.createElement("span");
+    sp.textContent = pn;
+    pill.appendChild(cb);
+    pill.appendChild(sp);
+    els.defaultAffects.appendChild(pill);
+  });
+}
+
+function addSelectedToBoard(){
+  const name = els.cardSelect.value;
+  if(!name){ setStatus("Pick a card first."); return; }
+
+  const c = builtList.find(x => x.name === name);
+  if(!c){ setStatus("Card not in list. Try Refresh."); return; }
+
+  const item = {
+    id: uid(),
+    name: c.name,
+    type_line: c.type_line,
+    oracle_text: c.oracle_text,
+    counterLabel: "Count",
+    counter: 0,
+    eot: false,
+    affected: [...state.defaultAffected],
+    notes: "",
+    link: c.scryfall_uri || ""
+  };
+
+  state.active.unshift(item);
+  renderBoard();
+  saveState();
+  setStatus("Added.");
+}
+
+function addCustom(){
+  const name = prompt("Custom effect name:");
+  if(!name) return;
+  const text = prompt("Reminder text (keep it readable):") || "";
+  const item = {
+    id: uid(),
+    name,
+    type_line: "Custom",
+    oracle_text: text,
+    counterLabel: "Count",
+    counter: 0,
+    eot: true,
+    affected: [...state.defaultAffected],
+    notes: "",
+    link: ""
+  };
+  state.active.unshift(item);
+  renderBoard();
+  saveState();
+  setStatus("Custom added.");
+}
+
+function renderBoard(){
+  els.effects.innerHTML = "";
+
+  for(const item of state.active){
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const header = document.createElement("div");
+    header.className = "cardHeader";
+
+    const left = document.createElement("div");
+    const nm = document.createElement("div");
+    nm.className = "name";
+    nm.textContent = item.name;
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = item.type_line || "";
+
+    left.appendChild(nm);
+    left.appendChild(meta);
+
+    const right = document.createElement("div");
+    right.className = "row";
+
+    const eotBtn = document.createElement("button");
+    eotBtn.className = "btn small " + (item.eot ? "warn" : "ghost");
+    eotBtn.textContent = item.eot ? "EOT: ON" : "EOT: OFF";
+    eotBtn.addEventListener("click", () => {
+      item.eot = !item.eot;
+      saveState();
+      renderBoard();
+    });
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn small bad";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", () => {
+      state.active = state.active.filter(x => x.id !== item.id);
+      saveState();
+      renderBoard();
+    });
+
+    right.appendChild(eotBtn);
+    right.appendChild(removeBtn);
+
+    header.appendChild(left);
+    header.appendChild(right);
+
+    const desc = document.createElement("div");
+    desc.className = "desc";
+    desc.textContent = item.oracle_text || "(no text)";
+
+    // affected players
+    const affLabel = document.createElement("div");
+    affLabel.className = "sub";
+    affLabel.textContent = "Affected players:";
+    affLabel.style.margin = "8px 0 8px 2px";
+
+    const pills = document.createElement("div");
+    pills.className = "pillRow";
+
+    state.playerNames.forEach((pn,i) => {
+      const pill = document.createElement("label");
+      pill.className = "pill";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !!item.affected?.[i];
+      cb.addEventListener("change", () => {
+        if(!item.affected) item.affected = [false,false,false,false];
+        item.affected[i] = cb.checked;
+        saveState();
+      });
+
+      const sp = document.createElement("span");
+      sp.textContent = pn;
+
+      pill.appendChild(cb);
+      pill.appendChild(sp);
+      pills.appendChild(pill);
+    });
+
+    // counter row
+    const bottom = document.createElement("div");
+    bottom.className = "row";
+    bottom.style.justifyContent = "space-between";
+    bottom.style.marginTop = "10px";
+
+    const counter = document.createElement("div");
+    counter.className = "counter";
+
+    const labelBtn = document.createElement("button");
+    labelBtn.className = "btn small ghost";
+    labelBtn.textContent = item.counterLabel || "Count";
+    labelBtn.addEventListener("click", () => {
+      const next = prompt("Counter label:", item.counterLabel || "Count");
+      if(next === null) return;
+      item.counterLabel = (next.trim() || "Count");
+      saveState();
+      renderBoard();
+    });
+
+    const minus = document.createElement("button");
+    minus.className = "btn small ghost";
+    minus.textContent = "–";
+    minus.addEventListener("click", () => {
+      item.counter = (item.counter || 0) - 1;
+      saveState(); renderBoard();
+    });
+
+    const val = document.createElement("div");
+    val.className = "val";
+    val.textContent = String(item.counter ?? 0);
+
+    const plus = document.createElement("button");
+    plus.className = "btn small ghost";
+    plus.textContent = "+";
+    plus.addEventListener("click", () => {
+      item.counter = (item.counter || 0) + 1;
+      saveState(); renderBoard();
+    });
+
+    counter.appendChild(labelBtn);
+    counter.appendChild(minus);
+    counter.appendChild(val);
+    counter.appendChild(plus);
+
+    const noteWrap = document.createElement("div");
+    noteWrap.style.width = "100%";
+    noteWrap.style.marginTop = "10px";
+
+    const noteLabel = document.createElement("div");
+    noteLabel.className = "sub";
+    noteLabel.textContent = "Notes:";
+    noteLabel.style.margin = "6px 0 8px 2px";
+
+    const ta = document.createElement("textarea");
+    ta.value = item.notes || "";
+    ta.placeholder = "ex: who has rad, what’s being taxed, what’s locked, etc.";
+    ta.addEventListener("input", () => {
+      item.notes = ta.value;
+      saveState();
+    });
+
+    noteWrap.appendChild(noteLabel);
+    noteWrap.appendChild(ta);
+
+    card.appendChild(header);
+    card.appendChild(desc);
+    card.appendChild(affLabel);
+    card.appendChild(pills);
+    card.appendChild(bottom);
+    card.appendChild(counter);
+    card.appendChild(noteWrap);
+
+    els.effects.appendChild(card);
+  }
+
+  els.countText.textContent = `${state.active.length} active`;
+}
+
+function syncNameInputs(){
+  els.p1.value = state.playerNames[0] || "You";
+  els.p2.value = state.playerNames[1] || "Opponent 1";
+  els.p3.value = state.playerNames[2] || "Opponent 2";
+  els.p4.value = state.playerNames[3] || "Opponent 3";
+}
+
+function updateNames(){
+  state.playerNames = [
+    (els.p1.value || "You").trim(),
+    (els.p2.value || "Opponent 1").trim(),
+    (els.p3.value || "Opponent 2").trim(),
+    (els.p4.value || "Opponent 3").trim()
+  ];
+  renderDefaultAffects();
+  // refresh labels in existing cards too (just re-render)
+  renderBoard();
+  saveState();
+}
+
+/* ----------------------- WIRING ----------------------- */
+els.refreshBtn.addEventListener("click", refreshCards);
+els.saveBtn.addEventListener("click", saveState);
+els.loadBtn.addEventListener("click", loadState);
+els.resetBtn.addEventListener("click", resetAll);
+
+els.addBtn.addEventListener("click", addSelectedToBoard);
+els.customBtn.addEventListener("click", addCustom);
+
+els.typeFilter.addEventListener("change", fillCardSelect);
+els.search.addEventListener("input", fillCardSelect);
+els.includeTargeted.addEventListener("change", () => {
+  buildDropdownList();
+  fillTypeFilter();
+  fillCardSelect();
+});
+
+[els.p1, els.p2, els.p3, els.p4].forEach(i => i.addEventListener("input", updateNames));
+
+/* ----------------------- BOOT ----------------------- */
+(function boot(){
+  // state
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const s = JSON.parse(raw);
+      if(s && typeof s === "object") state = s;
+    }
+  }catch(e){}
+
+  if(!state.playerNames) state.playerNames = ["You","Opponent 1","Opponent 2","Opponent 3"];
+  if(!state.defaultAffected) state.defaultAffected = [false,true,true,true];
+  if(!state.active) state.active = [];
+
+  syncNameInputs();
+  renderDefaultAffects();
+  renderBoard();
+
+  // cache
+  loadCardCache();
+
+  // Build dropdown from cache if possible
+  buildDropdownList();
+  fillTypeFilter();
+  fillCardSelect();
+
+  // If cache is empty, prompt to refresh (but don’t block)
+  const hasAny = Object.keys(cardCache || {}).length > 0;
+  els.progress.textContent = hasAny ? `${Object.keys(cardCache).length} cached` : "0 cached";
+  if(!hasAny) setStatus("Tap Refresh Cards once to build the dropdown.", 2200);
+})();
+</script>
+</body>
+</html>
