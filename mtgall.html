@@ -3,501 +3,577 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Arcane | Quick Filter</title>
+    <title>Arcane | Obsidian</title>
     <style>
         :root {
-            --bg-body: #09090b;
-            --bg-surface: #18181b;
-            --bg-elevated: #27272a;
+            --bg-deep: #050505;
+            --bg-glass: rgba(20, 20, 25, 0.7);
+            --bg-card: #141414;
             --primary: #8b5cf6;
+            --primary-glow: rgba(139, 92, 246, 0.5);
             --text-main: #ffffff;
-            --text-sub: #a1a1aa;
-            --border: #3f3f46;
+            --text-muted: #71717a;
+            --border: rgba(255, 255, 255, 0.1);
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
         body {
             margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: var(--bg-body);
+            background-color: var(--bg-deep);
             color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             height: 100vh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
         }
 
-        /* --- Header --- */
+        /* --- 1. GLASS HEADER --- */
         header {
-            background: var(--bg-surface);
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--border);
             z-index: 50;
-            flex-shrink: 0;
-            padding-bottom: 5px;
+            padding-top: var(--safe-top);
         }
 
-        .top-bar {
+        .nav-row {
             height: 60px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
             padding: 0 16px;
+            gap: 15px;
         }
 
-        .brand { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.5px; }
-        .brand span { color: var(--primary); margin-right: 5px; }
+        .logo { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.5px; flex-shrink: 0; }
+        .logo span { color: var(--primary); }
 
-        .adv-filter-btn {
-            background: var(--bg-elevated);
+        /* Integrated Search */
+        .search-container {
+            flex: 1;
+            position: relative;
+        }
+        .nav-search {
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid transparent;
+            border-radius: 20px;
+            padding: 8px 15px 8px 35px;
             color: white;
-            border: 1px solid var(--border);
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            cursor: pointer;
+            font-size: 0.95rem;
+            transition: 0.2s;
+        }
+        .nav-search:focus { background: rgba(0,0,0,0.5); border-color: var(--primary); outline: none; }
+        .search-icon {
+            position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+            color: var(--text-muted); pointer-events: none;
         }
 
-        /* --- Quick Filter Bar (New) --- */
-        .quick-filters {
-            display: flex;
-            gap: 10px;
-            padding: 5px 16px 15px 16px;
-            overflow-x: auto;
-            white-space: nowrap;
-            scrollbar-width: none; /* Hide scrollbar Firefox */
-        }
-        .quick-filters::-webkit-scrollbar { display: none; } /* Hide scrollbar Chrome/Safari */
-
-        /* Mana Circles */
-        .q-mana {
-            width: 36px; height: 36px;
-            border-radius: 50%;
-            background: var(--bg-elevated);
+        .filter-btn {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
             border: 1px solid var(--border);
             display: flex; align-items: center; justify-content: center;
-            font-weight: bold; color: var(--text-sub);
+            color: white; cursor: pointer;
+            transition: 0.2s;
+        }
+        .filter-btn:active { transform: scale(0.9); }
+
+        /* --- 2. ORB FILTERS --- */
+        .filter-scroller {
+            padding: 10px 16px 15px;
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .filter-scroller::-webkit-scrollbar { display: none; }
+
+        .mana-orb {
+            width: 42px; height: 42px;
+            border-radius: 50%;
+            background: #1a1a1a;
+            border: 2px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 0.8rem;
             flex-shrink: 0; cursor: pointer;
-            transition: 0.2s;
-            font-size: 0.9rem;
+            transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
         }
-        .q-mana.active {
-            border-color: white;
-            color: white;
-            box-shadow: 0 0 10px rgba(255,255,255,0.2);
-            transform: scale(1.05);
-        }
-        /* Specific Mana Colors when active */
-        .q-mana[data-c="w"].active { background: #fdfce8; color: #333; }
-        .q-mana[data-c="u"].active { background: #bae6fd; color: #333; }
-        .q-mana[data-c="b"].active { background: #d6d3d1; color: #333; }
-        .q-mana[data-c="r"].active { background: #fca5a5; color: #333; }
-        .q-mana[data-c="g"].active { background: #86efac; color: #333; }
-        .q-mana[data-c="c"].active { background: #cbd5e1; color: #333; }
+        /* Glowing Orbs */
+        .mana-orb[data-c="w"] { color: #fff; }
+        .mana-orb[data-c="u"] { color: #aae0fa; }
+        .mana-orb[data-c="b"] { color: #ccc; }
+        .mana-orb[data-c="r"] { color: #ff8a8a; }
+        .mana-orb[data-c="g"] { color: #86efac; }
+        .mana-orb[data-c="c"] { color: #ddd; }
 
-        /* Type Pills */
-        .q-type {
-            padding: 0 16px;
-            height: 36px;
-            border-radius: 20px;
-            background: var(--bg-elevated);
+        .mana-orb.active { border-color: currentColor; box-shadow: 0 0 15px currentColor; transform: scale(1.1); background: rgba(255,255,255,0.1); }
+        
+        .type-pill {
+            height: 42px;
+            padding: 0 20px;
+            border-radius: 21px;
+            background: rgba(255,255,255,0.05);
             border: 1px solid var(--border);
-            color: var(--text-sub);
+            color: var(--text-muted);
             display: flex; align-items: center;
-            font-size: 0.85rem;
-            font-weight: 500;
-            cursor: pointer;
+            font-weight: 600; font-size: 0.85rem;
+            white-space: nowrap; cursor: pointer;
             transition: 0.2s;
         }
-        .q-type.active {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }
+        .type-pill.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 15px var(--primary-glow); }
 
-        /* Divider */
-        .v-line { width: 1px; background: var(--border); height: 30px; margin: 3px 5px; flex-shrink:0; }
-
-
-        /* --- Main Grid --- */
-        .scroller {
+        /* --- 3. INFINITE GRID --- */
+        .main-scroll {
             flex: 1;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            padding: 16px;
+            padding: 140px 10px 100px 10px; /* Top padding clears the fixed header */
         }
 
         .card-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 16px;
-            padding-bottom: 100px;
-        }
-        
-        @media (max-width: 500px) {
-            .card-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 12px;
+            max-width: 1400px;
+            margin: 0 auto;
         }
 
-        .card-item {
+        @media (max-width: 600px) {
+            .card-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+        }
+
+        .card-view {
             position: relative;
             aspect-ratio: 2.5/3.5;
-            border-radius: 10px;
-            background: var(--bg-elevated);
+            border-radius: 14px;
+            background: var(--bg-card);
             overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            cursor: pointer;
             transition: transform 0.2s;
+            cursor: pointer;
         }
-        .card-item:active { transform: scale(0.96); }
-
+        .card-view:active { transform: scale(0.96); }
+        
         .card-img {
             width: 100%; height: 100%; object-fit: cover;
-            opacity: 0; transition: opacity 0.3s;
+            opacity: 0; transition: opacity 0.5s ease-out;
         }
         .card-img.loaded { opacity: 1; }
-
+        
+        /* Shimmer Loader */
         .skeleton {
-            background: linear-gradient(110deg, #1f1f23 8%, #2a2a30 18%, #1f1f23 33%);
-            background-size: 200% 100%;
-            animation: shine 1.5s linear infinite;
-        }
-        @keyframes shine { to { background-position-x: -200%; } }
-
-        /* --- Full Screen Modal --- */
-        .modal {
-            position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.95);
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            opacity: 0; pointer-events: none; transition: opacity 0.2s;
-            cursor: pointer; /* Indicates clickable background */
-        }
-        .modal.active { opacity: 1; pointer-events: auto; }
-        
-        .modal-content-wrapper {
+            background: #1a1a1a;
             position: relative;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            max-width: 90%;
-            cursor: default; /* Don't close when clicking content */
+            overflow: hidden;
         }
-
-        .modal-card {
-            max-width: 100%;
-            max-height: 65vh;
-            border-radius: 14px;
-            box-shadow: 0 0 40px rgba(0,0,0,0.6);
-            transform: scale(0.95);
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        .skeleton::after {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+            transform: translateX(-100%);
+            animation: shimmer 1.5s infinite;
         }
-        .modal.active .modal-card { transform: scale(1); }
+        @keyframes shimmer { 100% { transform: translateX(100%); } }
 
-        .modal-meta {
-            margin-top: 20px;
-            text-align: center;
-            background: var(--bg-surface);
-            padding: 15px 25px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            animation: slideUp 0.3s ease-out;
+        /* --- 4. ADVANCED SHEET --- */
+        .sheet-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            z-index: 100;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s;
         }
-        @keyframes slideUp { from { transform: translateY(20px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+        .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
 
-        .tcg-link {
-            display: inline-block;
-            color: #4ade80;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 1.1rem;
-            margin-top: 5px;
-            padding: 8px 16px;
-            background: rgba(74, 222, 128, 0.1);
-            border-radius: 20px;
-        }
-
-        /* --- Advanced Filter Sheet --- */
-        .sheet-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-            z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s;
-        }
-        .sheet-overlay.open { opacity: 1; pointer-events: auto; }
-
-        .sheet {
+        .sheet-panel {
             position: absolute;
-            background: var(--bg-surface);
-            display: flex; flex-direction: column;
+            bottom: 0; left: 0; right: 0;
+            background: #121214;
+            border-top: 1px solid var(--border);
+            border-radius: 24px 24px 0 0;
+            padding: 24px;
+            transform: translateY(100%);
             transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-            box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
-            bottom: 0; left: 0; right: 0; height: 85vh; border-radius: 20px 20px 0 0; transform: translateY(100%);
+            max-height: 85vh;
+            display: flex; flex-direction: column;
         }
-        .sheet-overlay.open .sheet { transform: translateY(0); }
-        .sheet-body { padding: 20px; overflow-y: auto; flex:1; }
+        .sheet-backdrop.open .sheet-panel { transform: translateY(0); }
+
+        .sheet-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px;
+        }
+        .sheet-title { font-size: 1.1rem; font-weight: 700; }
         
-        input[type="text"] {
-            width: 100%; background: var(--bg-body); border: 1px solid var(--border);
-            color: white; padding: 12px; border-radius: 8px; font-size: 1rem; margin-bottom: 20px;
+        .set-selector {
+            flex: 1; overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(0,0,0,0.3);
         }
-        
-        /* Multi-Set Selector Styles */
-        .set-list {
-            max-height: 200px; overflow-y: auto; background: var(--bg-body);
-            border: 1px solid var(--border); border-radius: 8px; padding: 5px;
+        .set-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 12px;
+            cursor: pointer;
         }
-        .set-option {
-            padding: 10px; display: flex; align-items: center; gap: 10px;
-            cursor: pointer; border-bottom: 1px solid var(--border);
+        .set-item.selected { background: rgba(139, 92, 246, 0.15); }
+        .checkbox-circle {
+            width: 20px; height: 20px; border-radius: 50%;
+            border: 2px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
         }
-        .set-option.selected { color: var(--primary); }
-        .set-option .check { width: 16px; height: 16px; border: 2px solid var(--border); border-radius: 4px; }
-        .set-option.selected .check { background: var(--primary); border-color: var(--primary); }
+        .set-item.selected .checkbox-circle {
+            border-color: var(--primary); background: var(--primary);
+        }
+        .set-item.selected .checkbox-circle::after {
+            content: "✓"; font-size: 12px; color: white;
+        }
+
+        .btn-primary {
+            background: var(--primary); color: white;
+            border: none; padding: 16px;
+            border-radius: 16px; width: 100%;
+            font-weight: 700; font-size: 1rem;
+            margin-top: 20px; cursor: pointer;
+        }
+
+        /* --- 5. IMMERSIVE MODAL --- */
+        .modal-layer {
+            position: fixed; inset: 0;
+            z-index: 200;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .modal-layer.active { opacity: 1; pointer-events: auto; }
+
+        .modal-card-container {
+            width: 90%; max-width: 400px;
+            text-align: center;
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .modal-layer.active .modal-card-container { transform: scale(1); }
+
+        .modal-img {
+            width: 100%; border-radius: 18px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            margin-bottom: 20px;
+        }
+
+        .price-chip {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: #27272a; padding: 10px 20px;
+            border-radius: 30px; border: 1px solid var(--border);
+            color: #4ade80; font-weight: 700; text-decoration: none;
+            font-size: 1.1rem;
+        }
+        .price-chip:active { transform: scale(0.95); }
 
     </style>
 </head>
 <body>
 
     <header>
-        <div class="top-bar">
-            <div class="brand"><span>✦</span> Archive</div>
-            <button class="adv-filter-btn" onclick="toggleSheet()">Sets & Search</button>
+        <div class="nav-row">
+            <div class="logo"><span>✦</span></div>
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="nav-search" id="quickSearch" placeholder="Search cards..." onkeypress="handleSearch(event)">
+            </div>
+            <div class="filter-btn" onclick="toggleSheet()">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"></path></svg>
+            </div>
         </div>
 
-        <div class="quick-filters">
-            <div class="q-mana" data-c="w" onclick="toggleColor('w', this)">W</div>
-            <div class="q-mana" data-c="u" onclick="toggleColor('u', this)">U</div>
-            <div class="q-mana" data-c="b" onclick="toggleColor('b', this)">B</div>
-            <div class="q-mana" data-c="r" onclick="toggleColor('r', this)">R</div>
-            <div class="q-mana" data-c="g" onclick="toggleColor('g', this)">G</div>
-            <div class="q-mana" data-c="c" onclick="toggleColor('c', this)">C</div>
+        <div class="filter-scroller">
+            <div class="mana-orb" data-c="w" onclick="toggleFilter(this, 'color')">W</div>
+            <div class="mana-orb" data-c="u" onclick="toggleFilter(this, 'color')">U</div>
+            <div class="mana-orb" data-c="b" onclick="toggleFilter(this, 'color')">B</div>
+            <div class="mana-orb" data-c="r" onclick="toggleFilter(this, 'color')">R</div>
+            <div class="mana-orb" data-c="g" onclick="toggleFilter(this, 'color')">G</div>
+            <div class="mana-orb" data-c="c" onclick="toggleFilter(this, 'color')">C</div>
+            
+            <div style="width:1px; background:var(--border); margin: 0 5px;"></div>
 
-            <div class="v-line"></div>
-
-            <div class="q-type" onclick="toggleType('Creature', this)">Creature</div>
-            <div class="q-type" onclick="toggleType('Instant', this)">Instant</div>
-            <div class="q-type" onclick="toggleType('Sorcery', this)">Sorcery</div>
-            <div class="q-type" onclick="toggleType('Artifact', this)">Artifact</div>
-            <div class="q-type" onclick="toggleType('Enchantment', this)">Enchant</div>
-            <div class="q-type" onclick="toggleType('Land', this)">Land</div>
+            <div class="type-pill" onclick="toggleFilter(this, 'type', 'Creature')">Creature</div>
+            <div class="type-pill" onclick="toggleFilter(this, 'type', 'Instant')">Instant</div>
+            <div class="type-pill" onclick="toggleFilter(this, 'type', 'Sorcery')">Sorcery</div>
+            <div class="type-pill" onclick="toggleFilter(this, 'type', 'Artifact')">Artifact</div>
+            <div class="type-pill" onclick="toggleFilter(this, 'type', 'Enchantment')">Enchant</div>
+            <div class="type-pill" onclick="toggleFilter(this, 'type', 'Planeswalker')">Walker</div>
         </div>
     </header>
 
-    <div class="scroller" id="scrollContainer">
-        <div class="card-grid" id="grid"></div>
-        <div id="loader" style="text-align:center; padding: 20px; color: var(--text-sub); display:none;">Loading...</div>
+    <div class="main-scroll" id="scrollArea">
+        <div class="card-grid" id="grid">
+            </div>
+        <div id="loader" style="padding: 40px; text-align: center; color: var(--text-muted); opacity: 0;">Loading more...</div>
     </div>
 
-    <div class="sheet-overlay" id="sheetOverlay" onclick="toggleSheet()">
-        <div class="sheet" onclick="event.stopPropagation()">
-            <div style="padding: 20px; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between;">
-                <strong>Advanced Filters</strong>
-                <button onclick="toggleSheet()" style="background:none; border:none; color:white; font-size:1.5rem;">×</button>
+    <div class="sheet-backdrop" id="sheet" onclick="toggleSheet()">
+        <div class="sheet-panel" onclick="event.stopPropagation()">
+            <div class="sheet-header">
+                <span class="sheet-title">Select Sets</span>
+                <button onclick="toggleSheet()" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem;">&times;</button>
             </div>
-            <div class="sheet-body">
-                <label style="color:var(--text-sub); font-size:0.8rem; text-transform:uppercase; font-weight:bold; display:block; margin-bottom:10px;">Text Search</label>
-                <input type="text" id="txtSearch" placeholder="Card name or rules text..." onchange="applyFilters()">
+            
+            <input type="text" id="setSearch" placeholder="Find a set..." class="nav-search" style="margin-bottom: 15px;">
+            
+            <div class="set-selector" id="setList">
+                <div style="padding:20px; text-align:center; color:gray">Loading Sets...</div>
+            </div>
 
-                <label style="color:var(--text-sub); font-size:0.8rem; text-transform:uppercase; font-weight:bold; display:block; margin-bottom:10px;">Sets</label>
-                <div class="set-list" id="setListContainer">
-                    <div style="padding:10px; color:gray;">Loading sets...</div>
-                </div>
-            </div>
-            <div style="padding:20px; border-top:1px solid var(--border);">
-                <button onclick="applyFilters()" style="width:100%; background:var(--primary); color:white; border:none; padding:15px; border-radius:10px; font-weight:bold;">Apply Changes</button>
-            </div>
+            <button class="btn-primary" onclick="applyAdvFilters()">Apply Changes</button>
         </div>
     </div>
 
-    <div class="modal" id="modal" onclick="closeModal()">
-        <div class="modal-content-wrapper" onclick="event.stopPropagation()">
-            <img src="" id="modalImg" class="modal-card">
-            
-            <div class="modal-meta">
-                <h3 id="modalTitle" style="margin:0 0 5px 0;"></h3>
-                <div id="modalType" style="color:var(--text-sub); margin-bottom:10px; font-size:0.9rem;"></div>
-                <a href="#" id="modalLink" target="_blank" class="tcg-link">Buy on TCGPlayer</a>
+    <div class="modal-layer" id="modal" onclick="closeModal()">
+        <div class="modal-card-container" onclick="event.stopPropagation()">
+            <img src="" id="modalImg" class="modal-img">
+            <div>
+                <a href="#" target="_blank" id="modalLink" class="price-chip">
+                    <span>$0.00</span>
+                    <span style="opacity: 0.5;">|</span>
+                    <span>TCGPlayer</span>
+                </a>
             </div>
+            <div id="modalName" style="margin-top: 15px; color: white; font-weight: bold; font-size: 1.2rem;"></div>
+            <div id="modalType" style="color: var(--text-muted); font-size: 0.9rem;"></div>
         </div>
     </div>
 
     <script>
-        // --- STATE ---
-        let allSets = [];
-        let selectedSets = new Set(['fdn']); // Default: Foundations
-        let selectedTypes = new Set();
-        let selectedColors = new Set();
-        let nextPage = null;
-        let isLoading = false;
-        let cards = [];
+        // --- CORE ENGINE ---
+        const state = {
+            sets: [],
+            selectedSets: new Set(['fdn']), // Default to Foundations
+            colors: new Set(),
+            types: new Set(),
+            query: "",
+            page: 1,
+            hasMore: true,
+            isLoading: false,
+            data: []
+        };
 
         // --- INIT ---
         window.addEventListener('DOMContentLoaded', async () => {
             await loadSets();
-            // Start
-            refreshData(); 
+            fetchCards(true);
+            setupInfiniteScroll();
         });
 
-        // --- QUICK TOGGLES ---
-        function toggleColor(color, el) {
+        // --- ACTIONS ---
+        function handleSearch(e) {
+            if(e.key === 'Enter') {
+                state.query = e.target.value;
+                document.getElementById('quickSearch').blur();
+                fetchCards(true);
+            }
+        }
+
+        function toggleFilter(el, category, val) {
             el.classList.toggle('active');
-            if(selectedColors.has(color)) selectedColors.delete(color);
-            else selectedColors.add(color);
-            refreshData();
-        }
-
-        function toggleType(type, el) {
-            el.classList.toggle('active');
-            if(selectedTypes.has(type)) selectedTypes.delete(type);
-            else selectedTypes.add(type);
-            refreshData();
-        }
-
-        function refreshData() {
-            // Scroll top
-            document.getElementById('scrollContainer').scrollTop = 0;
-            fetchCards(buildQueryUrl());
-        }
-
-        // --- QUERY BUILDER ---
-        function buildQueryUrl() {
-            let qParts = [];
-
-            // Sets
-            if (selectedSets.size > 0) {
-                const setQuery = Array.from(selectedSets).map(c => `set:${c}`).join(' OR ');
-                qParts.push(`(${setQuery})`);
-            }
-
-            // Colors
-            if (selectedColors.size > 0) {
-                // Identity search
-                const c = Array.from(selectedColors).join('');
-                qParts.push(`id:${c}`);
-            }
-
-            // Types
-            if (selectedTypes.size > 0) {
-                Array.from(selectedTypes).forEach(t => qParts.push(`t:${t}`));
-            }
-
-            // Text
-            const txt = document.getElementById('txtSearch').value.trim();
-            if (txt) qParts.push(`(${txt})`);
-
-            if (qParts.length === 0) return `https://api.scryfall.com/cards/search?q=format:standard`;
+            const value = val || el.dataset.c;
             
-            const query = encodeURIComponent(qParts.join(' AND '));
-            return `https://api.scryfall.com/cards/search?q=${query}&order=usd`;
+            if(category === 'color') {
+                if(state.colors.has(value)) state.colors.delete(value);
+                else state.colors.add(value);
+            } else {
+                if(state.types.has(value)) state.types.delete(value);
+                else state.types.add(value);
+            }
+            
+            // Auto-refresh on filter tap
+            fetchCards(true);
+        }
+
+        function toggleSheet() {
+            document.getElementById('sheet').classList.toggle('open');
+        }
+
+        function applyAdvFilters() {
+            toggleSheet();
+            fetchCards(true);
         }
 
         // --- DATA FETCHING ---
-        async function fetchCards(url, append = false) {
-            if (isLoading || !url) return;
-            isLoading = true;
-            document.getElementById('loader').style.display = 'block';
+        async function fetchCards(reset = false) {
+            if(state.isLoading) return;
+            state.isLoading = true;
+            
+            const grid = document.getElementById('grid');
+            const loader = document.getElementById('loader');
+            loader.style.opacity = 1;
 
-            if (!append) {
-                cards = [];
-                document.getElementById('grid').innerHTML = '';
-                nextPage = null;
+            if(reset) {
+                state.data = [];
+                state.page = 1;
+                state.hasMore = true;
+                grid.innerHTML = '';
+                // Inject skeletons
+                for(let i=0; i<12; i++) grid.innerHTML += `<div class="card-view skeleton"></div>`;
+                document.getElementById('scrollArea').scrollTop = 0;
             }
 
             try {
+                const url = buildApiUrl();
                 const res = await fetch(url);
                 const json = await res.json();
-                
-                if (json.code === "not_found") {
-                    document.getElementById('grid').innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:40px; color:gray">No cards found.</div>';
-                    return;
-                }
 
-                const newCards = json.data;
-                cards = append ? [...cards, ...newCards] : newCards;
-                nextPage = json.has_more ? json.next_page : null;
-                renderCards(newCards, append ? cards.length - newCards.length : 0);
-            } catch (err) { console.error(err); } 
-            finally {
-                isLoading = false;
-                document.getElementById('loader').style.display = 'none';
+                if(reset) grid.innerHTML = ''; // Clear skeletons
+
+                if(json.code === 'not_found') {
+                    grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:50px; color:var(--text-muted)">No cards found.</div>`;
+                    state.hasMore = false;
+                } else {
+                    const newCards = json.data;
+                    state.data = [...state.data, ...newCards];
+                    state.hasMore = json.has_more;
+                    state.nextUrl = json.next_page;
+                    renderCards(newCards, state.data.length - newCards.length);
+                }
+            } catch(e) {
+                console.error(e);
+            } finally {
+                state.isLoading = false;
+                loader.style.opacity = 0;
             }
         }
 
-        function renderCards(list, offset) {
+        function buildApiUrl() {
+            // Infinite scroll URL or new query
+            if(state.page > 1 && state.nextUrl) return state.nextUrl;
+
+            let parts = [];
+            
+            // Sets
+            if(state.selectedSets.size > 0) {
+                const s = Array.from(state.selectedSets).map(x => `set:${x}`).join(' OR ');
+                parts.push(`(${s})`);
+            }
+
+            // Colors (Identity)
+            if(state.colors.size > 0) {
+                parts.push(`id:${Array.from(state.colors).join('')}`);
+            }
+
+            // Types
+            if(state.types.size > 0) {
+                const t = Array.from(state.types).map(x => `t:${x}`).join(' AND ');
+                parts.push(t);
+            }
+
+            // Text Query
+            if(state.query) parts.push(`(${state.query})`);
+
+            if(parts.length === 0) return `https://api.scryfall.com/cards/search?q=format:standard&order=usd`;
+
+            const q = encodeURIComponent(parts.join(' AND '));
+            return `https://api.scryfall.com/cards/search?q=${q}&order=usd`;
+        }
+
+        function renderCards(cards, offset) {
             const grid = document.getElementById('grid');
             const frag = document.createDocumentFragment();
 
-            list.forEach((c, i) => {
-                const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal;
-                if (!img) return;
+            cards.forEach((c, i) => {
+                let img = c.image_uris?.normal;
+                if(!img && c.card_faces) img = c.card_faces[0].image_uris?.normal;
+                if(!img) return;
 
                 const el = document.createElement('div');
-                el.className = 'card-item skeleton';
+                el.className = 'card-view skeleton';
                 el.onclick = () => openModal(offset + i);
-                
-                const imageEl = document.createElement('img');
-                imageEl.src = img;
-                imageEl.className = 'card-img';
-                imageEl.onload = () => {
-                    imageEl.classList.add('loaded');
+
+                const image = new Image();
+                image.src = img;
+                image.className = 'card-img';
+                image.onload = () => {
+                    image.classList.add('loaded');
                     el.classList.remove('skeleton');
                 };
-                
-                el.appendChild(imageEl);
+
+                el.appendChild(image);
                 frag.appendChild(el);
             });
             grid.appendChild(frag);
         }
 
-        // --- SETS ---
+        // --- SETS LOGIC ---
         async function loadSets() {
-            // Simple cache
-            const cached = localStorage.getItem('mtg_sets_v2');
+            // Check cache
+            const cached = localStorage.getItem('mtg_sets_v3');
             if(cached) {
-                allSets = JSON.parse(cached);
+                state.sets = JSON.parse(cached);
             } else {
                 const r = await fetch('https://api.scryfall.com/sets');
                 const j = await r.json();
-                allSets = j.data.filter(s => ['core','expansion','masters','commander'].includes(s.set_type));
-                localStorage.setItem('mtg_sets_v2', JSON.stringify(allSets));
+                state.sets = j.data.filter(s => ['expansion','core','masters','commander'].includes(s.set_type));
+                localStorage.setItem('mtg_sets_v3', JSON.stringify(state.sets));
             }
             renderSetList();
         }
 
         function renderSetList() {
-            const c = document.getElementById('setListContainer');
-            c.innerHTML = '';
-            allSets.forEach(s => {
+            const list = document.getElementById('setList');
+            const filter = document.getElementById('setSearch').value.toLowerCase();
+            list.innerHTML = '';
+
+            state.sets.forEach(s => {
+                if(!s.name.toLowerCase().includes(filter) && !s.code.includes(filter)) return;
+
                 const div = document.createElement('div');
-                div.className = `set-option ${selectedSets.has(s.code) ? 'selected' : ''}`;
+                div.className = `set-item ${state.selectedSets.has(s.code) ? 'selected' : ''}`;
                 div.onclick = () => {
-                    if(selectedSets.has(s.code)) selectedSets.delete(s.code);
-                    else selectedSets.add(s.code);
+                    if(state.selectedSets.has(s.code)) state.selectedSets.delete(s.code);
+                    else state.selectedSets.add(s.code);
                     div.classList.toggle('selected');
                 };
-                div.innerHTML = `<div class="check"></div> <div><strong>${s.code.toUpperCase()}</strong> ${s.name}</div>`;
-                c.appendChild(div);
+                div.innerHTML = `
+                    <div class="checkbox-circle"></div>
+                    <div>
+                        <div style="font-weight:600; color:white;">${s.name}</div>
+                        <div style="font-size:0.8rem; color:var(--text-muted);">${s.code.toUpperCase()} &bull; ${s.released_at?.split('-')[0] || ''}</div>
+                    </div>
+                `;
+                list.appendChild(div);
             });
         }
-
-        function applyFilters() {
-            toggleSheet();
-            refreshData();
-        }
-
-        function toggleSheet() {
-            document.getElementById('sheetOverlay').classList.toggle('open');
-        }
+        
+        document.getElementById('setSearch').addEventListener('input', renderSetList);
 
         // --- MODAL ---
         function openModal(idx) {
-            const c = cards[idx];
-            const img = c.image_uris?.png || c.card_faces?.[0]?.image_uris?.png;
+            const c = state.data[idx];
+            if(!c) return;
             
+            // High Res Image
+            let img = c.image_uris?.png;
+            if(!img && c.card_faces) img = c.card_faces[0].image_uris?.png;
+
             document.getElementById('modalImg').src = img;
-            document.getElementById('modalTitle').textContent = c.name;
+            document.getElementById('modalName').textContent = c.name;
             document.getElementById('modalType').textContent = c.type_line;
-            document.getElementById('modalLink').href = c.purchase_uris?.tcgplayer || '#';
             
-            // Set price if available
-            const price = c.prices?.usd || c.prices?.usd_foil || '--';
-            document.getElementById('modalLink').textContent = `$${price} | Buy on TCGPlayer`;
+            // Price Logic
+            const price = c.prices?.usd || c.prices?.usd_foil || '---';
+            const linkBtn = document.getElementById('modalLink');
+            linkBtn.innerHTML = `<span>$${price}</span><span style="opacity:0.5">|</span><span>Buy</span>`;
+            linkBtn.href = c.purchase_uris?.tcgplayer || '#';
 
             document.getElementById('modal').classList.add('active');
         }
@@ -506,13 +582,18 @@
             document.getElementById('modal').classList.remove('active');
         }
 
-        // Infinite Scroll
-        const scroller = document.getElementById('scrollContainer');
-        scroller.addEventListener('scroll', () => {
-            if(scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 300) {
-                if(nextPage && !isLoading) fetchCards(nextPage, true);
-            }
-        });
+        // --- INFINITE SCROLL ---
+        function setupInfiniteScroll() {
+            const area = document.getElementById('scrollArea');
+            area.addEventListener('scroll', () => {
+                if(area.scrollTop + area.clientHeight >= area.scrollHeight - 400) {
+                    if(state.hasMore && !state.isLoading) {
+                        state.page++;
+                        fetchCards();
+                    }
+                }
+            });
+        }
 
     </script>
 </body>
