@@ -3,25 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Arcane Mobile</title>
+    <title>Arcane | Pro Search</title>
     <style>
         :root {
             --bg-body: #09090b;
             --bg-surface: #18181b;
-            --bg-glass: rgba(24, 24, 27, 0.85);
-            --primary: #8b5cf6; /* Vivid Purple */
-            --primary-glow: rgba(139, 92, 246, 0.5);
+            --bg-elevated: #27272a;
+            --primary: #8b5cf6;
+            --primary-dark: #6d28d9;
             --text-main: #ffffff;
             --text-sub: #a1a1aa;
-            --border: #27272a;
-            --safe-area-bottom: env(safe-area-inset-bottom);
+            --border: #3f3f46;
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
         body {
             margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: var(--bg-body);
             color: var(--text-main);
             height: 100vh;
@@ -30,25 +29,29 @@
             overflow: hidden;
         }
 
-        /* --- Header --- */
+        /* --- Header & Active Filters --- */
         header {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            z-index: 50;
+            flex-shrink: 0;
+        }
+
+        .top-bar {
             height: 60px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 20px;
-            background: var(--bg-surface);
-            border-bottom: 1px solid var(--border);
-            z-index: 50;
+            padding: 0 16px;
         }
 
-        .brand { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
-        .brand span { color: var(--primary); font-size: 1.5rem; }
+        .brand { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.5px; color: var(--text-main); }
+        .brand span { color: var(--primary); margin-right: 5px; }
 
-        .filter-toggle {
-            background: var(--border);
-            border: none;
+        .filter-toggle-btn {
+            background: var(--primary);
             color: white;
+            border: none;
             padding: 8px 16px;
             border-radius: 20px;
             font-weight: 600;
@@ -58,47 +61,68 @@
             align-items: center;
             gap: 6px;
         }
+        .filter-toggle-btn:active { transform: scale(0.96); }
+
+        /* Active Filter Chips */
+        .chip-row {
+            display: flex;
+            gap: 8px;
+            padding: 10px 16px;
+            overflow-x: auto;
+            white-space: nowrap;
+            background: var(--bg-body);
+            border-bottom: 1px solid var(--border);
+            scrollbar-width: none;
+        }
+        .chip-row::-webkit-scrollbar { display: none; }
+
+        .chip {
+            background: var(--bg-elevated);
+            color: var(--text-sub);
+            font-size: 0.75rem;
+            padding: 4px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .chip.active {
+            border-color: var(--primary);
+            color: white;
+            background: rgba(139, 92, 246, 0.1);
+        }
 
         /* --- Main Grid --- */
         .scroller {
             flex: 1;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            padding: 15px;
-            scroll-behavior: smooth;
+            padding: 16px;
         }
 
         .card-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); /* Adaptive grid */
-            gap: 15px;
-            padding-bottom: 80px; /* Space for bottom content */
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
+            padding-bottom: 100px;
         }
-
-        /* Mobile Adjustments for Grid */
-        @media (max-width: 600px) {
-            .card-grid {
-                grid-template-columns: 1fr 1fr; /* Strict 2 column on mobile */
-                gap: 10px;
-            }
-            .filter-toggle {
-                background: var(--primary); /* Highlight filter btn on mobile */
-            }
+        
+        @media (max-width: 500px) {
+            .card-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
         }
 
         .card-item {
             position: relative;
             aspect-ratio: 2.5/3.5;
             border-radius: 10px;
-            background: var(--bg-surface);
+            background: var(--bg-elevated);
             overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             cursor: pointer;
             transition: transform 0.2s;
         }
-        
-        .card-item:active { transform: scale(0.96); } 
-        @media(hover: hover) { .card-item:hover { transform: translateY(-5px); } }
+        .card-item:active { transform: scale(0.98); }
 
         .card-img {
             width: 100%; height: 100%; object-fit: cover;
@@ -106,7 +130,6 @@
         }
         .card-img.loaded { opacity: 1; }
 
-        /* Skeleton Loading State */
         .skeleton {
             background: linear-gradient(110deg, #1f1f23 8%, #2a2a30 18%, #1f1f23 33%);
             background-size: 200% 100%;
@@ -114,460 +137,432 @@
         }
         @keyframes shine { to { background-position-x: -200%; } }
 
-        /* --- Filter Sheet (Mobile Bottom Sheet / Desktop Sidebar) --- */
-        .filters-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(4px);
-            z-index: 100;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s;
+        /* --- Filter Sheet --- */
+        .sheet-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s;
         }
-        .filters-overlay.open { opacity: 1; pointer-events: auto; }
+        .sheet-overlay.open { opacity: 1; pointer-events: auto; }
 
-        .filter-panel {
+        .sheet {
             position: absolute;
             background: var(--bg-surface);
-            display: flex;
-            flex-direction: column;
+            display: flex; flex-direction: column;
             transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-            padding: 20px;
             box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+            padding: 0;
         }
 
         /* Desktop: Sidebar */
         @media (min-width: 769px) {
-            .filter-panel {
-                top: 0; right: 0; bottom: 0;
-                width: 350px;
-                transform: translateX(100%);
-                border-left: 1px solid var(--border);
-            }
-            .filters-overlay.open .filter-panel { transform: translateX(0); }
+            .sheet { top: 0; right: 0; bottom: 0; width: 400px; transform: translateX(100%); border-left: 1px solid var(--border); }
+            .sheet-overlay.open .sheet { transform: translateX(0); }
         }
-
         /* Mobile: Bottom Sheet */
         @media (max-width: 768px) {
-            .filter-panel {
-                bottom: 0; left: 0; right: 0;
-                height: 85vh; /* 85% height */
-                border-radius: 20px 20px 0 0;
-                transform: translateY(100%);
-            }
-            .filters-overlay.open .filter-panel { transform: translateY(0); }
+            .sheet { bottom: 0; left: 0; right: 0; height: 90vh; border-radius: 20px 20px 0 0; transform: translateY(100%); }
+            .sheet-overlay.open .sheet { transform: translateY(0); }
         }
 
-        .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .panel-title { font-weight: bold; font-size: 1.2rem; }
-        .close-btn { background: none; border: none; color: var(--text-sub); font-size: 1.5rem; padding: 5px; cursor: pointer; }
-
-        .search-input {
-            width: 100%;
-            background: #09090b;
-            border: 1px solid var(--border);
-            padding: 12px;
-            border-radius: 8px;
-            color: white;
-            font-size: 1rem;
-            margin-bottom: 20px;
+        .sheet-header {
+            padding: 20px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
         }
+        .sheet-body { flex: 1; overflow-y: auto; padding: 20px; }
+        .sheet-footer { padding: 20px; border-top: 1px solid var(--border); background: var(--bg-surface); }
 
-        .filter-section { margin-bottom: 25px; }
-        .filter-label { color: var(--text-sub); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; display: block; font-weight: 700; }
-
-        select {
-            width: 100%; padding: 12px; background: #09090b; border: 1px solid var(--border);
-            color: white; border-radius: 8px; appearance: none;
-        }
-
-        .mana-row { display: flex; gap: 10px; justify-content: space-between; }
-        .mana-btn {
-            width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--border);
-            background: #09090b; color: #666; font-weight: bold;
-            display: grid; place-items: center; cursor: pointer; transition: 0.2s;
-        }
-        .mana-btn.active { border-color: white; transform: scale(1.1); color: #09090b; }
-        /* Colors */
-        .mana-btn[data-c="w"].active { background: #fffbd5; }
-        .mana-btn[data-c="u"].active { background: #aae0fa; }
-        .mana-btn[data-c="b"].active { background: #cbc2bf; }
-        .mana-btn[data-c="r"].active { background: #f9aa8f; }
-        .mana-btn[data-c="g"].active { background: #9bd3ae; }
-
-        .apply-btn {
-            margin-top: auto;
-            width: 100%;
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 15px;
-            border-radius: 12px;
-            font-weight: bold;
-            font-size: 1rem;
-            cursor: pointer;
-        }
-
-        /* --- Fullscreen Modal (Swipeable) --- */
-        .modal {
-            position: fixed; inset: 0; z-index: 200;
-            background: rgba(0,0,0,0.95);
-            display: flex; flex-direction: column;
-            opacity: 0; pointer-events: none; transition: opacity 0.3s;
-        }
-        .modal.active { opacity: 1; pointer-events: auto; }
-
-        .modal-header {
-            padding: 15px; display: flex; justify-content: flex-end;
+        /* Form Elements */
+        .section-label { color: var(--text-sub); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; display: block; letter-spacing: 1px;}
+        .input-group { margin-bottom: 25px; }
+        
+        input[type="text"], select {
+            width: 100%; background: var(--bg-body); border: 1px solid var(--border);
+            color: white; padding: 12px; border-radius: 8px; font-size: 1rem;
         }
         
-        .modal-body {
-            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            padding: 20px; position: relative;
+        .mana-row { display: flex; gap: 8px; justify-content: space-between; }
+        .mana-btn {
+            flex: 1; height: 40px; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--bg-body); display: grid; place-items: center; cursor: pointer;
+            font-weight: bold; color: var(--text-sub); transition: 0.2s;
+        }
+        .mana-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .toggle-btn {
+            padding: 10px; background: var(--bg-body); border: 1px solid var(--border);
+            color: var(--text-sub); border-radius: 6px; text-align: center; cursor: pointer; font-size: 0.9rem;
+        }
+        .toggle-btn.active { border-color: var(--primary); color: white; background: rgba(139, 92, 246, 0.1); }
+
+        /* Multi-Set Selector */
+        .set-list {
+            max-height: 150px; overflow-y: auto; background: var(--bg-body);
+            border: 1px solid var(--border); border-radius: 8px; padding: 5px;
+        }
+        .set-option {
+            padding: 8px; display: flex; align-items: center; gap: 10px;
+            cursor: pointer; border-radius: 4px; font-size: 0.9rem;
+        }
+        .set-option:hover { background: var(--bg-elevated); }
+        .set-option.selected { background: var(--bg-elevated); color: var(--primary); }
+        .set-option .check { width: 16px; height: 16px; border: 2px solid var(--border); border-radius: 4px; display: grid; place-items: center; }
+        .set-option.selected .check { border-color: var(--primary); background: var(--primary); }
+        .set-option.selected .check::after { content: '✓'; color: white; font-size: 10px; }
+
+        .apply-btn {
+            width: 100%; background: var(--primary); color: white; border: none;
+            padding: 14px; border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer;
         }
 
-        /* 3D Card Effect */
+        /* --- Modal --- */
+        .modal {
+            position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.95);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .modal.active { opacity: 1; pointer-events: auto; }
+        
         .modal-card {
-            width: 85%; max-width: 350px;
-            border-radius: 14px;
-            box-shadow: 0 0 50px rgba(139, 92, 246, 0.2);
-            transition: transform 0.2s; /* Immediate response for swipe */
-            touch-action: pan-y; /* Allow vertical scroll, hijack horizontal */
+            max-width: 90%; max-height: 70vh; border-radius: 14px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
         }
-
-        .modal-info {
-            margin-top: 20px;
-            text-align: center;
-            color: white;
-            width: 100%;
-            max-width: 500px;
+        .close-modal {
+            position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1);
+            border: none; color: white; width: 40px; height: 40px; border-radius: 50%; font-size: 1.5rem;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
         }
-
-        .price-tag {
-            display: inline-block;
-            background: #27272a;
-            padding: 8px 16px;
-            border-radius: 20px;
-            color: #4ade80;
-            font-weight: bold;
-            margin-top: 10px;
-            text-decoration: none;
-        }
-
-        .loader-bar {
-            height: 3px; width: 100%; background: transparent;
-            position: absolute; top: 60px; left: 0; overflow: hidden;
-        }
-        .loader-bar .progress {
-            width: 50%; height: 100%; background: var(--primary);
-            position: absolute; left: -50%;
-            animation: load 1s infinite linear;
-            display: none;
-        }
-        .loader-bar.loading .progress { display: block; }
-        @keyframes load { 0% { left: -50%; } 100% { left: 100%; } }
 
     </style>
 </head>
 <body>
 
     <header>
-        <div class="brand"><span>✦</span> Archive</div>
-        <button class="filter-toggle" onclick="toggleFilters()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
-            Filters
-        </button>
+        <div class="top-bar">
+            <div class="brand"><span>✦</span> Archive Pro</div>
+            <button class="filter-toggle-btn" onclick="toggleSheet()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                Filters
+            </button>
+        </div>
+        <div class="chip-row" id="chipRow">
+            <div class="chip">All Sets</div>
+            <div class="chip">No Filters</div>
+        </div>
     </header>
 
-    <div class="loader-bar" id="loaderBar"><div class="progress"></div></div>
-
     <div class="scroller" id="scrollContainer">
-        <div class="card-grid" id="grid">
-            </div>
-        <div id="endOfList" style="height: 50px; text-align: center; color: #666; margin-top: 20px;"></div>
+        <div class="card-grid" id="grid"></div>
+        <div id="loader" style="text-align:center; padding: 20px; color: var(--text-sub); display:none;">Loading more...</div>
     </div>
 
-    <div class="filters-overlay" id="filterOverlay" onclick="toggleFilters()">
-        <div class="filter-panel" onclick="event.stopPropagation()">
-            <div class="panel-header">
-                <span class="panel-title">Filters</span>
-                <button class="close-btn" onclick="toggleFilters()">×</button>
+    <div class="sheet-overlay" id="sheetOverlay" onclick="toggleSheet()">
+        <div class="sheet" onclick="event.stopPropagation()">
+            <div class="sheet-header">
+                <span style="font-weight:bold; font-size:1.2rem;">Advanced Search</span>
+                <button onclick="toggleSheet()" style="background:none; border:none; color:white; font-size:1.5rem;">×</button>
             </div>
             
-            <input type="text" id="searchInput" class="search-input" placeholder="Card name, type, text...">
-            
-            <div class="filter-section">
-                <span class="filter-label">Set / Release</span>
-                <select id="setSelect">
-                    <option value="fdn">Foundations (Latest)</option>
-                    <option value="dsk">Duskmourn</option>
-                    <option value="blb">Bloomburrow</option>
-                    <option value="mh3">Modern Horizons 3</option>
-                    </select>
-            </div>
-
-            <div class="filter-section">
-                <span class="filter-label">Colors</span>
-                <div class="mana-row">
-                    <div class="mana-btn" data-c="w" onclick="toggleMana(this)">W</div>
-                    <div class="mana-btn" data-c="u" onclick="toggleMana(this)">U</div>
-                    <div class="mana-btn" data-c="b" onclick="toggleMana(this)">B</div>
-                    <div class="mana-btn" data-c="r" onclick="toggleMana(this)">R</div>
-                    <div class="mana-btn" data-c="g" onclick="toggleMana(this)">G</div>
+            <div class="sheet-body">
+                
+                <div class="input-group">
+                    <span class="section-label">Search (Name or Oracle Text)</span>
+                    <input type="text" id="txtSearch" placeholder="e.g. 'Flying', 'Goblin', 'Draw card'...">
                 </div>
+
+                <div class="input-group">
+                    <span class="section-label">Colors (Identity)</span>
+                    <div class="mana-row">
+                        <div class="mana-btn" data-c="w" onclick="this.classList.toggle('active')">W</div>
+                        <div class="mana-btn" data-c="u" onclick="this.classList.toggle('active')">U</div>
+                        <div class="mana-btn" data-c="b" onclick="this.classList.toggle('active')">B</div>
+                        <div class="mana-btn" data-c="r" onclick="this.classList.toggle('active')">R</div>
+                        <div class="mana-btn" data-c="g" onclick="this.classList.toggle('active')">G</div>
+                        <div class="mana-btn" data-c="c" onclick="this.classList.toggle('active')">C</div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <span class="section-label">Card Type</span>
+                    <div class="type-grid">
+                        <div class="toggle-btn" onclick="toggleType(this, 'Creature')">Creature</div>
+                        <div class="toggle-btn" onclick="toggleType(this, 'Instant')">Instant</div>
+                        <div class="toggle-btn" onclick="toggleType(this, 'Sorcery')">Sorcery</div>
+                        <div class="toggle-btn" onclick="toggleType(this, 'Artifact')">Artifact</div>
+                        <div class="toggle-btn" onclick="toggleType(this, 'Enchantment')">Enchantment</div>
+                        <div class="toggle-btn" onclick="toggleType(this, 'Land')">Land</div>
+                        <div class="toggle-btn" onclick="toggleType(this, 'Planeswalker')">Planeswalker</div>
+                        <div class="toggle-btn" onclick="toggleType(this, 'Legendary')">Legendary</div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <span class="section-label">Include Sets (Select Multiple)</span>
+                    <input type="text" id="setFilter" placeholder="Filter set list..." style="margin-bottom: 5px; font-size: 0.8rem; padding: 8px;">
+                    <div class="set-list" id="setListContainer">
+                        <div style="padding:10px; color:gray; font-size:0.8rem;">Loading sets...</div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <span class="section-label">Rarity</span>
+                    <div class="mana-row">
+                        <div class="toggle-btn" style="flex:1" onclick="this.classList.toggle('active')" data-r="c">C</div>
+                        <div class="toggle-btn" style="flex:1" onclick="this.classList.toggle('active')" data-r="u">U</div>
+                        <div class="toggle-btn" style="flex:1" onclick="this.classList.toggle('active')" data-r="r">R</div>
+                        <div class="toggle-btn" style="flex:1" onclick="this.classList.toggle('active')" data-r="m">M</div>
+                    </div>
+                </div>
+
             </div>
 
-            <button class="apply-btn" onclick="applyFilters()">Show Cards</button>
+            <div class="sheet-footer">
+                <button class="apply-btn" onclick="applyFilters()">Apply Filters</button>
+            </div>
         </div>
     </div>
 
     <div class="modal" id="modal">
-        <div class="modal-header">
-            <button class="close-btn" onclick="closeModal()" style="color: white; font-size: 2rem;">&times;</button>
-        </div>
-        <div class="modal-body" id="modalBody">
-            <img src="" id="modalImg" class="modal-card">
-            <div class="modal-info">
-                <h2 id="modalTitle" style="margin-bottom: 5px;"></h2>
-                <div id="modalType" style="color: var(--text-sub); margin-bottom: 15px;"></div>
-                <a href="#" id="modalPrice" target="_blank" class="price-tag">View on TCGPlayer</a>
-            </div>
-            <div style="margin-top: 20px; color: #666; font-size: 0.8rem;">
-                Swipe left/right to browse
-            </div>
+        <button class="close-modal" onclick="closeModal()">×</button>
+        <img src="" id="modalImg" class="modal-card">
+        <div id="modalMeta" style="margin-top:20px; color:white; text-align:center;">
+            <h3 id="modalTitle" style="margin:0 0 10px 0;"></h3>
+            <a href="#" id="modalLink" target="_blank" style="color:#a78bfa; text-decoration:none;">View on TCGPlayer</a>
         </div>
     </div>
 
     <script>
-        // --- DATA & STATE ---
-        let cards = [];
+        // --- STATE ---
+        let allSets = [];
+        let selectedSets = new Set(['fdn']); // Default: Foundations
+        let selectedTypes = new Set();
         let nextPage = null;
         let isLoading = false;
-        let currentIdx = 0;
-        
-        // --- ELEMENTS ---
-        const grid = document.getElementById('grid');
-        const loaderBar = document.getElementById('loaderBar');
-        const setSelect = document.getElementById('setSelect');
-        const scrollContainer = document.getElementById('scrollContainer');
-        const modal = document.getElementById('modal');
-        const modalImg = document.getElementById('modalImg');
+        let cards = [];
 
         // --- INIT ---
-        window.addEventListener('DOMContentLoaded', () => {
-            // 1. Load Sets in Background
-            loadSets(); 
-            // 2. Fetch Initial Cards (Default: Latest Set 'Foundations' for speed)
-            fetchCards(`https://api.scryfall.com/cards/search?q=set:fdn&order=usd`);
-            // 3. Infinite Scroll Observer
-            setupInfiniteScroll();
+        window.addEventListener('DOMContentLoaded', async () => {
+            await loadSets();
+            // Initial Load
+            fetchCards(buildQueryUrl());
+            updateChipRow();
         });
 
-        // --- SETS MANAGEMENT (Optimized) ---
+        // --- 1. SET MANAGEMENT ---
         async function loadSets() {
-            // Check LocalStorage first
-            const cached = localStorage.getItem('mtg_sets_v1');
-            if(cached) {
-                populateSetDropdown(JSON.parse(cached));
-                // Refetch quietly to update cache
-                fetchSetsApi();
-            } else {
-                await fetchSetsApi();
-            }
-        }
-
-        async function fetchSetsApi() {
             try {
-                // Fetch only expansions to keep payload small
-                const resp = await fetch('https://api.scryfall.com/sets');
-                const json = await resp.json();
-                const mainSets = json.data.filter(s => ['expansion', 'core', 'masters', 'commander'].includes(s.set_type));
-                
-                localStorage.setItem('mtg_sets_v1', JSON.stringify(mainSets));
-                populateSetDropdown(mainSets);
-            } catch(e) { console.error(e); }
+                // Check cache
+                const cached = localStorage.getItem('mtg_sets_v2');
+                if (cached) {
+                    allSets = JSON.parse(cached);
+                } else {
+                    const resp = await fetch('https://api.scryfall.com/sets');
+                    const json = await resp.json();
+                    // Only expansion/core/masters
+                    allSets = json.data.filter(s => 
+                        ['core', 'expansion', 'masters', 'commander', 'draft_innovation'].includes(s.set_type)
+                    );
+                    localStorage.setItem('mtg_sets_v2', JSON.stringify(allSets));
+                }
+                renderSetList(allSets);
+            } catch (e) { console.error("Set load error", e); }
         }
 
-        function populateSetDropdown(sets) {
-            setSelect.innerHTML = '<option value="">All Sets</option>';
-            sets.forEach(s => {
-                const opt = document.createElement('option');
-                opt.value = s.code;
-                opt.textContent = `${s.name} (${s.code.toUpperCase()})`;
-                if(s.code === 'fdn') opt.selected = true; // Default
+        function renderSetList(sets) {
+            const container = document.getElementById('setListContainer');
+            container.innerHTML = '';
+            
+            sets.forEach(set => {
+                const div = document.createElement('div');
+                div.className = `set-option ${selectedSets.has(set.code) ? 'selected' : ''}`;
+                div.onclick = () => toggleSet(set.code, div);
+                div.innerHTML = `
+                    <div class="check"></div>
+                    <div>
+                        <div style="font-weight:600;">${set.code.toUpperCase()}</div>
+                        <div style="font-size:0.8rem; color:var(--text-sub);">${set.name}</div>
+                    </div>
+                `;
+                div.dataset.name = set.name.toLowerCase();
+                div.dataset.code = set.code;
+                container.appendChild(div);
             });
         }
 
-        // --- CARD FETCHING ---
-        async function fetchCards(url, append = false) {
-            if(isLoading || !url) return;
-            isLoading = true;
-            loaderBar.classList.add('loading');
+        // Filter the set list inside the menu
+        document.getElementById('setFilter').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('.set-option').forEach(el => {
+                const match = el.dataset.name.includes(term) || el.dataset.code.includes(term);
+                el.style.display = match ? 'flex' : 'none';
+            });
+        });
 
-            if(!append) {
-                cards = [];
-                grid.innerHTML = '';
-                // Add skeletons
-                for(let i=0; i<10; i++) grid.innerHTML += `<div class="card-item skeleton"></div>`;
-            }
-
-            try {
-                const resp = await fetch(url);
-                const json = await resp.json();
-                
-                // Clear skeletons if new fetch
-                if(!append) grid.innerHTML = '';
-
-                if(json.data) {
-                    cards = append ? [...cards, ...json.data] : json.data;
-                    nextPage = json.has_more ? json.next_page : null;
-                    renderCards(json.data, append);
-                }
-            } catch(e) {
-                console.error(e);
-            } finally {
-                isLoading = false;
-                loaderBar.classList.remove('loading');
-            }
+        function toggleSet(code, el) {
+            if (selectedSets.has(code)) selectedSets.delete(code);
+            else selectedSets.add(code);
+            el.classList.toggle('selected');
         }
 
-        function renderCards(newCards, append) {
-            // Offset used to calculate correct index for click handler
-            const baseIdx = append ? cards.length - newCards.length : 0;
-
-            const html = newCards.map((c, i) => {
-                // Image logic (Face A or Normal)
-                let img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal || '';
-                if(!img) return ''; // Skip cards with no images
-
-                return `
-                <div class="card-item" onclick="openModal(${baseIdx + i})">
-                    <img src="${img}" class="card-img" onload="this.classList.add('loaded')">
-                </div>
-                `;
-            }).join('');
-
-            grid.insertAdjacentHTML('beforeend', html);
-        }
-
-        // --- FILTERS ---
-        function toggleFilters() {
-            document.getElementById('filterOverlay').classList.toggle('open');
-        }
-
-        function toggleMana(btn) {
+        // --- 2. FILTER LOGIC ---
+        function toggleType(btn, type) {
             btn.classList.toggle('active');
+            if (selectedTypes.has(type)) selectedTypes.delete(type);
+            else selectedTypes.add(type);
+        }
+
+        function buildQueryUrl() {
+            let qParts = [];
+
+            // 1. Sets (OR logic)
+            // If user selects NO sets, we search ALL sets (be careful) or default to one?
+            // Let's default to standard if empty to prevent crashing
+            if (selectedSets.size > 0) {
+                const setQuery = Array.from(selectedSets).map(c => `set:${c}`).join(' OR ');
+                qParts.push(`(${setQuery})`);
+            }
+
+            // 2. Text / Name (Oracle)
+            const txt = document.getElementById('txtSearch').value.trim();
+            if (txt) {
+                // "oracle:flying" finds keywords in text. "name:flying" finds name.
+                // Simple approach: just put the word, Scryfall handles it as smart search
+                qParts.push(`(${txt})`); 
+            }
+
+            // 3. Colors (Identity)
+            const colors = Array.from(document.querySelectorAll('.mana-btn.active')).map(b => b.dataset.c).join('');
+            if (colors) qParts.push(`id:${colors}`);
+
+            // 4. Types (AND logic - e.g. Legendary Creature)
+            if (selectedTypes.size > 0) {
+                Array.from(selectedTypes).forEach(t => qParts.push(`t:${t}`));
+            }
+
+            // 5. Rarity (OR logic)
+            const rarities = Array.from(document.querySelectorAll('[data-r].active')).map(b => `r:${b.dataset.r}`);
+            if (rarities.length > 0) {
+                qParts.push(`(${rarities.join(' OR ')})`);
+            }
+
+            // Fallback
+            if (qParts.length === 0) return `https://api.scryfall.com/cards/search?q=format:standard`;
+
+            const query = encodeURIComponent(qParts.join(' AND '));
+            return `https://api.scryfall.com/cards/search?q=${query}&order=usd`;
         }
 
         function applyFilters() {
-            toggleFilters();
-            
-            // Build Query
-            let q = [];
-            const text = document.getElementById('searchInput').value;
-            if(text) q.push(text);
-
-            const set = document.getElementById('setSelect').value;
-            if(set) q.push(`set:${set}`);
-
-            const colors = Array.from(document.querySelectorAll('.mana-btn.active')).map(b => b.dataset.c).join('');
-            if(colors) q.push(`id:${colors}`); // Identity filter
-
-            const queryStr = encodeURIComponent(q.join(' '));
-            // Default sort by Price USD Descending
-            fetchCards(`https://api.scryfall.com/cards/search?q=${queryStr}&order=usd`);
+            toggleSheet();
+            const url = buildQueryUrl();
+            updateChipRow();
+            fetchCards(url);
         }
 
-        // --- INFINITE SCROLL ---
-        function setupInfiniteScroll() {
-            const observer = new IntersectionObserver((entries) => {
-                if(entries[0].isIntersecting && nextPage) {
-                    fetchCards(nextPage, true);
+        function updateChipRow() {
+            const row = document.getElementById('chipRow');
+            row.innerHTML = '';
+
+            // Sets
+            const count = selectedSets.size;
+            row.innerHTML += `<div class="chip ${count > 0 ? 'active' : ''}">${count === 0 ? 'All Sets' : count + ' Sets'}</div>`;
+
+            // Text
+            const txt = document.getElementById('txtSearch').value;
+            if(txt) row.innerHTML += `<div class="chip active">"${txt}"</div>`;
+
+            // Types
+            if(selectedTypes.size > 0) row.innerHTML += `<div class="chip active">${Array.from(selectedTypes).join(' ')}</div>`;
+
+            // Colors
+            const colors = document.querySelectorAll('.mana-btn.active').length;
+            if(colors > 0) row.innerHTML += `<div class="chip active">${colors} Colors</div>`;
+        }
+
+        // --- 3. FETCHING ---
+        async function fetchCards(url, append = false) {
+            if (isLoading || !url) return;
+            isLoading = true;
+            document.getElementById('loader').style.display = 'block';
+            
+            if (!append) {
+                cards = [];
+                document.getElementById('grid').innerHTML = '';
+                nextPage = null;
+            }
+
+            try {
+                const res = await fetch(url);
+                const json = await res.json();
+                
+                if (json.code === "not_found") {
+                    document.getElementById('grid').innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:40px; color:gray">No cards found matching filters.</div>';
+                    return;
                 }
-            }, { rootMargin: '200px' });
-            
-            observer.observe(document.getElementById('endOfList'));
+
+                const newCards = json.data;
+                cards = append ? [...cards, ...newCards] : newCards;
+                nextPage = json.has_more ? json.next_page : null;
+                
+                renderCards(newCards, append ? cards.length - newCards.length : 0);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                isLoading = false;
+                document.getElementById('loader').style.display = 'none';
+            }
         }
 
-        // --- MODAL & SWIPE LOGIC ---
+        function renderCards(list, offset) {
+            const grid = document.getElementById('grid');
+            const frag = document.createDocumentFragment();
+
+            list.forEach((c, i) => {
+                const img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal;
+                if (!img) return;
+
+                const el = document.createElement('div');
+                el.className = 'card-item skeleton';
+                el.onclick = () => openModal(offset + i);
+                
+                const imageEl = document.createElement('img');
+                imageEl.src = img;
+                imageEl.className = 'card-img';
+                imageEl.onload = () => {
+                    imageEl.classList.add('loaded');
+                    el.classList.remove('skeleton');
+                };
+                
+                el.appendChild(imageEl);
+                frag.appendChild(el);
+            });
+            grid.appendChild(frag);
+        }
+
+        // --- 4. INFINITE SCROLL ---
+        const scroller = document.getElementById('scrollContainer');
+        scroller.addEventListener('scroll', () => {
+            if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 300) {
+                if (nextPage && !isLoading) fetchCards(nextPage, true);
+            }
+        });
+
+        // --- 5. UI TOGGLES ---
+        function toggleSheet() {
+            document.getElementById('sheetOverlay').classList.toggle('open');
+        }
+
         function openModal(idx) {
-            currentIdx = idx;
-            updateModal();
-            modal.classList.add('active');
+            const c = cards[idx];
+            const img = c.image_uris?.png || c.card_faces?.[0]?.image_uris?.png;
+            document.getElementById('modalImg').src = img;
+            document.getElementById('modalTitle').textContent = c.name;
+            document.getElementById('modalLink').href = c.purchase_uris?.tcgplayer || '#';
+            document.getElementById('modal').classList.add('active');
         }
 
         function closeModal() {
-            modal.classList.remove('active');
-        }
-
-        function updateModal() {
-            const c = cards[currentIdx];
-            if(!c) return;
-
-            let img = c.image_uris?.png || c.card_faces?.[0]?.image_uris?.png || ''; // High res
-            modalImg.src = img;
-            
-            document.getElementById('modalTitle').textContent = c.name;
-            document.getElementById('modalType').textContent = c.type_line;
-            
-            const price = c.prices?.usd || c.prices?.usd_foil || '---';
-            const link = document.getElementById('modalPrice');
-            link.textContent = `$${price} | Buy on TCGPlayer`;
-            link.href = c.purchase_uris?.tcgplayer || '#';
-        }
-
-        // Swipe Handling
-        let touchStartX = 0;
-        let touchEndX = 0;
-
-        const modalBody = document.getElementById('modalBody');
-
-        modalBody.addEventListener('touchstart', e => {
-            touchStartX = e.changedTouches[0].screenX;
-        }, {passive: true});
-
-        modalBody.addEventListener('touchend', e => {
-            touchEndX = e.changedTouches[0].screenX;
-            handleSwipe();
-        }, {passive: true});
-
-        function handleSwipe() {
-            const threshold = 50;
-            if (touchEndX < touchStartX - threshold) {
-                // Swipe Left -> Next
-                nextCard();
-            }
-            if (touchEndX > touchStartX + threshold) {
-                // Swipe Right -> Prev
-                prevCard();
-            }
-        }
-
-        function nextCard() {
-            if(currentIdx < cards.length - 1) {
-                currentIdx++;
-                animateModal('left');
-            } else if (nextPage) {
-                // Auto load more if at end?
-                // For now, just stop.
-            }
-        }
-
-        function prevCard() {
-            if(currentIdx > 0) {
-                currentIdx--;
-                animateModal('right');
-            }
-        }
-
-        function animateModal(dir) {
-            // Simple animation class toggle
-            modalImg.style.opacity = '0.5';
-            setTimeout(() => {
-                updateModal();
-                modalImg.style.opacity = '1';
-            }, 150);
+            document.getElementById('modal').classList.remove('active');
         }
 
     </script>
