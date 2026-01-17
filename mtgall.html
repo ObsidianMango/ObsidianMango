@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Arcane | Zenith II</title>
+    <title>Arcane | Zenith II (SLD Unlocked)</title>
     <style>
         :root {
             --bg-deep: #050505;
@@ -11,6 +11,7 @@
             --bg-panel: #18181b;
             --primary: #8b5cf6;
             --primary-glow: rgba(139, 92, 246, 0.5);
+            --special: #f59e0b; /* Gold for Secret Lair */
             --text-main: #ffffff;
             --text-muted: #a1a1aa;
             --border: rgba(255, 255, 255, 0.08);
@@ -105,6 +106,10 @@
             background: var(--primary); color: white; border-color: var(--primary);
             box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
         }
+        /* Special Secret Lair Chip Style */
+        .chip[data-val="sld"] { border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
+        .chip[data-val="sld"].active { background: var(--special); color: black; border-color: var(--special); box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); }
+
         .chip[data-type="color"].active[data-val="w"] { background: #fff; color:#000; }
         .chip[data-type="color"].active[data-val="u"] { background: #3b82f6; }
         .chip[data-type="color"].active[data-val="b"] { background: #666; }
@@ -175,7 +180,10 @@
         .set-list { max-height: 250px; overflow-y: auto; background: #000; border: 1px solid var(--border); border-radius: 8px; }
         .set-row { padding: 12px 15px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 10px; cursor: pointer; color: #aaa; }
         .set-row.selected { color: white; background: #1a1a20; }
-        .set-row.special { position: sticky; top: 0; background: #222; z-index: 2; font-weight: bold; color: white; }
+        .set-row.special { position: sticky; top: 0; background: #222; z-index: 2; font-weight: bold; color: white; border-bottom: 1px solid #444; }
+        /* Special highlight for pinned Secret Lair deck */
+        .set-row.pinned { background: rgba(245, 158, 11, 0.1); color: #fbbf24; border-bottom: 1px solid #333; }
+        .set-row.pinned.selected { background: #fbbf24; color: black; }
 
         .btn-apply {
             width: 100%; padding: 16px; background: var(--primary); color: white;
@@ -296,6 +304,8 @@
         </div>
 
         <div class="nav-bottom">
+            <div class="chip" data-type="set" data-val="sld" onclick="quickFilterSet('sld', this)">★ Secret Lair</div>
+            <div style="width:1px; background:var(--border); margin:0 5px;"></div>
             <div class="chip" data-type="color" data-val="w" onclick="quickFilter(this)">W</div>
             <div class="chip" data-type="color" data-val="u" onclick="quickFilter(this)">U</div>
             <div class="chip" data-type="color" data-val="b" onclick="quickFilter(this)">B</div>
@@ -485,6 +495,26 @@
             state.viewingFavorites = false; fetchCards(true);
         }
 
+        // Specific handler for the new Secret Lair chip
+        function quickFilterSet(val, el) {
+            // Deselect all others first for clarity
+            document.querySelectorAll('.chip[data-type="set"]').forEach(c => {
+                if(c !== el) c.classList.remove('active');
+            });
+            el.classList.toggle('active');
+            
+            // Logic: If active, we set set:sld. If not, back to ALL.
+            state.selectedSets.clear();
+            if(el.classList.contains('active')) {
+                state.selectedSets.add(val);
+            } else {
+                state.selectedSets.add('ALL');
+            }
+            state.viewingFavorites = false;
+            fetchCards(true);
+            renderSetList(); // Update the list in the drawer too
+        }
+
         function handleEnter(e) { if(e.key === 'Enter') { els.search.blur(); state.viewingFavorites = false; fetchCards(true); } }
         function toggleSheet() { document.getElementById('sheet').classList.toggle('active'); }
         function advToggle(el) {
@@ -557,13 +587,10 @@
             let q = []; 
             const txt = els.search.value.trim();
             
-            // MODIFIED: Search name OR oracle text
             if(txt) {
                 if(txt.includes(':')) {
-                    // Trust user syntax if they use a colon (e.g. t:creature)
                     q.push(`(${txt})`); 
                 } else {
-                    // Otherwise search Name OR Oracle Text (o:)
                     q.push(`(${txt} OR o:${txt})`); 
                 }
             }
@@ -572,9 +599,12 @@
             if(state.colors.size > 0) q.push(`id:${Array.from(state.colors).join('')}`);
             if(state.types.size > 0) q.push(`(${Array.from(state.types).map(x => `t:${x}`).join(' AND ')})`);
             if(state.rarities.size > 0) q.push(`(${Array.from(state.rarities).map(x => `r:${x}`).join(' OR ')})`);
+            
             const sort = document.getElementById('sortSelect').value;
             let order = sort === 'usd_asc' ? `order=usd&dir=asc` : `order=${sort}`;
-            return q.length === 0 ? `https://api.scryfall.com/cards/search?q=format:standard&${order}` : `https://api.scryfall.com/cards/search?q=${encodeURIComponent(q.join(' AND '))}&${order}`;
+            
+            // MODIFIED: Changed default from 'format:standard' to date sort so ALL cards (including SLD) show up
+            return q.length === 0 ? `https://api.scryfall.com/cards/search?q=date>=1993&${order}` : `https://api.scryfall.com/cards/search?q=${encodeURIComponent(q.join(' AND '))}&${order}`;
         }
 
         function renderCardElement(c, idx, isStaticFav = false) {
@@ -588,23 +618,60 @@
 
         /* --- SETS --- */
         async function loadSets() {
-            const cached = localStorage.getItem('mtg_sets_v5');
+            const cached = localStorage.getItem('mtg_sets_v6');
             if(cached) state.sets = JSON.parse(cached);
-            else { const r = await fetch('https://api.scryfall.com/sets'); const j = await r.json(); state.sets = j.data.filter(s => ['expansion','core','masters','commander'].includes(s.set_type)); localStorage.setItem('mtg_sets_v5', JSON.stringify(state.sets)); }
+            else { 
+                const r = await fetch('https://api.scryfall.com/sets'); 
+                const j = await r.json(); 
+                // MODIFIED: Added 'box' (Secret Lair) and 'promo' to allowed types
+                state.sets = j.data.filter(s => ['expansion','core','masters','commander','box','promo'].includes(s.set_type)); 
+                localStorage.setItem('mtg_sets_v6', JSON.stringify(state.sets)); 
+            }
             renderSetList();
         }
         function renderSetList() {
             const list = document.getElementById('setList'); list.innerHTML = '';
+            
+            // 1. ALL SETS Option
             const master = document.createElement('div'); const isAll = state.selectedSets.has('ALL');
             master.className = `set-row special ${isAll ? 'selected' : ''}`; master.innerHTML = `<div>${isAll?'✔':'○'}</div><div>All Sets</div>`;
-            master.onclick = () => { state.selectedSets.clear(); state.selectedSets.add('ALL'); renderSetList(); };
+            master.onclick = () => { 
+                state.selectedSets.clear(); state.selectedSets.add('ALL'); 
+                document.querySelector('.chip[data-val="sld"]').classList.remove('active'); // Uncheck nav chip
+                renderSetList(); 
+            };
             list.appendChild(master);
+
+            // 2. MODIFIED: "Deck" style PINNED option for Secret Lair
+            const sldDeck = document.createElement('div'); 
+            const isSld = state.selectedSets.has('sld') && state.selectedSets.size === 1;
+            sldDeck.className = `set-row pinned ${isSld ? 'selected' : ''}`; 
+            sldDeck.innerHTML = `<div>${isSld?'★':'☆'}</div><div>Secret Lair Drop (All)</div>`;
+            sldDeck.onclick = () => {
+                state.selectedSets.clear(); state.selectedSets.add('sld');
+                // Sync with nav chip
+                const chip = document.querySelector('.chip[data-val="sld"]');
+                if(chip) chip.classList.add('active');
+                renderSetList();
+            };
+            list.appendChild(sldDeck);
+
+            // 3. The rest of the sets
             const term = document.getElementById('setSearch').value.toLowerCase();
             state.sets.forEach(s => {
+                if(s.code === 'sld') return; // Skip SLD here since we pinned it above
                 if(term && !s.name.toLowerCase().includes(term) && !s.code.includes(term)) return;
                 const div = document.createElement('div'); const isSel = state.selectedSets.has(s.code);
                 div.className = `set-row ${isSel ? 'selected' : ''}`; div.innerHTML = `<div>${isSel?'✔':'○'}</div><div>${s.name}</div>`;
-                div.onclick = () => { state.selectedSets.delete('ALL'); state.selectedSets.has(s.code)?state.selectedSets.delete(s.code):state.selectedSets.add(s.code); if(state.selectedSets.size===0)state.selectedSets.add('ALL'); renderSetList(); };
+                div.onclick = () => { 
+                    state.selectedSets.delete('ALL'); 
+                    // Remove SLD visual lock if picking other sets
+                    document.querySelector('.chip[data-val="sld"]').classList.remove('active');
+                    
+                    state.selectedSets.has(s.code)?state.selectedSets.delete(s.code):state.selectedSets.add(s.code); 
+                    if(state.selectedSets.size===0)state.selectedSets.add('ALL'); 
+                    renderSetList(); 
+                };
                 list.appendChild(div);
             });
         }
