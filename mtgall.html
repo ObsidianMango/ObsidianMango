@@ -681,10 +681,29 @@
             const status = document.getElementById('importStatus');
             status.textContent = 'Parsing...';
             
-            const lines = txt.split('\n').filter(l => l.trim().length > 0);
-            const names = lines.map(l => l.replace(/^[0-9]+x?\s/, '').trim());
+            // --- MODIFIED PARSING LOGIC START ---
+            const rawLines = txt.split('\n');
+            const names = rawLines
+                .map(l => l.trim())
+                .filter(l => l && !l.startsWith('//')) // Filter empty and comments
+                .map(l => {
+                    // 1. Remove count (e.g. "1 ", "1x ")
+                    let name = l.replace(/^[0-9]+x?\s+/, '');
+                    
+                    // 2. Remove set code and collector info (e.g. " (PIP) 123...")
+                    // Matches space + paren + 3-5 chars + paren + anything else
+                    // This handles "Card Name (PIP) 123 *F*" and turns it into "Card Name"
+                    name = name.replace(/\s\([a-zA-Z0-9]{3,5}\).*/, '');
+                    
+                    return name.trim();
+                })
+                .filter(n => n);
+            // --- MODIFIED PARSING LOGIC END ---
+            
             const chunks = [];
-            while(names.length) chunks.push(names.splice(0, 75));
+            // Clone array because splice mutates it
+            const namesCopy = [...names];
+            while(namesCopy.length) chunks.push(namesCopy.splice(0, 75));
             
             let addedCount = 0;
             status.textContent = `Fetching ${chunks.length} batches...`;
