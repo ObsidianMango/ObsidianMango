@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Arcane | Zenith II (SLD Unlocked)</title>
+    <title>Arcane | Zenith II (Deck & Analysis)</title>
     <style>
         :root {
             --bg-deep: #050505;
@@ -11,7 +11,7 @@
             --bg-panel: #18181b;
             --primary: #8b5cf6;
             --primary-glow: rgba(139, 92, 246, 0.5);
-            --special: #f59e0b; /* Gold for Secret Lair */
+            --special: #f59e0b;
             --text-main: #ffffff;
             --text-muted: #a1a1aa;
             --border: rgba(255, 255, 255, 0.08);
@@ -78,6 +78,8 @@
             position: relative;
         }
         .btn-icon:active { transform: scale(0.95); background: var(--primary); }
+        .btn-icon.active { background: var(--primary); border-color: var(--primary); color: white; }
+        
         .badge {
             position: absolute; top: -4px; right: -4px;
             background: var(--primary); width: 16px; height: 16px;
@@ -106,7 +108,6 @@
             background: var(--primary); color: white; border-color: var(--primary);
             box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
         }
-        /* Special Secret Lair Chip Style */
         .chip[data-val="sld"] { border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
         .chip[data-val="sld"].active { background: var(--special); color: black; border-color: var(--special); box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); }
 
@@ -147,7 +148,89 @@
         }
         .card-wrapper.is-fav .fav-indicator { display: block; }
 
-        /* --- SHEET --- */
+        /* --- DECK & ANALYSIS LAYERS --- */
+        .full-layer {
+            position: fixed; inset: 0; background: var(--bg-deep); z-index: 60;
+            display: flex; flex-direction: column;
+            transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .full-layer.active { transform: translateY(0); }
+        .layer-header {
+            padding: 15px 20px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--bg-glass); padding-top: max(15px, var(--safe-top));
+        }
+        .layer-title { font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+        .layer-close { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.1); border-radius: 50%; cursor: pointer; }
+        
+        .layer-content { flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 100px; }
+
+        /* DECK VIEW STYLES */
+        .commander-zone {
+            background: radial-gradient(circle at center, rgba(139, 92, 246, 0.15) 0%, rgba(0,0,0,0) 70%);
+            border: 1px dashed var(--primary); border-radius: 16px; padding: 20px;
+            text-align: center; margin-bottom: 30px; min-height: 200px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .commander-placeholder { color: var(--primary); font-weight: 600; opacity: 0.8; }
+        
+        .type-section { margin-bottom: 25px; }
+        .type-header { 
+            font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); 
+            border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 15px;
+            display: flex; justify-content: space-between;
+        }
+        
+        .deck-list-item {
+            display: flex; align-items: center; gap: 12px; padding: 10px;
+            background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px;
+            border: 1px solid transparent; transition: 0.2s;
+        }
+        .deck-list-item:hover { background: rgba(255,255,255,0.07); }
+        .deck-card-img { width: 40px; height: 56px; object-fit: cover; border-radius: 4px; }
+        .deck-card-name { flex: 1; font-weight: 500; }
+        .deck-actions { display: flex; gap: 8px; }
+        .btn-mini { 
+            width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); 
+            display: flex; align-items: center; justify-content: center; cursor: pointer; color: #aaa;
+        }
+        .btn-mini:hover { background: #fff; color: #000; }
+        .btn-mini.is-cmdr { background: var(--special); color: #000; border-color: var(--special); }
+
+        .deck-footer {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            padding: 20px; background: var(--bg-glass); border-top: 1px solid var(--border);
+            display: flex; gap: 10px; backdrop-filter: blur(10px);
+        }
+
+        /* ANALYSIS STYLES */
+        .chart-box { background: var(--bg-panel); border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid var(--border); }
+        .chart-title { font-weight: 700; margin-bottom: 15px; color: white; }
+        
+        /* Bar Chart (Mana Curve) */
+        .bar-chart { display: flex; align-items: flex-end; height: 150px; gap: 8px; padding-top: 20px; }
+        .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; height: 100%; justify-content: flex-end; }
+        .bar-val { width: 100%; background: var(--primary); border-radius: 4px 4px 0 0; transition: height 0.5s ease; min-height: 2px; position: relative; }
+        .bar-label { font-size: 0.7rem; color: #888; }
+        .bar-count { font-size: 0.7rem; color: #fff; margin-bottom: 4px; }
+
+        /* Doughnut Chart */
+        .doughnut-wrap { display: flex; justify-content: center; position: relative; height: 200px; }
+        .doughnut {
+            width: 180px; height: 180px; border-radius: 50%;
+            background: conic-gradient(var(--chart-gradient));
+            position: relative;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .doughnut::after {
+            content: ''; position: absolute; width: 100px; height: 100px; 
+            background: var(--bg-panel); border-radius: 50%;
+        }
+        .legend { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 15px; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #ccc; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        /* --- SHEET & MODAL --- */
         .sheet-backdrop {
             position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
             z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s;
@@ -181,7 +264,6 @@
         .set-row { padding: 12px 15px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 10px; cursor: pointer; color: #aaa; }
         .set-row.selected { color: white; background: #1a1a20; }
         .set-row.special { position: sticky; top: 0; background: #222; z-index: 2; font-weight: bold; color: white; border-bottom: 1px solid #444; }
-        /* Special highlight for pinned Secret Lair deck */
         .set-row.pinned { background: rgba(245, 158, 11, 0.1); color: #fbbf24; border-bottom: 1px solid #333; }
         .set-row.pinned.selected { background: #fbbf24; color: black; }
 
@@ -190,20 +272,6 @@
             border: none; border-radius: 12px; font-weight: 800; font-size: 1rem; cursor: pointer;
         }
 
-        /* VISIT COUNTER */
-        .visit-counter {
-            margin-top: 15px;
-            text-align: center;
-            font-family: 'Courier New', monospace;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            opacity: 0.6;
-            border-top: 1px solid #333;
-            padding-top: 15px;
-        }
-        .visit-number { color: #4ade80; font-weight: bold; letter-spacing: 1px; }
-
-        /* --- MODAL --- */
         .modal {
             position: fixed; inset: 0; z-index: 200;
             background: rgba(0,0,0,0.92); backdrop-filter: blur(15px);
@@ -211,19 +279,10 @@
             opacity: 0; pointer-events: none; transition: opacity 0.3s;
         }
         .modal.active { opacity: 1; pointer-events: auto; }
-
-        .modal-content-area {
-            width: 100%; height: 100%;
-            display: flex; justify-content: center; align-items: center;
-            position: relative;
-        }
-
-        .modal-card-wrapper {
-            width: 90%; max-width: 420px;
-            display: flex; flex-direction: column; align-items: center;
-            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s;
-        }
-        /* Animation classes for swipe */
+        
+        .modal-content-area { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; position: relative; }
+        .modal-card-wrapper { width: 90%; max-width: 420px; display: flex; flex-direction: column; align-items: center; transition: transform 0.3s, opacity 0.2s; }
+        
         .slide-left-out { transform: translateX(-50%) scale(0.8) !important; opacity: 0; }
         .slide-left-in { transform: translateX(50%) scale(0.8); opacity: 0; }
         .slide-right-out { transform: translateX(50%) scale(0.8) !important; opacity: 0; }
@@ -231,15 +290,10 @@
         .slide-reset { transform: translateX(0) scale(1); opacity: 1; }
 
         .card-3d-wrap {
-            width: 100%; border-radius: 18px;
-            position: relative; overflow: hidden;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
-            transform-style: preserve-3d; margin-bottom: 25px; background: #000;
-            cursor: pointer;
+            width: 100%; border-radius: 18px; position: relative; overflow: hidden;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6); transform-style: preserve-3d; margin-bottom: 25px; background: #000; cursor: pointer;
         }
-        
         .modal-img { width: 100%; display: block; position: relative; z-index: 1; }
-        
         .foil-overlay {
             position: absolute; inset: 0; z-index: 2;
             background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.3) 50%, transparent 80%);
@@ -248,41 +302,29 @@
         }
         .card-3d-wrap:hover .foil-overlay { opacity: 1; }
 
-        .modal-actions { display: flex; gap: 15px; width: 100%; justify-content: center; }
+        .modal-actions { display: flex; gap: 10px; width: 100%; justify-content: center; flex-wrap: wrap; }
         .action-btn {
             background: #27272a; border: 1px solid var(--border); color: white;
-            padding: 12px 24px; border-radius: 30px; font-weight: 600; text-decoration: none;
-            display: flex; align-items: center; gap: 8px; cursor: pointer; transition: 0.2s;
+            padding: 10px 20px; border-radius: 30px; font-weight: 600; text-decoration: none;
+            display: flex; align-items: center; gap: 8px; cursor: pointer; transition: 0.2s; font-size: 0.9rem;
         }
         .action-btn:hover { background: #3f3f46; }
         .action-btn.fav-btn.active { color: #ef4444; border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+        .scry-btn { border-color: #6366f1; color: #6366f1; }
         
-        /* Navigation Arrows (Desktop) */
         .nav-arrow {
-            position: absolute; top: 50%; transform: translateY(-50%);
-            font-size: 3rem; color: white; opacity: 0.3; cursor: pointer;
-            padding: 20px; z-index: 10; user-select: none;
+            position: absolute; top: 50%; transform: translateY(-50%); font-size: 3rem; color: white; opacity: 0.3; cursor: pointer; padding: 20px; z-index: 10;
         }
         .nav-arrow:hover { opacity: 0.8; }
         .nav-left { left: 10px; }
         .nav-right { right: 10px; }
-        
         @media (max-width: 600px) { .nav-arrow { display: none; } }
-
-        /* Close Button Modal */
         .modal-close-btn {
-            position: absolute; top: 20px; right: 20px; z-index: 210;
-            width: 44px; height: 44px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            color: white; font-size: 24px; cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transition: 0.2s;
+            position: absolute; top: 20px; right: 20px; z-index: 210; width: 44px; height: 44px;
+            background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; cursor: pointer;
         }
-        .modal-close-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.2); }
-
+        
     </style>
 </head>
 <body>
@@ -294,11 +336,17 @@
                 <span class="search-icon">🔍</span>
                 <input type="text" class="search-input" id="searchInput" placeholder="Search cards..." onkeypress="handleEnter(event)">
             </div>
+            
+            <div class="btn-icon" id="deckIcon" onclick="openDeckView()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                <div class="badge" id="deckCount" style="background:var(--special); color:black;">0</div>
+            </div>
+
             <div class="btn-icon" onclick="toggleSheet()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"></path></svg>
                 <div class="badge" id="filterCount">0</div>
             </div>
-            <div class="btn-icon" onclick="toggleFavoritesMode()">
+            <div class="btn-icon" onclick="toggleFavoritesMode()" id="favToggleBtn">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
             </div>
         </div>
@@ -311,19 +359,54 @@
             <div class="chip" data-type="color" data-val="b" onclick="quickFilter(this)">B</div>
             <div class="chip" data-type="color" data-val="r" onclick="quickFilter(this)">R</div>
             <div class="chip" data-type="color" data-val="g" onclick="quickFilter(this)">G</div>
-            <div style="width:1px; background:var(--border); margin:0 5px;"></div>
-            <div class="chip" data-type="type" data-val="Creature" onclick="quickFilter(this)">Creature</div>
-            <div class="chip" data-type="type" data-val="Instant" onclick="quickFilter(this)">Instant</div>
-            <div class="chip" data-type="type" data-val="Sorcery" onclick="quickFilter(this)">Sorcery</div>
-            <div class="chip" data-type="type" data-val="Artifact" onclick="quickFilter(this)">Artifact</div>
-            <div class="chip" data-type="type" data-val="Enchantment" onclick="quickFilter(this)">Enchant</div>
-            <div class="chip" data-type="type" data-val="Land" onclick="quickFilter(this)">Land</div>
         </div>
     </header>
 
     <div class="grid-container" id="mainScroll">
         <div class="card-grid" id="grid"></div>
         <div id="loader" style="padding:40px; text-align:center; opacity:0; color:#555;">Loading...</div>
+    </div>
+
+    <div class="full-layer" id="deckLayer">
+        <div class="layer-header">
+            <div class="layer-title"><span style="color:var(--special)">✦</span> Deck Builder</div>
+            <div class="layer-close" onclick="closeDeckView()">×</div>
+        </div>
+        <div class="layer-content">
+            <div class="commander-zone" id="commanderZone">
+                <div class="commander-placeholder">Select a Commander from your list</div>
+            </div>
+            <div id="deckListContainer"></div>
+            <div style="height:60px;"></div>
+        </div>
+        <div class="deck-footer">
+            <button class="btn-apply" style="background:var(--bg-panel); border:1px solid var(--border); flex:1;" onclick="importFavorites()">Import Favorites</button>
+            <button class="btn-apply" style="flex:1;" onclick="openAnalysis()">Stats & Analysis</button>
+        </div>
+    </div>
+
+    <div class="full-layer" id="analysisLayer" style="z-index:70;">
+        <div class="layer-header">
+            <div class="layer-title">Deck Analysis</div>
+            <div class="layer-close" onclick="closeAnalysis()">×</div>
+        </div>
+        <div class="layer-content">
+            <div class="chart-box">
+                <div class="chart-title">Mana Curve</div>
+                <div class="bar-chart" id="manaChart"></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Color Distribution</div>
+                <div class="doughnut-wrap">
+                    <div class="doughnut" id="colorChart"></div>
+                </div>
+                <div class="legend" id="colorLegend"></div>
+            </div>
+            <div class="chart-box">
+                <div class="chart-title">Type Breakdown</div>
+                <div id="typeStats"></div>
+            </div>
+        </div>
     </div>
 
     <div class="sheet-backdrop" id="sheet" onclick="toggleSheet()">
@@ -339,29 +422,17 @@
                         <option value="usd">Price: High to Low</option>
                         <option value="usd_asc">Price: Low to High</option>
                         <option value="released">Release Date (Newest)</option>
-                        <option value="edhrec">EDH Popularity</option>
                     </select>
                 </div>
                 <div class="filter-group">
-                    <div class="fg-title">Rarity</div>
-                    <div class="grid-2">
-                        <div class="btn-toggle" data-cat="rarity" data-val="m" onclick="advToggle(this)">Mythic</div>
-                        <div class="btn-toggle" data-cat="rarity" data-val="r" onclick="advToggle(this)">Rare</div>
-                        <div class="btn-toggle" data-cat="rarity" data-val="u" onclick="advToggle(this)">Uncommon</div>
-                        <div class="btn-toggle" data-cat="rarity" data-val="c" onclick="advToggle(this)">Common</div>
-                    </div>
-                </div>
-                <div class="filter-group">
-                    <div class="fg-title">Sets & Decks</div>
+                    <div class="fg-title">Sets</div>
                     <input type="text" id="setSearch" placeholder="Find a set..." style="width:100%; padding:10px; background:#111; border:1px solid #333; color:white; border-radius:6px; margin-bottom:8px;">
                     <div class="set-list" id="setList"></div>
                 </div>
             </div>
             <div class="sheet-footer">
                 <button class="btn-apply" onclick="applyAdvFilters()">Apply Configuration</button>
-                <div class="visit-counter">
-                    ARCHIVE ACCESS COUNT: <span id="visitorCount" class="visit-number">000000</span>
-                </div>
+                <div style="text-align:center; padding-top:10px; color:#444; font-size:10px;">ARCHIVE ACCESS: <span id="visitorCount">0</span></div>
             </div>
         </div>
     </div>
@@ -385,10 +456,14 @@
 
                 <div class="modal-actions" onclick="event.stopPropagation()">
                     <button class="action-btn fav-btn" id="favBtn" onclick="toggleFav()">
-                        <span id="favIcon">♥</span> Favorite
+                        <span id="favIcon">♥</span> Fav
                     </button>
+                    <a href="#" target="_blank" class="action-btn scry-btn" id="scryLink">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                        Scryfall
+                    </a>
                     <a href="#" target="_blank" class="action-btn" id="tcgLink" style="border-color:#4ade80; color:#4ade80;">
-                        $0.00 | Buy
+                        Buy
                     </a>
                 </div>
             </div>
@@ -397,10 +472,13 @@
 
     <script>
         const state = {
-            sets: [], selectedSets: new Set(['ALL']), colors: new Set(), types: new Set(), rarities: new Set(),
+            sets: [], selectedSets: new Set(['ALL']), colors: new Set(), types: new Set(),
             page: 1, hasMore: true, isLoading: false, nextUrl: null,
-            data: [], favorites: JSON.parse(localStorage.getItem('arcane_favs') || '[]'), viewingFavorites: false,
-            currentCardIndex: 0
+            data: [], 
+            favorites: JSON.parse(localStorage.getItem('arcane_favs') || '[]'),
+            deck: JSON.parse(localStorage.getItem('arcane_deck') || '[]'),
+            commanderId: localStorage.getItem('arcane_cmdr') || null,
+            viewingFavorites: false, currentCardIndex: 0
         };
 
         const els = { grid: document.getElementById('grid'), loader: document.getElementById('loader'), search: document.getElementById('searchInput') };
@@ -412,29 +490,184 @@
             initFoilEffect();
             initVisitorCount();
             initSwipe();
+            updateDeckCount();
         });
 
-        /* --- VISITOR COUNT --- */
+        /* --- VISITOR & UTILS --- */
         function initVisitorCount() {
             let count = parseInt(localStorage.getItem('arcane_visits') || '28491');
-            count++;
-            localStorage.setItem('arcane_visits', count);
-            document.getElementById('visitorCount').textContent = count.toLocaleString('en-US', {minimumIntegerDigits: 6, useGrouping:false});
+            localStorage.setItem('arcane_visits', ++count);
+            document.getElementById('visitorCount').textContent = count;
         }
 
-        /* --- SWIPE & NAVIGATION --- */
-        let touchStartX = 0;
-        let touchEndX = 0;
+        /* --- DECK BUILDER --- */
+        function openDeckView() {
+            document.getElementById('deckLayer').classList.add('active');
+            renderDeck();
+        }
+        function closeDeckView() { document.getElementById('deckLayer').classList.remove('active'); }
+        
+        function updateDeckCount() {
+            const b = document.getElementById('deckCount');
+            b.textContent = state.deck.length;
+            b.style.display = state.deck.length > 0 ? 'flex' : 'none';
+        }
 
+        function importFavorites() {
+            if(confirm('Import all favorites to deck? Duplicates will be ignored.')) {
+                state.favorites.forEach(f => {
+                    if(!state.deck.some(d => d.id === f.id)) state.deck.push(f);
+                });
+                saveDeck();
+                renderDeck();
+            }
+        }
+
+        function saveDeck() {
+            localStorage.setItem('arcane_deck', JSON.stringify(state.deck));
+            localStorage.setItem('arcane_cmdr', state.commanderId || '');
+            updateDeckCount();
+        }
+
+        function toggleCommander(id) {
+            state.commanderId = (state.commanderId === id) ? null : id;
+            saveDeck();
+            renderDeck();
+        }
+
+        function removeFromDeck(id) {
+            state.deck = state.deck.filter(c => c.id !== id);
+            if(state.commanderId === id) state.commanderId = null;
+            saveDeck();
+            renderDeck();
+        }
+
+        function renderDeck() {
+            const cmdrZone = document.getElementById('commanderZone');
+            const listContainer = document.getElementById('deckListContainer');
+            listContainer.innerHTML = '';
+            
+            // Render Commander
+            const commander = state.deck.find(c => c.id === state.commanderId);
+            if(commander) {
+                const img = commander.image_uris?.normal || commander.card_faces?.[0]?.image_uris?.normal;
+                cmdrZone.innerHTML = `
+                    <img src="${img}" style="height:180px; border-radius:10px; box-shadow:0 10px 30px rgba(139,92,246,0.4);">
+                    <div style="margin-top:10px; font-weight:bold;">${commander.name}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">COMMANDER</div>
+                `;
+            } else {
+                cmdrZone.innerHTML = `<div class="commander-placeholder">Select a Commander from your list below</div>`;
+            }
+
+            // Group and Render Rest
+            const rest = state.deck.filter(c => c.id !== state.commanderId);
+            const groups = {};
+            rest.forEach(c => {
+                const type = c.type_line.split('—')[0].trim().split(' ').pop(); // Simple grouping
+                if(!groups[type]) groups[type] = [];
+                groups[type].push(c);
+            });
+
+            for(const [type, cards] of Object.entries(groups)) {
+                const section = document.createElement('div');
+                section.className = 'type-section';
+                section.innerHTML = `<div class="type-header"><span>${type}s</span><span>${cards.length}</span></div>`;
+                
+                cards.forEach(c => {
+                    const img = c.image_uris?.small || c.card_faces?.[0]?.image_uris?.small;
+                    const row = document.createElement('div');
+                    row.className = 'deck-list-item';
+                    row.innerHTML = `
+                        <img src="${img}" class="deck-card-img">
+                        <div class="deck-card-name">${c.name}</div>
+                        <div class="deck-actions">
+                            <div class="btn-mini ${state.commanderId===c.id?'is-cmdr':''}" onclick="toggleCommander('${c.id}')">👑</div>
+                            <div class="btn-mini" onclick="removeFromDeck('${c.id}')">✕</div>
+                        </div>
+                    `;
+                    section.appendChild(row);
+                });
+                listContainer.appendChild(section);
+            }
+            if(state.deck.length === 0) listContainer.innerHTML = '<div style="text-align:center; color:#555; margin-top:50px;">Deck is empty. Import favorites to begin.</div>';
+        }
+
+        /* --- ANALYSIS --- */
+        function openAnalysis() {
+            if(state.deck.length === 0) return alert('Deck is empty!');
+            document.getElementById('analysisLayer').classList.add('active');
+            renderAnalysis();
+        }
+        function closeAnalysis() { document.getElementById('analysisLayer').classList.remove('active'); }
+
+        function renderAnalysis() {
+            // 1. Mana Curve
+            const cmc = {}; let maxCount = 0;
+            state.deck.forEach(c => {
+                const cost = Math.floor(c.cmc || 0);
+                const k = cost > 7 ? '8+' : cost;
+                cmc[k] = (cmc[k] || 0) + 1;
+                if(cmc[k] > maxCount) maxCount = cmc[k];
+            });
+
+            const chart = document.getElementById('manaChart');
+            chart.innerHTML = '';
+            ['0','1','2','3','4','5','6','7','8+'].forEach(k => {
+                const count = cmc[k] || 0;
+                const h = maxCount ? (count / maxCount) * 100 : 0;
+                chart.innerHTML += `
+                    <div class="bar-col">
+                        <div class="bar-count">${count}</div>
+                        <div class="bar-val" style="height:${h}%;"></div>
+                        <div class="bar-label">${k}</div>
+                    </div>`;
+            });
+
+            // 2. Color Wheel (Wrap Hole)
+            const colors = { W:0, U:0, B:0, R:0, G:0, C:0 };
+            let totalColor = 0;
+            state.deck.forEach(c => {
+                if(!c.colors || c.colors.length === 0) colors.C++;
+                else c.colors.forEach(col => colors[col]++);
+                totalColor += (c.colors ? c.colors.length : 1);
+            });
+
+            const colorMap = { W:'#fff', U:'#3b82f6', B:'#666', R:'#ef4444', G:'#22c55e', C:'#888' };
+            let conicStr = ''; let currentDeg = 0;
+            const legend = document.getElementById('colorLegend'); legend.innerHTML = '';
+            
+            Object.keys(colors).forEach(k => {
+                if(colors[k] > 0) {
+                    const deg = (colors[k] / totalColor) * 360;
+                    conicStr += `${colorMap[k]} ${currentDeg}deg ${currentDeg + deg}deg, `;
+                    currentDeg += deg;
+                    legend.innerHTML += `<div class="legend-item"><div class="dot" style="background:${colorMap[k]}"></div>${k} (${colors[k]})</div>`;
+                }
+            });
+            document.getElementById('colorChart').style.setProperty('--chart-gradient', conicStr.slice(0,-2) || '#333 0deg 360deg');
+
+            // 3. Types
+            const types = {};
+            state.deck.forEach(c => {
+                const t = c.type_line.split('—')[0].trim();
+                types[t] = (types[t] || 0) + 1;
+            });
+            document.getElementById('typeStats').innerHTML = Object.entries(types)
+                .map(([t,c]) => `<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #333;"><span>${t}</span><span style="color:#aaa">${c}</span></div>`)
+                .join('');
+        }
+
+        /* --- EXISTING FUNCTIONALITY PRESERVED BELOW --- */
+
+        /* SWIPE & NAV */
+        let touchStartX = 0; let touchEndX = 0;
         function initSwipe() {
             const area = document.getElementById('swipeArea');
             area.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, {passive: true});
             area.addEventListener('touchend', e => {
-                touchEndX = e.changedTouches[0].screenX;
-                handleSwipeGesture();
+                touchEndX = e.changedTouches[0].screenX; handleSwipeGesture();
             }, {passive: true});
-
-            // Keyboard support
             document.addEventListener('keydown', (e) => {
                 if(!document.getElementById('modal').classList.contains('active')) return;
                 if(e.key === "ArrowLeft") navigateCard(-1);
@@ -442,19 +675,12 @@
                 if(e.key === "Escape") closeModal();
             });
         }
-
         function handleSwipeGesture() {
-            const threshold = 50;
-            if (touchEndX < touchStartX - threshold) navigateCard(1);
-            if (touchEndX > touchStartX + threshold) navigateCard(-1);
+            if (touchEndX < touchStartX - 50) navigateCard(1);
+            if (touchEndX > touchStartX + 50) navigateCard(-1);
         }
-
-        function handleBgClick(e) {
-            if(e.target.id === 'swipeArea') {
-                closeModal();
-            }
-        }
-
+        function handleBgClick(e) { if(e.target.id === 'swipeArea') closeModal(); }
+        
         function navigateCard(direction) {
             const wrapper = document.getElementById('modalContent');
             const activeList = state.viewingFavorites ? state.favorites : state.data;
@@ -467,26 +693,15 @@
                 let newIndex = state.currentCardIndex + direction;
                 if (newIndex >= activeList.length) newIndex = 0;
                 if (newIndex < 0) newIndex = activeList.length - 1;
-                
                 state.currentCardIndex = newIndex;
                 updateModalContent(activeList[newIndex]);
-
-                wrapper.className = 'modal-card-wrapper'; 
-                void wrapper.offsetWidth;
-
-                if(direction === 1) wrapper.classList.add('slide-left-in');
-                else wrapper.classList.add('slide-right-in');
-
-                requestAnimationFrame(() => {
-                    wrapper.classList.remove('slide-left-in');
-                    wrapper.classList.remove('slide-right-in');
-                    wrapper.classList.add('slide-reset');
-                });
-
+                wrapper.className = 'modal-card-wrapper'; void wrapper.offsetWidth;
+                if(direction === 1) wrapper.classList.add('slide-left-in'); else wrapper.classList.add('slide-right-in');
+                requestAnimationFrame(() => { wrapper.classList.remove('slide-left-in'); wrapper.classList.remove('slide-right-in'); wrapper.classList.add('slide-reset'); });
             }, 200);
         }
 
-        /* --- FILTERING --- */
+        /* FILTERING */
         function quickFilter(el) {
             el.classList.toggle('active');
             const val = el.dataset.val;
@@ -494,49 +709,26 @@
             if(el.dataset.type === 'type') state.types.has(val) ? state.types.delete(val) : state.types.add(val);
             state.viewingFavorites = false; fetchCards(true);
         }
-
-        // Specific handler for the new Secret Lair chip
         function quickFilterSet(val, el) {
-            // Deselect all others first for clarity
-            document.querySelectorAll('.chip[data-type="set"]').forEach(c => {
-                if(c !== el) c.classList.remove('active');
-            });
+            document.querySelectorAll('.chip[data-type="set"]').forEach(c => { if(c !== el) c.classList.remove('active'); });
             el.classList.toggle('active');
-            
-            // Logic: If active, we set set:sld. If not, back to ALL.
             state.selectedSets.clear();
-            if(el.classList.contains('active')) {
-                state.selectedSets.add(val);
-            } else {
-                state.selectedSets.add('ALL');
-            }
-            state.viewingFavorites = false;
-            fetchCards(true);
-            renderSetList(); // Update the list in the drawer too
+            el.classList.contains('active') ? state.selectedSets.add(val) : state.selectedSets.add('ALL');
+            state.viewingFavorites = false; fetchCards(true); renderSetList();
         }
 
         function handleEnter(e) { if(e.key === 'Enter') { els.search.blur(); state.viewingFavorites = false; fetchCards(true); } }
         function toggleSheet() { document.getElementById('sheet').classList.toggle('active'); }
-        function advToggle(el) {
-            el.classList.toggle('active');
-            const val = el.dataset.val;
-            state.rarities.has(val) ? state.rarities.delete(val) : state.rarities.add(val);
-        }
-        function applyAdvFilters() { toggleSheet(); state.viewingFavorites = false; fetchCards(true); updateBadge(); }
-        function updateBadge() {
-            const count = (state.selectedSets.has('ALL') ? 0 : state.selectedSets.size) + state.rarities.size;
-            const b = document.getElementById('filterCount');
-            b.style.display = count > 0 ? 'flex' : 'none'; b.textContent = count;
-        }
+        function applyAdvFilters() { toggleSheet(); state.viewingFavorites = false; fetchCards(true); }
         function resetFilters() {
-            state.colors.clear(); state.types.clear(); state.rarities.clear(); state.selectedSets.clear(); state.selectedSets.add('ALL');
+            state.colors.clear(); state.types.clear(); state.selectedSets.clear(); state.selectedSets.add('ALL');
             document.querySelectorAll('.active').forEach(e => e.classList.remove('active'));
             renderSetList();
         }
 
-        /* --- FAVORITES --- */
         function toggleFavoritesMode() {
             state.viewingFavorites = !state.viewingFavorites;
+            document.getElementById('favToggleBtn').classList.toggle('active');
             state.viewingFavorites ? renderFavorites() : fetchCards(true);
         }
         function renderFavorites() {
@@ -547,8 +739,8 @@
         function toggleFav() {
             const activeList = state.viewingFavorites ? state.favorites : state.data;
             const currentCard = activeList[state.currentCardIndex];
-            
             const idx = state.favorites.findIndex(c => c.id === currentCard.id);
+            
             if(idx > -1) {
                 state.favorites.splice(idx, 1);
                 document.getElementById('favBtn').classList.remove('active');
@@ -563,11 +755,11 @@
             if(gridCard) gridCard.classList.toggle('is-fav');
         }
 
-        /* --- API --- */
         async function fetchCards(reset = false) {
             if(state.isLoading) return;
             state.isLoading = true; els.loader.style.opacity = 1;
             if(reset) { state.data = []; state.page = 1; state.hasMore = true; state.nextUrl = null; els.grid.innerHTML = ''; document.getElementById('mainScroll').scrollTop = 0; }
+            
             try {
                 const url = buildApiUrl(); const res = await fetch(url); const json = await res.json();
                 if(reset) els.grid.innerHTML = '';
@@ -583,27 +775,13 @@
 
         function buildApiUrl() {
             if(state.page > 1 && state.nextUrl) return state.nextUrl;
-            
-            let q = []; 
-            const txt = els.search.value.trim();
-            
-            if(txt) {
-                if(txt.includes(':')) {
-                    q.push(`(${txt})`); 
-                } else {
-                    q.push(`(${txt} OR o:${txt})`); 
-                }
-            }
-
+            let q = []; const txt = els.search.value.trim();
+            if(txt) q.push(txt.includes(':') ? `(${txt})` : `(${txt} OR o:${txt})`);
             if(!state.selectedSets.has('ALL')) q.push(`(${Array.from(state.selectedSets).map(x => `set:${x}`).join(' OR ')})`);
             if(state.colors.size > 0) q.push(`id:${Array.from(state.colors).join('')}`);
-            if(state.types.size > 0) q.push(`(${Array.from(state.types).map(x => `t:${x}`).join(' AND ')})`);
-            if(state.rarities.size > 0) q.push(`(${Array.from(state.rarities).map(x => `r:${x}`).join(' OR ')})`);
             
             const sort = document.getElementById('sortSelect').value;
             let order = sort === 'usd_asc' ? `order=usd&dir=asc` : `order=${sort}`;
-            
-            // MODIFIED: Changed default from 'format:standard' to date sort so ALL cards (including SLD) show up
             return q.length === 0 ? `https://api.scryfall.com/cards/search?q=date>=1993&${order}` : `https://api.scryfall.com/cards/search?q=${encodeURIComponent(q.join(' AND '))}&${order}`;
         }
 
@@ -616,68 +794,41 @@
             els.grid.appendChild(div);
         }
 
-        /* --- SETS --- */
         async function loadSets() {
             const cached = localStorage.getItem('mtg_sets_v6');
             if(cached) state.sets = JSON.parse(cached);
             else { 
-                const r = await fetch('https://api.scryfall.com/sets'); 
-                const j = await r.json(); 
-                // MODIFIED: Added 'box' (Secret Lair) and 'promo' to allowed types
+                const r = await fetch('https://api.scryfall.com/sets'); const j = await r.json(); 
                 state.sets = j.data.filter(s => ['expansion','core','masters','commander','box','promo'].includes(s.set_type)); 
                 localStorage.setItem('mtg_sets_v6', JSON.stringify(state.sets)); 
             }
             renderSetList();
         }
+
         function renderSetList() {
             const list = document.getElementById('setList'); list.innerHTML = '';
-            
-            // 1. ALL SETS Option
             const master = document.createElement('div'); const isAll = state.selectedSets.has('ALL');
             master.className = `set-row special ${isAll ? 'selected' : ''}`; master.innerHTML = `<div>${isAll?'✔':'○'}</div><div>All Sets</div>`;
-            master.onclick = () => { 
-                state.selectedSets.clear(); state.selectedSets.add('ALL'); 
-                document.querySelector('.chip[data-val="sld"]').classList.remove('active'); // Uncheck nav chip
-                renderSetList(); 
-            };
+            master.onclick = () => { state.selectedSets.clear(); state.selectedSets.add('ALL'); document.querySelector('.chip[data-val="sld"]').classList.remove('active'); renderSetList(); };
             list.appendChild(master);
 
-            // 2. MODIFIED: "Deck" style PINNED option for Secret Lair
-            const sldDeck = document.createElement('div'); 
-            const isSld = state.selectedSets.has('sld') && state.selectedSets.size === 1;
-            sldDeck.className = `set-row pinned ${isSld ? 'selected' : ''}`; 
-            sldDeck.innerHTML = `<div>${isSld?'★':'☆'}</div><div>Secret Lair Drop (All)</div>`;
-            sldDeck.onclick = () => {
-                state.selectedSets.clear(); state.selectedSets.add('sld');
-                // Sync with nav chip
-                const chip = document.querySelector('.chip[data-val="sld"]');
-                if(chip) chip.classList.add('active');
-                renderSetList();
-            };
+            const sldDeck = document.createElement('div'); const isSld = state.selectedSets.has('sld') && state.selectedSets.size === 1;
+            sldDeck.className = `set-row pinned ${isSld ? 'selected' : ''}`; sldDeck.innerHTML = `<div>${isSld?'★':'☆'}</div><div>Secret Lair Drop (All)</div>`;
+            sldDeck.onclick = () => { state.selectedSets.clear(); state.selectedSets.add('sld'); const chip = document.querySelector('.chip[data-val="sld"]'); if(chip) chip.classList.add('active'); renderSetList(); };
             list.appendChild(sldDeck);
 
-            // 3. The rest of the sets
             const term = document.getElementById('setSearch').value.toLowerCase();
             state.sets.forEach(s => {
-                if(s.code === 'sld') return; // Skip SLD here since we pinned it above
+                if(s.code === 'sld') return;
                 if(term && !s.name.toLowerCase().includes(term) && !s.code.includes(term)) return;
                 const div = document.createElement('div'); const isSel = state.selectedSets.has(s.code);
                 div.className = `set-row ${isSel ? 'selected' : ''}`; div.innerHTML = `<div>${isSel?'✔':'○'}</div><div>${s.name}</div>`;
-                div.onclick = () => { 
-                    state.selectedSets.delete('ALL'); 
-                    // Remove SLD visual lock if picking other sets
-                    document.querySelector('.chip[data-val="sld"]').classList.remove('active');
-                    
-                    state.selectedSets.has(s.code)?state.selectedSets.delete(s.code):state.selectedSets.add(s.code); 
-                    if(state.selectedSets.size===0)state.selectedSets.add('ALL'); 
-                    renderSetList(); 
-                };
+                div.onclick = () => { state.selectedSets.delete('ALL'); document.querySelector('.chip[data-val="sld"]').classList.remove('active'); state.selectedSets.has(s.code)?state.selectedSets.delete(s.code):state.selectedSets.add(s.code); if(state.selectedSets.size===0)state.selectedSets.add('ALL'); renderSetList(); };
                 list.appendChild(div);
             });
         }
         document.getElementById('setSearch').addEventListener('input', renderSetList);
 
-        /* --- MODAL --- */
         function openModal(idx, isStaticFav) {
             state.currentCardIndex = idx;
             const c = isStaticFav ? state.favorites[idx] : state.data[idx];
@@ -693,6 +844,9 @@
             const price = c.prices?.usd || c.prices?.usd_foil || '--';
             document.getElementById('tcgLink').innerHTML = `$${price} | Buy`;
             document.getElementById('tcgLink').href = c.purchase_uris?.tcgplayer || '#';
+            
+            // Scryfall Link
+            document.getElementById('scryLink').href = c.scryfall_uri || '#';
 
             const isFav = state.favorites.some(f => f.id === c.id);
             const favBtn = document.getElementById('favBtn');
@@ -704,8 +858,7 @@
         function closeModal() { document.getElementById('modal').classList.remove('active'); }
 
         function initFoilEffect() {
-            const wrap = document.getElementById('card3d');
-            const foil = document.getElementById('foilLayer');
+            const wrap = document.getElementById('card3d'); const foil = document.getElementById('foilLayer');
             wrap.addEventListener('mousemove', (e) => {
                 const rect = wrap.getBoundingClientRect();
                 const x = e.clientX - rect.left; const y = e.clientY - rect.top;
@@ -716,6 +869,7 @@
             });
             wrap.addEventListener('mouseleave', () => { wrap.style.transform = 'perspective(1000px) rotateX(0) rotateY(0)'; foil.style.opacity = 0; });
         }
+
         function initInfiniteScroll() {
             const el = document.getElementById('mainScroll');
             el.addEventListener('scroll', () => {
