@@ -486,12 +486,14 @@
             }
 
             const idx = state.deck.findIndex(c => c.id === id);
+            let wasRemoved = false;
             
             if(idx > -1) {
                 // REMOVE: Only if onlyAdd is FALSE
                 if(!onlyAdd) {
                     state.deck.splice(idx, 1);
                     if(state.commanderId === id) state.commanderId = null;
+                    wasRemoved = true;
                 }
             } else {
                 // ADD
@@ -501,19 +503,33 @@
             saveDeck();
             updateDeckCount();
             
-            // UI Updates
+            // 1. Grid Visual Update
             const el = document.querySelector(`.card-wrapper[data-id="${id}"]`);
             if(el) {
-                if(idx > -1 && !onlyAdd) el.classList.remove('in-deck');
+                if(wasRemoved) el.classList.remove('in-deck');
                 else el.classList.add('in-deck');
             }
             
+            // 2. Modal Button Update
+            // If the modal is open, we need to refresh the buttons for the card currently displayed.
+            // Even if we removed it, we still have the object reference in 'card', so we can use that to render the "Add" button state.
             if(document.getElementById('modal').classList.contains('active')) {
+                // If we are in "Deck View" mode and we removed the card we are looking at, close the modal
+                // because the list index is now messed up.
+                if(state.viewingDeck && wasRemoved && state.activeContextList === state.deck) {
+                   closeModal();
+                   renderDeck(); // Refresh the list behind the modal
+                   return;
+                }
+
+                // Otherwise (Search mode OR we just added it), just refresh buttons
                 const currentModalCard = state.activeContextList[state.currentCardIndex];
                 if(currentModalCard && currentModalCard.id === id) {
                     updateModalButtons(currentModalCard);
                 }
             }
+
+            // 3. Deck View Update
             if(state.viewingDeck) renderDeck();
         }
 
@@ -681,32 +697,39 @@
             const status = document.getElementById('importStatus');
             status.textContent = 'Parsing...';
             
-            // --- MODIFIED PARSING LOGIC START ---
+            // --- ROBUST PARSING LOGIC START ---
             const rawLines = txt.split('\n');
             const names = rawLines
                 .map(l => l.trim())
                 .filter(l => l && !l.startsWith('//')) // Filter empty and comments
                 .map(l => {
-                    // 1. Remove count (e.g. "1 ", "1x ")
-                    let name = l.replace(/^[0-9]+x?\s+/, '');
+                    let name = l;
+                    // 1. Remove Leading Counts: "1x " or "1 " or "10 "
+                    // This regex removes a number followed by optional 'x' and space at start of string
+                    name = name.replace(/^[0-9]+x?\s+/, '');
                     
-                    // 2. Remove set code and collector info (e.g. " (PIP) 123...")
-                    // Matches space + paren + 3-5 chars + paren + anything else
-                    // This handles "Card Name (PIP) 123 *F*" and turns it into "Card Name"
-                    name = name.replace(/\s\([a-zA-Z0-9]{3,5}\).*/, '');
+                    // 2. Remove Set/Collector/Foil Info
+                    // Split by first parenthesis. "Card Name (SET) 123" -> "Card Name "
+                    if(name.includes('(')) {
+                        name = name.split('(')[0];
+                    }
                     
                     return name.trim();
                 })
-                .filter(n => n);
-            // --- MODIFIED PARSING LOGIC END ---
+                .filter(n => n && n.length > 0);
+            // --- ROBUST PARSING LOGIC END ---
             
+            if(names.length === 0) {
+                 status.textContent = "No valid card names found.";
+                 return;
+            }
+
             const chunks = [];
-            // Clone array because splice mutates it
             const namesCopy = [...names];
             while(namesCopy.length) chunks.push(namesCopy.splice(0, 75));
             
             let addedCount = 0;
-            status.textContent = `Fetching ${chunks.length} batches...`;
+            status.textContent = `Fetching ${names.length} cards...`;
 
             for(const chunk of chunks) {
                 const identifiers = chunk.map(name => ({name}));
@@ -719,6 +742,7 @@
                     const json = await res.json();
                     if(json.data) {
                         json.data.forEach(c => {
+                            // Prevent duplicates based on ID
                             if(!state.deck.some(d => d.id === c.id)) {
                                 state.deck.push(c);
                                 addedCount++;
