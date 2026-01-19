@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Arcane | Zenith II (Deck & Analysis)</title>
+    <title>Arcane | Deck Builder</title>
     <style>
         :root {
             --bg-deep: #050505;
@@ -78,7 +78,6 @@
             position: relative;
         }
         .btn-icon:active { transform: scale(0.95); background: var(--primary); }
-        .btn-icon.active { background: var(--primary); border-color: var(--primary); color: white; }
         
         .badge {
             position: absolute; top: -4px; right: -4px;
@@ -142,13 +141,16 @@
         .card-img.loaded { opacity: 1; }
 
         .fav-indicator {
-            position: absolute; top: 8px; right: 8px;
-            color: #ef4444; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
-            display: none; font-size: 1.2rem;
+            position: absolute; top: 0; right: 0; padding: 10px;
+            color: white; 
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            font-size: 1.4rem; z-index: 5;
+            opacity: 0.5; transition: 0.2s;
         }
-        .card-wrapper.is-fav .fav-indicator { display: block; }
+        .card-wrapper.in-deck .fav-indicator { opacity: 1; color: #ef4444; }
+        .fav-indicator:hover { transform: scale(1.2); opacity: 1; }
 
-        /* --- DECK & ANALYSIS LAYERS --- */
+        /* --- DECK LAYERS --- */
         .full-layer {
             position: fixed; inset: 0; background: var(--bg-deep); z-index: 60;
             display: flex; flex-direction: column;
@@ -165,14 +167,20 @@
         
         .layer-content { flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 100px; }
 
+        /* VIEW TOGGLE */
+        .view-toggle { display: flex; background: rgba(255,255,255,0.1); border-radius: 8px; padding: 2px; }
+        .vt-btn { padding: 6px 12px; font-size: 0.8rem; cursor: pointer; border-radius: 6px; color: #888; }
+        .vt-btn.active { background: var(--bg-panel); color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+
         /* DECK VIEW STYLES */
         .commander-zone {
             background: radial-gradient(circle at center, rgba(139, 92, 246, 0.15) 0%, rgba(0,0,0,0) 70%);
             border: 1px dashed var(--primary); border-radius: 16px; padding: 20px;
-            text-align: center; margin-bottom: 30px; min-height: 200px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; margin-bottom: 30px;
+            display: none; /* Hidden by default */
+            flex-direction: column; align-items: center; justify-content: center;
         }
-        .commander-placeholder { color: var(--primary); font-weight: 600; opacity: 0.8; }
+        .commander-zone.has-cmdr { display: flex; border-style: solid; background: radial-gradient(circle at center, rgba(245, 158, 11, 0.1) 0%, rgba(0,0,0,0) 80%); border-color: var(--special); }
         
         .type-section { margin-bottom: 25px; }
         .type-header { 
@@ -181,21 +189,39 @@
             display: flex; justify-content: space-between;
         }
         
+        /* List View Items */
         .deck-list-item {
-            display: flex; align-items: center; gap: 12px; padding: 10px;
-            background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px;
-            border: 1px solid transparent; transition: 0.2s;
+            display: flex; align-items: center; gap: 12px; padding: 8px 10px;
+            background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 6px;
+            border: 1px solid transparent; transition: 0.2s; cursor: pointer;
         }
-        .deck-list-item:hover { background: rgba(255,255,255,0.07); }
-        .deck-card-img { width: 40px; height: 56px; object-fit: cover; border-radius: 4px; }
-        .deck-card-name { flex: 1; font-weight: 500; }
-        .deck-actions { display: flex; gap: 8px; }
-        .btn-mini { 
-            width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); 
-            display: flex; align-items: center; justify-content: center; cursor: pointer; color: #aaa;
+        .deck-list-item:active { background: rgba(255,255,255,0.07); }
+        .deck-card-name { flex: 1; font-weight: 500; font-size: 0.95rem; }
+        
+        /* MANA PIP STYLES */
+        .deck-mana { display: flex; align-items: center; gap: 3px; }
+        .mana-pip { 
+            width: 14px; height: 14px; border-radius: 50%; display: inline-block; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.5); position: relative;
         }
-        .btn-mini:hover { background: #fff; color: #000; }
-        .btn-mini.is-cmdr { background: var(--special); color: #000; border-color: var(--special); }
+        .mana-pip.generic {
+            background: #9ca3af; color: #000; font-size: 9px; font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .mana-pip.W { background: #fef08a; } 
+        .mana-pip.U { background: #3b82f6; } 
+        .mana-pip.B { background: #4b5563; } 
+        .mana-pip.R { background: #ef4444; } 
+        .mana-pip.G { background: #22c55e; } 
+        .mana-pip.C { background: #9ca3af; } 
+        
+        /* Delete Button */
+        .btn-delete { 
+            width: 28px; height: 28px; border-radius: 6px; 
+            display: flex; align-items: center; justify-content: center; cursor: pointer; color: #666;
+            margin-left: 8px;
+        }
+        .btn-delete:hover { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
 
         .deck-footer {
             position: absolute; bottom: 0; left: 0; right: 0;
@@ -206,15 +232,11 @@
         /* ANALYSIS STYLES */
         .chart-box { background: var(--bg-panel); border-radius: 16px; padding: 20px; margin-bottom: 20px; border: 1px solid var(--border); }
         .chart-title { font-weight: 700; margin-bottom: 15px; color: white; }
-        
-        /* Bar Chart (Mana Curve) */
         .bar-chart { display: flex; align-items: flex-end; height: 150px; gap: 8px; padding-top: 20px; }
         .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; height: 100%; justify-content: flex-end; }
         .bar-val { width: 100%; background: var(--primary); border-radius: 4px 4px 0 0; transition: height 0.5s ease; min-height: 2px; position: relative; }
         .bar-label { font-size: 0.7rem; color: #888; }
         .bar-count { font-size: 0.7rem; color: #fff; margin-bottom: 4px; }
-
-        /* Doughnut Chart */
         .doughnut-wrap { display: flex; justify-content: center; position: relative; height: 200px; }
         .doughnut {
             width: 180px; height: 180px; border-radius: 50%;
@@ -222,109 +244,56 @@
             position: relative;
             display: flex; align-items: center; justify-content: center;
         }
-        .doughnut::after {
-            content: ''; position: absolute; width: 100px; height: 100px; 
-            background: var(--bg-panel); border-radius: 50%;
-        }
+        .doughnut::after { content: ''; position: absolute; width: 100px; height: 100px; background: var(--bg-panel); border-radius: 50%; }
         .legend { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 15px; }
         .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #ccc; }
         .dot { width: 10px; height: 10px; border-radius: 50%; }
 
-        /* --- SHEET & MODAL --- */
-        .sheet-backdrop {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
-            z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s;
-        }
-        .sheet-backdrop.active { opacity: 1; pointer-events: auto; }
+        /* IMPORT MODAL */
+        .import-area { width: 100%; height: 200px; background: #111; color: #fff; border: 1px solid #333; padding: 15px; border-radius: 10px; font-family: monospace; resize: none; margin-bottom: 15px; }
 
+        /* --- SHEET & MODAL --- */
+        .sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .sheet-backdrop.active { opacity: 1; pointer-events: auto; }
         .sheet-panel {
             position: absolute; top: 0; right: 0; bottom: 0; width: 85%; max-width: 400px;
             background: #121212; border-left: 1px solid var(--border);
             transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-            display: flex; flex-direction: column;
-            box-shadow: -20px 0 50px rgba(0,0,0,0.7);
+            display: flex; flex-direction: column; box-shadow: -20px 0 50px rgba(0,0,0,0.7);
         }
         .sheet-backdrop.active .sheet-panel { transform: translateX(0); }
-
         .sheet-header { padding: 25px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .sheet-body { flex: 1; overflow-y: auto; padding: 25px; }
         .sheet-footer { padding: 20px; background: var(--bg-panel); border-top: 1px solid var(--border); }
+        .visit-counter { margin-top: 5px; text-align: center; font-family: 'Courier New', monospace; font-size: 0.8rem; color: var(--text-muted); opacity: 0.6; }
+        .visit-number { color: #4ade80; font-weight: bold; letter-spacing: 1px; }
 
         .filter-group { margin-bottom: 30px; }
         .fg-title { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 12px; letter-spacing: 1px; }
-
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .btn-toggle {
-            background: #202025; border: 1px solid var(--border); color: #888;
-            padding: 12px; border-radius: 8px; text-align: center; font-weight: 600; cursor: pointer; transition: 0.2s;
-        }
-        .btn-toggle.active { background: rgba(139, 92, 246, 0.15); border-color: var(--primary); color: var(--primary); }
-
         .set-list { max-height: 250px; overflow-y: auto; background: #000; border: 1px solid var(--border); border-radius: 8px; }
         .set-row { padding: 12px 15px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 10px; cursor: pointer; color: #aaa; }
         .set-row.selected { color: white; background: #1a1a20; }
-        .set-row.special { position: sticky; top: 0; background: #222; z-index: 2; font-weight: bold; color: white; border-bottom: 1px solid #444; }
-        .set-row.pinned { background: rgba(245, 158, 11, 0.1); color: #fbbf24; border-bottom: 1px solid #333; }
-        .set-row.pinned.selected { background: #fbbf24; color: black; }
+        .btn-apply { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; border-radius: 12px; font-weight: 800; font-size: 1rem; cursor: pointer; }
 
-        .btn-apply {
-            width: 100%; padding: 16px; background: var(--primary); color: white;
-            border: none; border-radius: 12px; font-weight: 800; font-size: 1rem; cursor: pointer;
-        }
-
-        .modal {
-            position: fixed; inset: 0; z-index: 200;
-            background: rgba(0,0,0,0.92); backdrop-filter: blur(15px);
-            display: flex; justify-content: center; align-items: center;
-            opacity: 0; pointer-events: none; transition: opacity 0.3s;
-        }
+        /* FULL SCREEN CARD MODAL */
+        .modal { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.92); backdrop-filter: blur(15px); display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
         .modal.active { opacity: 1; pointer-events: auto; }
-        
         .modal-content-area { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; position: relative; }
         .modal-card-wrapper { width: 90%; max-width: 420px; display: flex; flex-direction: column; align-items: center; transition: transform 0.3s, opacity 0.2s; }
-        
-        .slide-left-out { transform: translateX(-50%) scale(0.8) !important; opacity: 0; }
-        .slide-left-in { transform: translateX(50%) scale(0.8); opacity: 0; }
-        .slide-right-out { transform: translateX(50%) scale(0.8) !important; opacity: 0; }
-        .slide-right-in { transform: translateX(-50%) scale(0.8); opacity: 0; }
-        .slide-reset { transform: translateX(0) scale(1); opacity: 1; }
-
-        .card-3d-wrap {
-            width: 100%; border-radius: 18px; position: relative; overflow: hidden;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.6); transform-style: preserve-3d; margin-bottom: 25px; background: #000; cursor: pointer;
-        }
+        .card-3d-wrap { width: 100%; border-radius: 18px; position: relative; overflow: hidden; box-shadow: 0 30px 60px rgba(0,0,0,0.6); transform-style: preserve-3d; margin-bottom: 25px; background: #000; cursor: pointer; }
         .modal-img { width: 100%; display: block; position: relative; z-index: 1; }
-        .foil-overlay {
-            position: absolute; inset: 0; z-index: 2;
-            background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.3) 50%, transparent 80%);
-            mix-blend-mode: overlay; opacity: 0; pointer-events: none;
-            background-size: 200% 200%; transition: opacity 0.2s;
-        }
+        .foil-overlay { position: absolute; inset: 0; z-index: 2; background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.3) 50%, transparent 80%); mix-blend-mode: overlay; opacity: 0; pointer-events: none; background-size: 200% 200%; transition: opacity 0.2s; }
         .card-3d-wrap:hover .foil-overlay { opacity: 1; }
-
         .modal-actions { display: flex; gap: 10px; width: 100%; justify-content: center; flex-wrap: wrap; }
-        .action-btn {
-            background: #27272a; border: 1px solid var(--border); color: white;
-            padding: 10px 20px; border-radius: 30px; font-weight: 600; text-decoration: none;
-            display: flex; align-items: center; gap: 8px; cursor: pointer; transition: 0.2s; font-size: 0.9rem;
-        }
+        .action-btn { background: #27272a; border: 1px solid var(--border); color: white; padding: 10px 20px; border-radius: 30px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: 0.2s; font-size: 0.9rem; }
         .action-btn:hover { background: #3f3f46; }
-        .action-btn.fav-btn.active { color: #ef4444; border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
-        .scry-btn { border-color: #6366f1; color: #6366f1; }
+        .action-btn.primary-btn { background: var(--primary); border-color: var(--primary); }
+        .action-btn.delete-btn { color: white; background: #ef4444; border-color: #ef4444; }
+        .action-btn.cmdr-btn { color: var(--special); border-color: var(--special); background: rgba(245, 158, 11, 0.1); }
+        .modal-close-btn { position: absolute; top: 20px; right: 20px; z-index: 210; width: 44px; height: 44px; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; cursor: pointer; }
         
-        .nav-arrow {
-            position: absolute; top: 50%; transform: translateY(-50%); font-size: 3rem; color: white; opacity: 0.3; cursor: pointer; padding: 20px; z-index: 10;
-        }
-        .nav-arrow:hover { opacity: 0.8; }
-        .nav-left { left: 10px; }
-        .nav-right { right: 10px; }
+        .nav-arrow { position: absolute; top: 50%; transform: translateY(-50%); font-size: 3rem; color: white; opacity: 0.3; cursor: pointer; padding: 20px; z-index: 10; }
         @media (max-width: 600px) { .nav-arrow { display: none; } }
-        .modal-close-btn {
-            position: absolute; top: 20px; right: 20px; z-index: 210; width: 44px; height: 44px;
-            background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border-radius: 50%;
-            display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; cursor: pointer;
-        }
-        
     </style>
 </head>
 <body>
@@ -346,9 +315,6 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"></path></svg>
                 <div class="badge" id="filterCount">0</div>
             </div>
-            <div class="btn-icon" onclick="toggleFavoritesMode()" id="favToggleBtn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-            </div>
         </div>
 
         <div class="nav-bottom">
@@ -369,23 +335,37 @@
 
     <div class="full-layer" id="deckLayer">
         <div class="layer-header">
-            <div class="layer-title"><span style="color:var(--special)">✦</span> Deck Builder</div>
+            <div class="layer-title"><span style="color:var(--special)">✦</span> Deck</div>
+            <div class="view-toggle">
+                <div class="vt-btn active" id="btnList" onclick="setDeckView('list')">List</div>
+                <div class="vt-btn" id="btnGrid" onclick="setDeckView('grid')">Grid</div>
+            </div>
             <div class="layer-close" onclick="closeDeckView()">×</div>
         </div>
         <div class="layer-content">
-            <div class="commander-zone" id="commanderZone">
-                <div class="commander-placeholder">Select a Commander from your list</div>
-            </div>
+            <div class="commander-zone" id="commanderZone"></div>
             <div id="deckListContainer"></div>
-            <div style="height:60px;"></div>
         </div>
         <div class="deck-footer">
-            <button class="btn-apply" style="background:var(--bg-panel); border:1px solid var(--border); flex:1;" onclick="importFavorites()">Import Favorites</button>
+            <button class="btn-apply" style="background:var(--bg-panel); border:1px solid var(--border); flex:1;" onclick="openImportModal()">Import List</button>
             <button class="btn-apply" style="flex:1;" onclick="openAnalysis()">Stats & Analysis</button>
         </div>
     </div>
 
-    <div class="full-layer" id="analysisLayer" style="z-index:70;">
+    <div class="full-layer" id="importLayer" style="z-index:70;">
+        <div class="layer-header">
+            <div class="layer-title">Import Text</div>
+            <div class="layer-close" onclick="closeImportModal()">×</div>
+        </div>
+        <div class="layer-content">
+            <p style="color:#aaa; font-size:0.9rem; margin-top:0;">Paste decklist (e.g. Moxfield, ManaBox export). One card per line.</p>
+            <textarea class="import-area" id="importText" placeholder="1 Sol Ring&#10;1 Command Tower&#10;..."></textarea>
+            <div id="importStatus" style="color:var(--special); font-size:0.9rem; min-height:20px;"></div>
+            <button class="btn-apply" onclick="processImport()">Process Import</button>
+        </div>
+    </div>
+
+    <div class="full-layer" id="analysisLayer" style="z-index:75;">
         <div class="layer-header">
             <div class="layer-title">Deck Analysis</div>
             <div class="layer-close" onclick="closeAnalysis()">×</div>
@@ -432,7 +412,7 @@
             </div>
             <div class="sheet-footer">
                 <button class="btn-apply" onclick="applyAdvFilters()">Apply Configuration</button>
-                <div style="text-align:center; padding-top:10px; color:#444; font-size:10px;">ARCHIVE ACCESS: <span id="visitorCount">0</span></div>
+                <div class="visit-counter">ARCHIVE ACCESS: <span id="visitorCount" class="visit-number">000000</span></div>
             </div>
         </div>
     </div>
@@ -455,16 +435,7 @@
                 </div>
 
                 <div class="modal-actions" onclick="event.stopPropagation()">
-                    <button class="action-btn fav-btn" id="favBtn" onclick="toggleFav()">
-                        <span id="favIcon">♥</span> Fav
-                    </button>
-                    <a href="#" target="_blank" class="action-btn scry-btn" id="scryLink">
-                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                        Scryfall
-                    </a>
-                    <a href="#" target="_blank" class="action-btn" id="tcgLink" style="border-color:#4ade80; color:#4ade80;">
-                        Buy
-                    </a>
+                    <div id="modalActionContainer" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;"></div>
                 </div>
             </div>
         </div>
@@ -472,13 +443,15 @@
 
     <script>
         const state = {
-            sets: [], selectedSets: new Set(['ALL']), colors: new Set(), types: new Set(),
+            sets: [], selectedSets: new Set(['ALL']), colors: new Set(),
             page: 1, hasMore: true, isLoading: false, nextUrl: null,
             data: [], 
-            favorites: JSON.parse(localStorage.getItem('arcane_favs') || '[]'),
-            deck: JSON.parse(localStorage.getItem('arcane_deck') || '[]'),
-            commanderId: localStorage.getItem('arcane_cmdr') || null,
-            viewingFavorites: false, currentCardIndex: 0
+            deck: JSON.parse(localStorage.getItem('arcane_deck_v2') || '[]'),
+            commanderId: localStorage.getItem('arcane_cmdr_v2') || null,
+            viewingDeck: false,
+            deckViewMode: 'list',
+            currentCardIndex: 0,
+            activeContextList: []
         };
 
         const els = { grid: document.getElementById('grid'), loader: document.getElementById('loader'), search: document.getElementById('searchInput') };
@@ -488,109 +461,261 @@
             fetchCards(true);
             initInfiniteScroll();
             initFoilEffect();
-            initVisitorCount();
             initSwipe();
+            initVisitorCount();
             updateDeckCount();
         });
 
-        /* --- VISITOR & UTILS --- */
+        /* --- VISITOR COUNT --- */
         function initVisitorCount() {
             let count = parseInt(localStorage.getItem('arcane_visits') || '28491');
             localStorage.setItem('arcane_visits', ++count);
             document.getElementById('visitorCount').textContent = count;
         }
 
-        /* --- DECK BUILDER --- */
-        function openDeckView() {
-            document.getElementById('deckLayer').classList.add('active');
-            renderDeck();
+        /* --- DECK MANAGEMENT --- */
+        function toggleDeckCard(idOrCard, onlyAdd = false) {
+            let id, card;
+            
+            if (typeof idOrCard === 'string') {
+                id = idOrCard;
+                card = state.deck.find(c => c.id === id) || state.data.find(c => c.id === id);
+            } else {
+                card = idOrCard;
+                id = card.id;
+            }
+
+            const idx = state.deck.findIndex(c => c.id === id);
+            
+            if(idx > -1) {
+                // REMOVE: Only if onlyAdd is FALSE
+                if(!onlyAdd) {
+                    state.deck.splice(idx, 1);
+                    if(state.commanderId === id) state.commanderId = null;
+                }
+            } else {
+                // ADD
+                if(card) state.deck.push(card);
+            }
+            
+            saveDeck();
+            updateDeckCount();
+            
+            // UI Updates
+            const el = document.querySelector(`.card-wrapper[data-id="${id}"]`);
+            if(el) {
+                if(idx > -1 && !onlyAdd) el.classList.remove('in-deck');
+                else el.classList.add('in-deck');
+            }
+            
+            if(document.getElementById('modal').classList.contains('active')) {
+                const currentModalCard = state.activeContextList[state.currentCardIndex];
+                if(currentModalCard && currentModalCard.id === id) {
+                    updateModalButtons(currentModalCard);
+                }
+            }
+            if(state.viewingDeck) renderDeck();
         }
-        function closeDeckView() { document.getElementById('deckLayer').classList.remove('active'); }
-        
+
+        function setCommander(id) {
+            state.commanderId = (state.commanderId === id) ? null : id;
+            saveDeck();
+            const currentModalCard = state.activeContextList[state.currentCardIndex];
+            if(currentModalCard && currentModalCard.id === id) updateModalButtons(currentModalCard);
+            if(state.viewingDeck) renderDeck();
+        }
+
+        function saveDeck() {
+            localStorage.setItem('arcane_deck_v2', JSON.stringify(state.deck));
+            localStorage.setItem('arcane_cmdr_v2', state.commanderId || '');
+        }
+
         function updateDeckCount() {
             const b = document.getElementById('deckCount');
             b.textContent = state.deck.length;
             b.style.display = state.deck.length > 0 ? 'flex' : 'none';
         }
 
-        function importFavorites() {
-            if(confirm('Import all favorites to deck? Duplicates will be ignored.')) {
-                state.favorites.forEach(f => {
-                    if(!state.deck.some(d => d.id === f.id)) state.deck.push(f);
-                });
-                saveDeck();
-                renderDeck();
-            }
-        }
-
-        function saveDeck() {
-            localStorage.setItem('arcane_deck', JSON.stringify(state.deck));
-            localStorage.setItem('arcane_cmdr', state.commanderId || '');
-            updateDeckCount();
-        }
-
-        function toggleCommander(id) {
-            state.commanderId = (state.commanderId === id) ? null : id;
-            saveDeck();
+        /* --- DECK VIEW --- */
+        function openDeckView() {
+            state.viewingDeck = true;
+            document.getElementById('deckLayer').classList.add('active');
             renderDeck();
         }
-
-        function removeFromDeck(id) {
-            state.deck = state.deck.filter(c => c.id !== id);
-            if(state.commanderId === id) state.commanderId = null;
-            saveDeck();
+        function closeDeckView() { 
+            state.viewingDeck = false;
+            document.getElementById('deckLayer').classList.remove('active'); 
+        }
+        
+        function setDeckView(mode) {
+            state.deckViewMode = mode;
+            document.getElementById('btnList').className = mode === 'list' ? 'vt-btn active' : 'vt-btn';
+            document.getElementById('btnGrid').className = mode === 'grid' ? 'vt-btn active' : 'vt-btn';
             renderDeck();
         }
 
         function renderDeck() {
+            const container = document.getElementById('deckListContainer');
             const cmdrZone = document.getElementById('commanderZone');
-            const listContainer = document.getElementById('deckListContainer');
-            listContainer.innerHTML = '';
             
-            // Render Commander
+            // 1. Commander Zone
             const commander = state.deck.find(c => c.id === state.commanderId);
             if(commander) {
                 const img = commander.image_uris?.normal || commander.card_faces?.[0]?.image_uris?.normal;
+                cmdrZone.className = 'commander-zone has-cmdr';
                 cmdrZone.innerHTML = `
-                    <img src="${img}" style="height:180px; border-radius:10px; box-shadow:0 10px 30px rgba(139,92,246,0.4);">
-                    <div style="margin-top:10px; font-weight:bold;">${commander.name}</div>
-                    <div style="font-size:0.8rem; color:var(--text-muted);">COMMANDER</div>
+                    <div onclick="openModalForDeckCard('${commander.id}')" style="cursor:pointer;">
+                        <img src="${img}" style="height:200px; border-radius:12px; box-shadow:0 10px 40px rgba(245, 158, 11, 0.3);">
+                        <div style="margin-top:10px; font-weight:bold; color:var(--special);">👑 ${commander.name}</div>
+                    </div>
                 `;
             } else {
-                cmdrZone.innerHTML = `<div class="commander-placeholder">Select a Commander from your list below</div>`;
+                cmdrZone.className = 'commander-zone';
+                cmdrZone.innerHTML = ''; 
             }
 
-            // Group and Render Rest
+            // 2. Main Deck List
+            container.innerHTML = '';
             const rest = state.deck.filter(c => c.id !== state.commanderId);
+
+            if(rest.length === 0 && !commander) {
+                container.innerHTML = '<div style="text-align:center; color:#555; margin-top:50px;">Deck is empty.<br>Search cards and tap ♥ to add.</div>';
+                return;
+            }
+
             const groups = {};
             rest.forEach(c => {
-                const type = c.type_line.split('—')[0].trim().split(' ').pop(); // Simple grouping
+                const type = c.type_line.split('—')[0].trim().split(' ').pop(); 
                 if(!groups[type]) groups[type] = [];
                 groups[type].push(c);
             });
 
-            for(const [type, cards] of Object.entries(groups)) {
-                const section = document.createElement('div');
-                section.className = 'type-section';
-                section.innerHTML = `<div class="type-header"><span>${type}s</span><span>${cards.length}</span></div>`;
-                
-                cards.forEach(c => {
-                    const img = c.image_uris?.small || c.card_faces?.[0]?.image_uris?.small;
-                    const row = document.createElement('div');
-                    row.className = 'deck-list-item';
-                    row.innerHTML = `
-                        <img src="${img}" class="deck-card-img">
-                        <div class="deck-card-name">${c.name}</div>
-                        <div class="deck-actions">
-                            <div class="btn-mini ${state.commanderId===c.id?'is-cmdr':''}" onclick="toggleCommander('${c.id}')">👑</div>
-                            <div class="btn-mini" onclick="removeFromDeck('${c.id}')">✕</div>
-                        </div>
-                    `;
-                    section.appendChild(row);
+            if(state.deckViewMode === 'list') {
+                for(const [type, cards] of Object.entries(groups)) {
+                    const section = document.createElement('div');
+                    section.className = 'type-section';
+                    section.innerHTML = `<div class="type-header"><span>${type}s</span><span>${cards.length}</span></div>`;
+                    
+                    cards.forEach(c => {
+                        const row = document.createElement('div');
+                        row.className = 'deck-list-item';
+                        row.onclick = (e) => { 
+                            if(e.target.closest('.btn-delete')) return; 
+                            openModalForDeckCard(c.id); 
+                        };
+                        const manaHtml = renderManaCost(c.mana_cost);
+                        row.innerHTML = `
+                            <div class="deck-card-name">${c.name}</div>
+                            <div class="deck-mana">${manaHtml}</div>
+                            <div class="btn-delete" onclick="toggleDeckCard('${c.id}')">✕</div>
+                        `;
+                        section.appendChild(row);
+                    });
+                    container.appendChild(section);
+                }
+            } else {
+                const gridDiv = document.createElement('div');
+                gridDiv.className = 'card-grid';
+                rest.forEach((c) => {
+                    let img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal;
+                    if(img) {
+                        const item = document.createElement('div');
+                        item.className = 'card-wrapper in-deck'; 
+                        item.innerHTML = `
+                            <div class="card-item" onclick="openModalForDeckCard('${c.id}')">
+                                <img src="${img}" class="card-img loaded">
+                                <div class="fav-indicator" onclick="event.stopPropagation(); toggleDeckCard('${c.id}', true)">♥</div>
+                            </div>`;
+                        gridDiv.appendChild(item);
+                    }
                 });
-                listContainer.appendChild(section);
+                container.appendChild(gridDiv);
             }
-            if(state.deck.length === 0) listContainer.innerHTML = '<div style="text-align:center; color:#555; margin-top:50px;">Deck is empty. Import favorites to begin.</div>';
+        }
+
+        /* --- MANA PARSER --- */
+        function renderManaCost(cost) {
+            if(!cost) return '';
+            const regex = /{([^}]+)}/g;
+            let html = '';
+            let match;
+            
+            const colorMap = {
+                'W': '#fef08a', 'U': '#3b82f6', 'B': '#4b5563', 'R': '#ef4444', 'G': '#22c55e', 'C': '#9ca3af'
+            };
+
+            while ((match = regex.exec(cost)) !== null) {
+                const symbol = match[1];
+                
+                // Generic Number
+                if(!isNaN(symbol) || symbol === 'X') {
+                    html += `<div class="mana-pip generic">${symbol}</div>`;
+                }
+                // Hybrid (Split)
+                else if(symbol.includes('/')) {
+                    const [c1, c2] = symbol.split('/');
+                    if(c2 === 'P') { // Phyrexian
+                        html += `<div class="mana-pip" style="background:${colorMap[c1] || '#ccc'}"></div>`;
+                    } else { // True Hybrid
+                        const hex1 = colorMap[c1] || '#ccc';
+                        const hex2 = colorMap[c2] || '#ccc';
+                        // "Mushed together" split circle
+                        html += `<div class="mana-pip" style="background: linear-gradient(90deg, ${hex1} 50%, ${hex2} 50%);"></div>`;
+                    }
+                }
+                // Basic Color
+                else {
+                    html += `<div class="mana-pip" style="background:${colorMap[symbol] || '#ccc'}"></div>`;
+                }
+            }
+            return html;
+        }
+
+        /* --- IMPORT FUNCTIONALITY --- */
+        function openImportModal() { document.getElementById('importLayer').classList.add('active'); }
+        function closeImportModal() { document.getElementById('importLayer').classList.remove('active'); document.getElementById('importStatus').textContent = ''; }
+        
+        async function processImport() {
+            const txt = document.getElementById('importText').value;
+            if(!txt.trim()) return;
+            const status = document.getElementById('importStatus');
+            status.textContent = 'Parsing...';
+            
+            const lines = txt.split('\n').filter(l => l.trim().length > 0);
+            const names = lines.map(l => l.replace(/^[0-9]+x?\s/, '').trim());
+            const chunks = [];
+            while(names.length) chunks.push(names.splice(0, 75));
+            
+            let addedCount = 0;
+            status.textContent = `Fetching ${chunks.length} batches...`;
+
+            for(const chunk of chunks) {
+                const identifiers = chunk.map(name => ({name}));
+                try {
+                    const res = await fetch('https://api.scryfall.com/cards/collection', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({identifiers})
+                    });
+                    const json = await res.json();
+                    if(json.data) {
+                        json.data.forEach(c => {
+                            if(!state.deck.some(d => d.id === c.id)) {
+                                state.deck.push(c);
+                                addedCount++;
+                            }
+                        });
+                    }
+                } catch(e) { console.error(e); }
+            }
+
+            saveDeck();
+            updateDeckCount();
+            status.textContent = `Done! Added ${addedCount} cards.`;
+            setTimeout(() => {
+                closeImportModal();
+                if(state.viewingDeck) renderDeck();
+            }, 1000);
         }
 
         /* --- ANALYSIS --- */
@@ -602,55 +727,44 @@
         function closeAnalysis() { document.getElementById('analysisLayer').classList.remove('active'); }
 
         function renderAnalysis() {
-            // 1. Mana Curve
             const cmc = {}; let maxCount = 0;
             state.deck.forEach(c => {
+                if(c.type_line.includes('Land')) return;
                 const cost = Math.floor(c.cmc || 0);
                 const k = cost > 7 ? '8+' : cost;
                 cmc[k] = (cmc[k] || 0) + 1;
                 if(cmc[k] > maxCount) maxCount = cmc[k];
             });
-
             const chart = document.getElementById('manaChart');
             chart.innerHTML = '';
             ['0','1','2','3','4','5','6','7','8+'].forEach(k => {
                 const count = cmc[k] || 0;
                 const h = maxCount ? (count / maxCount) * 100 : 0;
-                chart.innerHTML += `
-                    <div class="bar-col">
-                        <div class="bar-count">${count}</div>
-                        <div class="bar-val" style="height:${h}%;"></div>
-                        <div class="bar-label">${k}</div>
-                    </div>`;
+                chart.innerHTML += `<div class="bar-col"><div class="bar-count">${count}</div><div class="bar-val" style="height:${h}%;"></div><div class="bar-label">${k}</div></div>`;
             });
 
-            // 2. Color Wheel (Wrap Hole)
-            const colors = { W:0, U:0, B:0, R:0, G:0, C:0 };
-            let totalColor = 0;
+            const colors = { W:0, U:0, B:0, R:0, G:0, C:0 }; let totalColor = 0;
             state.deck.forEach(c => {
                 if(!c.colors || c.colors.length === 0) colors.C++;
                 else c.colors.forEach(col => colors[col]++);
                 totalColor += (c.colors ? c.colors.length : 1);
             });
-
             const colorMap = { W:'#fff', U:'#3b82f6', B:'#666', R:'#ef4444', G:'#22c55e', C:'#888' };
             let conicStr = ''; let currentDeg = 0;
             const legend = document.getElementById('colorLegend'); legend.innerHTML = '';
-            
             Object.keys(colors).forEach(k => {
                 if(colors[k] > 0) {
                     const deg = (colors[k] / totalColor) * 360;
                     conicStr += `${colorMap[k]} ${currentDeg}deg ${currentDeg + deg}deg, `;
                     currentDeg += deg;
-                    legend.innerHTML += `<div class="legend-item"><div class="dot" style="background:${colorMap[k]}"></div>${k} (${colors[k]})</div>`;
+                    legend.innerHTML += `<div class="legend-item"><div class="dot" style="background:${colorMap[k]}"></div>${k}</div>`;
                 }
             });
             document.getElementById('colorChart').style.setProperty('--chart-gradient', conicStr.slice(0,-2) || '#333 0deg 360deg');
 
-            // 3. Types
             const types = {};
             state.deck.forEach(c => {
-                const t = c.type_line.split('—')[0].trim();
+                const t = c.type_line.split('—')[0].trim().split(' ').pop();
                 types[t] = (types[t] || 0) + 1;
             });
             document.getElementById('typeStats').innerHTML = Object.entries(types)
@@ -658,103 +772,7 @@
                 .join('');
         }
 
-        /* --- EXISTING FUNCTIONALITY PRESERVED BELOW --- */
-
-        /* SWIPE & NAV */
-        let touchStartX = 0; let touchEndX = 0;
-        function initSwipe() {
-            const area = document.getElementById('swipeArea');
-            area.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, {passive: true});
-            area.addEventListener('touchend', e => {
-                touchEndX = e.changedTouches[0].screenX; handleSwipeGesture();
-            }, {passive: true});
-            document.addEventListener('keydown', (e) => {
-                if(!document.getElementById('modal').classList.contains('active')) return;
-                if(e.key === "ArrowLeft") navigateCard(-1);
-                if(e.key === "ArrowRight") navigateCard(1);
-                if(e.key === "Escape") closeModal();
-            });
-        }
-        function handleSwipeGesture() {
-            if (touchEndX < touchStartX - 50) navigateCard(1);
-            if (touchEndX > touchStartX + 50) navigateCard(-1);
-        }
-        function handleBgClick(e) { if(e.target.id === 'swipeArea') closeModal(); }
-        
-        function navigateCard(direction) {
-            const wrapper = document.getElementById('modalContent');
-            const activeList = state.viewingFavorites ? state.favorites : state.data;
-            if(activeList.length === 0) return;
-
-            if(direction === 1) wrapper.classList.add('slide-left-out');
-            else wrapper.classList.add('slide-right-out');
-
-            setTimeout(() => {
-                let newIndex = state.currentCardIndex + direction;
-                if (newIndex >= activeList.length) newIndex = 0;
-                if (newIndex < 0) newIndex = activeList.length - 1;
-                state.currentCardIndex = newIndex;
-                updateModalContent(activeList[newIndex]);
-                wrapper.className = 'modal-card-wrapper'; void wrapper.offsetWidth;
-                if(direction === 1) wrapper.classList.add('slide-left-in'); else wrapper.classList.add('slide-right-in');
-                requestAnimationFrame(() => { wrapper.classList.remove('slide-left-in'); wrapper.classList.remove('slide-right-in'); wrapper.classList.add('slide-reset'); });
-            }, 200);
-        }
-
-        /* FILTERING */
-        function quickFilter(el) {
-            el.classList.toggle('active');
-            const val = el.dataset.val;
-            if(el.dataset.type === 'color') state.colors.has(val) ? state.colors.delete(val) : state.colors.add(val);
-            if(el.dataset.type === 'type') state.types.has(val) ? state.types.delete(val) : state.types.add(val);
-            state.viewingFavorites = false; fetchCards(true);
-        }
-        function quickFilterSet(val, el) {
-            document.querySelectorAll('.chip[data-type="set"]').forEach(c => { if(c !== el) c.classList.remove('active'); });
-            el.classList.toggle('active');
-            state.selectedSets.clear();
-            el.classList.contains('active') ? state.selectedSets.add(val) : state.selectedSets.add('ALL');
-            state.viewingFavorites = false; fetchCards(true); renderSetList();
-        }
-
-        function handleEnter(e) { if(e.key === 'Enter') { els.search.blur(); state.viewingFavorites = false; fetchCards(true); } }
-        function toggleSheet() { document.getElementById('sheet').classList.toggle('active'); }
-        function applyAdvFilters() { toggleSheet(); state.viewingFavorites = false; fetchCards(true); }
-        function resetFilters() {
-            state.colors.clear(); state.types.clear(); state.selectedSets.clear(); state.selectedSets.add('ALL');
-            document.querySelectorAll('.active').forEach(e => e.classList.remove('active'));
-            renderSetList();
-        }
-
-        function toggleFavoritesMode() {
-            state.viewingFavorites = !state.viewingFavorites;
-            document.getElementById('favToggleBtn').classList.toggle('active');
-            state.viewingFavorites ? renderFavorites() : fetchCards(true);
-        }
-        function renderFavorites() {
-            els.grid.innerHTML = '';
-            if(state.favorites.length === 0) { els.grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:50px; color:#666;">No favorites saved yet.</div>'; return; }
-            state.favorites.forEach((card, i) => renderCardElement(card, i, true));
-        }
-        function toggleFav() {
-            const activeList = state.viewingFavorites ? state.favorites : state.data;
-            const currentCard = activeList[state.currentCardIndex];
-            const idx = state.favorites.findIndex(c => c.id === currentCard.id);
-            
-            if(idx > -1) {
-                state.favorites.splice(idx, 1);
-                document.getElementById('favBtn').classList.remove('active');
-                document.getElementById('favIcon').textContent = "♥";
-            } else {
-                state.favorites.push(currentCard);
-                document.getElementById('favBtn').classList.add('active');
-                document.getElementById('favIcon').textContent = "★";
-            }
-            localStorage.setItem('arcane_favs', JSON.stringify(state.favorites));
-            const gridCard = document.querySelector(`.card-wrapper[data-id="${currentCard.id}"]`);
-            if(gridCard) gridCard.classList.toggle('is-fav');
-        }
-
+        /* --- API & SEARCH --- */
         async function fetchCards(reset = false) {
             if(state.isLoading) return;
             state.isLoading = true; els.loader.style.opacity = 1;
@@ -785,12 +803,17 @@
             return q.length === 0 ? `https://api.scryfall.com/cards/search?q=date>=1993&${order}` : `https://api.scryfall.com/cards/search?q=${encodeURIComponent(q.join(' AND '))}&${order}`;
         }
 
-        function renderCardElement(c, idx, isStaticFav = false) {
+        function renderCardElement(c, idx) {
             let img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal; if(!img) return;
-            const isFav = state.favorites.some(f => f.id === c.id);
+            const inDeck = state.deck.some(d => d.id === c.id);
             const div = document.createElement('div');
-            div.className = `card-wrapper ${isFav ? 'is-fav' : ''}`; div.dataset.id = c.id; div.style.animationDelay = `${(idx % 10) * 0.05}s`;
-            div.innerHTML = `<div class="card-item" onclick="openModal(${idx}, ${isStaticFav})"><img src="${img}" class="card-img" onload="this.classList.add('loaded')"><div class="fav-indicator">♥</div></div>`;
+            div.className = `card-wrapper ${inDeck ? 'in-deck' : ''}`; div.dataset.id = c.id; div.style.animationDelay = `${(idx % 10) * 0.05}s`;
+            
+            div.innerHTML = `
+                <div class="card-item" onclick="openModalForSearch(${idx})">
+                    <img src="${img}" class="card-img" onload="this.classList.add('loaded')">
+                    <div class="fav-indicator" onclick="event.stopPropagation(); toggleDeckCard(state.data[${idx}], true)">♥</div>
+                </div>`;
             els.grid.appendChild(div);
         }
 
@@ -829,9 +852,21 @@
         }
         document.getElementById('setSearch').addEventListener('input', renderSetList);
 
-        function openModal(idx, isStaticFav) {
+        /* --- MODAL LOGIC --- */
+        function openModalForSearch(idx) {
+            state.activeContextList = state.data;
+            openModal(idx);
+        }
+
+        function openModalForDeckCard(id) {
+            const idx = state.deck.findIndex(c => c.id === id);
+            state.activeContextList = state.deck;
+            openModal(idx);
+        }
+
+        function openModal(idx) {
             state.currentCardIndex = idx;
-            const c = isStaticFav ? state.favorites[idx] : state.data[idx];
+            const c = state.activeContextList[idx];
             updateModalContent(c);
             document.getElementById('modal').classList.add('active');
         }
@@ -841,21 +876,60 @@
             document.getElementById('modalImg').src = img;
             document.getElementById('modalTitle').textContent = c.name;
             document.getElementById('modalType').textContent = c.type_line;
-            const price = c.prices?.usd || c.prices?.usd_foil || '--';
-            document.getElementById('tcgLink').innerHTML = `$${price} | Buy`;
-            document.getElementById('tcgLink').href = c.purchase_uris?.tcgplayer || '#';
-            
-            // Scryfall Link
-            document.getElementById('scryLink').href = c.scryfall_uri || '#';
+            updateModalButtons(c);
+        }
 
-            const isFav = state.favorites.some(f => f.id === c.id);
-            const favBtn = document.getElementById('favBtn');
-            const favIcon = document.getElementById('favIcon');
-            if(isFav) { favBtn.classList.add('active'); favIcon.textContent = "★"; }
-            else { favBtn.classList.remove('active'); favIcon.textContent = "♥"; }
+        function updateModalButtons(c) {
+            const container = document.getElementById('modalActionContainer');
+            const inDeck = state.deck.some(d => d.id === c.id);
+            const isCmdr = state.commanderId === c.id;
+            const price = c.prices?.usd || '--';
+            
+            let html = '';
+            
+            if(inDeck) {
+                html += `<button class="action-btn delete-btn" onclick="toggleDeckCard({id:'${c.id}'})">✕ Remove from Deck</button>`;
+            } else {
+                html += `<button class="action-btn primary-btn" onclick="toggleDeckCard(state.activeContextList[state.currentCardIndex])">♥ Add to Deck</button>`;
+            }
+
+            if(inDeck && c.type_line.includes('Legendary') && c.type_line.includes('Creature')) {
+                html += isCmdr 
+                    ? `<button class="action-btn cmdr-btn" onclick="setCommander('${c.id}')">Unset Commander</button>` 
+                    : `<button class="action-btn cmdr-btn" onclick="setCommander('${c.id}')">👑 Set Commander</button>`;
+            }
+
+            html += `
+                <a href="${c.scryfall_uri}" target="_blank" class="action-btn">Scryfall</a>
+                <a href="${c.purchase_uris?.tcgplayer || '#'}" target="_blank" class="action-btn" style="color:#4ade80; border-color:#4ade80;">$${price} | TCG</a>
+            `;
+
+            container.innerHTML = html;
         }
 
         function closeModal() { document.getElementById('modal').classList.remove('active'); }
+
+        function quickFilter(el) {
+            el.classList.toggle('active');
+            const val = el.dataset.val;
+            state.colors.has(val) ? state.colors.delete(val) : state.colors.add(val);
+            fetchCards(true);
+        }
+        function quickFilterSet(val, el) {
+            document.querySelectorAll('.chip[data-type="set"]').forEach(c => { if(c !== el) c.classList.remove('active'); });
+            el.classList.toggle('active');
+            state.selectedSets.clear();
+            el.classList.contains('active') ? state.selectedSets.add(val) : state.selectedSets.add('ALL');
+            fetchCards(true); renderSetList();
+        }
+        function handleEnter(e) { if(e.key === 'Enter') { els.search.blur(); fetchCards(true); } }
+        function toggleSheet() { document.getElementById('sheet').classList.toggle('active'); }
+        function applyAdvFilters() { toggleSheet(); fetchCards(true); }
+        function resetFilters() {
+            state.colors.clear(); state.selectedSets.clear(); state.selectedSets.add('ALL');
+            document.querySelectorAll('.active').forEach(e => e.classList.remove('active'));
+            renderSetList();
+        }
 
         function initFoilEffect() {
             const wrap = document.getElementById('card3d'); const foil = document.getElementById('foilLayer');
@@ -869,12 +943,46 @@
             });
             wrap.addEventListener('mouseleave', () => { wrap.style.transform = 'perspective(1000px) rotateX(0) rotateY(0)'; foil.style.opacity = 0; });
         }
+        
+        let touchStartX = 0; let touchEndX = 0;
+        function initSwipe() {
+            const area = document.getElementById('swipeArea');
+            area.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, {passive: true});
+            area.addEventListener('touchend', e => { touchEndX = e.changedTouches[0].screenX; handleSwipeGesture(); }, {passive: true});
+        }
+        function handleSwipeGesture() {
+            if (touchEndX < touchStartX - 50) navigateCard(1);
+            if (touchEndX > touchStartX + 50) navigateCard(-1);
+        }
+        function handleBgClick(e) { if(e.target.id === 'swipeArea') closeModal(); }
+        
+        function navigateCard(direction) {
+            const wrapper = document.getElementById('modalContent');
+            if(state.activeContextList.length === 0) return;
 
+            wrapper.style.transform = direction === 1 ? 'translateX(-20px)' : 'translateX(20px)';
+            wrapper.style.opacity = '0';
+
+            setTimeout(() => {
+                let newIndex = state.currentCardIndex + direction;
+                if (newIndex >= state.activeContextList.length) newIndex = 0;
+                if (newIndex < 0) newIndex = state.activeContextList.length - 1;
+                state.currentCardIndex = newIndex;
+                updateModalContent(state.activeContextList[newIndex]);
+                
+                wrapper.style.transform = direction === 1 ? 'translateX(20px)' : 'translateX(-20px)';
+                requestAnimationFrame(() => {
+                    wrapper.style.transform = 'translateX(0)';
+                    wrapper.style.opacity = '1';
+                });
+            }, 200);
+        }
+        
         function initInfiniteScroll() {
             const el = document.getElementById('mainScroll');
             el.addEventListener('scroll', () => {
                 if(el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
-                    if(state.hasMore && !state.isLoading && !state.viewingFavorites) { state.page++; fetchCards(); }
+                    if(state.hasMore && !state.isLoading) { state.page++; fetchCards(); }
                 }
             });
         }
