@@ -501,9 +501,8 @@
     </div>
 
     <script>
-        // --- STATE ---
         const state = {
-            sets: [], selectedSets: new Set(['sld']), // DEFAULT: Secret Lair
+            sets: [], selectedSets: new Set(['sld']),
             page: 1, hasMore: true, isLoading: false, nextUrl: null,
             data: [], 
             deck: JSON.parse(localStorage.getItem('arcane_deck_v2') || '[]'),
@@ -517,14 +516,17 @@
 
         const els = { grid: document.getElementById('grid'), loader: document.getElementById('loader'), search: document.getElementById('searchInput') };
 
-        window.addEventListener('DOMContentLoaded', async () => {
-            await loadSets();
-            fetchCards(true);
-            initInfiniteScroll();
-            initFoilEffect();
-            initSwipe();
+        // INITIALIZE
+        window.addEventListener('DOMContentLoaded', () => {
             initVisitorCount();
             updateDeckCount();
+            initFoilEffect();
+            initSwipe();
+            initInfiniteScroll();
+            
+            // Load independently
+            loadSets(); 
+            fetchCards(true);
         });
 
         /* --- VISITOR COUNT --- */
@@ -534,7 +536,7 @@
             document.getElementById('visitorCount').textContent = count;
         }
 
-        /* --- FILTER SYNC LOGIC --- */
+        /* --- FILTER SYNC --- */
         function toggleColor(c) { 
             state.filters.colors.has(c) ? state.filters.colors.delete(c) : state.filters.colors.add(c);
             updateFilterUI(); 
@@ -589,8 +591,9 @@
                 }
             } else {
                 if(card) {
+                    // Always add Basic Lands. For others, allow duplicate adds if triggered manually via modal add button
                     const isBasic = card.type_line.includes('Basic Land');
-                    if(isBasic || idx === -1) {
+                    if(isBasic || idx === -1 || onlyAdd) {
                         state.deck.push(card);
                     }
                 }
@@ -601,16 +604,12 @@
             
             const el = document.querySelector(`.card-wrapper[data-id="${id}"]`);
             if(el) {
-                if(wasRemoved) el.classList.remove('in-deck');
-                else el.classList.add('in-deck');
+                const inDeckNow = state.deck.some(d => d.id === id);
+                if(inDeckNow) el.classList.add('in-deck');
+                else el.classList.remove('in-deck');
             }
             
             if(document.getElementById('modal').classList.contains('active')) {
-                if(state.viewingDeck && wasRemoved && state.activeContextList === state.deck) {
-                   closeModal();
-                   renderDeck(); 
-                   return;
-                }
                 const currentModalCard = state.activeContextList[state.currentCardIndex];
                 if(currentModalCard && currentModalCard.id === id) {
                     updateModalButtons(currentModalCard);
@@ -775,7 +774,7 @@
         }
         function varColor(k) { return getComputedStyle(document.body).getPropertyValue(`--c-${k}`).trim(); }
 
-        /* --- IMPORT FUNCTIONALITY (UPDATED FOR MULTIPLES) --- */
+        /* --- IMPORT (FIXED FOR MULTIPLES) --- */
         function openImportModal() { document.getElementById('importLayer').classList.add('active'); }
         function closeImportModal() { document.getElementById('importLayer').classList.remove('active'); document.getElementById('importStatus').textContent = ''; }
         
@@ -786,90 +785,43 @@
             status.textContent = 'Parsing...';
             
             const rawLines = txt.split('\n');
-            // Stores: { name: "Swamp", count: 20 }
             const requests = [];
 
             rawLines.forEach(l => {
                 if(!l.trim() || l.trim().startsWith('//')) return;
-                
-                // Parse "20 Swamp" or "1 Sol Ring"
-                // Regex matches leading digits optionally followed by 'x'
                 const match = l.trim().match(/^(\d+)[xX]?\s+(.*)/);
                 let count = 1;
                 let cleanLine = l.trim();
-                
-                if(match) {
-                    count = parseInt(match[1]);
-                    cleanLine = match[2];
-                }
+                if(match) { count = parseInt(match[1]); cleanLine = match[2]; }
 
-                // Handle Set Codes if present: "Swamp (UST) 214"
                 const setMatch = cleanLine.match(/(.*?)\s+\(([\w\d]{3,})\)\s+(\d+)/);
-                
                 if(setMatch) {
-                    requests.push({ 
-                        identifier: { set: setMatch[2].toLowerCase(), collector_number: setMatch[3] },
-                        count: count
-                    });
+                    requests.push({ identifier: { set: setMatch[2].toLowerCase(), collector_number: setMatch[3] }, count: count });
                 } else {
-                    let name = cleanLine.replace(/\s\*F\*$/, ''); // Remove foil tag
-                    requests.push({
-                        identifier: { name: name },
-                        count: count
-                    });
+                    let name = cleanLine.replace(/\s\*F\*$/, ''); 
+                    requests.push({ identifier: { name: name }, count: count });
                 }
             });
             
             if(requests.length === 0) { status.textContent = "No valid cards."; return; }
 
-            // Scryfall /cards/collection takes identifiers only
-            // We need to batch requests, then map results back to counts
             const batches = [];
             let temp = [];
-            requests.forEach(r => {
-                temp.push(r.identifier);
-                if(temp.length === 75) { batches.push(temp); temp = []; }
-            });
+            requests.forEach(r => { temp.push(r.identifier); if(temp.length === 75) { batches.push(temp); temp = []; } });
             if(temp.length) batches.push(temp);
 
             let addedCount = 0;
             status.textContent = `Fetching ${requests.length} unique cards...`;
 
-            // We need to map returned cards back to their requested counts.
-            // Since Scryfall returns a list of found cards, we will iterate our 'requests'
-            // and try to find the matching card in the results.
-
             for(const batchIdentifiers of batches) {
                 try {
                     const res = await fetch('https://api.scryfall.com/cards/collection', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({identifiers: batchIdentifiers})
+                        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({identifiers: batchIdentifiers})
                     });
                     const json = await res.json();
                     
                     if(json.data) {
-                        // For each card returned, find out how many we wanted
-                        // This is slightly inefficient (O(N^2)) but fine for deck sizes (100 cards)
-                        
-                        // We iterate the original requests that correspond to this batch
-                        // Note: Scryfall returns them in any order.
-                        
-                        // Better strategy: For every returned card, check if it matches a request in the global list
-                        // But we might have multiple requests for "Swamp".
-                        
-                        // Strategy: Iterate over the batch identifiers we just sent.
-                        // Find the corresponding card in json.data.
-                        // Find the corresponding count in 'requests'.
-                        
-                        // Since 'batchIdentifiers' is a slice of 'requests' identifiers,
-                        // we can correlate via index if we are careful, but let's just use matching.
-                        
-                        // Simplified: We loop through the cards returned.
-                        // For each card, we check if we have a pending request for it.
-                        
                         json.data.forEach(card => {
-                            // Find matching request(s)
                             const matchingReqs = requests.filter(req => {
                                 if(req.identifier.set && req.identifier.collector_number) {
                                     return req.identifier.set === card.set && req.identifier.collector_number === card.collector_number;
@@ -877,26 +829,11 @@
                                     return req.identifier.name.toLowerCase() === card.name.toLowerCase();
                                 }
                             });
-
                             matchingReqs.forEach(req => {
-                                // Prevent double adding if card appears multiple times in response (unlikely but possible with fuzziness)
-                                // We consume the request? No, just add.
-                                
                                 const isBasic = card.type_line.includes('Basic Land');
-                                
-                                // How many to add?
                                 const numToAdd = req.count;
-                                
-                                // Logic:
-                                // If Basic Land -> Add 'numToAdd' copies.
-                                // If Non-Basic -> Add 1 copy (Singleton), unless we forced it? 
-                                // User asked for "simple land cards" multiple support.
-                                // Let's strictly allow multiples for Basics, and 1 for others (safe default).
-                                
-                                const actualAdd = isBasic ? numToAdd : 1;
-                                
+                                const actualAdd = isBasic ? numToAdd : 1; 
                                 for(let i=0; i<actualAdd; i++) {
-                                    // Check singleton for non-basics inside the loop just in case
                                     if(isBasic || !state.deck.some(d => d.id === card.id)) {
                                         state.deck.push(card);
                                         addedCount++;
@@ -907,7 +844,6 @@
                     }
                 } catch(e) { console.error(e); }
             }
-
             saveDeck();
             updateDeckCount();
             status.textContent = `Done! Added ${addedCount} cards.`;
@@ -985,8 +921,6 @@
                     const sort = document.getElementById('sortSelect').value;
                     let sortStr = `order=${sort}`;
                     if(sort === 'usd_asc') sortStr = 'order=usd&dir=asc';
-                    
-                    // Default released, but support price too
                     if(sort === 'released') sortStr = 'order=released&dir=desc';
 
                     const qStr = parts.length ? `q=${encodeURIComponent(parts.join(' AND '))}` : `q=date>=2020`;
@@ -1018,16 +952,23 @@
             els.grid.appendChild(div);
         }
 
-        /* --- SETS (Restored) --- */
+        /* --- SETS --- */
         async function loadSets() {
             const cached = localStorage.getItem('mtg_sets_v7');
-            if(cached) state.sets = JSON.parse(cached);
-            else { 
-                const r = await fetch('https://api.scryfall.com/sets'); const j = await r.json(); 
+            if(cached) {
+                try {
+                    state.sets = JSON.parse(cached);
+                    renderSetList();
+                    return;
+                } catch(e) {}
+            }
+            try {
+                const r = await fetch('https://api.scryfall.com/sets'); 
+                const j = await r.json(); 
                 state.sets = j.data.filter(s => ['expansion','core','masters','commander','box','promo'].includes(s.set_type)); 
                 localStorage.setItem('mtg_sets_v7', JSON.stringify(state.sets)); 
-            }
-            renderSetList();
+                renderSetList();
+            } catch(e) { console.log("Set load fail", e); }
         }
 
         function renderSetList() {
@@ -1086,6 +1027,9 @@
             let html = '';
             if(inDeck) {
                 html += `<button class="action-btn delete-btn" onclick="toggleDeckCard({id:'${c.id}'})">✕ Remove</button>`;
+                if(c.type_line.includes('Basic Land')) {
+                     html += `<button class="action-btn primary-btn" onclick="toggleDeckCard(state.activeContextList[state.currentCardIndex], true)">+1 Land</button>`;
+                }
             } else {
                 html += `<button class="action-btn primary-btn" onclick="toggleDeckCard(state.activeContextList[state.currentCardIndex])">♥ Add</button>`;
             }
