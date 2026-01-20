@@ -7,7 +7,7 @@
     <style>
         :root {
             --bg-deep: #050505;
-            --bg-glass: rgba(16, 16, 20, 0.95);
+            --bg-glass: rgba(16, 16, 20, 0.9);
             --bg-panel: #18181b;
             --bg-surface: #27272a;
             --primary: #8b5cf6;
@@ -102,7 +102,6 @@
         }
         .nav-bottom::-webkit-scrollbar { display: none; }
 
-        /* Color Circles */
         .mana-group { display: flex; gap: 8px; flex-shrink: 0; }
         .mana-circle {
             width: 28px; height: 28px; border-radius: 50%;
@@ -120,7 +119,6 @@
 
         .sep { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
 
-        /* Type Chips */
         .type-scroll { display: flex; gap: 8px; }
         .chip {
             padding: 6px 14px;
@@ -207,7 +205,6 @@
             display: flex; justify-content: space-between;
         }
         
-        /* List View Items */
         .deck-list-item {
             display: flex; align-items: center; gap: 12px; padding: 8px 10px;
             background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 6px;
@@ -216,7 +213,6 @@
         .deck-list-item:active { background: rgba(255,255,255,0.07); }
         .deck-card-name { flex: 1; font-weight: 500; font-size: 0.95rem; }
         
-        /* MANA PIP STYLES */
         .deck-mana { display: flex; align-items: center; gap: 3px; }
         .mana-pip { 
             width: 14px; height: 14px; border-radius: 50%; display: inline-block; 
@@ -393,11 +389,9 @@
                 <div class="filter-section">
                     <div class="fs-title">Sort By</div>
                     <select id="sortSelect" class="search-input" style="padding:12px;">
-                        <option value="edhrec">EDHREC Rank</option>
                         <option value="released">Release Date (Newest)</option>
                         <option value="usd">Price: High to Low</option>
                         <option value="usd_asc">Price: Low to High</option>
-                        <option value="cmc">CMC: Low to High</option>
                     </select>
                 </div>
 
@@ -468,7 +462,7 @@
         </div>
         <div class="layer-content">
             <p style="color:#aaa; font-size:0.9rem; margin-top:0;">Paste decklist (e.g. Moxfield, ManaBox export). One card per line.</p>
-            <textarea class="import-area" id="importText" placeholder="1 Sol Ring&#10;1 Command Tower&#10;..."></textarea>
+            <textarea class="import-area" id="importText" placeholder="1 Sol Ring&#10;20 Swamp&#10;..."></textarea>
             <div id="importStatus" style="color:var(--special); font-size:0.9rem; min-height:20px;"></div>
             <button class="btn-apply" onclick="processImport()">Process Import</button>
         </div>
@@ -509,7 +503,7 @@
     <script>
         // --- STATE ---
         const state = {
-            sets: [], selectedSets: new Set(['ALL']),
+            sets: [], selectedSets: new Set(['sld']), // DEFAULT: Secret Lair
             page: 1, hasMore: true, isLoading: false, nextUrl: null,
             data: [], 
             deck: JSON.parse(localStorage.getItem('arcane_deck_v2') || '[]'),
@@ -522,11 +516,10 @@
         };
 
         const els = { grid: document.getElementById('grid'), loader: document.getElementById('loader'), search: document.getElementById('searchInput') };
-        const API = 'https://api.scryfall.com';
 
         window.addEventListener('DOMContentLoaded', async () => {
-            fetchCards(true); // Fetch immediately
-            loadSets();       // Load sets in background
+            await loadSets();
+            fetchCards(true);
             initInfiniteScroll();
             initFoilEffect();
             initSwipe();
@@ -570,7 +563,7 @@
         function resetFilters() {
             state.filters.colors.clear(); state.filters.types.clear();
             state.selectedSets.clear(); state.selectedSets.add('ALL');
-            document.getElementById('sortSelect').value = 'edhrec';
+            document.getElementById('sortSelect').value = 'released';
             updateFilterUI(); renderSetList();
         }
 
@@ -782,7 +775,7 @@
         }
         function varColor(k) { return getComputedStyle(document.body).getPropertyValue(`--c-${k}`).trim(); }
 
-        /* --- IMPORT FUNCTIONALITY --- */
+        /* --- IMPORT FUNCTIONALITY (UPDATED FOR MULTIPLES) --- */
         function openImportModal() { document.getElementById('importLayer').classList.add('active'); }
         function closeImportModal() { document.getElementById('importLayer').classList.remove('active'); document.getElementById('importStatus').textContent = ''; }
         
@@ -793,41 +786,123 @@
             status.textContent = 'Parsing...';
             
             const rawLines = txt.split('\n');
-            const identifiers = [];
+            // Stores: { name: "Swamp", count: 20 }
+            const requests = [];
 
             rawLines.forEach(l => {
                 if(!l.trim() || l.trim().startsWith('//')) return;
-                let line = l.trim();
-                line = line.replace(/^[0-9]+x?\s+/, '');
-                const setMatch = line.match(/(.*?)\s+\(([\w\d]{3,})\)\s+(\d+)/);
+                
+                // Parse "20 Swamp" or "1 Sol Ring"
+                // Regex matches leading digits optionally followed by 'x'
+                const match = l.trim().match(/^(\d+)[xX]?\s+(.*)/);
+                let count = 1;
+                let cleanLine = l.trim();
+                
+                if(match) {
+                    count = parseInt(match[1]);
+                    cleanLine = match[2];
+                }
+
+                // Handle Set Codes if present: "Swamp (UST) 214"
+                const setMatch = cleanLine.match(/(.*?)\s+\(([\w\d]{3,})\)\s+(\d+)/);
+                
                 if(setMatch) {
-                    identifiers.push({ set: setMatch[2].toLowerCase(), collector_number: setMatch[3] });
+                    requests.push({ 
+                        identifier: { set: setMatch[2].toLowerCase(), collector_number: setMatch[3] },
+                        count: count
+                    });
                 } else {
-                    let name = line.replace(/\s\*F\*$/, ''); 
-                    identifiers.push({ name: name });
+                    let name = cleanLine.replace(/\s\*F\*$/, ''); // Remove foil tag
+                    requests.push({
+                        identifier: { name: name },
+                        count: count
+                    });
                 }
             });
             
-            const chunks = [];
-            while(identifiers.length) chunks.push(identifiers.splice(0, 75));
-            let addedCount = 0;
-            status.textContent = `Fetching batches...`;
+            if(requests.length === 0) { status.textContent = "No valid cards."; return; }
 
-            for(const chunk of chunks) {
+            // Scryfall /cards/collection takes identifiers only
+            // We need to batch requests, then map results back to counts
+            const batches = [];
+            let temp = [];
+            requests.forEach(r => {
+                temp.push(r.identifier);
+                if(temp.length === 75) { batches.push(temp); temp = []; }
+            });
+            if(temp.length) batches.push(temp);
+
+            let addedCount = 0;
+            status.textContent = `Fetching ${requests.length} unique cards...`;
+
+            // We need to map returned cards back to their requested counts.
+            // Since Scryfall returns a list of found cards, we will iterate our 'requests'
+            // and try to find the matching card in the results.
+
+            for(const batchIdentifiers of batches) {
                 try {
                     const res = await fetch('https://api.scryfall.com/cards/collection', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({identifiers: chunk})
+                        body: JSON.stringify({identifiers: batchIdentifiers})
                     });
                     const json = await res.json();
+                    
                     if(json.data) {
-                        json.data.forEach(c => {
-                            const isBasic = c.type_line.includes('Basic Land');
-                            if(isBasic || !state.deck.some(d => d.id === c.id)) {
-                                state.deck.push(c);
-                                addedCount++;
-                            }
+                        // For each card returned, find out how many we wanted
+                        // This is slightly inefficient (O(N^2)) but fine for deck sizes (100 cards)
+                        
+                        // We iterate the original requests that correspond to this batch
+                        // Note: Scryfall returns them in any order.
+                        
+                        // Better strategy: For every returned card, check if it matches a request in the global list
+                        // But we might have multiple requests for "Swamp".
+                        
+                        // Strategy: Iterate over the batch identifiers we just sent.
+                        // Find the corresponding card in json.data.
+                        // Find the corresponding count in 'requests'.
+                        
+                        // Since 'batchIdentifiers' is a slice of 'requests' identifiers,
+                        // we can correlate via index if we are careful, but let's just use matching.
+                        
+                        // Simplified: We loop through the cards returned.
+                        // For each card, we check if we have a pending request for it.
+                        
+                        json.data.forEach(card => {
+                            // Find matching request(s)
+                            const matchingReqs = requests.filter(req => {
+                                if(req.identifier.set && req.identifier.collector_number) {
+                                    return req.identifier.set === card.set && req.identifier.collector_number === card.collector_number;
+                                } else {
+                                    return req.identifier.name.toLowerCase() === card.name.toLowerCase();
+                                }
+                            });
+
+                            matchingReqs.forEach(req => {
+                                // Prevent double adding if card appears multiple times in response (unlikely but possible with fuzziness)
+                                // We consume the request? No, just add.
+                                
+                                const isBasic = card.type_line.includes('Basic Land');
+                                
+                                // How many to add?
+                                const numToAdd = req.count;
+                                
+                                // Logic:
+                                // If Basic Land -> Add 'numToAdd' copies.
+                                // If Non-Basic -> Add 1 copy (Singleton), unless we forced it? 
+                                // User asked for "simple land cards" multiple support.
+                                // Let's strictly allow multiples for Basics, and 1 for others (safe default).
+                                
+                                const actualAdd = isBasic ? numToAdd : 1;
+                                
+                                for(let i=0; i<actualAdd; i++) {
+                                    // Check singleton for non-basics inside the loop just in case
+                                    if(isBasic || !state.deck.some(d => d.id === card.id)) {
+                                        state.deck.push(card);
+                                        addedCount++;
+                                    }
+                                }
+                            });
                         });
                     }
                 } catch(e) { console.error(e); }
@@ -911,8 +986,10 @@
                     let sortStr = `order=${sort}`;
                     if(sort === 'usd_asc') sortStr = 'order=usd&dir=asc';
                     
-                    // Fallback to format:commander if empty to prevent timeout
-                    const qStr = parts.length ? `q=${encodeURIComponent(parts.join(' AND '))}` : `q=format:commander`;
+                    // Default released, but support price too
+                    if(sort === 'released') sortStr = 'order=released&dir=desc';
+
+                    const qStr = parts.length ? `q=${encodeURIComponent(parts.join(' AND '))}` : `q=date>=2020`;
                     url = `${API}/cards/search?${qStr}&${sortStr}&page=${state.page}`;
                 }
 
@@ -943,16 +1020,14 @@
 
         /* --- SETS (Restored) --- */
         async function loadSets() {
-            try {
-                const cached = localStorage.getItem('mtg_sets_v7');
-                if(cached) state.sets = JSON.parse(cached);
-                else { 
-                    const r = await fetch('https://api.scryfall.com/sets'); const j = await r.json(); 
-                    state.sets = j.data.filter(s => ['expansion','core','masters','commander','box','promo'].includes(s.set_type)); 
-                    localStorage.setItem('mtg_sets_v7', JSON.stringify(state.sets)); 
-                }
-                renderSetList();
-            } catch(e) { console.error("Sets failed to load", e); }
+            const cached = localStorage.getItem('mtg_sets_v7');
+            if(cached) state.sets = JSON.parse(cached);
+            else { 
+                const r = await fetch('https://api.scryfall.com/sets'); const j = await r.json(); 
+                state.sets = j.data.filter(s => ['expansion','core','masters','commander','box','promo'].includes(s.set_type)); 
+                localStorage.setItem('mtg_sets_v7', JSON.stringify(state.sets)); 
+            }
+            renderSetList();
         }
 
         function renderSetList() {
