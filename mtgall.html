@@ -66,8 +66,6 @@
             transition: 0.3s;
         }
         .search-input:focus { background: #000; border-color: var(--primary); outline: none; box-shadow: 0 0 15px var(--primary-glow); }
-        
-        /* UPDATED: Added cursor pointer to search icon */
         .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); opacity: 0.7; cursor: pointer; }
         .search-icon:active { transform: translateY(-50%) scale(0.9); color: white; }
 
@@ -311,7 +309,7 @@
         <div class="nav-top">
             <div class="brand"><span>✦</span> Zenith</div>
             <div class="search-box">
-                <span class="search-icon" onclick="performSmartSearch()">🔍</span>
+                <span class="search-icon" onclick="triggerSearch()">🔍</span>
                 <input type="text" class="search-input" id="searchInput" placeholder="Search cards..." onkeypress="handleEnter(event)">
             </div>
             
@@ -464,8 +462,8 @@
     <script>
         const state = {
             sets: [], 
-            // UPDATED: Defaulting to 'sld' for fast load, but Smart Search will switch it to ALL
-            selectedSets: new Set(['sld']), 
+            // FIXED: Default to 'ALL' in the state. This fixes your search issue permanently.
+            selectedSets: new Set(['ALL']), 
             colors: new Set(), types: new Set(),
             page: 1, hasMore: true, isLoading: false, nextUrl: null,
             data: [], 
@@ -842,7 +840,7 @@
                 .join('');
         }
 
-        /* --- API & SEARCH --- */
+        /* --- API & SEARCH (FIXED LOGIC) --- */
         async function fetchCards(reset = false) {
             if(state.isLoading) return;
             state.isLoading = true; els.loader.style.opacity = 1;
@@ -867,7 +865,10 @@
             if(txt) q.push(txt.includes(':') ? `(${txt})` : `(${txt} OR o:${txt})`);
             
             // Sets
-            if(!state.selectedSets.has('ALL')) q.push(`(${Array.from(state.selectedSets).map(x => `set:${x}`).join(' OR ')})`);
+            // Logic: If 'ALL' is selected, we do NOT append a set filter.
+            if(!state.selectedSets.has('ALL')) {
+                q.push(`(${Array.from(state.selectedSets).map(x => `set:${x}`).join(' OR ')})`);
+            }
             
             // Colors
             if(state.colors.size > 0) q.push(`id:${Array.from(state.colors).join('')}`);
@@ -881,8 +882,15 @@
             const sort = document.getElementById('sortSelect').value;
             let order = sort === 'usd_asc' ? `order=usd&dir=asc` : `order=${sort}`;
             
-            // Fallback for default load speed (loads SLD if query is empty)
-            return q.length === 0 ? `https://api.scryfall.com/cards/search?q=set:sld&${order}` : `https://api.scryfall.com/cards/search?q=${encodeURIComponent(q.join(' AND '))}&${order}`;
+            // FALLBACK LOGIC: 
+            // If the user has NO filters applied (empty search, no colors, no types, and Set is ALL),
+            // we default to showing Secret Lair cards so the homepage isn't blank/boring.
+            // But if they type *anything*, this block is skipped and it searches ALL sets.
+            if (q.length === 0 && state.selectedSets.has('ALL')) {
+                return `https://api.scryfall.com/cards/search?q=set:sld&${order}`;
+            }
+
+            return `https://api.scryfall.com/cards/search?q=${encodeURIComponent(q.join(' AND '))}&${order}`;
         }
 
         function renderCardElement(c, idx) {
@@ -1008,24 +1016,12 @@
             fetchCards(true);
         }
 
-        /* --- UPDATED: SMART SEARCH LOGIC --- */
         function handleEnter(e) {
-            if (e.key === 'Enter') {
-                performSmartSearch();
-            }
+            if (e.key === 'Enter') triggerSearch();
         }
 
-        function performSmartSearch() {
+        function triggerSearch() {
             els.search.blur();
-            const hasText = els.search.value.trim().length > 0;
-            // Check if we are still on the default "Secret Lair only" mode
-            const isDefaultSet = state.selectedSets.size === 1 && state.selectedSets.has('sld');
-
-            if (hasText && isDefaultSet) {
-                state.selectedSets.clear();
-                state.selectedSets.add('ALL');
-                renderSetList(); // Update the UI checkboxes
-            }
             fetchCards(true);
         }
 
