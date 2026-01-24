@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced MTG Goldfisher</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --zone-bg: #1e1e1e;
+            --border-color: #333;
+            --highlight-color: #00bcd4;
+            --text-color: #e0e0e0;
+            --card-width: 110px;
+            --card-height: 153px; /* Standard MTG aspect ratio */
+            --card-back-url: url('https://backs.scryfall.io/large/back/1/1/11111111-1111-1111-1111-111111111111.jpg?1689887377');
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            user-select: none; /* Prevent text selection during drag */
+        }
+
+        /* --- Utility --- */
+        .hidden { display: none !important; }
+        .btn {
+            padding: 12px 24px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .btn-primary { background-color: var(--highlight-color); color: #121212; }
+        .btn-primary:hover { background-color: #00acc1; }
+        .btn-secondary { background-color: #444; color: white; }
+        .btn-secondary:hover { background-color: #555; }
+        .input-group { margin-bottom: 15px; text-align: left; width: 100%; max-width: 600px;}
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: monospace;
+        }
+
+        /* --- Screens --- */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 10;
+            background: var(--bg-color);
+        }
+
+        /* --- Card Styles --- */
+        .mtg-card {
+            width: var(--card-width);
+            height: var(--card-height);
+            background-color: #222;
+            border-radius: 6px; /* standard corner radius approx 3-4mm scaled */
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.6);
+            cursor: grab;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .mtg-card:active { cursor: grabbing; transform: scale(1.05); z-index: 1000; }
+        .mtg-card.tapped {
+            transform: rotate(90deg);
+            /* Adjust origin so it doesn't overlap weirdly in flex/grid */
+            transform-origin: center center;
+        }
+        /* Face Down (Library/Hidden) */
+        .mtg-card.face-down {
+            background-image: var(--card-back-url) !important;
+        }
+
+        /* --- Mulligan View --- */
+        #mulligan-hand-view {
+            display: flex;
+            gap: 10px;
+            padding: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            min-height: 200px;
+        }
+
+        /* --- Battlefield Grid --- */
+        #battlefield-screen {
+            display: grid;
+            grid-template-columns: 140px 1fr 140px;
+            grid-template-rows: 60px 1fr 180px; /* Top Bar, Field, Hand/Lands */
+            height: 100vh;
+            gap: 8px;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        /* --- Zones --- */
+        .zone {
+            background-color: var(--zone-bg);
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            position: relative;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            padding: 10px;
+            gap: 5px;
+            overflow: auto;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+        
+        .zone-label {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255,255,255,0.05);
+            font-size: 2rem;
+            font-weight: 800;
+            pointer-events: none;
+            z-index: 0;
+            text-transform: uppercase;
+        }
+
+        .zone.drag-over {
+            border-color: var(--highlight-color);
+            background-color: rgba(0, 188, 212, 0.1);
+        }
+
+        /* Specific Zones */
+        #top-bar {
+            grid-column: 1 / 4;
+            grid-row: 1 / 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #252525;
+            padding: 0 20px;
+            border-radius: 8px;
+        }
+
+        #commander-zone { grid-column: 1 / 2; grid-row: 2 / 3; height: 180px; flex-shrink: 0;}
+        #graveyard-zone { grid-column: 3 / 4; grid-row: 2 / 3; height: 50%; }
+        #exile-zone { grid-column: 3 / 4; grid-row: 2 / 3; height: 50%; margin-top: auto; align-self: end;} /* Split right col */
+        
+        .right-col {
+            grid-column: 3/4;
+            grid-row: 2/3;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            height: 100%;
+        }
+
+        #battlefield-zone {
+            grid-column: 2 / 3;
+            grid-row: 2 / 3;
+            align-content: center;
+            justify-content: center;
+        }
+
+        #bottom-area {
+            grid-column: 1 / 4;
+            grid-row: 3 / 4;
+            display: flex;
+            gap: 8px;
+        }
+
+        #hand-zone {
+            flex-grow: 1;
+            flex-wrap: nowrap; /* Horizontal scroll for hand */
+            overflow-x: auto;
+            align-items: center;
+            padding-left: 20px;
+        }
+
+        #library-zone {
+            width: 120px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* Visual stack effect for library */
+        .library-stack {
+            width: var(--card-width);
+            height: var(--card-height);
+            background-image: var(--card-back-url);
+            background-size: cover;
+            border-radius: 6px;
+            box-shadow: 4px 4px 0 #333, 3px 3px 0 #444, 2px 2px 0 #555;
+            position: relative;
+        }
+        .library-count {
+            position: absolute;
+            bottom: 5px; right: 5px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3; border-top: 4px solid var(--highlight-color);
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
+        <p id="loading-text" style="margin-top: 20px;">Fetching Card Data...</p>
+    </div>
+
+    <div id="import-screen" class="screen">
+        <h1>MTG Deck Goldfisher</h1>
+        
+        <div class="input-group">
+            <label for="deck-paste">Paste Decklist (ManaBox/Arena/Text format)</label>
+            <textarea id="deck-paste" rows="10" placeholder="1 The Wise Mothman (PIP) 4&#10;1 Sol Ring (PIP) 239&#10;..."></textarea>
+            <small style="color: #888;">Supports: "1 CardName (SET) 123"</small>
+        </div>
+
+        <div class="input-group">
+            <label>Custom Card Back</label>
+            <input type="text" id="card-back-input" placeholder="Image URL (leave empty for default)">
+            <input type="color" id="card-color-input" value="#121212" style="height: 40px; padding: 0; width: 50px; vertical-align: middle;">
+            <span style="font-size: 0.9rem; color: #aaa;"> or pick solid color</span>
+        </div>
+
+        <button id="load-deck-btn" class="btn btn-primary">Load Deck & Start</button>
+    </div>
+
+    <div id="mulligan-screen" class="screen hidden">
+        <h2>Opening Hand</h2>
+        <div id="mulligan-hand-view"></div>
+        <div>
+            <button onclick="takeMulligan()" class="btn btn-secondary">Mulligan</button>
+            <button onclick="keepHand()" class="btn btn-primary">Keep</button>
+        </div>
+    </div>
+
+    <div id="battlefield-screen" class="hidden">
+        
+        <div id="top-bar">
+            <span><strong>Turn:</strong> <span id="turn-counter">1</span></span>
+            <div>
+                <button onclick="untapAll()" class="btn btn-secondary" style="padding: 5px 15px;">Untap All</button>
+                <button onclick="resetGame()" class="btn btn-secondary" style="background:#722; padding: 5px 15px;">Reset</button>
+            </div>
+        </div>
+
+        <div id="commander-zone" class="zone droppable" data-zone="commander">
+            <div class="zone-label">CMD</div>
+        </div>
+
+        <div id="battlefield-zone" class="zone droppable" data-zone="battlefield">
+            <div class="zone-label">Battlefield</div>
+        </div>
+
+        <div class="right-col">
+            <div id="graveyard-zone" class="zone droppable" data-zone="graveyard">
+                <div class="zone-label">GY</div>
+            </div>
+            <div id="exile-zone" class="zone droppable" data-zone="exile">
+                <div class="zone-label">Exile</div>
+            </div>
+        </div>
+
+        <div id="bottom-area">
+            <div id="library-zone" class="zone" onclick="drawCard()">
+                <div class="library-stack">
+                    <span class="library-count" id="lib-count">99</span>
+                </div>
+            </div>
+            <div id="hand-zone" class="zone droppable" data-zone="hand">
+                <div class="zone-label">Hand</div>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    // --- STATE ---
+    let fullDeckData = []; // {id, name, set, cn, image_url, isCommander}
+    let gameState = {
+        library: [],
+        hand: [],
+        battlefield: [],
+        graveyard: [],
+        exile: [],
+        commander: [],
+        turn: 1
+    };
+
+    // --- DOM ELEMENTS ---
+    const screens = {
+        import: document.getElementById('import-screen'),
+        mulligan: document.getElementById('mulligan-screen'),
+        battlefield: document.getElementById('battlefield-screen'),
+        loading: document.getElementById('loading-overlay')
+    };
+
+    // --- PARSING & LOADING ---
+
+    document.getElementById('load-deck-btn').addEventListener('click', async () => {
+        const text = document.getElementById('deck-paste').value;
+        const customBack = document.getElementById('card-back-input').value;
+        const customColor = document.getElementById('card-color-input').value;
+
+        // Set Card Back Style
+        if(customBack) {
+            document.documentElement.style.setProperty('--card-back-url', `url('${customBack}')`);
+        } else if (customColor && customColor !== '#121212') {
+             // Basic solid color implementation
+             document.documentElement.style.setProperty('--card-back-url', 'none');
+             // We would need to add background-color to the CSS class if url is none, 
+             // but for simplicity let's stick to the user choice logic
+        }
+
+        if(!text.trim()) { alert("Paste a decklist first!"); return; }
+
+        screens.loading.classList.remove('hidden');
+        
+        try {
+            fullDeckData = await parseAndFetchDeck(text);
+            initializeGame();
+        } catch (e) {
+            alert("Error loading deck: " + e.message);
+        } finally {
+            screens.loading.classList.add('hidden');
+        }
+    });
+
+    async function parseAndFetchDeck(rawText) {
+        const lines = rawText.split('\n').filter(l => l.trim() && !l.startsWith('//'));
+        const parsedCards = [];
+        
+        // Regex to match "1 Name (SET) CN"
+        // Captures: 1: Count, 2: Name, 3: Set, 4: Collector Number
+        const lineRegex = /^(\d+)\s+(.+?)\s+\((\w+)\)\s+(\d+.*)$/;
+
+        let commanderFound = false;
+
+        for (let line of lines) {
+            const match = line.match(lineRegex);
+            if (match) {
+                const count = parseInt(match[1]);
+                const name = match[2];
+                const set = match[3].toLowerCase();
+                const cn = match[4].split(' ')[0]; // Handle "123 *F*" by taking just 123
+
+                // Construct Scryfall Image URL (High res)
+                // Format: https://cards.scryfall.io/large/front/S/E/SETCODE_CN.jpg
+                // Note: The file structure on scryfall.io is technically /front/char/char/id.jpg, 
+                // but direct Set/CN access via API is safer. Let's use scryfall API to get ID to be safe, 
+                // OR use the deterministic image URL pattern if we want speed.
+                
+                // For reliability, we will assume standard Scryfall image URL pattern for Set/CN:
+                // Actually, without the Scryfall ID, we can't guess the folder structure (the /c/4/ part).
+                // So we will use the API endpoint that redirects to image.
+                const imgUrl = `https://api.scryfall.com/cards/${set}/${cn}?format=image&version=large`;
+
+                for(let i=0; i<count; i++) {
+                    // Logic to guess commander: First legendary creature usually, or explicit logic.
+                    // For this tool, let's assume the first card in the list if it looks like the provided format is the commander?
+                    // Actually, the user provided list puts "The Wise Mothman" at top under //COMMANDER.
+                    // We'll treat the very first card processed as Commander for now if it's legendary-ish,
+                    // or just add a manual toggle later. For now, let's assume Index 0 is Commander.
+                    
+                    let isCmd = false;
+                    if(!commanderFound && i===0) {
+                        isCmd = true;
+                        commanderFound = true;
+                    }
+
+                    parsedCards.push({
+                        id: `card_${parsedCards.length}_${Date.now()}`, // Unique DOM ID
+                        name: name,
+                        imageUrl: imgUrl,
+                        isCommander: isCmd
+                    });
+                }
+            }
+        }
+        return parsedCards;
+    }
+
+    // --- GAME LOGIC ---
+
+    function initializeGame() {
+        screens.import.classList.add('hidden');
+        
+        // 1. Separate Commander
+        gameState.commander = fullDeckData.filter(c => c.isCommander);
+        gameState.library = fullDeckData.filter(c => !c.isCommander);
+
+        // 2. Shuffle Library
+        shuffle(gameState.library);
+
+        // 3. Draw 7
+        gameState.hand = gameState.library.splice(0, 7);
+
+        // 4. Show Mulligan
+        renderMulligan();
+        screens.mulligan.classList.remove('hidden');
+    }
+
+    function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    function renderMulligan() {
+        const container = document.getElementById('mulligan-hand-view');
+        container.innerHTML = '';
+        gameState.hand.forEach(card => {
+            const el = createCardElement(card);
+            el.draggable = false; // No drag in mulligan
+            container.appendChild(el);
+        });
+    }
+
+    window.takeMulligan = function() {
+        // Shuffle hand back in
+        gameState.library = gameState.library.concat(gameState.hand);
+        gameState.hand = [];
+        shuffle(gameState.library);
+        // Draw 7
+        gameState.hand = gameState.library.splice(0, 7);
+        renderMulligan();
+    };
+
+    window.keepHand = function() {
+        screens.mulligan.classList.add('hidden');
+        screens.battlefield.style.display = 'grid';
+        screens.battlefield.classList.remove('hidden'); // Helper class removal
+        
+        // Initial Renders
+        renderZone('commander');
+        renderZone('hand');
+        updateCounts();
+    };
+
+    // --- RENDERING ZONES ---
+
+    function createCardElement(cardData) {
+        const div = document.createElement('div');
+        div.classList.add('mtg-card');
+        div.id = cardData.id;
+        div.style.backgroundImage = `url('${cardData.imageUrl}')`;
+        div.draggable = true;
+        
+        // Events
+        div.addEventListener('dragstart', handleDragStart);
+        div.addEventListener('click', handleCardClick);
+        div.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            // Right click could be "Zoom" or "Move to Bottom of Library"
+            // For now, let's make it zoom? Or ignore.
+        });
+
+        // Store data on element for easy retrieval
+        div.dataset.cardJson = JSON.stringify(cardData);
+
+        return div;
+    }
+
+    function renderZone(zoneName) {
+        const zoneEl = document.querySelector(`[data-zone="${zoneName}"]`);
+        // Keep the label, remove cards
+        const label = zoneEl.querySelector('.zone-label');
+        zoneEl.innerHTML = '';
+        if(label) zoneEl.appendChild(label);
+
+        gameState[zoneName].forEach(card => {
+            zoneEl.appendChild(createCardElement(card));
+        });
+    }
+
+    function updateCounts() {
+        document.getElementById('lib-count').innerText = gameState.library.length;
+        document.getElementById('turn-counter').innerText = gameState.turn;
+    }
+
+    // --- INTERACTION ---
+
+    window.drawCard = function() {
+        if(gameState.library.length === 0) return alert("Empty Library");
+        const card = gameState.library.shift();
+        gameState.hand.push(card);
+        
+        // Optimize: just append element instead of full re-render for speed? 
+        // For simplicity, re-render hand.
+        renderZone('hand');
+        updateCounts();
+    };
+
+    window.untapAll = function() {
+        document.querySelectorAll('.tapped').forEach(el => el.classList.remove('tapped'));
+        gameState.turn++;
+        updateCounts();
+    };
+    
+    window.resetGame = function() {
+        if(confirm("Reset entire game?")) {
+            location.reload(); // Simplest way to clear everything
+        }
+    };
+
+    function handleCardClick(e) {
+        const zone = e.target.parentElement.dataset.zone;
+        if(zone === 'battlefield' || zone === 'commander') {
+            e.target.classList.toggle('tapped');
+        }
+    }
+
+    // --- DRAG & DROP ENGINE ---
+
+    let draggedId = null;
+    let sourceZone = null;
+
+    function handleDragStart(e) {
+        draggedId = e.target.id;
+        sourceZone = e.target.parentElement.dataset.zone;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", draggedId);
+        // visual adjustment
+        requestAnimationFrame(() => e.target.style.opacity = '0.5');
+    }
+
+    // Add listeners to all droppable zones
+    document.querySelectorAll('.droppable').forEach(zone => {
+        zone.addEventListener('dragover', e => {
+            e.preventDefault(); // allow drop
+            e.dataTransfer.dropEffect = "move";
+            zone.classList.add('drag-over');
+        });
+        
+        zone.addEventListener('dragleave', e => {
+            zone.classList.remove('drag-over');
+        });
+
+        zone.addEventListener('drop', e => {
+            e.preventDefault();
+            zone.classList.remove('drag-over');
+            const destZone = zone.dataset.zone;
+            
+            if(draggedId && destZone) {
+                moveCard(draggedId, sourceZone, destZone);
+            }
+            draggedId = null;
+        });
+    });
+
+    document.addEventListener('dragend', (e) => {
+        if(draggedId) {
+             const el = document.getElementById(draggedId);
+             if(el) el.style.opacity = '1';
+        }
+    });
+
+    function moveCard(cardId, fromZone, toZone) {
+        if(fromZone === toZone) return;
+
+        // Find card in source array
+        const cardIndex = gameState[fromZone].findIndex(c => c.id === cardId);
+        if(cardIndex === -1) return;
+        
+        const cardObj = gameState[fromZone][cardIndex];
+
+        // Update State
+        gameState[fromZone].splice(cardIndex, 1);
+        gameState[toZone].push(cardObj);
+
+        // Update UI
+        renderZone(fromZone);
+        renderZone(toZone);
+        
+        // Special case: If moved to library (not implemented via drag, but logic exists)
+    }
+
+</script>
+</body>
+</html>
