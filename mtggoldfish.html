@@ -34,7 +34,7 @@
         .hidden { display: none !important; }
         .scrollable { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-        /* --- 1. IMPORT SCREEN (Redesigned) --- */
+        /* --- 1. IMPORT SCREEN --- */
         #import-screen { 
             display: flex; flex-direction: column; 
             padding: 20px; box-sizing: border-box; 
@@ -245,7 +245,7 @@
             <button class="close-btn" onclick="closePreconModal()">CLOSE</button>
         </div>
         <p style="color:#aaa; font-size:0.9rem; margin-top:-10px; margin-bottom:15px;">
-            Select a Commander below to generate a deck from this set based on color identity.
+            Select a Commander below to auto-generate a 100-card deck (Commander + 99).
         </p>
         <div id="deck-grid"></div>
     </div>
@@ -271,8 +271,8 @@
             </div>
 
             <div class="panel" id="set-browser">
-                <h3>Browse Sets</h3>
-                <input type="text" id="set-search" placeholder="Search Sets (e.g. Fallout, Commander)..." onkeyup="filterSets()">
+                <h3>Browse Precon Sets</h3>
+                <input type="text" id="set-search" placeholder="Search Commander Sets..." onkeyup="filterSets()">
                 <div id="set-list">
                     <div style="color:#777; padding:20px; text-align:center; width:100%;">Loading Sets...</div>
                 </div>
@@ -317,9 +317,12 @@
         try {
             const resp = await fetch('https://api.scryfall.com/sets');
             const data = await resp.json();
-            // Filter for sets that might have precon content (Expansion, Commander, Draft, Core)
-            const validTypes = ['expansion', 'core', 'commander', 'draft_innovation', 'funny', 'masters'];
-            allSets = data.data.filter(s => validTypes.includes(s.set_type) && s.card_count > 0);
+            
+            // STRICT FILTER: Only 'commander' set type. 
+            // This ensures we get sets like "Lost Caverns of Ixalan Commander" (LCC) 
+            // and NOT the main set (LCI) which doesn't have the precons.
+            allSets = data.data.filter(s => s.set_type === 'commander' && s.card_count > 0);
+            
             renderSets(allSets);
         } catch (e) {
             document.getElementById('set-list').innerHTML = '<div style="color:red">Error loading sets.</div>';
@@ -366,10 +369,9 @@
         document.getElementById('global-loader').classList.remove('hidden');
         document.getElementById('modal-title').innerText = set.name + " Decks";
         
-        // Fetch "Commanders" from this set
-        // Search: set:[code] (type:legendary type:creature) (rarity:rare or rarity:mythic)
-        // This finds face commanders
-        const query = `set:${set.code} (type:legendary type:creature) (rarity:rare OR rarity:mythic) -type:background`;
+        // Fetch "Face Commanders" from this set
+        // Limit to Mythic Rares in Commander sets as they are usually the face commanders
+        const query = `set:${set.code} (type:legendary type:creature) (rarity:mythic) -type:background`;
         const url = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&order=edhrec`;
 
         try {
@@ -380,10 +382,9 @@
             grid.innerHTML = '';
 
             if(!json.data || json.data.length === 0) {
-                grid.innerHTML = '<p style="color:white; width:100%; text-align:center;">No obvious commanders found in this set.</p>';
+                grid.innerHTML = '<p style="color:white; width:100%; text-align:center;">No Face Commanders found (Mythic Legends).</p>';
             } else {
                 json.data.forEach(card => {
-                    // Create Deck Option
                     const el = document.createElement('div');
                     el.className = 'deck-option';
                     el.onclick = () => loadPreconFromCommander(card, set.code);
@@ -417,23 +418,25 @@
         document.getElementById('precon-modal').classList.add('hidden');
     }
 
-    // --- 3. FETCHING PRECON (PSEUDO) ---
+    // --- 3. FETCHING PRECON (STRICTER LOGIC) ---
     async function loadPreconFromCommander(commander, setCode) {
         closePreconModal();
         document.getElementById('global-loader').classList.remove('hidden');
         
-        // Heuristic: Fetch all cards in set that match commander color identity
-        // This filters out other precon cards in the same set (e.g. RW commander won't get UB cards)
         const colors = commander.color_identity.join('');
         const colorQuery = colors.length === 0 ? `id:c` : `id<=${colors}`;
         
-        // Fetch ALL pages
+        // REFINED QUERY:
+        // 1. Set matches the commander set
+        // 2. Color identity matches the commander
+        // 3. Exclude tokens (-type:token)
+        // 4. Exclude Art Series/Tokens (unique:cards)
+        // 5. Must be paper (game:paper)
+        const query = `set:${setCode} ${colorQuery} -type:token unique:cards game:paper`;
+        let apiUrl = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`;
+
         let allCards = [];
         let hasMore = true;
-        let page = 1;
-        // Search query: Set is code, colors within identity, excluding basic lands to save bandwidth (we add basics later? No, let's keep basics)
-        const query = `set:${setCode} ${colorQuery}`;
-        let apiUrl = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`;
 
         try {
             while(hasMore) {
@@ -443,13 +446,27 @@
                 
                 if(json.has_more) {
                     apiUrl = json.next_page;
-                    await new Promise(r => setTimeout(r, 100)); // Be nice to API
+                    await new Promise(r => setTimeout(r, 50)); 
                 } else {
                     hasMore = false;
                 }
             }
 
-            // Convert Scryfall objects to our internal card objects
+            // --- DECK CONSTRUCTION ---
+            
+            // 1. Remove the Commander from the "99" list (by name)
+            allCards = allCards.filter(c => c.name !== commander.name);
+
+            // 2. Shuffle the fetched pool
+            shuffle(allCards);
+
+            // 3. Trim to exactly 99 cards if we fetched too many 
+            // (common in sets with booster fun variants or multiple decks sharing colors)
+            if (allCards.length > 99) {
+                allCards = allCards.slice(0, 99);
+            }
+
+            // 4. Convert to internal format
             let parsedLibrary = allCards.map(c => {
                 let img = 'https://backs.scryfall.io/large/back/1/1/11111111-1111-1111-1111-111111111111.jpg';
                 if(c.image_uris) img = c.image_uris.large;
@@ -459,20 +476,18 @@
                     id: 'c' + Math.random().toString(36).substr(2, 9),
                     name: c.name,
                     img: img,
-                    isCommander: c.name === commander.name
+                    isCommander: false
                 };
             });
 
-            // Ensure commander is marked correctly
-            // If the specific commander card wasn't found in the bulk fetch (rare), add it manually
-            const cmdInDeck = parsedLibrary.find(c => c.name === commander.name);
-            if(cmdInDeck) cmdInDeck.isCommander = true;
-            else {
-                 let img = commander.image_uris ? commander.image_uris.large : commander.card_faces[0].image_uris.large;
-                 parsedLibrary.push({
-                    id: 'cmd', name: commander.name, img: img, isCommander: true
-                 });
-            }
+            // 5. Add the Commander explicitly
+            let cmdImg = commander.image_uris ? commander.image_uris.large : commander.card_faces[0].image_uris.large;
+            parsedLibrary.push({
+                id: 'cmd', 
+                name: commander.name, 
+                img: cmdImg, 
+                isCommander: true
+            });
 
             startGameWithLibrary(parsedLibrary);
 
@@ -505,7 +520,7 @@
 
     function startGameWithLibrary(cards) {
         library = cards;
-        shuffle(library);
+        shuffle(library); // Basic shuffle
         dealOpeningHand();
         
         document.getElementById('import-screen').classList.add('hidden');
@@ -522,13 +537,11 @@
         let isCmd = true; 
 
         for(let line of lines) {
-            const match = line.match(/^(\d+)\s+(.+?)\s*(\(.*\))?\s*(\d+.*)?$/); // Loose regex
+            const match = line.match(/^(\d+)\s+(.+?)\s*(\(.*\))?\s*(\d+.*)?$/); 
             if(match) {
                 const count = parseInt(match[1]);
                 const name = match[2].trim();
                 
-                // Fetch image (simple search)
-                // In production, bulk fetch is better, but for single pasted lists, this is okay
                 const searchUrl = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`;
                 let imgUrl = '';
                 
@@ -563,9 +576,9 @@
         }
     }
 
-    // --- 5. GAMEPLAY LOGIC (Unchanged) ---
+    // --- 5. GAMEPLAY LOGIC ---
     function dealOpeningHand() {
-        const cmdIndex = library.findIndex(c => c.isCommander); // Fix logic to check flag
+        const cmdIndex = library.findIndex(c => c.isCommander); 
         let cmd = null;
         if(cmdIndex > -1) {
             cmd = library.splice(cmdIndex, 1)[0];
@@ -645,7 +658,7 @@
         document.getElementById('battlefield').appendChild(el);
     }
 
-    // --- 6. TOUCH ENGINE (Unchanged) ---
+    // --- 6. TOUCH ENGINE ---
     let dragItem = null;
     let ghost = document.getElementById('ghost');
     let touchOffsetX = 0, touchOffsetY = 0;
