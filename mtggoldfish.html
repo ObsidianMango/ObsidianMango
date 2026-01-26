@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Goldfish Final</title>
+    <title>MTG Goldfish Precons</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -183,13 +183,13 @@
         .zone-highlight { border-color: var(--accent); background: rgba(0, 188, 212, 0.2); }
 
         #hand-container {
-            height: 160px; background: #0e0e0e; border-top: 2px solid #333;
+            height: 170px; background: #0e0e0e; border-top: 2px solid #333;
             display: flex; align-items: center; overflow-x: auto; 
             padding-left: 10px; z-index: 20;
         }
 
         #library-btn {
-            position: absolute; bottom: 170px; left: 10px;
+            position: absolute; bottom: 180px; left: 10px;
             width: 65px; height: 91px;
             background: var(--card-back-bg);
             border-radius: 4px; box-shadow: 3px 3px 8px #000;
@@ -249,15 +249,15 @@
 <body>
 
     <div id="ghost"></div>
-    <div id="global-loader" class="hidden"><div class="spinner"></div><p style="margin-top:20px; font-weight:bold;">Fetching Cards...</p></div>
+    <div id="global-loader" class="hidden"><div class="spinner"></div><p style="margin-top:20px; font-weight:bold;">Assembling Deck...</p></div>
 
     <div id="precon-modal" class="hidden">
         <div class="modal-header">
-            <h2 id="modal-title" style="margin:0; color:var(--accent);">Select Deck</h2>
+            <h2 id="modal-title" style="margin:0; color:var(--accent);">Select Precon Deck</h2>
             <button class="close-btn" onclick="closePreconModal()">CLOSE</button>
         </div>
         <p style="color:#aaa; font-size:0.9rem; margin-top:-10px; margin-bottom:15px;">
-            Select a Commander below to auto-generate a 100-card deck (Commander + 99).
+            Select a Commander to auto-assemble the official deck for that color combination.
         </p>
         <div id="deck-grid"></div>
     </div>
@@ -283,8 +283,8 @@
             </div>
 
             <div class="panel" id="set-browser">
-                <h3>Browse Precon Sets</h3>
-                <input type="text" id="set-search" placeholder="Search Commander Sets..." onkeyup="filterSets()">
+                <h3>Browse Precon Series</h3>
+                <input type="text" id="set-search" placeholder="Search Sets (e.g. Fallout, Bloomburrow)..." onkeyup="filterSets()">
                 <div id="set-list">
                     <div style="color:#777; padding:20px; text-align:center; width:100%;">Loading Sets...</div>
                 </div>
@@ -329,10 +329,9 @@
     let zIndexCounter = 100;
     let allSets = [];
 
-    // --- 0. NEW UI FUNCTIONS ---
+    // --- 0. UI CONTROLS ---
     function adjustCardSize(val) {
         document.documentElement.style.setProperty('--card-width', val + 'px');
-        // Height is automatically calculated in CSS via calc(), but we need to ensure consistency
     }
 
     function toggleCardText() {
@@ -352,8 +351,9 @@
         try {
             const resp = await fetch('https://api.scryfall.com/sets');
             const data = await resp.json();
-            // Filter only commander sets
-            allSets = data.data.filter(s => s.set_type === 'commander' && s.card_count > 0);
+            // Filter: Commander sets only, and MUST have enough cards to be a full release (e.g., >40 cards)
+            // This filters out small "Secret Lair Commander" drops but keeps "Fallout", "Dr Who", "Main Sets"
+            allSets = data.data.filter(s => s.set_type === 'commander' && s.card_count > 40);
             renderSets(allSets);
         } catch (e) {
             document.getElementById('set-list').innerHTML = '<div style="color:red">Error loading sets.</div>';
@@ -400,6 +400,7 @@
         document.getElementById('global-loader').classList.remove('hidden');
         document.getElementById('modal-title').innerText = set.name + " Decks";
         
+        // Find Face Commanders (Mythic Legends in the set)
         const query = `set:${set.code} (type:legendary type:creature) (rarity:mythic) -type:background`;
         const url = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&order=edhrec`;
 
@@ -411,7 +412,7 @@
             grid.innerHTML = '';
 
             if(!json.data || json.data.length === 0) {
-                grid.innerHTML = '<p style="color:white; width:100%; text-align:center;">No Face Commanders found (Mythic Legends).</p>';
+                grid.innerHTML = '<p style="color:white; width:100%; text-align:center;">No Face Commanders found.</p>';
             } else {
                 json.data.forEach(card => {
                     const el = document.createElement('div');
@@ -426,6 +427,7 @@
 
                     const info = document.createElement('div');
                     info.className = 'deck-info';
+                    // We don't have the "Marketing Name" (e.g. "Mutant Menace") in API, so we use Commander Name + Color ID to imply it.
                     info.innerHTML = `<div class="deck-title">${card.name}</div><div class="deck-colors">Color ID: ${card.color_identity.join('') || 'C'}</div>`;
 
                     el.appendChild(imgDiv);
@@ -447,14 +449,22 @@
         document.getElementById('precon-modal').classList.add('hidden');
     }
 
-    // --- 3. FETCHING PRECON ---
+    // --- 3. RECONSTRUCT PRECON (SMART LOGIC) ---
     async function loadPreconFromCommander(commander, setCode) {
         closePreconModal();
         document.getElementById('global-loader').classList.remove('hidden');
         
+        // LOGIC EXPLANATION:
+        // Recent Commander Decks (like Fallout 'PIP', Bloomburrow 'BLC') contain cards coded to that set.
+        // Usually, the cards in a specific deck share the commander's color identity.
+        // We fetch: Set = Code AND Color Identity <= Commander Colors.
+        // We include "unique:prints" to get basics printed in this set.
+        
         const colors = commander.color_identity.join('');
         const colorQuery = colors.length === 0 ? `id:c` : `id<=${colors}`;
-        const query = `set:${setCode} ${colorQuery} -type:token unique:cards game:paper`;
+        
+        // Fetch query: In set, matches colors, paper only.
+        const query = `set:${setCode} ${colorQuery} game:paper`;
         let apiUrl = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}`;
 
         let allCards = [];
@@ -474,14 +484,58 @@
                 }
             }
 
-            allCards = allCards.filter(c => c.name !== commander.name);
-            shuffle(allCards);
-            if (allCards.length > 99) allCards = allCards.slice(0, 99);
+            // --- FILTERING & REFINING ---
+            // 1. Remove Tokens and Art Series
+            allCards = allCards.filter(c => !c.type_line.includes('Token') && !c.type_line.includes('Art Series'));
 
+            // 2. Remove the Commander (we add it back explicitly)
+            allCards = allCards.filter(c => c.name !== commander.name);
+
+            // 3. Shuffle
+            shuffle(allCards);
+
+            // 4. Handle Deck Size (Trim or Fill)
+            // If the set query caught too many cards (rare overlap), trim to 99.
+            if (allCards.length > 99) {
+                allCards = allCards.slice(0, 99);
+            }
+            
+            // If the set query caught FEWER than 99 cards (common in old sets or if basic lands weren't indexed),
+            // Fill with Basic Lands matching color identity.
+            if (allCards.length < 99) {
+                const landsNeeded = 99 - allCards.length;
+                const basics = ['Plains', 'Island', 'Swamp', 'Mountain', 'Forest'];
+                // Filter basics by commander identity
+                const validBasics = basics.filter(b => {
+                    // Check if basic land color matches commander identity (Rough logic)
+                    if(colors === '') return b === 'Wastes'; // Colorless
+                    if(b === 'Plains' && colors.includes('W')) return true;
+                    if(b === 'Island' && colors.includes('U')) return true;
+                    if(b === 'Swamp' && colors.includes('B')) return true;
+                    if(b === 'Mountain' && colors.includes('R')) return true;
+                    if(b === 'Forest' && colors.includes('G')) return true;
+                    return false;
+                });
+                
+                // If no valid basics found (colorless?), fallback to Wastes or just skip
+                if(validBasics.length > 0) {
+                    for(let i=0; i<landsNeeded; i++) {
+                        const landName = validBasics[i % validBasics.length];
+                        allCards.push({
+                            name: landName,
+                            image_uris: { large: getBasicLandImage(landName) } // Helper for generic basic img
+                        });
+                    }
+                }
+            }
+
+            // 5. Convert to App Format
             let parsedLibrary = allCards.map(c => {
                 let img = 'https://backs.scryfall.io/large/back/1/1/11111111-1111-1111-1111-111111111111.jpg';
                 if(c.image_uris) img = c.image_uris.large;
                 else if(c.card_faces && c.card_faces[0].image_uris) img = c.card_faces[0].image_uris.large;
+                // Handle basic land filler format
+                if(!c.image_uris && !c.card_faces && c.img) img = c.img; 
 
                 return {
                     id: 'c' + Math.random().toString(36).substr(2, 9),
@@ -491,6 +545,7 @@
                 };
             });
 
+            // 6. Add Commander
             let cmdImg = commander.image_uris ? commander.image_uris.large : commander.card_faces[0].image_uris.large;
             parsedLibrary.push({
                 id: 'cmd', name: commander.name, img: cmdImg, isCommander: true
@@ -504,6 +559,18 @@
         } finally {
             document.getElementById('global-loader').classList.add('hidden');
         }
+    }
+
+    function getBasicLandImage(name) {
+        // Fallback images for auto-filled lands
+        const map = {
+            'Plains': 'https://cards.scryfall.io/large/front/d/1/d1297587-579c-4eb6-9218-508933452187.jpg',
+            'Island': 'https://cards.scryfall.io/large/front/0/6/065b796d-31eb-47eb-ba04-03714b304c86.jpg',
+            'Swamp': 'https://cards.scryfall.io/large/front/9/e/9ee3c428-9844-486d-888e-c351f787841e.jpg',
+            'Mountain': 'https://cards.scryfall.io/large/front/e/0/e08c02c6-d933-4700-8438-d68249079f47.jpg',
+            'Forest': 'https://cards.scryfall.io/large/front/7/3/73252542-a728-4aa9-9a00-349f99764264.jpg'
+        };
+        return map[name] || map['Plains'];
     }
 
     // --- 4. MANUAL IMPORT LOGIC ---
