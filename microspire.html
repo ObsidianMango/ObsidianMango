@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Micro-Spire</title>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --card: #16213e;
+            --accent: #e94560;
+            --text: #e2e2e2;
+            --hp-bar: #2ecc71;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* --- Header / UI --- */
+        #hud {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 20px;
+            background: rgba(0,0,0,0.3);
+            font-weight: bold;
+        }
+
+        /* --- Battle Area --- */
+        #battle-scene {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-around;
+            padding: 20px;
+            position: relative;
+        }
+
+        .entity {
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .hp-container {
+            width: 120px;
+            height: 15px;
+            background: #444;
+            border: 2px solid #000;
+            margin-top: 5px;
+            position: relative;
+        }
+
+        .hp-fill {
+            height: 100%;
+            background: var(--hp-bar);
+            width: 100%;
+            transition: width 0.3s;
+        }
+
+        .block-label {
+            position: absolute;
+            top: -20px;
+            right: 0;
+            color: #3498db;
+            font-weight: bold;
+        }
+
+        .intent {
+            font-size: 0.8rem;
+            color: #f1c40f;
+            margin-bottom: 5px;
+            height: 20px;
+        }
+
+        /* --- Hand & Cards --- */
+        #hand {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            padding: 20px;
+            overflow-x: auto;
+            min-height: 120px;
+        }
+
+        .card {
+            min-width: 80px;
+            max-width: 80px;
+            height: 110px;
+            background: var(--card);
+            border: 2px solid var(--text);
+            border-radius: 8px;
+            padding: 5px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            text-align: center;
+        }
+
+        .card:active { transform: scale(0.95); }
+        .card.disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* --- Overlay (Rewards/Map) --- */
+        #overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            display: none;
+        }
+
+        button {
+            background: var(--accent);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 5px;
+        }
+
+        #log {
+            font-size: 0.8rem;
+            color: #aaa;
+            height: 40px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <span id="floor-display">Floor: 1</span>
+        <span id="energy-display">Energy: 3/3</span>
+    </div>
+
+    <div id="battle-scene">
+        <div id="enemy-area" class="entity">
+            <div id="enemy-intent" class="intent"></div>
+            <div style="font-size: 2rem;">👹</div>
+            <div id="enemy-name">Slime</div>
+            <div class="hp-container">
+                <div id="enemy-block" class="block-label"></div>
+                <div id="enemy-hp-bar" class="hp-fill"></div>
+            </div>
+            <div id="enemy-hp-text">20/20</div>
+        </div>
+
+        <div id="log">A monster approaches...</div>
+
+        <div id="player-area" class="entity">
+            <div style="font-size: 2rem;">🛡️</div>
+            <div>Player</div>
+            <div class="hp-container">
+                <div id="player-block" class="block-label"></div>
+                <div id="player-hp-bar" class="hp-fill"></div>
+            </div>
+            <div id="player-hp-text">50/50</div>
+        </div>
+    </div>
+
+    <div id="hand"></div>
+    
+    <div style="text-align: center; padding-bottom: 10px;">
+        <button onclick="endTurn()">End Turn</button>
+    </div>
+
+    <div id="overlay">
+        <h2 id="overlay-title">Victory!</h2>
+        <div id="reward-options"></div>
+        <button id="overlay-btn" onclick="nextFloor()">Next Floor</button>
+    </div>
+
+    <script>
+        // --- Game Constants & Data ---
+        const CARDS = {
+            strike: { name: "Strike", cost: 1, damage: 6, block: 0, desc: "Deal 6 dmg" },
+            defend: { name: "Defend", cost: 1, damage: 0, block: 5, desc: "Gain 5 block" },
+            bash:   { name: "Bash",   cost: 2, damage: 10, block: 4, desc: "10 dmg, 4 block" }
+        };
+
+        const ENEMIES = [
+            { name: "Louse", hp: 15, dmg: 5 },
+            { name: "Jaw Worm", hp: 30, dmg: 7 },
+            { name: "Sentry", hp: 45, dmg: 10 }
+        ];
+
+        // --- Game State ---
+        let game = {
+            floor: 1,
+            player: { hp: 50, maxHp: 50, energy: 3, block: 0, deck: ['strike','strike','strike','defend','defend','bash'], hand: [], discard: [] },
+            enemy: { name: "", hp: 0, maxHp: 0, dmg: 0, block: 0, intent: 0 },
+            isPlayerTurn: true
+        };
+
+        // --- Core Functions ---
+        function initBattle() {
+            const template = ENEMIES[Math.min(game.floor - 1, ENEMIES.length - 1)];
+            game.enemy = { ...template, maxHp: template.hp + (game.floor * 2), block: 0 };
+            game.enemy.hp = game.enemy.maxHp;
+            game.player.discard = [...game.player.deck];
+            game.player.hand = [];
+            startTurn();
+            updateUI();
+        }
+
+        function startTurn() {
+            game.isPlayerTurn = true;
+            game.player.energy = 3;
+            game.player.block = 0;
+            drawCards(5);
+            game.enemy.intent = game.enemy.dmg + Math.floor(Math.random() * game.floor);
+            updateUI();
+        }
+
+        function drawCards(count) {
+            for(let i=0; i<count; i++) {
+                if(game.player.discard.length === 0) game.player.discard = [...game.player.deck];
+                const index = Math.floor(Math.random() * game.player.discard.length);
+                game.player.hand.push(game.player.discard.splice(index, 1)[0]);
+            }
+        }
+
+        function playCard(cardKey, index) {
+            if(!game.isPlayerTurn) return;
+            const card = CARDS[cardKey];
+            if(game.player.energy >= card.cost) {
+                game.player.energy -= card.cost;
+                
+                // Logic
+                let dmg = card.damage;
+                game.enemy.hp -= Math.max(0, dmg - game.enemy.block);
+                game.player.block += card.block;
+
+                // Move to discard
+                game.player.hand.splice(index, 1);
+                
+                logMsg(`Played ${card.name}!`);
+                checkDeath();
+                updateUI();
+            }
+        }
+
+        function endTurn() {
+            game.isPlayerTurn = false;
+            game.player.hand = [];
+            
+            // Enemy Attack
+            logMsg(`${game.enemy.name} attacks for ${game.enemy.intent}!`);
+            setTimeout(() => {
+                let damageTaken = Math.max(0, game.enemy.intent - game.player.block);
+                game.player.hp -= damageTaken;
+                
+                if(game.player.hp <= 0) {
+                    alert("Gave Over! Restarting...");
+                    location.reload();
+                } else {
+                    startTurn();
+                }
+            }, 600);
+        }
+
+        function checkDeath() {
+            if(game.enemy.hp <= 0) {
+                showOverlay("Victory!", "Choose a card to add to your deck");
+            }
+        }
+
+        // --- UI Rendering ---
+        function updateUI() {
+            // Player
+            document.getElementById('player-hp-text').innerText = `${game.player.hp}/${game.player.maxHp}`;
+            document.getElementById('player-hp-bar').style.width = `${(game.player.hp/game.player.maxHp)*100}%`;
+            document.getElementById('player-block').innerText = game.player.block > 0 ? `🛡️${game.player.block}` : "";
+            document.getElementById('energy-display').innerText = `Energy: ${game.player.energy}/3`;
+            document.getElementById('floor-display').innerText = `Floor: ${game.floor}`;
+
+            // Enemy
+            document.getElementById('enemy-name').innerText = game.enemy.name;
+            document.getElementById('enemy-hp-text').innerText = `${game.enemy.hp}/${game.enemy.maxHp}`;
+            document.getElementById('enemy-hp-bar').style.width = `${(game.enemy.hp/game.enemy.maxHp)*100}%`;
+            document.getElementById('enemy-intent').innerText = `Intent: ⚔️${game.enemy.intent}`;
+
+            // Hand
+            const handDiv = document.getElementById('hand');
+            handDiv.innerHTML = '';
+            game.player.hand.forEach((cardKey, i) => {
+                const card = CARDS[cardKey];
+                const cardEl = document.createElement('div');
+                cardEl.className = `card ${game.player.energy < card.cost ? 'disabled' : ''}`;
+                cardEl.innerHTML = `<b>${card.name}</b><br><small>${card.desc}</small><br><b>⚡${card.cost}</b>`;
+                cardEl.onclick = () => playCard(cardKey, i);
+                handDiv.appendChild(cardEl);
+            });
+        }
+
+        function logMsg(msg) {
+            document.getElementById('log').innerText = msg;
+        }
+
+        function showOverlay(title, sub) {
+            const ov = document.getElementById('overlay');
+            ov.style.display = 'flex';
+            document.getElementById('overlay-title').innerText = title;
+            
+            const rewards = document.getElementById('reward-options');
+            rewards.innerHTML = '';
+            // Offer 2 random cards
+            ['strike', 'defend', 'bash'].forEach(c => {
+                let btn = document.createElement('button');
+                btn.innerText = `Add ${CARDS[c].name}`;
+                btn.onclick = () => {
+                    game.player.deck.push(c);
+                    nextFloor();
+                };
+                rewards.appendChild(btn);
+            });
+        }
+
+        function nextFloor() {
+            game.floor++;
+            document.getElementById('overlay').style.display = 'none';
+            initBattle();
+        }
+
+        // Start game
+        initBattle();
+    </script>
+</body>
+</html>
