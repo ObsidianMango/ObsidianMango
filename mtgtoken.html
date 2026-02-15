@@ -3,37 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Token Pro</title>
+    <title>Official MTG Tokens</title>
     <style>
         :root {
-            --bg-color: #0d0d0d;
-            --card-bg: #1a1a1a;
-            --text-color: #ffffff;
-            --accent: #dcae5f;
-            --pill-bg: #333;
+            --bg-color: #121212;
+            --surface: #2c2c2c;
+            --highlight: #b08d55; /* Gold */
         }
 
         body {
             background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: "Helvetica Neue", Arial, sans-serif;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             margin: 0;
             padding: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh;
-            /* Prevent pull-to-refresh on mobile to feel like an app */
-            overscroll-behavior-y: none;
+            overscroll-behavior-y: none; /* Disables pull-to-refresh */
         }
 
-        /* --- Search Bar --- */
-        #search-container {
+        /* --- Controls Area --- */
+        .controls-area {
             width: 100%;
             max-width: 600px;
+            position: sticky;
+            top: 0;
+            background: var(--bg-color);
+            z-index: 100;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+
+        .search-row {
             display: flex;
             gap: 10px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         input {
@@ -43,302 +48,291 @@
             border: 1px solid #444;
             background: #222;
             color: white;
-            font-size: 1rem;
+            font-size: 16px; /* Prevents zoom on iOS */
         }
 
-        #search-btn {
-            background: var(--accent);
-            color: black;
+        button.btn-search {
+            background: var(--highlight);
             border: none;
-            padding: 0 20px;
             border-radius: 8px;
+            padding: 0 20px;
             font-weight: bold;
+            color: #000;
             cursor: pointer;
         }
 
-        /* --- Quick Access Bar (Horizontal Scroll) --- */
-        #quick-bar {
+        /* --- Quick Presets (Scrollable) --- */
+        .presets {
             display: flex;
-            gap: 10px;
-            width: 100%;
-            max-width: 600px;
+            gap: 8px;
             overflow-x: auto;
-            padding-bottom: 15px;
-            margin-bottom: 10px;
-            -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
-            scrollbar-width: none; /* Hide scrollbar Firefox */
+            padding-bottom: 5px;
+            scrollbar-width: none; /* Firefox */
         }
-        #quick-bar::-webkit-scrollbar { display: none; /* Hide scrollbar Chrome/Safari */ }
+        .presets::-webkit-scrollbar { display: none; /* Chrome */ }
 
-        .quick-pill {
-            background: var(--pill-bg);
-            color: white;
-            padding: 8px 16px;
+        .preset-chip {
+            background: #333;
+            border: 1px solid #444;
+            padding: 8px 14px;
             border-radius: 20px;
             white-space: nowrap;
             font-size: 0.9rem;
-            border: 1px solid #444;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
             user-select: none;
         }
-        
-        .quick-pill:active { background: var(--accent); color: black; border-color: var(--accent); }
+        .preset-chip:active { background: var(--highlight); color: black; }
 
-        /* --- Token Grid --- */
-        #token-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 12px;
+        /* --- Search Results Area --- */
+        #search-results {
+            display: none; /* Hidden by default */
             width: 100%;
-            max-width: 800px;
-            padding-bottom: 80px;
+            overflow-x: auto;
+            gap: 10px;
+            padding: 10px 0;
+            background: #1a1a1a;
+            border-bottom: 1px solid #444;
+            margin-bottom: 20px;
+        }
+        .search-card-thumb {
+            height: 180px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            flex-shrink: 0;
+        }
+        .search-card-thumb:active { border-color: var(--highlight); opacity: 0.7; }
+
+        /* --- Active Token Grid --- */
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            width: 100%;
+            max-width: 900px;
+            padding-bottom: 50px;
         }
 
-        /* --- The Token Card --- */
         .token-card {
-            aspect-ratio: 2.5/3.5;
-            background-color: var(--card-bg);
+            position: relative;
+            aspect-ratio: 2.5/3.5; /* Magic Card Ratio */
             border-radius: 10px;
-            position: relative;
             overflow: hidden;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            border: 1px solid #333;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            background: #222;
         }
 
-        .token-art {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: cover;
-            z-index: 0;
-            opacity: 0.6; /* Darker art so white text pops */
-            transition: opacity 0.2s;
-        }
-
-        .token-overlay {
-            position: relative;
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        .card-img {
             width: 100%;
             height: 100%;
+            object-fit: cover; /* Ensures it fills the box */
+        }
+
+        /* The Counter Overlay */
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
             justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.2); /* Slight tint to read numbers */
+            z-index: 10;
         }
 
-        /* Big Counter Number */
-        .counter-value {
-            font-size: 3.5rem;
+        .count-val {
+            font-size: 4rem;
             font-weight: 900;
-            color: white;
-            text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
-            margin-bottom: 10px;
-            pointer-events: none; /* Let clicks pass through to background */
+            text-shadow: 0 0 5px black, 0 0 10px black, 0 0 20px black;
+            pointer-events: none;
         }
 
-        /* Invisible Tap Zones for + and - */
+        /* Interaction Zones */
         .tap-zone {
             position: absolute;
             top: 0; bottom: 0;
             width: 50%;
             z-index: 20;
         }
-        .zone-left { left: 0; }
-        .zone-right { right: 0; }
-
-        /* Visual Feedback on Tap */
-        .token-card:active .token-art { opacity: 0.8; }
+        .left { left: 0; }
+        .right { right: 0; }
 
         /* Delete Button */
-        .delete-btn {
+        .btn-del {
             position: absolute;
             top: 0; right: 0;
-            background: rgba(0,0,0,0.5);
-            color: #ff5555;
+            width: 30px; height: 30px;
+            background: rgba(255, 0, 0, 0.7);
+            color: white;
             border: none;
-            width: 40px; height: 40px;
+            font-weight: bold;
             z-index: 30;
-            font-size: 1.2rem;
-            border-bottom-left-radius: 10px;
+            border-bottom-left-radius: 8px;
+            cursor: pointer;
         }
 
-        /* --- Search Modal --- */
-        #results-modal {
-            display: none;
-            position: fixed;
-            top: 60px; left: 50%;
-            transform: translateX(-50%);
-            width: 90%;
-            max-width: 400px;
-            max-height: 60vh;
-            background: #222;
-            border: 1px solid #555;
-            border-radius: 12px;
-            overflow-y: auto;
-            z-index: 200;
-            box-shadow: 0 20px 50px black;
-        }
-        .result-item {
-            display: flex; align-items: center; gap: 10px; padding: 10px;
-            border-bottom: 1px solid #333; cursor: pointer;
-        }
-        .result-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
+        .loading-text { text-align: center; width: 100%; color: #888; padding: 20px;}
 
     </style>
 </head>
 <body>
 
-    <div id="search-container">
-        <input type="text" id="search-input" placeholder="Search specific token...">
-        <button id="search-btn" onclick="searchTokens()">Find</button>
+    <div class="controls-area">
+        <div class="search-row">
+            <input type="text" id="input" placeholder="Search (e.g. Dragon, Map)...">
+            <button class="btn-search" onclick="doSearch()">Find</button>
+        </div>
+        
+        <div class="presets">
+            <div class="preset-chip" onclick="quickAdd('Treasure')">💰 Treasure</div>
+            <div class="preset-chip" onclick="quickAdd('Food')">🍗 Food</div>
+            <div class="preset-chip" onclick="quickAdd('Clue')">🔍 Clue</div>
+            <div class="preset-chip" onclick="quickAdd('Map')">🗺️ Map</div>
+            <div class="preset-chip" onclick="quickAdd('Blood')">🩸 Blood</div>
+            <div class="preset-chip" onclick="quickAdd('Goblin')">👺 Goblin</div>
+            <div class="preset-chip" onclick="quickAdd('Zombie')">🧟 Zombie</div>
+            <div class="preset-chip" onclick="quickAdd('Soldier')">🛡️ Soldier</div>
+            <div class="preset-chip" onclick="quickAdd('Copy')">🟦 Copy</div>
+            <div class="preset-chip" onclick="quickAdd('The One Ring')">💍 Ring</div>
+        </div>
     </div>
 
-    <div id="quick-bar">
-        <div class="quick-pill" onclick="addPreset('https://cards.scryfall.io/art_crop/front/e/0/e0b6323a-c852-4a0b-99d9-05232c631024.jpg')">💰 Treasure</div>
-        <div class="quick-pill" onclick="addPreset('https://cards.scryfall.io/art_crop/front/b/f/bf309086-5384-486a-b286-a2468305c486.jpg')">🍗 Food</div>
-        <div class="quick-pill" onclick="addPreset('https://cards.scryfall.io/art_crop/front/8/e/8eb5299b-0080-496e-827c-9304a9192305.jpg')">🔍 Clue</div>
-        <div class="quick-pill" onclick="addPreset('https://cards.scryfall.io/art_crop/front/7/8/78652d8e-7901-4475-be79-7a541604d538.jpg')">👺 Goblin</div>
-        <div class="quick-pill" onclick="addPreset('https://cards.scryfall.io/art_crop/front/6/c/6cc000e3-9824-4f46-9549-31776ce32174.jpg')">🧟 Zombie</div>
-        <div class="quick-pill" onclick="addPreset('https://cards.scryfall.io/art_crop/front/5/3/5391a0fa-b32c-4740-9852-32a22237d402.jpg')">🛡️ Soldier</div>
-        <div class="quick-pill" onclick="addPreset('https://cards.scryfall.io/art_crop/front/8/7/874b2454-e67c-4034-8c8c-1a8684742e2c.jpg')">🟦 Copy</div>
-        <div class="quick-pill" onclick="addPreset('https://cards.scryfall.io/art_crop/front/c/5/c50b6be9-338f-4886-9817-8e1248967926.jpg')">🩸 Blood</div>
-    </div>
+    <div id="search-results"></div>
 
-    <div id="results-modal"></div>
-    <div id="token-grid"></div>
+    <div id="grid"></div>
 
     <script>
-        const grid = document.getElementById('token-grid');
-        const modal = document.getElementById('results-modal');
-        const searchInput = document.getElementById('search-input');
+        const grid = document.getElementById('grid');
+        const resultsBox = document.getElementById('search-results');
+        const input = document.getElementById('input');
 
-        function init() {
-            const saved = localStorage.getItem('mtgTokensPro');
-            if (saved) {
-                JSON.parse(saved).forEach(t => addTokenToBoard(t.img, t.value));
+        // Load saved state
+        const saved = localStorage.getItem('official_tokens_v2');
+        if(saved) JSON.parse(saved).forEach(t => spawnToken(t.img, t.val));
+
+        // 1. Quick Add (Auto-finds the most popular version)
+        async function quickAdd(name) {
+            // Show a temporary loading indicator
+            const tempId = Date.now();
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'token-card';
+            loadingDiv.id = tempId;
+            loadingDiv.innerHTML = `<div class="overlay">Loading...</div>`;
+            grid.appendChild(loadingDiv);
+
+            try {
+                // Search specifically for a token with this name
+                const res = await fetch(`https://api.scryfall.com/cards/search?q=t%3Atoken+!"${name}"&order=released`);
+                const data = await res.json();
+                
+                // Remove loader
+                document.getElementById(tempId).remove();
+
+                if(data.data && data.data.length > 0) {
+                    const card = data.data[0];
+                    const img = getImgUrl(card);
+                    if(img) spawnToken(img);
+                } else {
+                    alert("Could not find token: " + name);
+                }
+            } catch(e) {
+                document.getElementById(tempId).remove();
+                alert("Network error.");
             }
         }
 
-        // --- Quick Add ---
-        function addPreset(url) {
-            addTokenToBoard(url, 1);
-        }
-
-        // --- Search Logic ---
-        async function searchTokens() {
-            const query = searchInput.value.trim();
-            if (!query) return;
-
-            modal.style.display = 'block';
-            modal.innerHTML = '<div style="padding:15px; text-align:center; color:#888;">Searching...</div>';
+        // 2. Manual Search
+        async function doSearch() {
+            const query = input.value.trim();
+            if(!query) return;
+            
+            resultsBox.style.display = 'flex';
+            resultsBox.innerHTML = '<div class="loading-text">Searching Scryfall...</div>';
 
             try {
-                // Search for tokens only
-                const response = await fetch(`https://api.scryfall.com/cards/search?q=t%3Atoken+${encodeURIComponent(query)}`);
-                const data = await response.json();
+                // Broad search for tokens
+                const res = await fetch(`https://api.scryfall.com/cards/search?q=t%3Atoken+${query}`);
+                const data = await res.json();
 
-                if (data.object === 'error' || !data.data) {
-                    modal.innerHTML = `<div style="padding:15px; text-align:center;">No tokens found.</div>`;
-                    setTimeout(() => modal.style.display = 'none', 2000);
+                resultsBox.innerHTML = ''; // Clear loading
+
+                if(!data.data || data.data.length === 0) {
+                    resultsBox.innerHTML = '<div class="loading-text">No tokens found.</div>';
                     return;
                 }
 
-                displayResults(data.data);
-            } catch (e) {
-                modal.innerHTML = `<div style="padding:15px; text-align:center; color:red;">Connection Error</div>`;
+                // Display images horizontally
+                data.data.slice(0, 15).forEach(card => {
+                    const img = getImgUrl(card);
+                    if(img) {
+                        const imgEl = document.createElement('img');
+                        imgEl.src = img;
+                        imgEl.className = 'search-card-thumb';
+                        // Click a result to add it to the board
+                        imgEl.onclick = () => {
+                            spawnToken(img);
+                            resultsBox.style.display = 'none'; // Hide results after pick
+                            input.value = '';
+                        };
+                        resultsBox.appendChild(imgEl);
+                    }
+                });
+            } catch(e) {
+                resultsBox.innerHTML = '<div class="loading-text">Error connecting.</div>';
             }
         }
 
-        function displayResults(cards) {
-            modal.innerHTML = '';
-            // Show top 10 results
-            cards.slice(0, 10).forEach(card => {
-                // Find the art crop URL
-                let imgUrl = '';
-                if (card.image_uris) imgUrl = card.image_uris.art_crop;
-                else if (card.card_faces && card.card_faces[0].image_uris) imgUrl = card.card_faces[0].image_uris.art_crop;
-
-                if (imgUrl) {
-                    const div = document.createElement('div');
-                    div.className = 'result-item';
-                    div.innerHTML = `<img src="${imgUrl}" class="result-thumb"><span>${card.name}</span>`;
-                    div.onclick = () => {
-                        addTokenToBoard(imgUrl);
-                        modal.style.display = 'none';
-                        searchInput.value = '';
-                    };
-                    modal.appendChild(div);
-                }
-            });
-            // Close button
-            const close = document.createElement('div');
-            close.className = 'result-item';
-            close.style.justifyContent = 'center';
-            close.style.color = '#888';
-            close.innerText = 'Close';
-            close.onclick = () => modal.style.display = 'none';
-            modal.appendChild(close);
+        // Helper to extract image URL safely
+        function getImgUrl(card) {
+            if(card.image_uris) return card.image_uris.normal; // "normal" = full card resolution
+            if(card.card_faces && card.card_faces[0].image_uris) return card.card_faces[0].image_uris.normal;
+            return null;
         }
 
-        // --- Core Board Logic ---
-        function addTokenToBoard(imgUrl, value = 1) {
+        // 3. Create the Token on the Board
+        function spawnToken(url, val = 1) {
             const div = document.createElement('div');
             div.className = 'token-card';
-            
-            // Layout: Image + Value + Invisible tap zones
             div.innerHTML = `
-                <img src="${imgUrl}" class="token-art">
-                <button class="delete-btn" onclick="removeToken(this)">✕</button>
-                
-                <div class="tap-zone zone-left" onclick="update(this, -1)"></div>
-                <div class="tap-zone zone-right" onclick="update(this, 1)"></div>
-
-                <div class="token-overlay">
-                    <div class="counter-value">${value}</div>
+                <img src="${url}" class="card-img">
+                <button class="btn-del" onclick="removeToken(this)">✕</button>
+                <div class="tap-zone left" onclick="mod(this, -1)"></div>
+                <div class="tap-zone right" onclick="mod(this, 1)"></div>
+                <div class="overlay">
+                    <div class="count-val">${val}</div>
                 </div>
             `;
             grid.appendChild(div);
-            saveState();
+            save();
         }
 
-        function update(element, change) {
-            const card = element.closest('.token-card');
-            const valDiv = card.querySelector('.counter-value');
-            let current = parseInt(valDiv.innerText);
-            valDiv.innerText = current + change;
-            saveState();
+        function mod(el, amount) {
+            const valDiv = el.parentElement.querySelector('.count-val');
+            let curr = parseInt(valDiv.innerText);
+            valDiv.innerText = curr + amount;
+            save();
         }
 
         function removeToken(btn) {
-            if(confirm('Remove this token?')) {
-                btn.closest('.token-card').remove();
-                saveState();
+            if(confirm("Delete token?")) {
+                btn.parentElement.remove();
+                save();
             }
         }
 
-        function saveState() {
-            const tokens = [];
+        function save() {
+            const data = [];
             document.querySelectorAll('.token-card').forEach(card => {
-                tokens.push({
-                    img: card.querySelector('.token-art').src,
-                    value: parseInt(card.querySelector('.counter-value').innerText)
+                data.push({
+                    img: card.querySelector('img').src,
+                    val: parseInt(card.querySelector('.count-val').innerText)
                 });
             });
-            localStorage.setItem('mtgTokensPro', JSON.stringify(tokens));
+            localStorage.setItem('official_tokens_v2', JSON.stringify(data));
         }
 
-        // Enter key to search
-        searchInput.addEventListener("keypress", function(event) {
-            if (event.key === "Enter") searchTokens();
-        });
+        input.addEventListener('keypress', (e) => { if(e.key === 'Enter') doSearch(); });
 
-        init();
     </script>
 </body>
 </html>
