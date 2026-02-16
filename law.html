@@ -3,236 +3,347 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Law Atlas: The 1000-Point Database</title>
+    <title>Global Law Atlas: Maximum Accuracy Edition</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
         :root {
-            --bg-color: #121212;
-            --card-bg: #1e1e1e;
-            --text-color: #e0e0e0;
-            --accent: #4a90e2;
-            --danger: #ff4444;
-            --warning: #ffbb33;
-            --safe: #00C851;
+            --bg-color: #0f0f0f;
+            --sidebar-bg: #1a1a1a;
+            --card-bg: #262626;
+            --text-main: #e0e0e0;
+            --text-sub: #a0a0a0;
+            --accent: #3498db;
+            
+            /* Severity Colors */
+            --sev-0: #27ae60; /* Safe/Legal */
+            --sev-3: #f1c40f; /* Warning/Fine */
+            --sev-6: #e67e22; /* Prison/Danger */
+            --sev-9: #c0392b; /* Life/Death */
         }
-        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        header { background-color: var(--card-bg); padding: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.5); z-index: 1000; display: flex; justify-content: space-between; align-items: center; }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Header */
+        header {
+            background-color: var(--sidebar-bg);
+            padding: 15px 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 60px;
+            box-sizing: border-box;
+        }
+
         h1 { margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 10px; }
-        .counter { font-size: 0.8rem; background: #333; padding: 2px 8px; border-radius: 10px; color: #888; }
-        select { padding: 10px; border-radius: 5px; background: #333; color: white; border: 1px solid #555; }
-        .container { display: flex; flex: 1; height: calc(100vh - 60px); }
-        #map { flex: 2; height: 100%; background: #222; }
-        #sidebar { flex: 1; padding: 20px; background: var(--card-bg); overflow-y: auto; border-left: 1px solid #333; min-width: 320px; max-width: 450px; }
-        .law-card { background: #252525; border-radius: 6px; padding: 15px; margin-bottom: 10px; border-left: 4px solid #555; cursor: pointer; transition: 0.2s; }
-        .law-card:hover { background: #303030; transform: translateX(5px); }
-        .status-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-bottom: 5px; color: #121212; text-transform: uppercase; }
-        .sev-0 { border-color: var(--safe); } .sev-0 .status-badge { background: var(--safe); }
-        .sev-5 { border-color: var(--warning); } .sev-5 .status-badge { background: var(--warning); }
-        .sev-10 { border-color: var(--danger); } .sev-10 .status-badge { background: var(--danger); color: white; }
-        .country-header { font-weight: bold; font-size: 1.1em; display: flex; justify-content: space-between; }
-        .detail-text { font-size: 0.9em; color: #aaa; margin-top: 5px; }
+        .badge { background: #333; color: #aaa; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; }
+
+        select {
+            padding: 8px 12px;
+            background: #333;
+            color: white;
+            border: 1px solid #444;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        /* Layout */
+        .main-container {
+            display: flex;
+            height: calc(100vh - 60px);
+        }
+
+        #map {
+            flex: 2;
+            height: 100%;
+            background: #111;
+            z-index: 1;
+        }
+
+        #sidebar {
+            flex: 1;
+            min-width: 350px;
+            max-width: 450px;
+            background: var(--sidebar-bg);
+            border-left: 1px solid #333;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* Cards */
+        .law-card {
+            background: var(--card-bg);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid #555;
+            transition: transform 0.2s, background 0.2s;
+            cursor: pointer;
+        }
+        .law-card:hover { transform: translateX(5px); background: #303030; }
+
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .country-name { font-weight: bold; font-size: 1.1rem; }
+        
+        .status-pill {
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #1a1a1a;
+        }
+
+        .law-text { font-size: 0.9rem; color: var(--text-sub); line-height: 1.4; }
+        .source-ref { font-size: 0.75rem; color: #555; margin-top: 8px; font-style: italic; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--sidebar-bg); }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
     </style>
 </head>
 <body>
 
 <header>
-    <h1>Global Law Atlas <span class="counter" id="db-counter">Loading...</span></h1>
-    <select id="crimeSelector" onchange="filterLaws()">
-        <option value="blasphemy">Blasphemy & Religious Insult</option>
-        <option value="drugs">Drugs (Possession/Trafficking)</option>
-        <option value="theft">Theft & Robbery</option>
-        <option value="lgbt">LGBTQ+ Rights</option>
-        <option value="adultery">Adultery & Morality</option>
+    <h1>Global Law Atlas <span class="badge" id="count-badge">0 Entries</span></h1>
+    <select id="topicSelect" onchange="renderApp()">
+        <option value="blasphemy">Topic: Blasphemy (Prophet Depiction)</option>
+        <option value="drugs">Topic: Narcotics (Cannabis/Hard Drugs)</option>
+        <option value="theft">Topic: Theft & Robbery</option>
+        <option value="lgbt">Topic: LGBTQ+ Rights</option>
+        <option value="adultery">Topic: Adultery / Extramarital Sex</option>
     </select>
 </header>
 
-<div class="container">
+<div class="main-container">
     <div id="map"></div>
     <div id="sidebar">
-        <h2 id="topic-title">Select a Topic</h2>
-        <div id="results-container"></div>
+        <h2 id="sidebar-title" style="margin-top:0;">Global Laws</h2>
+        <div id="list-container"></div>
     </div>
 </div>
 
 <script>
-    // --- 1. DATA GENERATOR ENGINE ---
-    
-    // Instead of typing 1000 lines, we define "Country Groups" and apply rules to them.
-    
-    const groups = {
-        western: [
-            {n:"USA", lat:37.09, lng:-95.71}, {n:"Canada", lat:56.13, lng:-106.34}, {n:"UK", lat:55.37, lng:-3.43},
-            {n:"France", lat:46.22, lng:2.21}, {n:"Germany", lat:51.16, lng:10.45}, {n:"Australia", lat:-25.27, lng:133.77},
-            {n:"New Zealand", lat:-40.90, lng:174.88}, {n:"Sweden", lat:60.12, lng:18.64}, {n:"Norway", lat:60.47, lng:8.46},
-            {n:"Spain", lat:40.46, lng:-3.74}, {n:"Italy", lat:41.87, lng:12.56}, {n:"Netherlands", lat:52.13, lng:5.29},
-            {n:"Ireland", lat:53.14, lng:-7.69}, {n:"Switzerland", lat:46.81, lng:8.22}, {n:"Belgium", lat:50.50, lng:4.46},
-            {n:"Denmark", lat:56.26, lng:9.50}, {n:"Finland", lat:61.92, lng:25.74}, {n:"Austria", lat:47.51, lng:14.55},
-            {n:"Portugal", lat:39.39, lng:-8.22}, {n:"Iceland", lat:64.96, lng:-19.02}
-        ],
-        islamic_hardline: [
-            {n:"Iran", lat:32.42, lng:53.68}, {n:"Saudi Arabia", lat:23.88, lng:45.07}, {n:"Afghanistan", lat:33.93, lng:67.70},
-            {n:"Pakistan", lat:30.37, lng:69.34}, {n:"Yemen", lat:15.55, lng:48.51}, {n:"Somalia", lat:5.15, lng:46.19},
-            {n:"Mauritania", lat:21.00, lng:-10.94}, {n:"Brunei", lat:4.53, lng:114.72}, {n:"Nigeria (North)", lat:11.00, lng:8.00},
-            {n:"Sudan", lat:12.86, lng:30.21}
-        ],
-        conservative: [
-            {n:"Russia", lat:61.52, lng:105.31}, {n:"Poland", lat:51.91, lng:19.14}, {n:"Hungary", lat:47.16, lng:19.50},
-            {n:"Turkey", lat:38.96, lng:35.24}, {n:"Egypt", lat:26.82, lng:30.80}, {n:"Indonesia", lat:-0.78, lng:113.92},
-            {n:"Malaysia", lat:4.21, lng:101.97}, {n:"India", lat:20.59, lng:78.96}, {n:"Brazil", lat:-14.23, lng:-51.92},
-            {n:"Philippines", lat:12.87, lng:121.77}
-        ],
-        strict_asia: [
-            {n:"Singapore", lat:1.35, lng:103.81}, {n:"China", lat:35.86, lng:104.19}, {n:"Vietnam", lat:14.05, lng:108.27},
-            {n:"Thailand", lat:15.87, lng:100.99}, {n:"Japan", lat:36.20, lng:138.25}, {n:"South Korea", lat:35.90, lng:127.76},
-            {n:"Taiwan", lat:23.69, lng:120.96}
-        ]
-    };
 
-    let lawDatabase = [];
-
-    // Generator Function: Creates specific laws for each group
-    function generateLaws() {
+    /* =============================================================================
+     THE CORE DATABASE
+     Accuracy Note: Laws are complex and change. This is a static snapshot.
+     Severity Scale (0-10):
+     0-2: Legal / Decriminalized
+     3-5: Illegal (Fines / Short Prison)
+     6-8: Illegal (Long Prison / Corporal Punishment)
+     9-10: Capital Offense (Death Penalty)
+     =============================================================================
+    */
+    
+    const DB = [
+        // ==========================================
+        // BLASPHEMY / RELIGIOUS INSULT
+        // ==========================================
+        { topic: "blasphemy", country: "United States", lat: 38.90, lng: -77.03, status: "Legal", sev: 0, text: "Protected Speech (1st Amendment). No federal or state bans enforced." },
+        { topic: "blasphemy", country: "France", lat: 48.85, lng: 2.35, status: "Legal", sev: 0, text: "Legal. 'Right to blaspheme' is protected. Hate speech against *people* is illegal, but attacking *religion* is legal." },
+        { topic: "blasphemy", country: "United Kingdom", lat: 51.50, lng: -0.12, status: "Legal", sev: 0, text: "Abolished in 2008 (England/Wales). Scotland abolished in 2021." },
+        { topic: "blasphemy", country: "Denmark", lat: 55.67, lng: 12.56, status: "Legal", sev: 0, text: "Repealed in 2017. Previously dormant since 1946." },
+        { topic: "blasphemy", country: "New Zealand", lat: -41.28, lng: 174.77, status: "Legal", sev: 0, text: "Repealed in 2019 under Crimes Amendment Bill." },
+        { topic: "blasphemy", country: "Ireland", lat: 53.34, lng: -6.26, status: "Legal", sev: 0, text: "Removed from Constitution by referendum in 2018." },
         
-        // --- 1. BLASPHEMY LAWS ---
-        groups.western.forEach(c => lawDatabase.push({
-            topic: "blasphemy", country: c.n, lat: c.lat, lng: c.lng,
-            status: "Legal", sev: 0, text: "Protected Free Speech."
-        }));
-        groups.islamic_hardline.forEach(c => lawDatabase.push({
-            topic: "blasphemy", country: c.n, lat: c.lat, lng: c.lng,
-            status: "Capital Offense", sev: 10, text: "Death Penalty or Life Imprisonment for insulting the Prophet."
-        }));
-        groups.conservative.forEach(c => {
-            let sev = 4; let text = "Fines or short prison terms for offending religious feelings.";
-            if(c.n === "Russia") text = "Prison for insulting believers' feelings.";
-            if(c.n === "India") text = "Prison for outraging religious feelings (Sec 295A).";
-            lawDatabase.push({ topic: "blasphemy", country: c.n, lat: c.lat, lng: c.lng, status: "Illegal", sev: sev, text: text });
-        });
+        { topic: "blasphemy", country: "Germany", lat: 52.52, lng: 13.40, status: "Restricted", sev: 3, text: "Illegal (Sec 166 StGB) ONLY if it 'disturbs public peace'. Up to 3 years prison. Rarely used." },
+        { topic: "blasphemy", country: "Poland", lat: 52.22, lng: 21.01, status: "Illegal", sev: 4, text: "Offending Religious Feelings (Art 196). Fine or up to 2 years prison. Frequently used." },
+        { topic: "blasphemy", country: "Russia", lat: 55.75, lng: 37.61, status: "Illegal", sev: 5, text: "Insulting feelings of believers (Art 148). Fines or prison up to 3 years (enacted after Pussy Riot case)." },
+        { topic: "blasphemy", country: "Italy", lat: 41.90, lng: 12.49, status: "Illegal (Fine)", sev: 2, text: "Decriminalized to an administrative offense. Fine of €51 to €309." },
+        { topic: "blasphemy", country: "Greece", lat: 37.98, lng: 23.72, status: "Legal", sev: 0, text: "Abolished in 2019. Previously carried up to 2 years prison." },
 
-        // --- 2. DRUG LAWS ---
-        groups.western.forEach(c => {
-            let status = "Illegal"; let sev = 3; let text = "Fines or prison. (Legal in Canada/Parts of USA).";
-            if(c.n === "Canada" || c.n === "USA") { status = "Legal/Mixed"; sev = 0; text = "Legal in many jurisdictions."; }
-            if(c.n === "Netherlands") { status = "Decriminalized"; sev = 1; text = "Tolerated in coffee shops."; }
-            lawDatabase.push({ topic: "drugs", country: c.n, lat: c.lat, lng: c.lng, status: status, sev: sev, text: text });
-        });
-        groups.strict_asia.forEach(c => {
-            let sev = 9; let text = "Severe prison sentences.";
-            if(c.n === "Singapore" || c.n === "China" || c.n === "Vietnam") { sev = 10; text = "Death Penalty for trafficking."; }
-            if(c.n === "Thailand") { sev = 1; text = "Cannabis Decriminalized (2022)."; }
-            lawDatabase.push({ topic: "drugs", country: c.n, lat: c.lat, lng: c.lng, status: "Severe", sev: sev, text: text });
-        });
-        groups.islamic_hardline.forEach(c => lawDatabase.push({
-            topic: "drugs", country: c.n, lat: c.lat, lng: c.lng,
-            status: "Illegal", sev: 10, text: "Death penalty or severe lashes/prison often applied."
-        }));
+        { topic: "blasphemy", country: "Turkey", lat: 39.93, lng: 32.85, status: "Illegal", sev: 5, text: "Art 216: 'Degrading religious values'. 6 months to 1 year prison." },
+        { topic: "blasphemy", country: "Egypt", lat: 30.04, lng: 31.23, status: "Illegal", sev: 6, text: "Art 98(f): 'Contempt of heavenly religions'. 6 months to 5 years prison." },
+        { topic: "blasphemy", country: "Indonesia", lat: -6.20, lng: 106.84, status: "Illegal", sev: 6, text: "Up to 5 years prison (Art 156a). Expanded in 2022 code to include apostasy." },
+        { topic: "blasphemy", country: "India", lat: 28.61, lng: 77.20, status: "Illegal", sev: 5, text: "Sec 295A: 'Deliberate and malicious acts... to outrage religious feelings'. Up to 3 years prison." },
+        
+        { topic: "blasphemy", country: "Pakistan", lat: 33.68, lng: 73.04, status: "Death Penalty", sev: 10, text: "Sec 295-C: Mandatory Death Penalty for derogatory remarks against Prophet Muhammad." },
+        { topic: "blasphemy", country: "Iran", lat: 35.68, lng: 51.38, status: "Death Penalty", sev: 10, text: "Sabb-al-Nabi (Insulting the Prophet) is punishable by Death." },
+        { topic: "blasphemy", country: "Saudi Arabia", lat: 24.71, lng: 46.67, status: "Death Penalty", sev: 10, text: "Regarded as Apostasy. Punishable by Death (usually beheading), though prison/lashes common." },
+        { topic: "blasphemy", country: "Mauritania", lat: 18.07, lng: -15.95, status: "Death Penalty", sev: 10, text: "Mandatory Death Penalty for insulting the Prophet (Art 306), removing the option for repentance (2018)." },
+        { topic: "blasphemy", country: "Nigeria (North)", lat: 12.00, lng: 8.59, status: "Death Penalty", sev: 10, text: "Sharia States (e.g., Kano): Death by hanging for blasphemy against the Prophet." },
+        { topic: "blasphemy", country: "Afghanistan", lat: 34.55, lng: 69.20, status: "Death Penalty", sev: 10, text: "Under Taliban interpretation: Death Penalty for blasphemy/apostasy." },
+        { topic: "blasphemy", country: "Brunei", lat: 4.90, lng: 114.93, status: "Death Penalty", sev: 10, text: "Syariah Penal Code (2019): Death penalty for insulting Prophet Muhammad." },
 
-        // --- 3. THEFT LAWS ---
-        groups.western.forEach(c => lawDatabase.push({
-            topic: "theft", country: c.n, lat: c.lat, lng: c.lng,
-            status: "Illegal", sev: 3, text: "Prison sentence or fines depending on value."
-        }));
-        groups.islamic_hardline.forEach(c => {
-            let text = "Prison. Amputation of hand possible under strict Sharia (rarely enforced).";
-            let sev = 8;
-            if(c.n === "Brunei" || c.n === "Saudi Arabia") { text = "Amputation of hand (Hudud Law)."; sev = 10; }
-            lawDatabase.push({ topic: "theft", country: c.n, lat: c.lat, lng: c.lng, status: "Severe", sev: sev, text: text });
-        });
+        // ==========================================
+        // DRUGS (NARCOTICS / CANNABIS)
+        // ==========================================
+        { topic: "drugs", country: "Canada", lat: 45.42, lng: -75.69, status: "Legal", sev: 0, text: "Cannabis: Legal nationwide. Hard drugs: Illegal (Decriminalized trial in BC)." },
+        { topic: "drugs", country: "USA (Federal)", lat: 38.90, lng: -77.00, status: "Mixed", sev: 2, text: "Federal: Illegal. State: Legal in CA, NY, CO, etc. Illegal in ID, TX, etc." },
+        { topic: "drugs", country: "Uruguay", lat: -34.90, lng: -56.16, status: "Legal", sev: 0, text: "First country to fully legalize Cannabis (2013)." },
+        { topic: "drugs", country: "Thailand", lat: 13.75, lng: 100.50, status: "Flux", sev: 1, text: "Cannabis currently decriminalized/sold openly. Govt attempting to re-ban rec use in late 2024." },
+        { topic: "drugs", country: "Netherlands", lat: 52.36, lng: 4.90, status: "Tolerated", sev: 1, text: "Technically illegal, but 'tolerance policy' allows sale in coffee shops." },
+        { topic: "drugs", country: "Portugal", lat: 38.72, lng: -9.13, status: "Decriminalized", sev: 1, text: "All drugs decriminalized (small amounts). Administrative fines/rehab, no prison." },
+        
+        { topic: "drugs", country: "Sweden", lat: 59.32, lng: 18.06, status: "Strict", sev: 4, text: "Zero tolerance. Police can demand urine tests. Heavy fines/prison for simple use." },
+        { topic: "drugs", country: "Japan", lat: 35.67, lng: 139.65, status: "Strict", sev: 5, text: "Cannabis Control Law: Up to 5 years prison for possession. Social stigma is immense." },
+        { topic: "drugs", country: "South Korea", lat: 37.56, lng: 126.97, status: "Strict", sev: 5, text: "Illegal. Citizens can be prosecuted for using drugs *abroad* upon return." },
+        
+        { topic: "drugs", country: "Singapore", lat: 1.35, lng: 103.81, status: "Death Penalty", sev: 10, text: "Trafficking >500g Cannabis or >15g Heroin = Mandatory Death Penalty." },
+        { topic: "drugs", country: "China", lat: 39.90, lng: 116.40, status: "Severe", sev: 9, text: "Trafficking >50g Heroin/Meth = Eligible for Death Penalty. Forced Rehab for users." },
+        { topic: "drugs", country: "Indonesia", lat: -6.17, lng: 106.82, status: "Severe", sev: 9, text: "Death Penalty for trafficking. Users face prison (4-12 years) or forced rehab." },
+        { topic: "drugs", country: "Malaysia", lat: 3.13, lng: 101.68, status: "Severe", sev: 9, text: "Trafficking = Death Penalty (no longer mandatory as of 2023, but common)." },
+        { topic: "drugs", country: "Iran", lat: 35.68, lng: 51.38, status: "Severe", sev: 9, text: "Major trafficking point. Thousands executed for drug offenses, though laws softened slightly in 2017." },
+        { topic: "drugs", country: "Vietnam", lat: 21.02, lng: 105.83, status: "Severe", sev: 10, text: "Trafficking >600g Heroin or >2.5kg Meth = Death Penalty." },
+        { topic: "drugs", country: "United Arab Emirates", lat: 25.20, lng: 55.27, status: "Severe", sev: 6, text: "Zero tolerance. Detection in blood = Possession. Min 3 months prison (eased from 4 years)." },
 
-        // --- 4. LGBTQ+ LAWS ---
-        groups.western.forEach(c => lawDatabase.push({
-            topic: "lgbt", country: c.n, lat: c.lat, lng: c.lng,
-            status: "Legal", sev: 0, text: "Full marriage equality and anti-discrimination protections."
-        }));
-        groups.islamic_hardline.forEach(c => lawDatabase.push({
-            topic: "lgbt", country: c.n, lat: c.lat, lng: c.lng,
-            status: "Illegal", sev: 10, text: "Death penalty or life imprisonment."
-        }));
-        groups.conservative.forEach(c => {
-            let text = "Legal but no marriage equality."; let sev = 4;
-            if(c.n === "Russia") { text = "Illegal 'Propaganda'."; sev = 6; }
-            lawDatabase.push({ topic: "lgbt", country: c.n, lat: c.lat, lng: c.lng, status: "Restricted", sev: sev, text: text });
-        });
+        // ==========================================
+        // THEFT / ROBBERY
+        // ==========================================
+        { topic: "theft", country: "United Kingdom", lat: 51.50, lng: -0.12, status: "Illegal", sev: 3, text: "Theft Act 1968. Max 7 years prison. Shoplifting often results in fines/caution." },
+        { topic: "theft", country: "USA (Texas)", lat: 31.96, lng: -99.90, status: "Illegal", sev: 4, text: "Prison. Unique: Deadly force *can* be justified to protect property at night." },
+        { topic: "theft", country: "North Korea", lat: 39.03, lng: 125.76, status: "Severe", sev: 9, text: "Theft of state property is a serious political crime. Forced labor camp or execution." },
+        { topic: "theft", country: "Saudi Arabia", lat: 24.71, lng: 46.67, status: "Severe", sev: 8, text: "Sharia: Amputation of right hand for Sariqah (theft) if conditions met. Rare, but legal." },
+        { topic: "theft", country: "Iran", lat: 35.68, lng: 51.38, status: "Severe", sev: 8, text: "Amputation of fingers/hand for repeat offenders (Hudud). Several cases in 2023/24." },
+        { topic: "theft", country: "Brunei", lat: 4.90, lng: 114.93, status: "Severe", sev: 8, text: "Syariah Code: Amputation of hand for theft (stricter proof requirements)." },
+        { topic: "theft", country: "Nigeria (North)", lat: 12.00, lng: 8.50, status: "Severe", sev: 8, text: "Sharia courts may order amputation. Secular courts give prison." },
+        { topic: "theft", country: "China", lat: 39.90, lng: 116.40, status: "Illegal", sev: 4, text: "Prison / Detention. Corruption/Embezzlement of huge sums can lead to Death Penalty." },
 
-        // --- 5. ADULTERY LAWS ---
-        groups.western.forEach(c => lawDatabase.push({
-            topic: "adultery", country: c.n, lat: c.lat, lng: c.lng,
-            status: "Legal", sev: 0, text: "Not a crime. Grounds for divorce."
-        }));
-        groups.islamic_hardline.forEach(c => lawDatabase.push({
-            topic: "adultery", country: c.n, lat: c.lat, lng: c.lng,
-            status: "Illegal", sev: 10, text: "Stoning to death (theoretical) or severe lashes/prison."
-        }));
-        groups.strict_asia.forEach(c => {
-            let text = "Not a crime."; let sev = 0;
-            if(c.n === "Philippines") { text = "Crime: Prison time."; sev = 5; }
-            lawDatabase.push({ topic: "adultery", country: c.n, lat: c.lat, lng: c.lng, status: "Varies", sev: sev, text: text });
-        });
-    }
+        // ==========================================
+        // ADULTERY (Extramarital Sex)
+        // ==========================================
+        { topic: "adultery", country: "United Kingdom", lat: 51.50, lng: -0.12, status: "Legal", sev: 0, text: "Not a crime. Grounds for divorce." },
+        { topic: "adultery", country: "United States", lat: 38.90, lng: -77.03, status: "Varies", sev: 1, text: "Technically a crime in ~17 states (e.g., NY, MI, WI). Almost never prosecuted." },
+        { topic: "adultery", country: "South Korea", lat: 37.56, lng: 126.97, status: "Legal", sev: 0, text: "Decriminalized in 2015 by Constitutional Court." },
+        { topic: "adultery", country: "India", lat: 28.61, lng: 77.20, status: "Legal", sev: 0, text: "Decriminalized in 2018 (Section 497 struck down)." },
+        { topic: "adultery", country: "Taiwan", lat: 25.03, lng: 121.56, status: "Legal", sev: 0, text: "Decriminalized in 2020." },
 
-    // Initialize Data
-    generateLaws();
-    document.getElementById('db-counter').innerText = `${lawDatabase.length} Laws Loaded`;
+        { topic: "adultery", country: "Philippines", lat: 14.59, lng: 120.98, status: "Illegal", sev: 5, text: "Crime against chastity. Wife: up to 6 years prison. Husband: slightly less (concubinage)." },
+        { topic: "adultery", country: "Egypt", lat: 30.04, lng: 31.23, status: "Illegal", sev: 5, text: "Wife: up to 2 years prison. Husband: up to 6 months (and only if in marital home)." },
+        
+        { topic: "adultery", country: "Iran", lat: 35.68, lng: 51.38, status: "Death Penalty", sev: 10, text: "Stoning to death (Rajm) for married offenders. 100 lashes for unmarried." },
+        { topic: "adultery", country: "Saudi Arabia", lat: 24.71, lng: 46.67, status: "Severe", sev: 9, text: "Stoning (theoretical) or Lashes/Prison (common). Recent reforms reduced access to lashes." },
+        { topic: "adultery", country: "Brunei", lat: 4.90, lng: 114.93, status: "Death Penalty", sev: 10, text: "Stoning to death for Muslims (2019 Code). International outcry led to 'moratorium' on enforcement." },
+        { topic: "adultery", country: "Afghanistan", lat: 34.55, lng: 69.20, status: "Death Penalty", sev: 10, text: "Taliban reintroduced public flogging and stoning for adultery (2024)." },
+        { topic: "adultery", country: "Maldives", lat: 4.17, lng: 73.50, status: "Severe", sev: 6, text: "Flogging (100 lashes). Commonly applied to women." },
 
-    // --- 2. MAP LOGIC ---
-    var map = L.map('map', { minZoom: 2 }).setView([20, 0], 2);
+        // ==========================================
+        // LGBTQ+ RIGHTS
+        // ==========================================
+        { topic: "lgbt", country: "Netherlands", lat: 52.36, lng: 4.90, status: "Legal", sev: 0, text: "First country to legalize same-sex marriage (2001)." },
+        { topic: "lgbt", country: "South Africa", lat: -33.92, lng: 18.42, status: "Legal", sev: 0, text: "Constitution explicitly forbids discrimination based on sexual orientation." },
+        { topic: "lgbt", country: "Brazil", lat: -15.78, lng: -47.92, status: "Legal", sev: 0, text: "Marriage legal since 2013. Homophobia criminalized." },
+        
+        { topic: "lgbt", country: "Russia", lat: 55.75, lng: 37.61, status: "Illegal", sev: 6, text: "LGBT Movement labeled 'Extremist Organization' (2023). Propaganda banned. De facto illegal." },
+        { topic: "lgbt", country: "Hungary", lat: 47.49, lng: 19.04, status: "Restricted", sev: 3, text: "Same-sex marriage banned. 'Propaganda' law bans depiction to minors." },
+        { topic: "lgbt", country: "Ghana", lat: 5.60, lng: -0.18, status: "Illegal", sev: 6, text: "2024 Bill: Up to 3 years prison for identifying as LGBTQ+." },
+        
+        { topic: "lgbt", country: "Uganda", lat: 0.34, lng: 32.58, status: "Death Penalty", sev: 10, text: "Anti-Homosexuality Act 2023: Death Penalty for 'Aggravated Homosexuality'." },
+        { topic: "lgbt", country: "Yemen", lat: 15.36, lng: 44.19, status: "Death Penalty", sev: 10, text: "Death by stoning (married) or whipping/prison (unmarried)." },
+        { topic: "lgbt", country: "Saudi Arabia", lat: 24.71, lng: 46.67, status: "Death Penalty", sev: 10, text: "Punishable by death, though often imprisonment/lashes in practice." },
+        { topic: "lgbt", country: "Iran", lat: 35.68, lng: 51.38, status: "Death Penalty", sev: 10, text: "Active executions for sodomy (Lavta). Thousands executed since 1979." }
+    ];
+
+    // ==========================================
+    // APP ENGINE
+    // ==========================================
+    
+    // Map Setup
+    var map = L.map('map', {
+        center: [25, 0],
+        zoom: 2,
+        minZoom: 2,
+        maxBounds: [[-90, -180], [90, 180]]
+    });
+
+    // Dark Mode Tiles
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO'
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19
     }).addTo(map);
 
     var markers = [];
 
-    function getSeverityColor(score) {
-        if (score === 0) return "#00C851"; // Green
-        if (score <= 5) return "#ffbb33";  // Yellow
-        return "#ff4444";                  // Red
+    // Helper: Severity Colors
+    function getColor(sev) {
+        if (sev <= 2) return getComputedStyle(document.documentElement).getPropertyValue('--sev-0');
+        if (sev <= 5) return getComputedStyle(document.documentElement).getPropertyValue('--sev-3');
+        if (sev <= 8) return getComputedStyle(document.documentElement).getPropertyValue('--sev-6');
+        return getComputedStyle(document.documentElement).getPropertyValue('--sev-9');
     }
 
-    function filterLaws() {
-        const topic = document.getElementById('crimeSelector').value;
-        const container = document.getElementById('results-container');
-        container.innerHTML = "";
+    // Helper: Render Logic
+    function renderApp() {
+        const topic = document.getElementById('topicSelect').value;
+        const list = document.getElementById('list-container');
+        const badge = document.getElementById('count-badge');
         
-        // Remove old markers
+        // Clear
+        list.innerHTML = "";
         markers.forEach(m => map.removeLayer(m));
         markers = [];
 
-        // Filter Data
-        const data = lawDatabase.filter(l => l.topic === topic);
-        document.getElementById('topic-title').innerText = `${topic.toUpperCase()} (${data.length} Countries)`;
+        // Filter
+        const data = DB.filter(item => item.topic === topic);
+        badge.innerText = `${data.length} Countries Tracked`;
 
-        data.forEach(law => {
-            // Add to Sidebar
+        // Render
+        data.forEach(item => {
+            const color = getColor(item.sev);
+
+            // 1. Sidebar Card
             const card = document.createElement('div');
-            card.className = `law-card sev-${law.sev}`;
+            card.className = "law-card";
             card.innerHTML = `
-                <div class="country-header">
-                    ${law.country} 
-                    <span class="status-badge" style="background:${getSeverityColor(law.sev)}">${law.status}</span>
+                <div class="card-header">
+                    <span class="country-name">${item.country}</span>
+                    <span class="status-pill" style="background:${color}">${item.status}</span>
                 </div>
-                <div class="detail-text">${law.text}</div>
+                <div class="law-text">${item.text}</div>
             `;
-            card.onclick = () => { map.setView([law.lat, law.lng], 5); };
-            container.appendChild(card);
-
-            // Add to Map
-            const circle = L.circleMarker([law.lat, law.lng], {
-                color: getSeverityColor(law.sev),
-                fillColor: getSeverityColor(law.sev),
-                fillOpacity: 0.8,
-                radius: 8
-            }).addTo(map);
             
-            circle.bindPopup(`<b>${law.country}</b><br>${law.status}<br>${law.text}`);
+            // Interaction
+            card.onclick = () => {
+                map.flyTo([item.lat, item.lng], 6, { duration: 1.5 });
+                // Optional: Open popup automatically
+                markers.find(m => m._latlng.lat === item.lat).openPopup();
+            };
+            
+            list.appendChild(card);
+
+            // 2. Map Marker
+            const circle = L.circleMarker([item.lat, item.lng], {
+                radius: 8,
+                fillColor: color,
+                color: "#fff",
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map);
+
+            const popupContent = `
+                <strong style="font-size:1.1em">${item.country}</strong><br>
+                <span style="color:${color}; font-weight:bold">${item.status}</span><br>
+                <div style="margin-top:5px; font-size:0.9em">${item.text}</div>
+            `;
+            
+            circle.bindPopup(popupContent);
             markers.push(circle);
         });
     }
 
-    // Start
-    filterLaws();
+    // Start App
+    renderApp();
 
 </script>
 </body>
