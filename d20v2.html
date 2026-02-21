@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🎲 d20v6 - Enhanced Physics</title>
+    <title>🎲 d20v7 - True Physics & Framing</title>
     <style>
       body {
         margin: 0;
@@ -46,12 +46,10 @@
         font-weight: bold;
         box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
         transition: all 0.2s;
-        backdrop-filter: blur(4px);
       }
       #settings-btn:hover { 
         background: #0f0; 
         color: #000; 
-        box-shadow: 0 0 25px rgba(0, 255, 0, 0.8);
       }
 
       /* Result Display */
@@ -59,15 +57,14 @@
         text-align: center;
         font-size: 56px;
         font-weight: bold;
-        text-shadow: 0 0 20px #0f0, 0 0 40px #0f0;
+        text-shadow: 0 0 20px #0f0;
         pointer-events: auto;
-        background: rgba(0, 20, 0, 0.6);
+        background: rgba(0, 20, 0, 0.8);
         padding: 15px 40px;
         border-radius: 12px;
         margin-bottom: 20px;
         align-self: center;
         border: 1px solid rgba(0, 255, 0, 0.3);
-        backdrop-filter: blur(4px);
         transition: transform 0.1s;
       }
       #result-display:active { transform: scale(0.95); }
@@ -76,8 +73,7 @@
       #settings-modal {
         position: fixed;
         top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.85);
-        backdrop-filter: blur(8px);
+        background: rgba(0,0,0,0.9);
         display: none;
         align-items: center;
         justify-content: center;
@@ -165,82 +161,61 @@
     <script type="module">
       import * as THREE from "https://unpkg.com/three@0.152.2/build/three.module.js";
 
-      // --- CONFIG ---
       const CONFIG = {
         bg: 0x050505,
         diceColor: 0x151515,
         lineColor: 0x00ff00, 
         textColor: "#00ff00",
-        rollTime: 2200 // Slightly longer to appreciate the bounces
+        rollTime: 1800 
       };
 
-      // --- GLOBALS ---
       let scene, camera, renderer;
       let diceObjects = []; 
       let isRolling = false;
       let currentType = "d20";
       let currentCount = 1;
 
-      // --- INIT ---
       function init() {
         const container = document.getElementById("container");
         
-        // Scene & Fog
         scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(CONFIG.bg, 0.015);
 
-        // Camera
+        // Camera defaults - will be updated dynamically based on dice count
         camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
-        camera.position.set(0, 12, 16); 
-        camera.lookAt(0, 0, 0);
-
-        // Renderer with Shadows
+        
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(CONFIG.bg);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
 
-        // Lighting
-        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambient);
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dirLight.position.set(5, 15, 5);
-        dirLight.castShadow = true;
-        dirLight.shadow.camera.left = -10;
-        dirLight.shadow.camera.right = 10;
-        dirLight.shadow.camera.top = 10;
-        dirLight.shadow.camera.bottom = -10;
-        dirLight.shadow.mapSize.width = 1024;
-        dirLight.shadow.mapSize.height = 1024;
         scene.add(dirLight);
 
-        const pLight = new THREE.PointLight(CONFIG.lineColor, 2, 30);
-        pLight.position.set(0, 8, 0);
-        scene.add(pLight);
-
-        // Floor to catch shadows
-        const floorGeo = new THREE.PlaneGeometry(100, 100);
-        const floorMat = new THREE.ShadowMaterial({ opacity: 0.6 });
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        floor.receiveShadow = true;
-        scene.add(floor);
-
-        // Grid
         const grid = new THREE.GridHelper(50, 50, 0x003300, 0x111111);
-        grid.position.y = -0.01; // Avoid z-fighting with shadow plane
+        grid.position.y = 0;
         scene.add(grid);
 
-        // Listeners
         window.addEventListener("resize", onResize);
         container.addEventListener("click", () => { if(!isRolling) rollDice(); });
         
         setupUI();
+        updateCameraAndSpacing();
         spawnDice(); 
         animate();
+      }
+
+      // Dynamically moves camera back based on how many dice there are
+      function updateCameraAndSpacing() {
+        // Much steeper overhead angle so numbers face directly up at you
+        const yPos = 16 + (currentCount * 2);
+        const zPos = 6 + (currentCount * 1.5);
+        camera.position.set(0, yPos, zPos);
+        camera.lookAt(0, 0, 0);
       }
 
       function onResize() {
@@ -254,7 +229,6 @@
         renderer.render(scene, camera);
       }
 
-      // --- UI ---
       function setupUI() {
         const modal = document.getElementById("settings-modal");
         
@@ -273,6 +247,7 @@
             document.querySelectorAll("#type-row .option-btn").forEach(b=>b.classList.remove("active"));
             e.target.classList.add("active");
             currentType = e.target.dataset.type;
+            updateCameraAndSpacing();
             spawnDice();
           };
         });
@@ -283,12 +258,12 @@
             document.querySelectorAll("#count-row .option-btn").forEach(b=>b.classList.remove("active"));
             e.target.classList.add("active");
             currentCount = parseInt(e.target.dataset.count);
+            updateCameraAndSpacing();
             spawnDice();
           };
         });
       }
 
-      // --- DICE LOGIC ---
       function getGeometry(type) {
         switch (type) {
           case "d4": return new THREE.TetrahedronGeometry(1.5, 0);
@@ -311,7 +286,6 @@
 
       function createDiceMesh() {
         const geo = getGeometry(currentType);
-        
         const mat = new THREE.MeshStandardMaterial({ 
           color: CONFIG.diceColor,
           roughness: 0.3,
@@ -321,14 +295,9 @@
           polygonOffsetUnits: 1
         });
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
 
         const edges = new THREE.EdgesGeometry(geo);
-        const lineMat = new THREE.LineBasicMaterial({ 
-            color: CONFIG.lineColor, 
-            linewidth: 2 // Note: Many browsers ignore WebGL linewidth, but included for correctness
-        });
+        const lineMat = new THREE.LineBasicMaterial({ color: CONFIG.lineColor });
         const lines = new THREE.LineSegments(edges, lineMat);
         mesh.add(lines);
 
@@ -376,11 +345,9 @@
           const normal = normalSum.normalize();
 
           const label = createLabel(number.toString());
-          
           label.position.copy(center.add(normal.multiplyScalar(0.01))); 
           label.lookAt(center.clone().add(normal));
           
-          // Store the normal so we can perfectly align it during the roll
           label.userData = { 
               isLabel: true, 
               value: number,
@@ -394,7 +361,7 @@
 
       function createLabel(text) {
         const canvas = document.createElement("canvas");
-        canvas.width = 256; // Higher res text
+        canvas.width = 256; 
         canvas.height = 256;
         const ctx = canvas.getContext("2d");
         
@@ -414,17 +381,14 @@
           depthWrite: false
         });
 
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), mat);
-        return plane;
+        return new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), mat);
       }
 
-
-      // --- NEW PHYSICS & ANIMATION LOGIC ---
       function spawnDice() {
         diceObjects.forEach(d => scene.remove(d.mesh));
         diceObjects = [];
         
-        const spacing = 3.5;
+        const spacing = currentType === "d12" || currentType === "d20" ? 4 : 3.5;
         const startX = -((currentCount - 1) * spacing) / 2;
 
         for (let i = 0; i < currentCount; i++) {
@@ -437,11 +401,27 @@
           scene.add(mesh);
           diceObjects.push({
             mesh: mesh,
-            homePos: new THREE.Vector3(x, 1.5, 0)
+            homePos: new THREE.Vector3(x, 1.5, 0) // Y=1.5 is the resting radius
           });
         }
         document.getElementById("result-display").innerText = "CLICK TO ROLL";
         document.getElementById("result-display").style.color = CONFIG.textColor;
+      }
+
+      // Calculate perfect parabolic arcs for bouncing
+      function getBounceHeight(t) {
+        function parabola(t, start, end, height) {
+            const mid = (start + end) / 2;
+            const normalized = (t - mid) / ((end - start) / 2);
+            return (1 - normalized * normalized) * height;
+        }
+
+        // 4 distinct physical phases: Initial throw, Bounce 1, Bounce 2, Settle
+        if (t < 0.45) return parabola(t, 0, 0.45, 12);     // Big throw
+        if (t < 0.70) return parabola(t, 0.45, 0.70, 4);   // First bounce
+        if (t < 0.88) return parabola(t, 0.70, 0.88, 1.5); // Second bounce
+        if (t < 1.00) return parabola(t, 0.88, 1.00, 0.3); // Final tiny settling hop
+        return 0;
       }
 
       function rollDice() {
@@ -450,7 +430,6 @@
         document.getElementById("result-display").innerText = "...";
         document.getElementById("result-display").style.color = CONFIG.textColor;
 
-        // RESET visual effects from previous roll
         diceObjects.forEach(d => {
             d.mesh.children.forEach(c => {
                 if(c.userData.isLabel) {
@@ -460,31 +439,25 @@
             });
         });
 
-        // Pre-calculate the result for perfectly accurate landings
         const maxFaces = getMaxFaces(currentType);
 
         diceObjects.forEach(d => {
-            // 1. Roll the math
             d.resultValue = Math.floor(Math.random() * maxFaces) + 1;
             
-            // 2. Find the local normal of the winning face
             const winningLabel = d.mesh.children.find(c => c.userData.value === d.resultValue);
             const normal = winningLabel.userData.localNormal;
             
-            // 3. Calculate exact quaternion required to point that normal UP
+            // Align winning face perfectly up (+Y)
             const upVector = new THREE.Vector3(0, 1, 0);
             const alignQuat = new THREE.Quaternion().setFromUnitVectors(normal, upVector);
             
-            // 4. Add a random Yaw (spin around Y axis) so it doesn't look identical every time
+            // Random yaw so it doesn't look like a cloned animation
             const randomYaw = new THREE.Quaternion().setFromAxisAngle(upVector, Math.random() * Math.PI * 2);
             d.targetQuat = randomYaw.multiply(alignQuat);
 
-            // 5. Animation Setup
             d.startPos = d.mesh.position.clone();
-            // Start thrown from up and slightly forward
-            d.startPos.set(d.homePos.x + (Math.random()-0.5)*4, 12, (Math.random()-0.5)*4 - 5);
+            d.startPos.set(d.homePos.x + (Math.random()-0.5)*4, 1.5, (Math.random()-0.5)*6 - 8);
             
-            // Generate a random wild axis for the dice to tumble around while in the air
             d.spinAxis = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize();
         });
 
@@ -501,25 +474,17 @@
             return; 
           }
 
-          // Ease Out Cubic for forward/sideways ground movement
-          const lateralEase = 1 - Math.pow(1 - t, 3);
-          
-          // Custom Bouncing Parabola (Creates 3 distinct bounces that get smaller)
-          // sin(t * pi * frequency) * height * decay
-          const bounceFreq = 3; 
-          const bounceDecay = Math.pow(1 - t, 2.5);
-          const arcHeight = Math.abs(Math.sin(t * Math.PI * bounceFreq)) * 10 * bounceDecay;
+          // Lateral friction: slows down as it gets closer to settling
+          const lateralEase = 1 - Math.pow(1 - t, 1.8);
+          const currentHeight = getBounceHeight(t);
 
           diceObjects.forEach(d => {
-            // Position
             d.mesh.position.x = THREE.MathUtils.lerp(d.startPos.x, d.homePos.x, lateralEase);
             d.mesh.position.z = THREE.MathUtils.lerp(d.startPos.z, d.homePos.z, lateralEase);
-            d.mesh.position.y = d.homePos.y + arcHeight;
+            d.mesh.position.y = d.homePos.y + currentHeight;
 
-            // Rotation Physics:
-            // Instead of interpolating, we take the FINAL target rotation, and apply an offset spin
-            // that rapidly decays to 0. When t=1, the offset spin is 0, guaranteeing the target rotation.
-            const spinAmount = bounceDecay * Math.PI * 15; // 7.5 full rotations that decay
+            // Spin math: heavily tied to the bounces, snapping to 0 at the very end
+            const spinAmount = Math.pow(1 - t, 2) * Math.PI * 18;
             const spinQuat = new THREE.Quaternion().setFromAxisAngle(d.spinAxis, spinAmount);
             
             const currentQuat = d.targetQuat.clone().multiply(spinQuat);
@@ -532,7 +497,6 @@
       }
 
       function finalize() {
-        // Snap to exact calculations to eliminate micro-floating decimals
         diceObjects.forEach(d => {
           d.mesh.position.copy(d.homePos);
           d.mesh.quaternion.copy(d.targetQuat);
@@ -544,7 +508,6 @@
         const results = diceObjects.map(d => d.resultValue);
         
         diceObjects.forEach(d => {
-          // Highlight winning face visually
           d.mesh.children.forEach(c => {
              if(c.userData.value === d.resultValue) {
                  c.material.color.setHex(0xffffff); 
@@ -553,12 +516,10 @@
           });
         });
 
-        // Display
         const sum = results.reduce((a,b)=>a+b, 0);
         const display = document.getElementById("result-display");
         display.innerText = results.length > 1 ? `${results.join(" + ")} = ${sum}` : `${sum}`;
           
-        // Crit Effects for D20
         if (currentType === "d20" && currentCount === 1) {
             if(sum === 20) {
                 flash(0x00ff00);
