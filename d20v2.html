@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🎲 d20v5</title>
+    <title>🎲 d20v6 - Enhanced Physics</title>
     <style>
       body {
         margin: 0;
@@ -11,6 +11,7 @@
         background: #050505;
         font-family: 'Courier New', Courier, monospace;
         color: #0f0;
+        user-select: none;
       }
       
       #container { width: 100vw; height: 100vh; }
@@ -26,45 +27,57 @@
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        padding: 20px;
+        padding: 30px;
         box-sizing: border-box;
       }
 
       /* Settings Button */
       #settings-btn {
         pointer-events: auto;
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(0, 20, 0, 0.8);
         border: 2px solid #0f0;
         color: #0f0;
-        font-size: 24px;
-        padding: 10px 20px;
+        font-size: 20px;
+        padding: 12px 24px;
         cursor: pointer;
         align-self: flex-end;
-        border-radius: 4px;
+        border-radius: 6px;
         text-transform: uppercase;
         font-weight: bold;
-        box-shadow: 0 0 10px #0f0;
+        box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
         transition: all 0.2s;
+        backdrop-filter: blur(4px);
       }
-      #settings-btn:hover { background: #0f0; color: #000; }
+      #settings-btn:hover { 
+        background: #0f0; 
+        color: #000; 
+        box-shadow: 0 0 25px rgba(0, 255, 0, 0.8);
+      }
 
       /* Result Display */
       #result-display {
         text-align: center;
-        font-size: 48px;
-        text-shadow: 0 0 20px #0f0;
+        font-size: 56px;
+        font-weight: bold;
+        text-shadow: 0 0 20px #0f0, 0 0 40px #0f0;
         pointer-events: auto;
-        background: rgba(0,0,0,0.5);
-        padding: 10px;
-        border-radius: 10px;
+        background: rgba(0, 20, 0, 0.6);
+        padding: 15px 40px;
+        border-radius: 12px;
         margin-bottom: 20px;
+        align-self: center;
+        border: 1px solid rgba(0, 255, 0, 0.3);
+        backdrop-filter: blur(4px);
+        transition: transform 0.1s;
       }
+      #result-display:active { transform: scale(0.95); }
 
       /* Modal */
       #settings-modal {
         position: fixed;
         top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.9);
+        background: rgba(0,0,0,0.85);
+        backdrop-filter: blur(8px);
         display: none;
         align-items: center;
         justify-content: center;
@@ -75,17 +88,20 @@
       .modal-content {
         border: 2px solid #0f0;
         padding: 40px;
-        background: #111;
+        background: #0a0a0a;
         text-align: center;
-        box-shadow: 0 0 50px rgba(0, 255, 0, 0.2);
+        box-shadow: 0 0 40px rgba(0, 255, 0, 0.3);
+        border-radius: 10px;
         max-width: 90%;
+        width: 400px;
       }
 
       .btn-row {
         display: flex;
         gap: 10px;
         justify-content: center;
-        margin-top: 20px;
+        margin-top: 15px;
+        margin-bottom: 25px;
         flex-wrap: wrap;
       }
 
@@ -93,18 +109,23 @@
         background: transparent;
         border: 1px solid #0f0;
         color: #0f0;
-        padding: 10px 20px;
+        padding: 10px 15px;
         font-size: 18px;
         cursor: pointer;
         transition: 0.2s;
+        border-radius: 4px;
+        flex: 1;
+        min-width: 50px;
       }
       .option-btn:hover, .option-btn.active {
         background: #0f0;
         color: #000;
-        box-shadow: 0 0 15px #0f0;
+        box-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
+        font-weight: bold;
       }
       
-      h2 { margin-top: 0; text-shadow: 0 0 10px #0f0; }
+      h2 { margin-top: 0; text-shadow: 0 0 10px #0f0; font-size: 32px;}
+      p { margin: 0; font-size: 14px; opacity: 0.7; letter-spacing: 2px; }
     </style>
   </head>
   <body>
@@ -117,7 +138,7 @@
 
     <div id="settings-modal">
       <div class="modal-content">
-        <h2>DICE CONFIG</h2>
+        <h2>CONFIG</h2>
         
         <p>TYPE</p>
         <div class="btn-row" id="type-row">
@@ -137,8 +158,7 @@
           <button class="option-btn" data-count="5">5</button>
         </div>
         
-        <br><br>
-        <button class="option-btn" id="close-modal">DONE</button>
+        <button class="option-btn" id="close-modal" style="width: 100%; margin-top: 10px;">DONE</button>
       </div>
     </div>
 
@@ -147,11 +167,11 @@
 
       // --- CONFIG ---
       const CONFIG = {
-        bg: 0x111111,
-        diceColor: 0x1a1a1a,
-        lineColor: 0x00ff00, // Matrix Green
+        bg: 0x050505,
+        diceColor: 0x151515,
+        lineColor: 0x00ff00, 
         textColor: "#00ff00",
-        rollTime: 1500 // ms
+        rollTime: 2200 // Slightly longer to appreciate the bounces
       };
 
       // --- GLOBALS ---
@@ -165,33 +185,53 @@
       function init() {
         const container = document.getElementById("container");
         
-        // Scene
+        // Scene & Fog
         scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(CONFIG.bg, 0.02);
+        scene.fog = new THREE.FogExp2(CONFIG.bg, 0.015);
 
         // Camera
         camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
-        camera.position.set(0, 10, 14); // High angle
+        camera.position.set(0, 12, 16); 
         camera.lookAt(0, 0, 0);
 
-        // Renderer
-        renderer = new THREE.WebGLRenderer({ antialias: true });
+        // Renderer with Shadows
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(CONFIG.bg);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
 
-        // Lights (Make it look 3D but keep neon style)
-        const ambient = new THREE.AmbientLight(0xffffff, 0.3);
+        // Lighting
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
         scene.add(ambient);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-        dirLight.position.set(5, 10, 5);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(5, 15, 5);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.left = -10;
+        dirLight.shadow.camera.right = 10;
+        dirLight.shadow.camera.top = 10;
+        dirLight.shadow.camera.bottom = -10;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
         scene.add(dirLight);
-        const pLight = new THREE.PointLight(CONFIG.lineColor, 1, 20);
-        pLight.position.set(0, 5, 0);
+
+        const pLight = new THREE.PointLight(CONFIG.lineColor, 2, 30);
+        pLight.position.set(0, 8, 0);
         scene.add(pLight);
 
-        // Floor Grid (Visual anchor)
-        const grid = new THREE.GridHelper(50, 50, 0x333333, 0x222222);
+        // Floor to catch shadows
+        const floorGeo = new THREE.PlaneGeometry(100, 100);
+        const floorMat = new THREE.ShadowMaterial({ opacity: 0.6 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Grid
+        const grid = new THREE.GridHelper(50, 50, 0x003300, 0x111111);
+        grid.position.y = -0.01; // Avoid z-fighting with shadow plane
         scene.add(grid);
 
         // Listeners
@@ -199,7 +239,7 @@
         container.addEventListener("click", () => { if(!isRolling) rollDice(); });
         
         setupUI();
-        spawnDice(); // Initial Spawn
+        spawnDice(); 
         animate();
       }
 
@@ -209,20 +249,27 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       }
 
+      function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+      }
+
       // --- UI ---
       function setupUI() {
         const modal = document.getElementById("settings-modal");
         
-        document.getElementById("settings-btn").onclick = () => {
+        document.getElementById("settings-btn").onclick = (e) => {
+          e.stopPropagation();
           modal.style.display = "flex";
         };
-        document.getElementById("close-modal").onclick = () => {
+        document.getElementById("close-modal").onclick = (e) => {
+          e.stopPropagation();
           modal.style.display = "none";
         };
 
-        // Type Buttons
         document.querySelectorAll("#type-row .option-btn").forEach(btn => {
           btn.onclick = (e) => {
+            e.stopPropagation();
             document.querySelectorAll("#type-row .option-btn").forEach(b=>b.classList.remove("active"));
             e.target.classList.add("active");
             currentType = e.target.dataset.type;
@@ -230,9 +277,9 @@
           };
         });
 
-        // Count Buttons
         document.querySelectorAll("#count-row .option-btn").forEach(btn => {
           btn.onclick = (e) => {
+            e.stopPropagation();
             document.querySelectorAll("#count-row .option-btn").forEach(b=>b.classList.remove("active"));
             e.target.classList.add("active");
             currentCount = parseInt(e.target.dataset.count);
@@ -241,7 +288,7 @@
         });
       }
 
-      // --- DICE LOGIC (Restored from Original) ---
+      // --- DICE LOGIC ---
       function getGeometry(type) {
         switch (type) {
           case "d4": return new THREE.TetrahedronGeometry(1.5, 0);
@@ -253,38 +300,44 @@
       }
 
       function getTrisPerFace(type) {
-        // Critical logic from original code
         if (type === "d6") return 2;
         if (type === "d12") return 3;
         return 1;
+      }
+      
+      function getMaxFaces(type) {
+          return parseInt(type.replace('d', ''));
       }
 
       function createDiceMesh() {
         const geo = getGeometry(currentType);
         
-        // 1. Base Material (Black Plastic)
         const mat = new THREE.MeshStandardMaterial({ 
           color: CONFIG.diceColor,
-          roughness: 0.4,
-          metalness: 0.5
+          roughness: 0.3,
+          metalness: 0.6,
+          polygonOffset: true,
+          polygonOffsetFactor: 1,
+          polygonOffsetUnits: 1
         });
         const mesh = new THREE.Mesh(geo, mat);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
 
-        // 2. Wireframe (Glowing Edges)
         const edges = new THREE.EdgesGeometry(geo);
-        const lineMat = new THREE.LineBasicMaterial({ color: CONFIG.lineColor });
+        const lineMat = new THREE.LineBasicMaterial({ 
+            color: CONFIG.lineColor, 
+            linewidth: 2 // Note: Many browsers ignore WebGL linewidth, but included for correctness
+        });
         const lines = new THREE.LineSegments(edges, lineMat);
         mesh.add(lines);
 
-        // 3. Numbers (The crucial fix)
         addNumbers(mesh);
-
         return mesh;
       }
 
       function addNumbers(mesh) {
         const geometry = mesh.geometry;
-        // Fix index if missing
         if (!geometry.index) {
           const pos = geometry.attributes.position;
           const idx = [];
@@ -295,16 +348,13 @@
         const indices = geometry.index.array;
         const posAttr = geometry.attributes.position;
         const trisPerFace = getTrisPerFace(currentType);
-        const faceCount = indices.length / (3 * trisPerFace);
-
+        
         let number = 1;
         
         for (let i = 0; i < indices.length; i += (3 * trisPerFace)) {
-          // Calculate Center of the Face (Average of all vertices in the face)
           let center = new THREE.Vector3();
           let normalSum = new THREE.Vector3();
 
-          // Loop through triangles in this face
           for (let t = 0; t < trisPerFace; t++) {
             const idxOffset = i + (t * 3);
             const a = indices[idxOffset];
@@ -317,7 +367,6 @@
 
             center.add(vA).add(vB).add(vC);
 
-            // Calculate Normal
             const edge1 = new THREE.Vector3().subVectors(vB, vA);
             const edge2 = new THREE.Vector3().subVectors(vC, vA);
             normalSum.add(new THREE.Vector3().crossVectors(edge1, edge2).normalize());
@@ -326,17 +375,17 @@
           center.divideScalar(trisPerFace * 3);
           const normal = normalSum.normalize();
 
-          // Create Label
           const label = createLabel(number.toString());
           
-          // Position: Center + slight offset along normal to prevent clipping
-          label.position.copy(center.add(normal.multiplyScalar(0.02))); 
-          
-          // Rotate: Look away from center
+          label.position.copy(center.add(normal.multiplyScalar(0.01))); 
           label.lookAt(center.clone().add(normal));
           
-          // Identify face for logic later
-          label.userData = { isLabel: true, value: number };
+          // Store the normal so we can perfectly align it during the roll
+          label.userData = { 
+              isLabel: true, 
+              value: number,
+              localNormal: normal.clone() 
+          };
           
           mesh.add(label);
           number++;
@@ -345,83 +394,101 @@
 
       function createLabel(text) {
         const canvas = document.createElement("canvas");
-        canvas.width = 128; 
-        canvas.height = 128;
+        canvas.width = 256; // Higher res text
+        canvas.height = 256;
         const ctx = canvas.getContext("2d");
         
-        // High contrast text
         ctx.fillStyle = CONFIG.textColor;
-        ctx.font = "bold 80px Arial";
+        ctx.font = "bold 150px Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(text, 64, 64);
+        ctx.fillText(text, 128, 128);
 
         const tex = new THREE.CanvasTexture(canvas);
-        // Important: settings to prevent z-fighting / missing numbers
+        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        
         const mat = new THREE.MeshBasicMaterial({
           map: tex,
           transparent: true,
           side: THREE.DoubleSide,
-          polygonOffset: true,
-          polygonOffsetFactor: -2, // Pulls towards camera
-          polygonOffsetUnits: -2
+          depthWrite: false
         });
 
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), mat);
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), mat);
         return plane;
       }
 
 
-      // --- ANIMATION LOGIC (Restored & Smoothed) ---
+      // --- NEW PHYSICS & ANIMATION LOGIC ---
       function spawnDice() {
-        // Clear old
         diceObjects.forEach(d => scene.remove(d.mesh));
         diceObjects = [];
         
-        // Setup positions
-        const spacing = 3;
+        const spacing = 3.5;
         const startX = -((currentCount - 1) * spacing) / 2;
 
         for (let i = 0; i < currentCount; i++) {
           const mesh = createDiceMesh();
           const x = startX + i * spacing;
           
-          // Resting Position
           mesh.position.set(x, 1.5, 0); 
-          // Random Rotation
           mesh.rotation.set(Math.random()*6, Math.random()*6, Math.random()*6);
           
           scene.add(mesh);
           diceObjects.push({
             mesh: mesh,
-            homePos: new THREE.Vector3(x, 0, 0) // Target X/Z
+            homePos: new THREE.Vector3(x, 1.5, 0)
           });
         }
         document.getElementById("result-display").innerText = "CLICK TO ROLL";
+        document.getElementById("result-display").style.color = CONFIG.textColor;
       }
 
       function rollDice() {
         if (isRolling) return;
         isRolling = true;
         document.getElementById("result-display").innerText = "...";
+        document.getElementById("result-display").style.color = CONFIG.textColor;
+
+        // RESET visual effects from previous roll
+        diceObjects.forEach(d => {
+            d.mesh.children.forEach(c => {
+                if(c.userData.isLabel) {
+                    c.material.color.setHex(0xffffff);
+                    c.scale.set(1, 1, 1);
+                }
+            });
+        });
+
+        // Pre-calculate the result for perfectly accurate landings
+        const maxFaces = getMaxFaces(currentType);
+
+        diceObjects.forEach(d => {
+            // 1. Roll the math
+            d.resultValue = Math.floor(Math.random() * maxFaces) + 1;
+            
+            // 2. Find the local normal of the winning face
+            const winningLabel = d.mesh.children.find(c => c.userData.value === d.resultValue);
+            const normal = winningLabel.userData.localNormal;
+            
+            // 3. Calculate exact quaternion required to point that normal UP
+            const upVector = new THREE.Vector3(0, 1, 0);
+            const alignQuat = new THREE.Quaternion().setFromUnitVectors(normal, upVector);
+            
+            // 4. Add a random Yaw (spin around Y axis) so it doesn't look identical every time
+            const randomYaw = new THREE.Quaternion().setFromAxisAngle(upVector, Math.random() * Math.PI * 2);
+            d.targetQuat = randomYaw.multiply(alignQuat);
+
+            // 5. Animation Setup
+            d.startPos = d.mesh.position.clone();
+            // Start thrown from up and slightly forward
+            d.startPos.set(d.homePos.x + (Math.random()-0.5)*4, 12, (Math.random()-0.5)*4 - 5);
+            
+            // Generate a random wild axis for the dice to tumble around while in the air
+            d.spinAxis = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize();
+        });
 
         const startTime = performance.now();
-        
-        diceObjects.forEach(d => {
-            // Define Flight Path
-            d.startPos = d.mesh.position.clone();
-            // Start high up and slightly random offset
-            d.startPos.set(d.homePos.x + (Math.random()-0.5)*2, 10, (Math.random()-0.5)*2);
-            d.mesh.position.copy(d.startPos);
-
-            // Rotations
-            d.startRot = d.mesh.rotation.clone();
-            d.targetRot = new THREE.Euler(
-                d.startRot.x + (Math.random() * 8 + 4) * Math.PI,
-                d.startRot.y + (Math.random() * 8 + 4) * Math.PI,
-                d.startRot.z + (Math.random() * 8 + 4) * Math.PI
-            );
-        });
 
         function loop() {
           const now = performance.now();
@@ -429,102 +496,80 @@
           let t = elapsed / CONFIG.rollTime;
           
           if (t >= 1) {
-            t = 1;
             isRolling = false;
             finalize();
-            return; // Stop animation
-          } else {
-            requestAnimationFrame(loop);
+            return; 
           }
 
-          // Ease Out Cubic for ground movement
-          const easeOut = 1 - Math.pow(1 - t, 3);
+          // Ease Out Cubic for forward/sideways ground movement
+          const lateralEase = 1 - Math.pow(1 - t, 3);
           
-          // Parabola for Height (The "Throw" you liked)
-          // sin(t * PI) creates an arc. We multiply by (1-t) to dampen it slightly at the end
-          // to prevent the "hard snap".
-          const height = Math.sin(t * Math.PI) * 8; 
-          // However, sin(PI) is 0, so it lands naturally.
-          
-          // Add a tiny bounce at the very end
-          let bounce = 0;
-          if (t > 0.8) {
-              // small bump
-              bounce = Math.sin((t-0.8) * 10 * Math.PI) * 0.5 * (1-t); 
-          }
+          // Custom Bouncing Parabola (Creates 3 distinct bounces that get smaller)
+          // sin(t * pi * frequency) * height * decay
+          const bounceFreq = 3; 
+          const bounceDecay = Math.pow(1 - t, 2.5);
+          const arcHeight = Math.abs(Math.sin(t * Math.PI * bounceFreq)) * 10 * bounceDecay;
 
           diceObjects.forEach(d => {
             // Position
-            d.mesh.position.x = THREE.MathUtils.lerp(d.startPos.x, d.homePos.x, easeOut);
-            d.mesh.position.z = THREE.MathUtils.lerp(d.startPos.z, d.homePos.z, easeOut);
-            
-            // Y is the arc. If t is near 1, we force it to ground to prevent floating.
-            d.mesh.position.y = (t > 0.95 ? 0 : Math.abs(height)) + 1.5; // +1.5 is radius
+            d.mesh.position.x = THREE.MathUtils.lerp(d.startPos.x, d.homePos.x, lateralEase);
+            d.mesh.position.z = THREE.MathUtils.lerp(d.startPos.z, d.homePos.z, lateralEase);
+            d.mesh.position.y = d.homePos.y + arcHeight;
 
-            // Rotation
-            d.mesh.rotation.x = THREE.MathUtils.lerp(d.startRot.x, d.targetRot.x, easeOut);
-            d.mesh.rotation.y = THREE.MathUtils.lerp(d.startRot.y, d.targetRot.y, easeOut);
-            d.mesh.rotation.z = THREE.MathUtils.lerp(d.startRot.z, d.targetRot.z, easeOut);
+            // Rotation Physics:
+            // Instead of interpolating, we take the FINAL target rotation, and apply an offset spin
+            // that rapidly decays to 0. When t=1, the offset spin is 0, guaranteeing the target rotation.
+            const spinAmount = bounceDecay * Math.PI * 15; // 7.5 full rotations that decay
+            const spinQuat = new THREE.Quaternion().setFromAxisAngle(d.spinAxis, spinAmount);
+            
+            const currentQuat = d.targetQuat.clone().multiply(spinQuat);
+            d.mesh.quaternion.copy(currentQuat);
           });
           
-          renderer.render(scene, camera);
+          requestAnimationFrame(loop);
         }
         loop();
       }
 
       function finalize() {
-        // Snap to final exact values to ensure fairness
+        // Snap to exact calculations to eliminate micro-floating decimals
         diceObjects.forEach(d => {
           d.mesh.position.copy(d.homePos);
-          d.mesh.position.y = 1.5; // Resting height
-          d.mesh.rotation.copy(d.targetRot);
+          d.mesh.quaternion.copy(d.targetQuat);
         });
-        renderer.render(scene, camera);
         calculateResults();
       }
 
       function calculateResults() {
-        const results = [];
-        const camDir = camera.position.clone().normalize(); // Roughly
-
+        const results = diceObjects.map(d => d.resultValue);
+        
         diceObjects.forEach(d => {
-          let bestVal = "?";
-          let bestDist = Infinity;
-          
-          // Find the label closest to the camera
-          d.mesh.children.forEach(child => {
-            if (child.userData.isLabel) {
-              const worldPos = new THREE.Vector3();
-              child.getWorldPosition(worldPos);
-              const dist = worldPos.distanceTo(camera.position);
-              
-              if (dist < bestDist) {
-                bestDist = dist;
-                bestVal = child.userData.value;
-              }
-            }
-          });
-          
-          results.push(bestVal);
-          
-          // Highlight winning face
+          // Highlight winning face visually
           d.mesh.children.forEach(c => {
-             if(c.userData.value === bestVal) {
-                 c.material.color.setHex(0xffffff); // Flash white
-                 c.scale.set(1.5, 1.5, 1.5);
+             if(c.userData.value === d.resultValue) {
+                 c.material.color.setHex(0xffffff); 
+                 c.scale.set(1.4, 1.4, 1.4);
              }
           });
         });
 
         // Display
         const sum = results.reduce((a,b)=>a+b, 0);
-        document.getElementById("result-display").innerText = 
-          results.length > 1 ? `${results.join(" + ")} = ${sum}` : `${sum}`;
+        const display = document.getElementById("result-display");
+        display.innerText = results.length > 1 ? `${results.join(" + ")} = ${sum}` : `${sum}`;
           
-        // Crit Effects
+        // Crit Effects for D20
         if (currentType === "d20" && currentCount === 1) {
-            if(sum === 20) flash(0x00ff00);
-            if(sum === 1) flash(0xff0000);
+            if(sum === 20) {
+                flash(0x00ff00);
+                display.style.color = "#fff";
+                display.innerText = "CRIT! 20";
+            }
+            if(sum === 1) {
+                flash(0xff0000);
+                display.style.color = "#ff0000";
+                display.innerText = "FAIL! 1";
+            }
         }
       }
       
@@ -534,20 +579,20 @@
           div.style.top = 0; div.style.left = 0;
           div.style.width = "100%"; div.style.height = "100%";
           div.style.background = "#" + new THREE.Color(colorHex).getHexString();
-          div.style.opacity = 0.3;
+          div.style.opacity = 0.4;
           div.style.pointerEvents = "none";
+          div.style.zIndex = 999;
           document.body.appendChild(div);
           
-          // Fade out
-          let op = 0.3;
+          let op = 0.4;
           const timer = setInterval(() => {
-              op -= 0.05;
+              op -= 0.02;
               div.style.opacity = op;
               if(op <= 0) {
                   clearInterval(timer);
                   div.remove();
               }
-          }, 50);
+          }, 30);
       }
 
       init();
