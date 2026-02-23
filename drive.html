@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API-Free Driving Simulator</title>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    
+    <style>
+        body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; }
+        #map { height: 100%; width: 100%; }
+        
+        #hud {
+            position: absolute; top: 20px; left: 20px; z-index: 5;
+            color: white; font-family: sans-serif; font-size: 16px;
+            background: rgba(0, 0, 0, 0.7); padding: 15px; border-radius: 8px;
+            pointer-events: none; border: 1px solid #444;
+        }
+        
+        /* The Car */
+        #car {
+            position: absolute; top: 70%; left: 50%; /* Positioned lower on screen for driving view */
+            width: 30px; height: 60px;
+            background-color: #ff3333;
+            transform: translate(-50%, -50%);
+            z-index: 2; border-radius: 4px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.8);
+            border: 2px solid #900;
+        }
+        /* Headlights */
+        #car::before {
+            content: ''; position: absolute; top: -5px; left: 3px;
+            width: 6px; height: 10px; background: #fffacd; border-radius: 2px;
+            box-shadow: 0 -30px 40px 10px rgba(255, 255, 150, 0.8);
+        }
+        #car::after {
+            content: ''; position: absolute; top: -5px; right: 3px;
+            width: 6px; height: 10px; background: #fffacd; border-radius: 2px;
+            box-shadow: 0 -30px 40px 10px rgba(255, 255, 150, 0.8);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <b>Controls:</b> W/A/S/D or Arrows<br><br>
+        Speed: <span id="speedDisplay">0</span> km/h<br>
+        Heading: <span id="headingDisplay">0</span>&deg;
+    </div>
+    
+    <div id="map"></div>
+    <div id="car"></div>
+
+    <script>
+        // Car State
+        let car = {
+            lng: -73.985130, // Times Square
+            lat: 40.758896, 
+            speed: 0,
+            heading: 0,     // 0 = North
+            acceleration: 0.8,
+            friction: 0.95, // Lower means it slows down faster
+            turnSpeed: 4
+        };
+
+        let keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+
+        // Initialize MapLibre with Free Esri Satellite Tiles
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'esri-satellite': {
+                        type: 'raster',
+                        // Public, free-to-use satellite image tiles from Esri
+                        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+                        tileSize: 256,
+                        attribution: '&copy; Esri, Maxar, Earthstar Geographics'
+                    }
+                },
+                layers: [{
+                    id: 'satellite',
+                    type: 'raster',
+                    source: 'esri-satellite',
+                    minzoom: 0,
+                    maxzoom: 19
+                }]
+            },
+            center: [car.lng, car.lat],
+            zoom: 17.5,
+            pitch: 60, // Tilts the camera for a 3D driving effect
+            bearing: car.heading,
+            interactive: false // Disable mouse panning so we only drive
+        });
+
+        // Track key presses
+        window.addEventListener('keydown', (e) => { keys[e.key] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+        // Wait for map to load before starting physics
+        map.on('load', () => {
+            requestAnimationFrame(gameLoop);
+        });
+
+        function gameLoop() {
+            // 1. Gas & Brakes
+            if (keys.w || keys.ArrowUp) car.speed += car.acceleration;
+            if (keys.s || keys.ArrowDown) car.speed -= car.acceleration;
+            
+            // 2. Steering (only turn if moving)
+            if (Math.abs(car.speed) > 0.2) {
+                // If reversing, invert the steering for realistic feeling
+                let turnDir = car.speed > 0 ? 1 : -1;
+                if (keys.a || keys.ArrowLeft) car.heading -= car.turnSpeed * turnDir;
+                if (keys.d || keys.ArrowRight) car.heading += car.turnSpeed * turnDir;
+            }
+
+            // 3. Friction
+            car.speed *= car.friction; 
+            if (Math.abs(car.speed) < 0.1) car.speed = 0;
+
+            // 4. Math: Calculate next GPS coordinate
+            // MapLibre bearing: 0 is North, 90 is East. 
+            // Math.sin/cos expect radians.
+            let rad = car.heading * (Math.PI / 180);
+            
+            // Magic numbers scale speed to GPS degrees
+            let dLat = (car.speed * 0.000008) * Math.cos(rad); 
+            let dLng = (car.speed * 0.000008) * Math.sin(rad) / Math.cos(car.lat * (Math.PI / 180));
+
+            car.lat += dLat;
+            car.lng += dLng;
+
+            // 5. Update Map Camera
+            map.jumpTo({
+                center: [car.lng, car.lat],
+                bearing: car.heading
+            });
+
+            // 6. Update UI
+            document.getElementById('speedDisplay').innerText = Math.abs(Math.floor(car.speed * 10));
+            
+            // Keep heading display between 0-360
+            let displayHeading = Math.floor(car.heading) % 360;
+            if (displayHeading < 0) displayHeading += 360;
+            document.getElementById('headingDisplay').innerText = displayHeading;
+
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
