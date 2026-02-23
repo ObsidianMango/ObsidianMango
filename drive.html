@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Driving Simulator</title>
+    <title>3D Driving Simulator with Buildings</title>
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     
     <style>
-        body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #222; font-family: sans-serif; }
+        /* Sky blue background for a realistic horizon when tilted */
+        body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; }
         #map { height: 100%; width: 100%; }
         
         /* The Car - Styled to look like a white sedan from above */
@@ -30,7 +31,7 @@
             background: #333; border-radius: 0 0 3px 3px;
         }
 
-        /* Bottom Speedometer Overlay (Like the screenshot) */
+        /* Bottom Speedometer Overlay */
         #speedo-container {
             position: absolute; bottom: 30px; left: 50%;
             transform: translateX(-50%); z-index: 5;
@@ -38,6 +39,7 @@
             padding: 10px 20px;
             border: 1px solid #444;
             text-align: center;
+            border-radius: 5px;
         }
         #speedo-text {
             color: #00ff00; /* Bright green text */
@@ -59,7 +61,7 @@
 
     <div id="controls-overlay">
         <b>Controls:</b> W/A/S/D or Arrow Keys<br>
-        <i>Physics mapped to real-world 1:1 scale</i>
+        <i>Driving through 3D buildings</i>
     </div>
 
     <div id="map"></div>
@@ -72,23 +74,23 @@
     <script>
         // Constants for real-world math
         const METERS_PER_DEGREE_LAT = 111320; 
-        const MPH_TO_METERS_PER_FRAME = 0.00745; // Assuming ~60fps (0.447 m/s divided by 60)
+        const MPH_TO_METERS_PER_FRAME = 0.00745; // Assuming ~60fps
 
-        // Car Physics State
+        // Car Physics State (Starting in Downtown Red Bank, NJ)
         let car = {
-            lat: 40.3470,  // Red Bank, NJ
-            lng: -74.0640,
+            lat: 40.3505,  
+            lng: -74.0665,
             speedMph: 0,
-            heading: 0,    // 0 = North
+            heading: 0, 
         };
 
         // Tuning parameters for realistic handling
         const physics = {
-            maxSpeed: 110,      // Top speed in mph
-            accel: 0.35,        // Acceleration rate
-            brakeForce: 0.8,    // Braking is stronger than coasting
-            friction: 0.985,    // Natural coasting slowdown
-            maxSteer: 3.5       // Max degrees turned per frame
+            maxSpeed: 110,      
+            accel: 0.35,        
+            brakeForce: 0.8,    
+            friction: 0.985,    
+            maxSteer: 3.5       
         };
 
         let keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
@@ -99,6 +101,7 @@
             style: {
                 version: 8,
                 sources: {
+                    // Free Esri Satellite Imagery
                     'esri-satellite': {
                         type: 'raster',
                         tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
@@ -110,7 +113,7 @@
             },
             center: [car.lng, car.lat],
             zoom: 18.5,
-            pitch: 75, // Steep 3D pitch
+            pitch: 75, // Steep 3D pitch to see the buildings
             bearing: car.heading,
             interactive: false
         });
@@ -118,7 +121,30 @@
         window.addEventListener('keydown', (e) => { keys[e.key] = true; });
         window.addEventListener('keyup', (e) => { keys[e.key] = false; });
 
-        map.on('load', () => requestAnimationFrame(gameLoop));
+        map.on('load', () => {
+            // Load free 3D Building Data from OpenFreeMap
+            map.addSource('openfreemap', {
+                url: 'https://tiles.openfreemap.org/planet',
+                type: 'vector'
+            });
+
+            // Add the 3D building extrusion layer
+            map.addLayer({
+                'id': '3d-buildings',
+                'source': 'openfreemap',
+                'source-layer': 'building',
+                'type': 'fill-extrusion',
+                'minzoom': 14,
+                'paint': {
+                    'fill-extrusion-color': '#e0e0e0', // Light grey so they stand out against satellite
+                    'fill-extrusion-height': ['get', 'render_height'],
+                    'fill-extrusion-base': ['case', ['>=', ['get', 'render_min_height'], 0], ['get', 'render_min_height'], 0],
+                    'fill-extrusion-opacity': 0.85 // Slightly transparent
+                }
+            });
+
+            requestAnimationFrame(gameLoop);
+        });
 
         function gameLoop() {
             // 1. Gas and Brakes
@@ -127,23 +153,22 @@
             } else if (keys.s || keys.ArrowDown) {
                 car.speedMph -= physics.brakeForce;
             } else {
-                car.speedMph *= physics.friction; // Coasting
+                car.speedMph *= physics.friction; 
             }
 
             // Cap speeds
             if (car.speedMph > physics.maxSpeed) car.speedMph = physics.maxSpeed;
-            if (car.speedMph < -25) car.speedMph = -25; // Reverse speed limit
-            if (Math.abs(car.speedMph) < 0.1) car.speedMph = 0; // Full stop
+            if (car.speedMph < -25) car.speedMph = -25; 
+            if (Math.abs(car.speedMph) < 0.1) car.speedMph = 0; 
 
             // 2. Realistic Steering
-            // You can only turn if moving, and turn sharpness is scaled by speed
             let turnEffectiveness = Math.min(Math.abs(car.speedMph) / 15, 1); 
-            let steerDir = car.speedMph >= 0 ? 1 : -1; // Invert steering in reverse
+            let steerDir = car.speedMph >= 0 ? 1 : -1; 
 
             if (keys.a || keys.ArrowLeft) car.heading -= physics.maxSteer * turnEffectiveness * steerDir;
             if (keys.d || keys.ArrowRight) car.heading += physics.maxSteer * turnEffectiveness * steerDir;
 
-            // 3. Move the Car (Math to translate MPH to GPS coordinates)
+            // 3. Move the Car 
             let metersTraveled = car.speedMph * MPH_TO_METERS_PER_FRAME;
             let rad = car.heading * (Math.PI / 180);
             
