@@ -617,6 +617,161 @@
 
     // Force an initial render if a user starts on a page that needs it
     if(els.deckLayer && els.deckLayer.classList.contains('active')) renderAnalytics();
+    
+            // ==========================================
+        // UPDATE 2: ANALYTICS & ADVANCED FILTERS 
+        // ==========================================
+
+        // 1. Inject the CSS for the new components
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .nav-bottom { padding: 0 16px 12px 16px; display: flex; align-items: center; gap: 12px; overflow-x: auto; scrollbar-width: none; }
+            .nav-bottom::-webkit-scrollbar { display: none; }
+            .mana-group { display: flex; gap: 8px; flex-shrink: 0; }
+            .mana-circle { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; transition: 0.2s; border: 2px solid rgba(255,255,255,0.1); }
+            .mana-circle.active { transform: scale(1.1); border-color: transparent; box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+            .mc-w { background: #fef08a; } .mc-u { background: #3b82f6; } .mc-b { background: #4b5563; } .mc-r { background: #ef4444; } .mc-g { background: #22c55e; } .mc-c { background: #9ca3af; }
+            .chip { padding: 6px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 20px; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); white-space: nowrap; cursor: pointer; transition: 0.2s; }
+            .chip.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3); }
+            .chart-box { background: var(--bg-panel); border-radius: 16px; padding: 20px; margin-top: 20px; border: 1px solid var(--border); }
+            .chart-title { font-weight: 700; margin-bottom: 15px; color: white; text-align: center; }
+            .bar-chart { display: flex; align-items: flex-end; height: 120px; gap: 8px; padding-top: 20px; }
+            .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; height: 100%; justify-content: flex-end; }
+            .bar-val { width: 100%; background: var(--primary); border-radius: 4px 4px 0 0; transition: height 0.5s ease; min-height: 2px; }
+            .bar-label { font-size: 0.7rem; color: #888; }
+            .bar-count { font-size: 0.7rem; color: #fff; margin-bottom: 4px; }
+            .doughnut-wrap { display: flex; justify-content: center; position: relative; height: 160px; }
+            .doughnut { width: 150px; height: 150px; border-radius: 50%; background: conic-gradient(var(--chart-gradient, #333 0deg 360deg)); position: relative; display: flex; align-items: center; justify-content: center; }
+            .doughnut::after { content: ''; position: absolute; width: 80px; height: 80px; background: var(--bg-panel); border-radius: 50%; }
+            .legend { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 15px; }
+            .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #ccc; }
+            .dot { width: 10px; height: 10px; border-radius: 50%; }
+        `;
+        document.head.appendChild(style);
+
+        // 2. Inject the HTML into the DOM
+        document.querySelector('header').insertAdjacentHTML('beforeend', `
+            <div class="nav-bottom" id="global-filters">
+                <div class="mana-group">
+                    <div class="mana-circle mc-w" data-val="W" onclick="toggleFilter('color', 'W', this)"></div>
+                    <div class="mana-circle mc-u" data-val="U" onclick="toggleFilter('color', 'U', this)"></div>
+                    <div class="mana-circle mc-b" data-val="B" onclick="toggleFilter('color', 'B', this)"></div>
+                    <div class="mana-circle mc-r" data-val="R" onclick="toggleFilter('color', 'R', this)"></div>
+                    <div class="mana-circle mc-g" data-val="G" onclick="toggleFilter('color', 'G', this)"></div>
+                    <div class="mana-circle mc-c" data-val="C" onclick="toggleFilter('color', 'C', this)"></div>
+                </div>
+                <div style="width: 1px; height: 24px; background: var(--border); flex-shrink: 0; margin: 0 4px;"></div>
+                <div style="display: flex; gap: 8px;">
+                    <div class="chip" data-val="Creature" onclick="toggleFilter('type', 'Creature', this)">Creature</div>
+                    <div class="chip" data-val="Artifact" onclick="toggleFilter('type', 'Artifact', this)">Artifact</div>
+                    <div class="chip" data-val="Enchantment" onclick="toggleFilter('type', 'Enchantment', this)">Enchantment</div>
+                    <div class="chip" data-val="Instant" onclick="toggleFilter('type', 'Instant', this)">Instant</div>
+                    <div class="chip" data-val="Sorcery" onclick="toggleFilter('type', 'Sorcery', this)">Sorcery</div>
+                    <div class="chip" data-val="Planeswalker" onclick="toggleFilter('type', 'Planeswalker', this)">Planeswalker</div>
+                    <div class="chip" data-val="Land" onclick="toggleFilter('type', 'Land', this)">Land</div>
+                </div>
+            </div>
+        `);
+
+        document.getElementById('deckListContainer').insertAdjacentHTML('afterend', `
+            <div id="deckAnalytics" style="display:none; margin-top: 30px; border-top: 1px solid var(--border); padding-top: 20px;">
+                <div class="chart-box"><div class="chart-title">Mana Curve</div><div class="bar-chart" id="manaChart"></div></div>
+                <div class="chart-box"><div class="chart-title">Color Breakdown</div><div class="doughnut-wrap"><div class="doughnut" id="colorChart"></div></div><div class="legend" id="colorLegend"></div></div>
+            </div>
+        `);
+
+        // 3. Upgrade State & Functions
+        state.filters = { colors: new Set(), types: new Set() };
+
+        window.toggleFilter = function(type, val, el) {
+            el.classList.toggle('active');
+            const set = type === 'color' ? state.filters.colors : state.filters.types;
+            set.has(val) ? set.delete(val) : set.add(val);
+            if(state.view === 'search') fetchSearchCards(true);
+            if(state.view === 'binder') renderBinder();
+        };
+
+        // Override Search to respect filters
+        window.fetchSearchCards = async function(reset = false) {
+            if(state.isSearching) return; state.isSearching = true; document.getElementById('search-loader').style.display = 'block';
+            if(reset) { state.searchData = []; state.searchPage = 1; els.searchGrid.innerHTML = ''; state.searchNextUrl = null; }
+            
+            let queryParts = [];
+            const txt = els.searchInput.value.trim();
+            if(txt) queryParts.push(`(${txt})`);
+            
+            if(state.filters.colors.size > 0) queryParts.push(`id:${Array.from(state.filters.colors).join('')}`);
+            if(state.filters.types.size > 0) {
+                const tq = Array.from(state.filters.types).map(t => `t:${t}`).join(' OR ');
+                queryParts.push(`(${tq})`);
+            }
+            if(queryParts.length === 0) queryParts.push('set:sld');
+
+            let url = state.searchNextUrl || `https://api.scryfall.com/cards/search?q=${encodeURIComponent(queryParts.join(' AND '))}&order=usd`;
+
+            try {
+                const res = await fetch(url); const json = await res.json();
+                if(json.code === 'not_found') { els.searchGrid.innerHTML = getEmptyState("No cards match filters."); state.searchHasMore = false; }
+                else { state.searchData = [...state.searchData, ...json.data]; state.searchHasMore = json.has_more; state.searchNextUrl = json.next_page; json.data.forEach((c) => renderCard(c, els.searchGrid, 'search')); }
+            } catch(e) {} finally { state.isSearching = false; document.getElementById('search-loader').style.display = 'none'; }
+        };
+
+        // Override Binder to respect filters
+        window.renderBinder = function() {
+            let total = Object.values(state.collection).reduce((acc, c) => acc + (getPrice(c) * c.count), 0); document.getElementById('total-value').innerText = fmtMoney(total);
+            els.binderGrid.innerHTML = ''; let cards = Object.values(state.collection); const term = document.getElementById('binderSearch').value.toLowerCase(); const sort = document.getElementById('sort-select').value;
+            
+            if(term) cards = cards.filter(c => c.name.toLowerCase().includes(term) || c.type_line?.toLowerCase().includes(term));
+            
+            if(state.filters.colors.size > 0) cards = cards.filter(c => c.colors && Array.from(state.filters.colors).some(color => c.colors.includes(color)));
+            if(state.filters.types.size > 0) cards = cards.filter(c => c.type_line && Array.from(state.filters.types).some(type => c.type_line.includes(type)));
+
+            cards.sort((a,b) => sort === 'value' ? getPrice(b) - getPrice(a) : b.dateAdded - a.dateAdded);
+            if(cards.length === 0) { els.binderGrid.innerHTML = getEmptyState("No matches in binder."); return; }
+            cards.forEach(c => renderCard(c, els.binderGrid, 'binder'));
+        };
+
+        // Inject Chart Math into Deck Renderer
+        const originalRenderDeck = renderDeck;
+        window.renderDeck = function() {
+            originalRenderDeck();
+            
+            const deck = getActiveDeck();
+            if(deck.cards.length === 0) { document.getElementById('deckAnalytics').style.display = 'none'; return; }
+            document.getElementById('deckAnalytics').style.display = 'block';
+            
+            // Mana Curve Calculation
+            const cmc = {}; let maxCount = 0;
+            deck.cards.forEach(c => {
+                if(c.type_line?.includes('Land')) return;
+                const cost = Math.floor(c.cmc || 0); const k = cost > 7 ? '8+' : cost;
+                cmc[k] = (cmc[k] || 0) + 1; if(cmc[k] > maxCount) maxCount = cmc[k];
+            });
+            const chart = document.getElementById('manaChart'); chart.innerHTML = '';
+            ['0','1','2','3','4','5','6','7','8+'].forEach(k => {
+                const count = cmc[k] || 0; const h = maxCount ? (count / maxCount) * 100 : 0;
+                chart.innerHTML += `<div class="bar-col"><div class="bar-count">${count}</div><div class="bar-val" style="height:${h}%;"></div><div class="bar-label">${k}</div></div>`;
+            });
+
+            // Color Pie Calculation
+            const colors = { W:0, U:0, B:0, R:0, G:0, C:0 }; let totalColor = 0;
+            deck.cards.forEach(c => {
+                if(!c.colors || c.colors.length === 0) colors.C++;
+                else c.colors.forEach(col => colors[col]++);
+                totalColor += (c.colors ? c.colors.length : 1);
+            });
+            const cMap = { W:'#fef08a', U:'#3b82f6', B:'#4b5563', R:'#ef4444', G:'#22c55e', C:'#9ca3af' };
+            let conicStr = ''; let currentDeg = 0; const legend = document.getElementById('colorLegend'); legend.innerHTML = '';
+            Object.keys(colors).forEach(k => {
+                if(colors[k] > 0) {
+                    const deg = (colors[k] / totalColor) * 360;
+                    conicStr += `${cMap[k]} ${currentDeg}deg ${currentDeg + deg}deg, `; currentDeg += deg;
+                    legend.innerHTML += `<div class="legend-item"><div class="dot" style="background:${cMap[k]}"></div>${k}</div>`;
+                }
+            });
+            document.getElementById('colorChart').style.setProperty('--chart-gradient', conicStr.slice(0,-2) || '#333 0deg 360deg');
+        };
+
 </script>
 
 </body>
