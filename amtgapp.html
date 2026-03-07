@@ -3,426 +3,713 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MTG Pocket Sim | Portfolio Edition</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <title>MTG Pocket Sim: Collector's Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #0f0f13; --surface: #1c1c24; --surface-2: #2d2d3a;
-            --primary: #d4af37; --primary-dim: #8a7326;
-            --mythic: #ff5500; --rare: #c0c0c0; --uncommon: #73b2d9; --common: #2d2d2d;
-            --text: #ffffff; --text-muted: #8b8b99;
-            --success: #2ecc71; --danger: #eb5757;
-            --premium-grad: linear-gradient(135deg, #ff007a, #7000ff);
+            --primary: #d4af37; /* Gold */
+            --primary-dim: #8a7326;
+            --bg: #0a0a0c;
+            --surface: #1e1e24;
+            --surface-2: #2a2a35;
+            --text: #ffffff;
+            --text-muted: #8b8b99;
+            --danger: #eb5757;
+            --success: #2ecc71;
+            --link: #3498db;
+            
+            /* Mana Colors */
+            --w: #fffbd5; --u: #aae0fa; --b: #cbc2bf; --r: #f9aa8f; --g: #9bd3ae;
         }
 
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; user-select: none; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        
+        body {
+            margin: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
 
-        /* --- HEADER & PORTFOLIO --- */
-        #top-bar { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(28, 28, 36, 0.8); backdrop-filter: blur(10px); z-index: 100; border-bottom: 1px solid #333; }
-        .currency-badge { background: rgba(46, 204, 113, 0.1); border: 1px solid var(--success); color: var(--success); padding: 8px 16px; border-radius: 20px; font-weight: 900; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; box-shadow: 0 0 15px rgba(46, 204, 113, 0.2); transition: 0.3s; }
-        .currency-badge.bump { transform: scale(1.05); box-shadow: 0 0 25px rgba(46, 204, 113, 0.5); }
-        .portfolio-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        /* --- DYNAMIC BACKGROUND --- */
+        #dynamic-bg {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none;
+            opacity: 0.05; 
+            background-repeat: repeat;
+            background-position: center;
+            background-size: 100px 100px;
+            filter: grayscale(100%) blur(2px);
+            transition: background-image 0.5s ease;
+        }
+        #bg-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1; pointer-events: none;
+            background: radial-gradient(circle at center, rgba(18,18,18,0.7) 0%, rgba(10,10,12,1) 100%);
+        }
+
+        /* --- FLASH EFFECT --- */
+        #flash-overlay {
+            position: fixed; inset: 0; background: white; opacity: 0; pointer-events: none; z-index: 999;
+            transition: opacity 0.5s ease-out;
+        }
 
         /* --- APP CONTAINER --- */
-        #app-container { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; }
-        .view { position: absolute; inset: 0; display: none; flex-direction: column; padding: 20px; overflow-y: auto; padding-bottom: 100px; }
-        .view.active { display: flex; animation: fadeIn 0.3s ease; }
+        #app-container {
+            flex: 1; position: relative; overflow: hidden; display: flex;
+            flex-direction: column; width: 100%; height: 100%; z-index: 10;
+        }
+
+        .view {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 90px; 
+            display: none; flex-direction: column; padding: 16px;
+            overflow-y: auto; width: 100%;
+        }
+        
+        .view.active { display: flex; animation: fadeIn 0.3s cubic-bezier(0.25, 1, 0.5, 1); }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* --- PACK SIMULATOR --- */
-        .pack-selector { display: flex; gap: 10px; margin-bottom: 20px; background: var(--surface); padding: 6px; border-radius: 16px; border: 1px solid #333; }
-        .pack-tab { flex: 1; padding: 12px; text-align: center; border-radius: 12px; font-weight: 800; font-size: 0.9rem; cursor: pointer; color: var(--text-muted); transition: 0.3s; }
-        .pack-tab.active { background: var(--surface-2); color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        .pack-tab.premium.active { background: var(--premium-grad); color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        /* --- NAVIGATION --- */
+        #nav-bar {
+            height: 90px; background: var(--surface); display: flex;
+            justify-content: space-around; align-items: center;
+            border-top: 1px solid #333; z-index: 100; padding-bottom: 25px;
+            flex-shrink: 0; box-shadow: 0 -10px 30px rgba(0,0,0,0.6);
+        }
 
-        #pack-stage { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; perspective: 1000px; }
-        .pack-wrapper { width: 280px; height: 420px; position: relative; animation: float 6s ease-in-out infinite; }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        .nav-item {
+            display: flex; flex-direction: column; align-items: center;
+            font-size: 0.75rem; color: var(--text-muted); cursor: pointer;
+            width: 33%; transition: all 0.2s; font-weight: 600;
+        }
+        .nav-item.active { color: var(--primary); transform: translateY(-4px); }
+        .nav-icon { font-size: 1.8rem; margin-bottom: 4px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+
+        /* --- UI ELEMENTS --- */
+        h1, h2 { margin: 0 0 10px 0; letter-spacing: -0.5px; }
+        .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+            color: #000; border: none; padding: 14px; border-radius: 12px;
+            font-weight: 900; font-size: 1rem; cursor: pointer; width: 100%;
+            text-align: center; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.25);
+            transition: transform 0.1s, box-shadow 0.2s; text-transform: uppercase;
+        }
+        .btn:active { transform: scale(0.96); box-shadow: 0 2px 5px rgba(212, 175, 55, 0.2); }
+        .btn.secondary { background: var(--surface-2); color: white; box-shadow: none; border: 1px solid #444; }
+        .btn.danger { background: var(--danger); color: white; box-shadow: none; }
+        .btn.commander { background: linear-gradient(135deg, #9b59b6, #8e44ad); color: white; box-shadow: 0 4px 15px rgba(155, 89, 182, 0.4); }
+        .btn.shop { background: linear-gradient(135deg, var(--link), #2980b9); color: white; margin-top: 5px; }
         
-        .pack-body { width: 100%; height: 100%; background: linear-gradient(135deg, #333, #000); border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 30px 60px rgba(0,0,0,0.8); border: 1px solid #444; position: relative; overflow: hidden; transition: 0.5s; }
-        .pack-body.premium { background: linear-gradient(135deg, #1a0033, #4a00e0); border-color: #ff007a; box-shadow: 0 30px 60px rgba(74, 0, 224, 0.5); }
-        .pack-body::before { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.2) 45%, rgba(255,255,255,0.2) 55%, transparent 70%); background-size: 200% 100%; animation: shimmer 4s infinite linear; pointer-events: none; }
-        .pack-body.premium::before { background: linear-gradient(115deg, transparent 30%, rgba(255,215,0,0.4) 45%, rgba(255,215,0,0.4) 55%, transparent 70%); background-size: 200% 100%; }
+        select, input {
+            width: 100%; padding: 12px; background: var(--surface-2);
+            border: 1px solid #444; color: white; border-radius: 10px;
+            font-size: 0.95rem; margin-bottom: 8px; font-family: inherit; font-weight: 600;
+        }
+
+        .controls-row { display: flex; gap: 10px; margin-bottom: 20px; }
+
+        /* --- PACK STAGE & VISUALS --- */
+        #pack-stage {
+            flex: 1; display: flex; flex-direction: column; justify-content: center;
+            align-items: center; perspective: 1000px; width: 100%;
+        }
+        .pack-wrapper {
+            width: 320px; height: 480px; position: relative;
+            animation: float 6s ease-in-out infinite; cursor: pointer;
+        }
+        @keyframes float { 0%, 100% { transform: translateY(0) rotateX(2deg); } 50% { transform: translateY(-15px) rotateX(-2deg); } }
+        
+        .pack-body {
+            width: 100%; height: 100%; background: linear-gradient(135deg, #2a2a35, #111);
+            border-radius: 22px; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; box-shadow: 0 30px 60px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+            border: 1px solid #444; position: relative; overflow: hidden; transition: all 0.4s ease;
+        }
+        .pack-body::before {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.08) 45%, rgba(255,255,255,0.08) 55%, transparent 70%);
+            background-size: 200% 100%; animation: shimmer 4s infinite linear; pointer-events: none; z-index: 5;
+        }
         @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        /* COLLECTOR BOOSTER STYLING */
+        .pack-body.collector {
+            background: linear-gradient(135deg, #8a6312, #e6c25a, #b08d1f);
+            border: 2px solid #fff2b2;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.9), 0 0 40px rgba(230, 194, 90, 0.4);
+        }
+        .pack-body.collector::before {
+            background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,0.4) 40%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.4) 60%, transparent 80%);
+            animation: shimmer 2.5s infinite linear;
+        }
+        .pack-type-label {
+            position: absolute; top: 90px; color: var(--primary); font-weight: 900;
+            letter-spacing: 4px; font-size: 0.9rem; text-shadow: 0 2px 4px black; z-index: 6;
+        }
+        .pack-body.collector .pack-type-label { color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+
+        .pack-icon { width: 65%; height: 65%; opacity: 0.95; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.9)); object-fit: contain; z-index: 2; }
+        .pack-title {
+            position: absolute; bottom: 40px; font-size: 1.8rem; font-weight: 900;
+            text-transform: uppercase; text-align: center; color: var(--text);
+            text-shadow: 0 4px 15px black; width: 100%; z-index: 6; line-height: 1.1; padding: 0 10px;
+        }
+        .pack-strip {
+            position: absolute; top: 0; left: 0; width: 100%; height: 70px;
+            background: repeating-linear-gradient(45deg, #111, #111 10px, #222 10px, #222 20px);
+            z-index: 20; border-radius: 22px 22px 0 0; border-bottom: 2px dashed #666;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.7); cursor: grab;
+        }
+        .pack-body.collector .pack-strip { background: repeating-linear-gradient(45deg, #3a2a00, #3a2a00 10px, #5c4300 10px, #5c4300 20px); border-bottom-color: #ffd700; }
+        .tear-progress {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+            background: linear-gradient(90deg, var(--primary), #fff); pointer-events: none; opacity: 0.9; mix-blend-mode: overlay;
+        }
+
+        .card-stack { width: 320px; height: 440px; position: relative; display: none; }
+        .card {
+            width: 100%; height: 100%; position: absolute; top: 0; left: 0;
+            border-radius: 16px; background-size: cover; background-position: center;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.9); background-color: #111;
+            transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease; border: 1px solid #222;
+            cursor: pointer;
+        }
+        .card.swiped { transform: translateX(150%) rotate(25deg) scale(0.9); opacity: 0; }
         
-        .pack-icon { width: 60%; height: 60%; filter: drop-shadow(0 0 20px rgba(0,0,0,0.8)); object-fit: contain; z-index: 2; transition: 0.3s; }
-        .pack-title { position: absolute; bottom: 30px; font-size: 1.6rem; font-weight: 900; color: var(--text); text-shadow: 0 4px 10px black; z-index: 6; text-align: center; }
-        .pack-strip { position: absolute; top: 0; left: 0; width: 100%; height: 60px; background: repeating-linear-gradient(45deg, #1a1a1a, #1a1a1a 10px, #252525 10px, #252525 20px); z-index: 20; border-radius: 20px 20px 0 0; border-bottom: 2px dashed #555; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(0,0,0,0.5); cursor: pointer; }
-        .pack-body.premium .pack-strip { background: repeating-linear-gradient(45deg, #300, #300 10px, #500 10px, #500 20px); border-bottom-color: #ff007a; }
-        .tear-progress { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: linear-gradient(90deg, var(--primary), #fff); pointer-events: none; opacity: 0.8; }
+        /* FOIL SHINE EFFECT */
+        .card.foil::after, .col-card.foil::after, .row-img.foil::after {
+            content: ""; position: absolute; inset: 0; border-radius: inherit;
+            background: linear-gradient(125deg, rgba(255,255,255,0) 20%, rgba(255,150,255,0.3) 40%, rgba(150,255,255,0.4) 50%, rgba(255,255,150,0.3) 60%, rgba(255,255,255,0) 80%);
+            mix-blend-mode: color-dodge; opacity: 0.8; pointer-events: none;
+            animation: foilShine 4s infinite linear;
+        }
+        @keyframes foilShine { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
 
-        .card-stack { width: 280px; height: 390px; position: relative; display: none; }
-        .card { width: 100%; height: 100%; position: absolute; top: 0; left: 0; border-radius: 16px; background-size: cover; background-position: center; box-shadow: 0 10px 40px rgba(0,0,0,0.9); background-color: #222; transition: transform 0.3s, opacity 0.3s; border: 1px solid #111; cursor: pointer; }
-        .card.swiped { transform: translateX(140%) rotate(25deg); opacity: 0; pointer-events: none;}
-        .card.foil::after { content: ""; position: absolute; inset: 0; border-radius: 16px; background: linear-gradient(125deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 70%); mix-blend-mode: color-dodge; opacity: 0.8; animation: foilShine 3s infinite; pointer-events: none;}
-        
-        .price-pop { position: fixed; font-size: 2.5rem; font-weight: 900; color: var(--success); text-shadow: 0 2px 10px rgba(0,0,0,0.8); pointer-events: none; z-index: 2000; animation: popUp 1.2s ease-out forwards; }
-        .price-pop.high-value { color: var(--mythic); font-size: 3.5rem; text-shadow: 0 0 20px var(--mythic); }
-        @keyframes popUp { 0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } 20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 100% { transform: translate(-50%, -200%) scale(1); opacity: 0; } }
+        /* --- PRICE EXPLOSION --- */
+        .price-pop {
+            position: fixed; font-size: 2.8rem; font-weight: 900; color: var(--success);
+            text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 10px rgba(46, 204, 113, 0.5); pointer-events: none; z-index: 2000;
+            animation: popUp 1.2s ease-out forwards;
+        }
+        .price-pop.high-value { color: var(--primary); font-size: 4rem; text-shadow: 0 0 30px var(--primary), 0 5px 15px black; }
+        @keyframes popUp {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            15% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+            100% { transform: translate(-50%, -250%) scale(1); opacity: 0; }
+        }
 
-        /* --- SET MASTERY (BINDER) --- */
-        .mastery-card { background: var(--surface); border-radius: 16px; padding: 20px; border: 1px solid #333; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .mastery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .mastery-title { font-size: 1.1rem; font-weight: 800; color: var(--text); margin: 0; }
-        .mastery-pct { font-size: 1.5rem; font-weight: 900; color: var(--primary); }
-        .progress-track { width: 100%; height: 12px; background: var(--surface-2); border-radius: 6px; overflow: hidden; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); }
-        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary-dim), var(--primary)); width: 0%; transition: width 1s cubic-bezier(0.2, 0.8, 0.2, 1); border-radius: 6px; }
+        /* --- SUMMARY --- */
+        #summary-screen { text-align: center; display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; width: 100%; }
+        .rare-pull-list { display: flex; gap: 10px; overflow-x: auto; max-width: 100%; padding: 10px; justify-content: center; margin-bottom: 20px; }
+        .mini-card { width: 90px; height: 125px; border-radius: 8px; background-size: cover; flex-shrink: 0; border: 1px solid #555; box-shadow: 0 5px 15px rgba(0,0,0,0.8); position: relative;}
+        .stat-card {
+            background: var(--surface); padding: 20px; border-radius: 16px; margin-bottom: 15px;
+            text-align: center; border: 1px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.4); width: 100%;
+        }
+        .stat-val { font-size: 2.4rem; font-weight: 900; color: var(--success); text-shadow: 0 0 20px rgba(39, 174, 96, 0.4); }
 
-        .btn { background: var(--surface-2); color: white; border: 1px solid #444; padding: 12px 20px; border-radius: 10px; font-weight: 800; cursor: pointer; transition: 0.2s; text-align: center; width: 100%; font-size: 0.9rem;}
-        .btn:active { transform: scale(0.96); }
-        .btn.primary { background: var(--primary); color: black; border-color: var(--primary); }
-        .btn.danger { background: rgba(235, 87, 87, 0.1); color: var(--danger); border-color: rgba(235, 87, 87, 0.3); }
+        /* --- COLLECTION & DECK STYLES --- */
+        .binder-controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        .filter-toggle-btn {
+            width: 48px; display: flex; align-items: center; justify-content: center;
+            background: var(--surface-2); border: 1px solid #444; border-radius: 10px;
+            font-size: 1.2rem; cursor: pointer; transition: 0.2s;
+        }
+        .filter-toggle-btn.active { border-color: var(--primary); background: #333; box-shadow: 0 0 15px rgba(212,175,55,0.3); }
 
-        .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
-        .col-card { aspect-ratio: 2.5/3.5; background-size: cover; border-radius: 8px; position: relative; box-shadow: 0 4px 8px rgba(0,0,0,0.5); cursor: pointer; transition: 0.2s;}
-        .col-card:hover { transform: translateY(-3px); border: 1px solid var(--primary); }
-        .col-count { position: absolute; top: -5px; right: -5px; background: var(--primary); color: black; font-size: 0.7rem; font-weight: bold; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
-        
-        select { width: 100%; padding: 12px; background: var(--surface-2); border: 1px solid #444; color: white; border-radius: 10px; font-size: 1rem; margin-bottom: 15px; font-weight: bold;}
+        #collection-grid, #deck-grid-view { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding-bottom: 20px; }
+        .col-card {
+            aspect-ratio: 2.5/3.5; background-size: cover; border-radius: 8px;
+            position: relative; background-color: #222; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); border: 1px solid #333;
+        }
+        .col-count {
+            position: absolute; top: -6px; right: -6px; background: var(--primary);
+            color: black; font-size: 0.75rem; font-weight: 900; width: 24px; height: 24px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.8); z-index: 2; border: 2px solid var(--bg);
+        }
+        .col-price {
+            position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.9);
+            font-size: 0.7rem; color: var(--success); text-align: center;
+            border-radius: 0 0 8px 8px; padding: 5px 0; font-weight: 700;
+        }
 
-        /* --- NAV BAR --- */
-        #nav-bar { height: 75px; background: var(--surface); display: flex; justify-content: space-around; align-items: center; border-top: 1px solid #333; z-index: 100; flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -10px 20px rgba(0,0,0,0.5); }
-        .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 0.75rem; color: var(--text-muted); cursor: pointer; width: 50%; font-weight: 700; transition: 0.2s; }
-        .nav-item.active { color: var(--primary); transform: translateY(-2px); }
-        .nav-icon { font-size: 1.6rem; margin-bottom: 4px; }
+        .deck-list-item {
+            background: var(--surface); padding: 15px; border-radius: 12px; margin-bottom: 12px;
+            border: 1px solid #333; display: flex; justify-content: space-between; align-items: center; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: background 0.2s;
+        }
+        .deck-list-item:active { background: var(--surface-2); }
+        .deck-fmt-tag { font-size: 0.65rem; padding: 3px 6px; border-radius: 4px; background: #111; color: #ccc; margin-left: 8px; font-weight: 800; }
+        .deck-val-tag { font-size: 0.9rem; color: var(--success); font-weight: 900; margin-right: 12px; background: rgba(46, 204, 113, 0.1); padding: 6px 10px; border-radius: 8px; }
 
-        /* --- MODAL --- */
-        .modal-overlay { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.9); backdrop-filter: blur(8px); display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.2s; }
-        #modal-img { width: 100%; max-width: 320px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); margin-bottom: 20px; }
-        .modal-content { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 10px; text-align: center;}
-        .modal-price-tag { font-size: 1.8rem; font-weight: 900; color: var(--success); margin-bottom: 15px; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+        .deck-card-row {
+            display: flex; align-items: center; gap: 12px; background: var(--surface);
+            margin-bottom: 10px; padding: 10px; border-radius: 12px; border: 1px solid #333;
+        }
+        .row-img { width: 40px; height: 56px; background-size: cover; border-radius: 6px; position: relative; }
+        .remove-btn {
+            background: var(--danger); color: white; border: none; width: 32px; height: 32px;
+            border-radius: 50%; font-weight: bold; font-size: 1.2rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* --- MODALS & EXTRAS --- */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.95);
+            backdrop-filter: blur(10px); display: none; flex-direction: column;
+            align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.2s;
+        }
+        #modal-img { max-width: 90%; max-height: 55vh; border-radius: 18px; margin-bottom: 20px; box-shadow: 0 0 50px rgba(0,0,0,0.9); }
+        .modal-details { width: 100%; max-width: 400px; text-align: center; color: white; }
+        #toast {
+            position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
+            background: #2a2a35; padding: 12px 24px; border-radius: 30px; font-size: 0.95rem;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 600;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8); border: 1px solid #555; font-weight: 700;
+        }
     </style>
 </head>
 <body>
 
-    <div id="top-bar">
-        <div>
-            <span style="font-weight:900; font-size:1.2rem; letter-spacing:-0.5px;">POCKET SIM</span>
-        </div>
-        <div class="currency-badge" id="value-display">
-            <span class="portfolio-label">Value:</span>
-            <span id="portfolio-amt">$0.00</span>
-        </div>
-    </div>
+    <div id="dynamic-bg"></div>
+    <div id="bg-overlay"></div>
+    <div id="flash-overlay"></div>
 
     <div id="app-container">
-        
-        <div id="view-packs" class="view active">
-            <select id="set-select" onchange="loadSet()"><option disabled selected>Loading expansions...</option></select>
+
+        <div id="view-home" class="view active">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                <h1>Pack Simulator</h1>
+                <button class="btn secondary" style="width: auto; padding: 10px; border-radius: 50%;" onclick="clearData()">⚙️</button>
+            </div>
             
-            <div class="pack-selector">
-                <div class="pack-tab active" id="tab-draft" onclick="setPackType('draft')">Draft Booster<br><span style="font-size:0.7rem; color:#888;">Standard</span></div>
-                <div class="pack-tab premium" id="tab-collector" onclick="setPackType('collector')">Collector Booster<br><span style="font-size:0.7rem; color:#fff;">Premium Foils</span></div>
+            <div class="stat-card">
+                <div class="subtitle">Total Collection Value</div>
+                <div class="stat-val" id="home-value">$0.00</div>
+            </div>
+
+            <div class="controls-row">
+                <div style="flex:1;">
+                    <select id="set-select" onchange="updateSetInfo()">
+                        <option disabled selected>Loading sets...</option>
+                    </select>
+                </div>
+                <div style="flex:1;">
+                    <select id="pack-type" onchange="updatePackVisuals()">
+                        <option value="draft">Draft Booster</option>
+                        <option value="collector">Collector Booster</option>
+                    </select>
+                </div>
             </div>
 
             <div id="pack-stage">
                 <div id="pack-wrapper" class="pack-wrapper" style="display:none;">
-                    <div class="pack-strip" id="pack-strip"><span style="font-size:0.7rem; color:#aaa; font-weight:bold; letter-spacing:1px;">SLIDE >>></span><div class="tear-progress" id="tear-line"></div></div>
+                    <div class="pack-strip" id="pack-strip">
+                        <span style="font-size:0.75rem; color:#aaa; pointer-events:none; letter-spacing:3px; font-weight:900;">SLIDE TO TEAR >>></span>
+                        <div class="tear-progress" id="tear-line"></div>
+                    </div>
                     <div class="pack-body" id="pack-body">
-                        <img id="pack-icon" class="pack-icon" src="">
-                        <div class="pack-title" id="pack-title">MTG</div>
+                        <div class="pack-type-label" id="pack-label-text">DRAFT BOOSTER</div>
+                        <img id="pack-icon" class="pack-icon" src="" alt="">
+                        <div id="pack-title" class="pack-title">MTG</div>
                     </div>
                 </div>
                 
                 <div id="card-stack" class="card-stack"></div>
 
-                <div id="summary-screen" style="display:none; flex-direction:column; align-items:center; width:100%; max-width: 300px; margin: 0 auto;">
-                    <h2 style="color:var(--primary); margin-bottom: 5px; text-shadow: 0 2px 10px rgba(212,175,55,0.5);">PACK COMPLETE</h2>
-                    <div style="font-size: 1.2rem; font-weight: bold; color: var(--success); margin-bottom: 20px;" id="summary-value">$0.00</div>
-                    <button class="btn primary" style="margin-bottom:10px; font-size:1.1rem; padding:15px;" onclick="resetPack()">Open Another</button>
-                    <button class="btn" onclick="switchView('binder', document.querySelectorAll('.nav-item')[1])">View Binder</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="view-binder" class="view">
-            <div class="mastery-card">
-                <div class="mastery-header">
-                    <div>
-                        <h3 class="mastery-title">Set Mastery</h3>
-                        <div style="font-size:0.8rem; color:var(--text-muted);" id="mastery-set-name">Loading...</div>
+                <div id="summary-screen">
+                    <h2 style="color:var(--primary); font-size:2rem; text-shadow:0 0 15px rgba(212,175,55,0.4); margin-bottom: 5px;">PACK OPENED</h2>
+                    <div class="subtitle" style="margin-bottom: 20px;">Highlights</div>
+                    <div class="rare-pull-list" id="summary-rares"></div>
+                    <div class="stat-card" style="width:100%; padding:15px; margin-bottom:15px;">
+                        <div class="subtitle">Pack Value</div>
+                        <div class="stat-val" style="font-size:1.6rem;" id="pack-value">$0.00</div>
                     </div>
-                    <div class="mastery-pct" id="mastery-pct">0%</div>
-                </div>
-                <div class="progress-track"><div class="progress-fill" id="mastery-fill"></div></div>
-                <div style="text-align:right; font-size:0.75rem; color:#888; margin-top:8px;" id="mastery-text">0 / 0 Cards</div>
-                
-                <div style="margin-top: 20px; display:flex; gap:10px;">
-                    <button class="btn" onclick="trimToPlaysets()">Trim to Playsets</button>
-                    <button class="btn danger" onclick="discardBulk()">Discard Bulk (C/U)</button>
+                    <button class="btn" onclick="resetPack()">Open Another Pack</button>
                 </div>
             </div>
-
-            <h3 style="margin-top:0;">My Cards</h3>
-            <div class="collection-grid" id="binder-grid"></div>
         </div>
 
+        <div id="view-collection" class="view">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h1>Binder</h1>
+                <select id="sort-select" style="width: 120px; padding: 10px; font-size: 0.85rem;" onchange="renderCollection()">
+                    <option value="value">Price: High</option>
+                    <option value="recent">Recent</option>
+                    <option value="name">Name</option>
+                </select>
+            </div>
+
+            <div class="binder-controls">
+                <input type="text" id="search-input" placeholder="Search cards..." onkeyup="renderCollection()">
+            </div>
+            <div id="collection-grid"></div>
+        </div>
+
+        <div id="view-decks" class="view">
+            <h1>Deck Builder</h1>
+            <div id="decks-main-list">
+                <button class="btn secondary" onclick="document.getElementById('new-deck-modal').style.display='flex'">+ New Deck</button>
+                <div id="deck-list-container" style="margin-top:20px;"></div>
+            </div>
+            <div id="deck-view-container" style="display: none; flex-direction: column; height: 100%;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <button class="btn secondary" onclick="closeDeckView()" style="width: auto; padding: 8px 15px;">&lt; Back</button>
+                    <div style="text-align: right;">
+                        <h3 id="active-deck-name" style="margin:0;">Deck</h3>
+                        <span id="active-deck-format" class="deck-fmt-tag" style="margin-left: 0;">STD</span>
+                    </div>
+                </div>
+                <div class="controls-row">
+                    <button id="btn-mode-grid" class="btn secondary" onclick="toggleDeckMode('grid')">Binder View</button>
+                    <button id="btn-mode-list" class="btn secondary" onclick="toggleDeckMode('list')">List View</button>
+                </div>
+                <div id="active-deck-list" style="flex:1; overflow-y:auto; display: none;"></div>
+                <div id="deck-grid-view"></div>
+            </div>
+        </div>
     </div>
 
     <div id="nav-bar">
-        <div class="nav-item active" onclick="switchView('packs', this)">
+        <div class="nav-item active" onclick="switchView('home')">
             <div class="nav-icon">📦</div><div>Packs</div>
         </div>
-        <div class="nav-item" onclick="switchView('binder', this)">
+        <div class="nav-item" onclick="switchView('collection')">
             <div class="nav-icon">📚</div><div>Binder</div>
         </div>
-    </div>
-
-    <div class="modal-overlay" id="card-modal">
-        <img id="modal-img" src="">
-        <div class="modal-content">
-            <div class="modal-price-tag" id="modal-price">$0.00</div>
-            <button class="btn danger" onclick="discardSingleCard()">Discard Copy</button>
-            <button class="btn" onclick="closeModal()">Close</button>
+        <div class="nav-item" onclick="switchView('decks')">
+            <div class="nav-icon">⚔️</div><div>Decks</div>
         </div>
     </div>
 
+    <div id="card-modal" class="modal-overlay">
+        <img id="modal-img" src="">
+        <div class="modal-details">
+            <h2 id="modal-name">Card Name</h2>
+            <div style="font-size: 1.5rem; color: var(--success); font-weight: 900; margin-bottom: 20px;" id="modal-price">$0.00</div>
+            <button class="btn shop" onclick="window.open('https://www.tcgplayer.com/search/magic/product?productLineName=magic&q=' + encodeURIComponent(document.getElementById('modal-name').innerText), '_blank')">Lookup on TCGPlayer</button>
+            <div id="deck-select-area" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;"></div>
+            <button class="btn secondary" style="margin-top: 15px;" onclick="document.getElementById('card-modal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <div id="new-deck-modal" class="modal-overlay">
+        <div style="background: var(--surface); padding: 25px; border-radius: 20px; width: 90%; max-width: 400px; text-align: center;">
+            <h2 style="margin-bottom:20px;">Create New Deck</h2>
+            <input type="text" id="new-deck-name" placeholder="Deck Name" style="margin-bottom:15px;">
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <button class="btn" onclick="finalizeNewDeck('Standard')">Standard</button>
+                <button class="btn commander" onclick="finalizeNewDeck('Commander')">Commander</button>
+            </div>
+            <button class="btn secondary" onclick="document.getElementById('new-deck-modal').style.display='none'">Cancel</button>
+        </div>
+    </div>
+
+    <div id="toast">Message</div>
+
     <script>
-        // --- STATE ---
+        // --- DATA STORE ---
         const state = {
-            collection: JSON.parse(localStorage.getItem('ps_collection_usd')) || {},
-            sets: [], currentSetCode: null, packType: 'draft',
-            pool: { common: [], uncommon: [], rare: [], mythic: [], land: [] },
-            isLoaded: false, totalCardsInSet: 0,
-            activeModalId: null, tempPackValue: 0
+            sets: [], pool: { common: [], uncommon: [], rare: [], mythic: [], land: [] },
+            isLoaded: false,
+            collection: JSON.parse(localStorage.getItem('mtgCollection_v3')) || {},
+            decks: JSON.parse(localStorage.getItem('mtgDecks_v3')) || [],
+            activeDeckId: null, deckViewMode: 'grid', tempPackValue: 0, tempPackRares: []
+        };
+
+        const elements = {
+            packWrapper: document.getElementById('pack-wrapper'), packBody: document.getElementById('pack-body'),
+            cardStack: document.getElementById('card-stack'), summary: document.getElementById('summary-screen'),
+            summaryRares: document.getElementById('summary-rares'), packVal: document.getElementById('pack-value'),
+            strip: document.getElementById('pack-strip'), tear: document.getElementById('tear-line'),
+            homeVal: document.getElementById('home-value'), toast: document.getElementById('toast'),
+            flashOverlay: document.getElementById('flash-overlay')
         };
 
         const fmtMoney = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
-
-        const getCardPrice = (c, isFoil = false) => {
-            let p = isFoil ? (c.prices?.usd_foil || c.prices?.usd) : (c.prices?.usd || c.prices?.usd_foil);
-            return parseFloat(p || 0);
+        const getCardPrice = (card, isFoil) => {
+            if(!card.prices) return 0;
+            const p = isFoil ? card.prices.usd_foil : card.prices.usd;
+            return parseFloat(p || card.prices.usd || card.prices.usd_foil || 0);
         };
 
-        const updatePortfolioValue = () => {
-            let total = 0;
-            Object.values(state.collection).forEach(c => {
-                total += (c.price * c.count);
-            });
-            document.getElementById('portfolio-amt').innerText = fmtMoney(total);
-            
-            const badge = document.getElementById('value-display');
-            badge.classList.remove('bump'); void badge.offsetWidth; badge.classList.add('bump');
+        const showToast = (msg) => {
+            elements.toast.innerText = msg; elements.toast.style.opacity = 1;
+            setTimeout(() => elements.toast.style.opacity = 0, 2000);
         };
 
-        // --- INIT ---
-        window.addEventListener('DOMContentLoaded', () => {
-            updatePortfolioValue();
-            initSets(); initPackTear();
-        });
+        function clearData() { if(confirm("⚠ Factory Reset? This deletes all cards and decks.")) { localStorage.clear(); location.reload(); } }
 
-        function switchView(viewName, navItem) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.getElementById(`view-${viewName}`).classList.add('active'); navItem.classList.add('active');
-            if(viewName === 'binder') renderBinder();
-        }
+        window.addEventListener('DOMContentLoaded', () => { renderTotalValue(); initSets(); });
 
-        // --- API & LOGIC ---
         async function initSets() {
             try {
                 const res = await fetch('https://api.scryfall.com/sets'); const data = await res.json();
-                state.sets = data.data.filter(s => ['core', 'expansion', 'masters'].includes(s.set_type) && s.card_count > 0);
+                state.sets = data.data.filter(s => ['core', 'expansion', 'masters', 'commander'].includes(s.set_type));
                 const sel = document.getElementById('set-select'); sel.innerHTML = '<option value="" disabled selected>Select Expansion...</option>';
-                state.sets.forEach(s => sel.innerHTML += `<option value="${s.code}">${s.name}</option>`);
-                
-                const savedSet = localStorage.getItem('ps_last_set_usd');
-                if(savedSet && state.sets.some(s=>s.code===savedSet)) { sel.value = savedSet; loadSet(); }
-            } catch(e) {}
+                state.sets.forEach(s => {
+                    const opt = document.createElement('option'); opt.value = s.code; opt.innerText = `${s.name} (${s.released_at.substring(0,4)})`;
+                    sel.appendChild(opt);
+                });
+            } catch(e) { showToast("Failed to load sets."); }
         }
 
-        async function loadSet() {
-            const code = document.getElementById('set-select').value; const set = state.sets.find(s => s.code === code); if(!set) return;
-            state.currentSetCode = code; localStorage.setItem('ps_last_set_usd', code);
-            
-            document.getElementById('pack-title').innerText = set.name; document.getElementById('mastery-set-name').innerText = set.name;
-            if(set.icon_svg_uri) document.getElementById('pack-icon').src = set.icon_svg_uri;
-            
-            resetPack(); document.getElementById('pack-wrapper').style.opacity = '0.5'; state.isLoaded = false;
-            
+        function updatePackVisuals() {
+            const type = document.getElementById('pack-type').value;
+            if(type === 'collector') {
+                elements.packBody.classList.add('collector');
+                document.getElementById('pack-label-text').innerText = "COLLECTOR BOOSTER";
+            } else {
+                elements.packBody.classList.remove('collector');
+                document.getElementById('pack-label-text').innerText = "DRAFT BOOSTER";
+            }
+        }
+
+        async function updateSetInfo() {
+            const code = document.getElementById('set-select').value; const set = state.sets.find(s => s.code === code);
+            if(!set) return;
+            document.getElementById('dynamic-bg').style.backgroundImage = `url('${set.icon_svg_uri}')`;
+            document.getElementById('pack-title').innerText = set.name; document.getElementById('pack-icon').src = set.icon_svg_uri;
+            resetPack(); elements.packWrapper.style.opacity = '0.5'; showToast(`Loading ${set.name} cards...`); state.isLoaded = false;
             try {
-                let allCards = []; let url = `https://api.scryfall.com/cards/search?q=set:${code}%20unique:cards%20game:paper%20-type:basic`;
-                while(url) { let r = await fetch(url); let d = await r.json(); if(d.data) allCards = allCards.concat(d.data); url = d.has_more ? d.next_page : null; }
+                let allCards = []; let url = `https://api.scryfall.com/cards/search?q=set:${code}%20unique:cards%20game:paper&order=rarity`;
+                let r = await fetch(url); let d = await r.json(); allCards = allCards.concat(d.data || []);
+                if(d.has_more) { let r2 = await fetch(d.next_page); let d2 = await r2.json(); allCards = allCards.concat(d2.data || []); }
                 
                 state.pool = { common: [], uncommon: [], rare: [], mythic: [], land: [] };
-                state.totalCardsInSet = allCards.length;
-
                 allCards.forEach(c => {
-                    let img = c.image_uris?.normal || c.card_faces?.[0]?.image_uris?.normal;
+                    let img = c.image_uris?.normal || (c.card_faces && c.card_faces[0].image_uris?.normal);
                     if(img && c.rarity) {
-                        const obj = { id: c.id, name: c.name, img: img, rarity: c.rarity, prices: c.prices, set: c.set };
-                        if(state.pool[c.rarity]) state.pool[c.rarity].push(obj);
+                        const obj = { id: c.id, name: c.name, img: img, rarity: c.rarity, prices: c.prices };
+                        if(c.type_line && c.type_line.includes("Basic Land")) state.pool.land.push(obj); 
+                        else if(state.pool[c.rarity]) state.pool[c.rarity].push(obj);
                     }
                 });
-                state.isLoaded = true; document.getElementById('pack-wrapper').style.opacity = '1';
-                updateMastery();
-            } catch(e) { alert("Error loading set."); }
+                state.isLoaded = true; elements.packWrapper.style.opacity = '1'; showToast("Ready to open!");
+            } catch(e) { showToast("Error loading cards."); }
         }
 
-        function setPackType(type) {
-            state.packType = type;
-            document.getElementById('tab-draft').classList.toggle('active', type === 'draft');
-            document.getElementById('tab-collector').classList.toggle('active', type === 'collector');
-            document.getElementById('pack-body').className = type === 'collector' ? 'pack-body premium' : 'pack-body';
-        }
-
-        // --- PACK OPENING ---
+        // --- PACK TEAR LOGIC ---
         let isDragging = false;
-        function initPackTear() {
-            const strip = document.getElementById('pack-strip'); const tear = document.getElementById('tear-line');
-            const handleMove = (e) => { if(!isDragging) return; const rect = strip.getBoundingClientRect(); let pct = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / rect.width * 100; tear.style.width = Math.max(0, Math.min(pct, 100)) + '%'; if(pct > 90) { attemptOpenPack(); isDragging = false; } };
-            strip.addEventListener('mousedown', () => isDragging = true); window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', () => { isDragging = false; tear.style.width = '0%'; });
-            strip.addEventListener('touchstart', () => isDragging = true); window.addEventListener('touchmove', handleMove); window.addEventListener('touchend', () => { isDragging = false; tear.style.width = '0%'; });
-        }
+        const handleMove = (e) => {
+            if(!isDragging) return; const rect = elements.strip.getBoundingClientRect();
+            let pct = ((e.touches ? e.touches[0].clientX : e.clientX) - rect.left) / rect.width * 100;
+            elements.tear.style.width = Math.max(0, Math.min(100, pct)) + '%';
+            if(pct > 90) { openPack(); isDragging = false; }
+        };
+        elements.strip.addEventListener('mousedown', () => isDragging = true); window.addEventListener('mousemove', handleMove); window.addEventListener('mouseup', () => { isDragging = false; elements.tear.style.width = '0%'; });
+        elements.strip.addEventListener('touchstart', () => isDragging = true); window.addEventListener('touchmove', handleMove); window.addEventListener('touchend', () => { isDragging = false; elements.tear.style.width = '0%'; });
 
-        function resetPack() {
-            document.getElementById('pack-wrapper').style.display = state.isLoaded ? 'block' : 'none';
-            document.getElementById('card-stack').style.display = 'none';
-            document.getElementById('summary-screen').style.display = 'none';
-            document.getElementById('tear-line').style.width = '0%';
-        }
+        function resetPack() { elements.packWrapper.style.display = 'flex'; elements.cardStack.style.display = 'none'; elements.summary.style.display = 'none'; elements.tear.style.width = '0%'; }
 
-        function attemptOpenPack() {
+        function openPack() {
             if(!state.isLoaded) return;
-            openPackLogic();
-        }
-
-        function openPackLogic() {
-            const p = state.pool; const pick = arr => arr.length ? arr[Math.floor(Math.random()*arr.length)] : null; 
+            const p = state.pool; const pick = arr => arr.length ? arr[Math.floor(Math.random()*arr.length)] : null;
+            const type = document.getElementById('pack-type').value;
             let pack = [];
 
-            if(state.packType === 'draft') {
-                if(p.mythic.length && Math.random() < 0.13) pack.push({...pick(p.mythic)}); else if(p.rare.length) pack.push({...pick(p.rare)});
-                for(let i=0; i<3; i++) pack.push({...pick(p.uncommon)});
-                for(let i=0; i<10; i++) pack.push({...pick(p.common)});
-                if(Math.random() < 0.3 && pack.length > 0) pack[pack.length-1].foil = true; 
+            if (type === 'collector') {
+                // COLLECTOR BOOSTER LOGIC (High Value, Very Shiny)
+                const anyRare = () => pick(p.mythic.length && Math.random() < 0.2 ? p.mythic : p.rare) || pick(p.uncommon);
+                pack.push({...anyRare(), foil: true}); // Foil Rare/Mythic
+                pack.push({...anyRare(), foil: false}); // Extended Art / Showcase Rare
+                pack.push({...anyRare(), foil: false}); // Ancillary Rare
+                pack.push({...pick(p.uncommon) || pick(p.common), foil: true}); // Foil Wildcard
+                for(let i=0; i<3; i++) { let c = pick(p.uncommon); if(c) pack.push({...c, foil: true}); } // 3 Foil Uncommons
+                for(let i=0; i<7; i++) { let c = pick(p.common); if(c) pack.push({...c, foil: true}); } // 7 Foil Commons
+                if(p.land.length) pack.push({...pick(p.land), foil: true}); // 1 Foil Land
+
             } else {
-                for(let i=0; i<3; i++) {
-                    if(p.mythic.length && Math.random() < 0.25) pack.push({...pick(p.mythic), foil: true}); 
-                    else if(p.rare.length) pack.push({...pick(p.rare), foil: true});
-                }
-                for(let i=0; i<4; i++) pack.push({...pick(p.uncommon), foil: true});
-                for(let i=0; i<5; i++) pack.push({...pick(p.common), foil: true});
-                pack.push({...pick(p.rare), foil: true}); 
+                // STANDARD DRAFT BOOSTER LOGIC
+                if(p.mythic.length && Math.random() < 0.13) pack.push({...pick(p.mythic), foil: false}); else if(p.rare.length) pack.push({...pick(p.rare), foil: false});
+                for(let i=0; i<3; i++) { let c=pick(p.uncommon); if(c) pack.push({...c, foil: false}); }
+                let cCount = 10; 
+                if(Math.random() < 0.3) { cCount--; const foilCard = pick([...p.common, ...p.uncommon, ...p.rare]); if(foilCard) pack.push({...foilCard, foil: true}); }
+                for(let i=0; i<cCount; i++) { let c=pick(p.common); if(c) pack.push({...c, foil: false}); }
+                if(p.land.length) pack.push({...pick(p.land), foil: false});
             }
 
-            pack = pack.filter(c => c && c.id); 
-            if(pack.length === 0) return resetPack();
-
-            document.getElementById('pack-wrapper').style.display = 'none'; 
-            const stack = document.getElementById('card-stack'); stack.style.display = 'block'; stack.innerHTML = ''; 
-            state.tempPackValue = 0;
+            // Shuffle and render
+            pack = pack.sort(() => Math.random() - 0.5);
+            elements.packWrapper.style.display = 'none'; elements.cardStack.style.display = 'block'; elements.cardStack.innerHTML = '';
+            state.tempPackValue = 0; state.tempPackRares = [];
 
             pack.forEach((card, idx) => {
-                const el = document.createElement('div'); el.className = `card ${card.foil ? 'foil' : ''}`; el.style.backgroundImage = `url(${card.img})`; el.style.zIndex = pack.length - idx;
-                
-                // Calculate real USD value up front
-                const val = getCardPrice(card, card.foil);
-                
-                el.onclick = (e) => { 
-                    saveCard(card, val); el.classList.add('swiped'); 
-                    state.tempPackValue += val;
-                    
-                    if(val >= 5) showPriceExplosion(e.clientX, e.clientY, val, val >= 20); 
-                    
-                    if(idx === pack.length - 1) setTimeout(()=>{ 
-                        document.getElementById('card-stack').style.display = 'none'; 
-                        document.getElementById('summary-screen').style.display = 'flex'; 
-                        document.getElementById('summary-value').innerText = `Value: ${fmtMoney(state.tempPackValue)}`;
-                        updateMastery(); 
-                    }, 500); 
+                const el = document.createElement('div'); el.className = `card ${card.foil ? 'foil' : ''}`; el.style.backgroundImage = `url(${card.img})`; el.style.zIndex = idx;
+                el.onclick = (e) => {
+                    saveCard(card); el.classList.add('swiped');
+                    let val = getCardPrice(card, card.foil); state.tempPackValue += val;
+                    if(val > 5 || ['rare','mythic'].includes(card.rarity)) state.tempPackRares.push(card);
+                    showPriceExplosion(e.clientX, e.clientY, val, val > 10);
+                    if(idx === 0) setTimeout(showSummary, 500);
                 };
-                stack.appendChild(el);
+                elements.cardStack.appendChild(el);
             });
         }
 
         function showPriceExplosion(x, y, val, isHighVal) {
-            const el = document.createElement('div'); el.className = `price-pop ${isHighVal ? 'high-value' : ''}`; el.innerText = fmtMoney(val);
-            el.style.left = x + 'px'; el.style.top = y + 'px'; document.body.appendChild(el);
+            const el = document.createElement('div'); el.className = `price-pop ${isHighVal ? 'high-value' : ''}`;
+            el.innerText = fmtMoney(val); el.style.left = x + 'px'; el.style.top = y + 'px'; document.body.appendChild(el);
+            if(isHighVal) { elements.flashOverlay.style.opacity = '0.5'; setTimeout(() => elements.flashOverlay.style.opacity = '0', 100); }
             setTimeout(() => document.body.removeChild(el), 1200);
         }
 
-        // --- BINDER & MASTERY ---
-        function saveCard(card, val) {
-            // We use a composite ID so normal and foil versions stack separately
-            const uniqueId = card.id + (card.foil ? '_foil' : '');
-            if(!state.collection[uniqueId]) state.collection[uniqueId] = { ...card, uniqueId: uniqueId, count: 0, price: val };
-            state.collection[uniqueId].count++;
-            localStorage.setItem('ps_collection_usd', JSON.stringify(state.collection));
-            updatePortfolioValue();
+        function saveCard(card) {
+            // CRITICAL FIX: Differentiate Foil vs Non-Foil in storage key
+            const uniqueKey = card.id + (card.foil ? "_foil" : "");
+            if(!state.collection[uniqueKey]) state.collection[uniqueKey] = {...card, count: 0, date: Date.now()};
+            state.collection[uniqueKey].count++;
+            localStorage.setItem('mtgCollection_v3', JSON.stringify(state.collection));
+            renderTotalValue();
         }
 
-        function updateMastery() {
-            if(!state.currentSetCode || state.totalCardsInSet === 0) return;
-            // For mastery, we check base IDs so normal and foil count as the same card for completion
-            const uniqueBaseIds = new Set();
-            Object.values(state.collection).forEach(c => {
-                if(c.set === state.currentSetCode && c.count > 0) uniqueBaseIds.add(c.id);
+        function showSummary() {
+            elements.cardStack.style.display = 'none'; elements.summary.style.display = 'flex';
+            elements.packVal.innerText = fmtMoney(state.tempPackValue); elements.summaryRares.innerHTML = '';
+            if(!state.tempPackRares.length) elements.summaryRares.innerHTML = '<div style="color:#666;">No big hits.</div>';
+            state.tempPackRares.forEach(c => { 
+                const d = document.createElement('div'); d.className = `mini-card ${c.foil?'foil':''}`; 
+                d.style.backgroundImage = `url(${c.img})`; elements.summaryRares.appendChild(d); 
             });
-            
-            const pct = Math.min(100, Math.round((uniqueBaseIds.size / state.totalCardsInSet) * 100));
-            document.getElementById('mastery-pct').innerText = `${pct}%`;
-            document.getElementById('mastery-fill').style.width = `${pct}%`;
-            document.getElementById('mastery-text').innerText = `${uniqueBaseIds.size} / ${state.totalCardsInSet} Unique Cards`;
         }
 
-        function renderBinder() {
-            updateMastery(); updatePortfolioValue();
-            const grid = document.getElementById('binder-grid'); grid.innerHTML = '';
-            
-            let cards = Object.values(state.collection).filter(c => c.count > 0);
-            if(state.currentSetCode) cards = cards.filter(c => c.set === state.currentSetCode); 
-            
-            cards.sort((a,b) => b.price - a.price); // Sort by highest USD value
+        function renderTotalValue() {
+            let total = Object.values(state.collection).reduce((sum, c) => sum + (getCardPrice(c, c.foil) * c.count), 0);
+            elements.homeVal.innerText = fmtMoney(total);
+        }
 
-            cards.forEach(c => {
-                const el = document.createElement('div'); el.className = `col-card ${c.foil ? 'foil' : ''}`; el.style.backgroundImage = `url(${c.img})`;
+        // --- VIEWS & BINDER ---
+        function switchView(view) {
+            document.querySelectorAll('.view').forEach(e => e.classList.remove('active'));
+            document.getElementById('view-' + view).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            if(view === 'collection') renderCollection();
+            if(view === 'decks') renderDeckList();
+        }
+
+        function renderCollection() {
+            const grid = document.getElementById('collection-grid'); grid.innerHTML = '';
+            const search = document.getElementById('search-input').value.toLowerCase();
+            const sortMode = document.getElementById('sort-select').value;
+            
+            let filtered = Object.values(state.collection).filter(c => c.name.toLowerCase().includes(search));
+            filtered.sort((a,b) => {
+                if(sortMode === 'value') return getCardPrice(b, b.foil) - getCardPrice(a, a.foil);
+                if(sortMode === 'recent') return b.date - a.date;
+                return a.name.localeCompare(b.name);
+            });
+
+            filtered.forEach(c => {
+                const el = document.createElement('div'); el.className = `col-card ${c.foil?'foil':''}`; el.style.backgroundImage = `url(${c.img})`;
                 el.onclick = () => openModal(c);
-                const count = document.createElement('div'); count.className = 'col-count'; count.innerText = c.count;
-                el.appendChild(count); grid.appendChild(el);
+                el.innerHTML = `<div class="col-count">${c.count}</div><div class="col-price">${fmtMoney(getCardPrice(c, c.foil))}</div>`;
+                grid.appendChild(el);
             });
         }
 
-        // --- CLEANUP FUNCTIONS ---
-        function trimToPlaysets() {
-            let removedCount = 0;
-            Object.values(state.collection).forEach(c => {
-                if(c.count > 4) { removedCount += (c.count - 4); c.count = 4; }
-            });
-            if(removedCount === 0) return alert("All cards are already at or below 4 copies.");
-            localStorage.setItem('ps_collection_usd', JSON.stringify(state.collection));
-            alert(`Trimmed ${removedCount} extra cards.`); renderBinder();
+        // --- DECK BUILDER ---
+        function finalizeNewDeck(format) {
+            const name = document.getElementById('new-deck-name').value;
+            if(!name) return;
+            state.decks.push({ name: name, format: format, cards: {} });
+            localStorage.setItem('mtgDecks_v3', JSON.stringify(state.decks));
+            document.getElementById('new-deck-modal').style.display = 'none';
+            renderDeckList();
         }
 
-        function discardBulk() {
-            let removedCount = 0;
-            Object.values(state.collection).forEach(c => {
-                if(c.count > 0 && (c.rarity === 'common' || c.rarity === 'uncommon')) {
-                    removedCount += c.count; c.count = 0;
+        function renderDeckList() {
+            const list = document.getElementById('deck-list-container'); list.innerHTML = '';
+            document.getElementById('decks-main-list').style.display = 'block';
+            document.getElementById('deck-view-container').style.display = 'none';
+            state.decks.forEach((deck, idx) => {
+                const count = Object.values(deck.cards).reduce((a,b)=>a+b,0);
+                const el = document.createElement('div'); el.className = 'deck-list-item';
+                el.innerHTML = `<div onclick="openDeck(${idx})" style="flex:1;"><div style="font-weight:900;">${deck.name}<span class="deck-fmt-tag">${deck.format}</span></div><div style="font-size:0.8rem; color:#888; margin-top:5px;">${count} Cards</div></div>
+                <button class="btn danger" style="width:auto; padding:8px 15px;" onclick="state.decks.splice(${idx},1); renderDeckList();">X</button>`;
+                list.appendChild(el);
+            });
+        }
+
+        function openDeck(idx) {
+            state.activeDeckId = idx;
+            document.getElementById('decks-main-list').style.display = 'none';
+            document.getElementById('deck-view-container').style.display = 'flex';
+            renderActiveDeck();
+        }
+        function closeDeckView() { state.activeDeckId = null; renderDeckList(); }
+
+        function renderActiveDeck() {
+            const deck = state.decks[state.activeDeckId];
+            document.getElementById('active-deck-name').innerText = deck.name;
+            document.getElementById('active-deck-format').innerText = deck.format;
+            const list = document.getElementById('active-deck-list'); const grid = document.getElementById('deck-grid-view');
+            list.innerHTML = ''; grid.innerHTML = '';
+            
+            if(state.deckViewMode === 'list') { list.style.display = 'block'; grid.style.display = 'none'; } 
+            else { list.style.display = 'none'; grid.style.display = 'grid'; }
+
+            Object.keys(deck.cards).forEach(key => {
+                const c = state.collection[key]; if(!c) return;
+                const qty = deck.cards[key];
+                
+                if(state.deckViewMode === 'list') {
+                    const row = document.createElement('div'); row.className = 'deck-card-row';
+                    row.innerHTML = `<div class="row-img ${c.foil?'foil':''}" style="background-image:url(${c.img})"></div><div style="flex:1; font-weight:600;">${c.name}</div><div style="color:var(--primary); font-weight:900; margin-right:15px;">x${qty}</div><button class="remove-btn" onclick="removeFromDeck('${key}')">-</button>`;
+                    list.appendChild(row);
+                } else {
+                    const el = document.createElement('div'); el.className = `col-card ${c.foil?'foil':''}`; el.style.backgroundImage = `url(${c.img})`;
+                    el.onclick = () => removeFromDeck(key);
+                    el.innerHTML = `<div class="col-count">${qty}</div>`;
+                    grid.appendChild(el);
                 }
             });
-            if(removedCount === 0) return alert("No bulk to discard.");
-            if(confirm(`Discard ${removedCount} Bulk Cards (Commons/Uncommons)?`)) {
-                localStorage.setItem('ps_collection_usd', JSON.stringify(state.collection));
-                renderBinder();
-            }
         }
 
-        function discardSingleCard() {
-            const c = state.collection[state.activeModalId]; if(!c || c.count <= 0) return;
-            c.count--; localStorage.setItem('ps_collection_usd', JSON.stringify(state.collection));
-            closeModal(); renderBinder();
+        function toggleDeckMode(mode) { 
+            state.deckViewMode = mode; 
+            document.getElementById('btn-mode-grid').className = mode === 'grid' ? 'btn' : 'btn secondary';
+            document.getElementById('btn-mode-list').className = mode === 'list' ? 'btn' : 'btn secondary';
+            renderActiveDeck(); 
         }
 
-        // --- MODAL ---
-        function openModal(c) {
-            state.activeModalId = c.uniqueId;
-            document.getElementById('modal-img').src = c.img;
-            document.getElementById('modal-price').innerText = fmtMoney(c.price);
+        let currentModalKey = null;
+        function openModal(card) {
+            currentModalKey = card.id + (card.foil ? "_foil" : "");
+            document.getElementById('modal-img').src = card.img;
+            document.getElementById('modal-name').innerText = card.name;
+            document.getElementById('modal-price').innerText = fmtMoney(getCardPrice(card, card.foil));
+            
+            const area = document.getElementById('deck-select-area'); area.innerHTML = '';
+            state.decks.forEach((deck, idx) => {
+                const btn = document.createElement('button'); btn.className = 'btn secondary'; btn.innerText = `+ Add to ${deck.name}`;
+                btn.onclick = () => {
+                    if(!deck.cards[currentModalKey]) deck.cards[currentModalKey] = 0;
+                    deck.cards[currentModalKey]++; localStorage.setItem('mtgDecks_v3', JSON.stringify(state.decks));
+                    showToast(`Added to ${deck.name}`); document.getElementById('card-modal').style.display='none';
+                };
+                area.appendChild(btn);
+            });
             document.getElementById('card-modal').style.display = 'flex';
         }
-        function closeModal() { document.getElementById('card-modal').style.display = 'none'; }
+
+        function removeFromDeck(key) {
+            const deck = state.decks[state.activeDeckId];
+            if(deck.cards[key]) {
+                deck.cards[key]--; if(deck.cards[key] <= 0) delete deck.cards[key];
+                localStorage.setItem('mtgDecks_v3', JSON.stringify(state.decks)); renderActiveDeck();
+            }
+        }
     </script>
 </body>
 </html>
