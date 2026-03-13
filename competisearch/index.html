@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Competitor's Prices</title>
+  <style>
+    :root{
+      --bg1:#0a0f14;
+      --bg2:#101722;
+      --panel:rgba(18,25,35,.78);
+      --panel2:rgba(14,20,29,.94);
+      --border:rgba(255,255,255,.08);
+      --text:#eef3f8;
+      --muted:#97a4b5;
+      --gold:#d6ab68;
+      --gold2:#f0d3a7;
+      --shadow:0 24px 70px rgba(0,0,0,.36);
+      --soft:0 10px 30px rgba(0,0,0,.22);
+    }
+
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;
+      min-height:100%;
+      font-family:Inter,Arial,Helvetica,sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(214,171,104,.12), transparent 25%),
+        radial-gradient(circle at top right, rgba(100,140,210,.12), transparent 24%),
+        linear-gradient(180deg,var(--bg1),var(--bg2) 55%,#0c1117);
+    }
+    body{
+      padding:22px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .shell{width:min(1100px,100%)}
+
+    .loaderOverlay{
+      position:fixed;
+      inset:0;
+      z-index:9999;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      background:
+        radial-gradient(circle at center, rgba(214,171,104,.08), transparent 32%),
+        linear-gradient(180deg,#06090d,#0a0f14 55%,#05080c);
+      opacity:1;
+      visibility:visible;
+      transition:opacity .45s ease, visibility .45s ease;
+    }
+    .loaderOverlay.hidden{
+      opacity:0;
+      visibility:hidden;
+      pointer-events:none;
+    }
+    .loaderBox{
+      width:min(560px,100%);
+      padding:28px 24px 24px;
+      border-radius:28px;
+      border:1px solid rgba(255,255,255,.08);
+      background:linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));
+      box-shadow:0 24px 70px rgba(0,0,0,.4);
+      text-align:center;
+      backdrop-filter:blur(14px);
+    }
+    .loaderImage{
+      width:min(340px,80vw);
+      max-width:100%;
+      height:auto;
+      display:block;
+      margin:0 auto 8px;
+      filter:drop-shadow(0 18px 28px rgba(0,0,0,.35));
+    }
+    .loaderEyebrow{
+      color:var(--gold2);
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.14em;
+      margin-bottom:8px;
+    }
+    .loaderTitle{
+      margin:0 0 10px;
+      font-size:clamp(28px,4vw,42px);
+      line-height:1.02;
+      letter-spacing:-.035em;
+    }
+    .loaderText{
+      margin:0 0 18px;
+      color:var(--muted);
+      font-size:15px;
+      line-height:1.55;
+    }
+    .loaderBar{
+      width:100%;
+      height:12px;
+      border-radius:999px;
+      overflow:hidden;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.06);
+      box-shadow:inset 0 1px 2px rgba(0,0,0,.3);
+    }
+    .loaderFill{
+      width:0%;
+      height:100%;
+      border-radius:999px;
+      background:linear-gradient(90deg,#c99548,#e4bf82,#f0d3a7);
+      box-shadow:0 0 18px rgba(214,171,104,.25);
+      transition:width .22s ease;
+    }
+    .loaderStatus{
+      margin-top:12px;
+      color:var(--muted);
+      font-size:13px;
+      letter-spacing:.02em;
+      min-height:18px;
+    }
+    .loaderHeritage{
+      margin-top:20px;
+      padding-top:16px;
+      border-top:1px solid rgba(255,255,255,.06);
+    }
+    .heritageLine{
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.55;
+      text-align:center;
+    }
+    .heritageLine1{
+      opacity:.95;
+    }
+    .heritageLine2{
+      opacity:0;
+      transition:opacity .8s ease;
+    }
+    .heritageLine2.visible{
+      opacity:1;
+    }
+
+    .hero{
+      position:relative;
+      overflow:hidden;
+      border-radius:30px;
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      box-shadow:var(--shadow);
+      backdrop-filter:blur(18px);
+    }
+    .hero:before{
+      content:"";
+      position:absolute;
+      left:-100px; top:-100px;
+      width:320px; height:320px;
+      background:radial-gradient(circle, rgba(214,171,104,.16), transparent 66%);
+      pointer-events:none;
+    }
+    .hero:after{
+      content:"";
+      position:absolute;
+      right:-120px; bottom:-160px;
+      width:420px; height:420px;
+      background:radial-gradient(circle, rgba(104,136,196,.12), transparent 66%);
+      pointer-events:none;
+    }
+    .content{
+      position:relative;
+      z-index:1;
+      padding:22px;
+    }
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:10px 14px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.04);
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      font-size:12px;
+      margin-bottom:18px;
+    }
+    .mangoBtn{
+      appearance:none;
+      border:none;
+      background:rgba(255,255,255,.05);
+      color:var(--text);
+      width:28px;
+      height:28px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      font-size:16px;
+      line-height:1;
+      padding:0;
+      transition:transform .08s ease, background .15s ease, box-shadow .15s ease;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);
+    }
+    .mangoBtn:hover{
+      background:rgba(255,255,255,.1);
+      box-shadow:0 0 0 1px rgba(214,171,104,.25);
+    }
+    .mangoBtn:active{
+      transform:scale(.96);
+    }
+    .dot{
+      width:8px;height:8px;border-radius:50%;
+      background:var(--gold);
+      box-shadow:0 0 14px rgba(214,171,104,.6);
+    }
+    h1{
+      margin:0 0 10px;
+      font-size:clamp(38px,6vw,72px);
+      line-height:.95;
+      letter-spacing:-.045em;
+      max-width:760px;
+    }
+    .accent{color:var(--gold2)}
+    .sub{
+      margin:0 0 22px;
+      max-width:760px;
+      color:var(--muted);
+      font-size:18px;
+      line-height:1.55;
+    }
+    .panel{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:24px;
+      padding:18px;
+      box-shadow:var(--soft);
+    }
+    .searchRow{
+      display:grid;
+      grid-template-columns:1fr auto;
+      gap:14px;
+      align-items:center;
+    }
+    .fieldWrap{position:relative}
+    .field{
+      width:100%;
+      border:none;
+      outline:none;
+      padding:20px 58px 20px 58px;
+      font-size:19px;
+      color:var(--text);
+      background:var(--panel2);
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:18px;
+    }
+    .field:focus{
+      border-color:rgba(214,171,104,.42);
+      box-shadow:0 0 0 4px rgba(214,171,104,.08);
+    }
+    .icon{
+      position:absolute;
+      left:19px; top:50%;
+      transform:translateY(-50%);
+      color:var(--muted);
+      pointer-events:none;
+      font-size:18px;
+    }
+    .clearBtn{
+      position:absolute;
+      right:12px;
+      top:50%;
+      transform:translateY(-50%);
+      width:34px;
+      height:34px;
+      border:none;
+      border-radius:999px;
+      background:rgba(255,255,255,.07);
+      color:var(--muted);
+      cursor:pointer;
+      font-size:24px;
+      line-height:1;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      transition:background .15s ease, color .15s ease, transform .08s ease;
+    }
+    .clearBtn:hover{
+      background:rgba(255,255,255,.12);
+      color:var(--text);
+    }
+    .clearBtn:active{
+      transform:translateY(-50%) scale(.97);
+    }
+    .btn{
+      border:none;
+      cursor:pointer;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:18px;
+      padding:19px 22px;
+      font-weight:800;
+      font-size:15px;
+      transition:transform .08s ease, filter .15s ease, background .15s ease;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn-primary{
+      background:linear-gradient(180deg,#e4bf82,#ca9c56);
+      color:#191309;
+      box-shadow:0 16px 30px rgba(0,0,0,.24);
+      min-width:170px;
+    }
+    .btn-primary:hover{filter:brightness(1.04)}
+    .btn-secondary{
+      background:rgba(255,255,255,.05);
+      color:var(--text);
+      border:1px solid var(--border);
+    }
+    .toolbar{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:14px;
+    }
+    .results{
+      margin-top:16px;
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0,1fr));
+      gap:14px;
+    }
+    .card{
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      min-height:180px;
+      padding:18px;
+      border-radius:22px;
+      background:rgba(255,255,255,.035);
+      border:1px solid var(--border);
+      box-shadow:var(--soft);
+      transition:background .18s ease, border-color .18s ease, transform .08s ease, box-shadow .18s ease;
+    }
+    .card.clicked{
+      background:rgba(214,171,104,.12);
+      border-color:rgba(214,171,104,.45);
+      box-shadow:0 12px 34px rgba(214,171,104,.12);
+    }
+    .card.clicked h2{
+      color:var(--gold2);
+    }
+    .card h2{
+      margin:0 0 10px;
+      font-size:21px;
+      letter-spacing:-.02em;
+    }
+    .card p{
+      margin:0;
+      color:var(--muted);
+      font-size:14px;
+      line-height:1.5;
+    }
+    .linkbar{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      margin-top:16px;
+    }
+    .status{
+      margin-top:16px;
+      padding:12px 14px;
+      border-radius:16px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+      color:var(--muted);
+      font-size:14px;
+      line-height:1.5;
+    }
+    .hidden{display:none}
+
+    @media (max-width:900px){
+      .results{grid-template-columns:1fr}
+    }
+    @media (max-width:780px){
+      .searchRow{grid-template-columns:1fr}
+      .btn-primary{width:100%}
+    }
+  </style>
+</head>
+<body>
+  <div id="loaderOverlay" class="loaderOverlay">
+    <div class="loaderBox">
+      <div class="loaderEyebrow">Initializing siege engines</div>
+      <img class="loaderImage" src="trebuchet-aoe2.gif" alt="Animated trebuchet loading graphic">
+      <h2 class="loaderTitle">Loading competitor intel</h2>
+      <p class="loaderText">Winding torsion, assembling scouts, and pretending this takes real effort.</p>
+      <div class="loaderBar" aria-hidden="true">
+        <div id="loaderFill" class="loaderFill"></div>
+      </div>
+      <div id="loaderStatus" class="loaderStatus">Sharpening rocks…</div>
+      <div class="loaderHeritage">
+        <div class="heritageLine heritageLine1">This product was made in full consideration of trebuchet heritage.</div>
+        <div id="heritageLine2" class="heritageLine heritageLine2">Please consider donating to your local trebuchet heritage fund.</div>
+      </div>
+    </div>
+  </div>
+
+  <main class="shell">
+    <section class="hero">
+      <div class="content">
+        <div class="badge"><button id="replayLoaderBtn" class="mangoBtn" type="button" aria-label="Replay intro loading screen">🥭</button><span class="dot"></span> competitor lookup</div>
+        <h1>Your <span class="accent">Competitor’s Prices</span></h1>
+        <p class="sub">
+          Type a bottle, hit search, and the page stays put while it builds the live search links for Rumson Wine &amp; Spirits, Bottle Shop, Total Wine, and Wine-Searcher.
+        </p>
+
+        <div class="panel">
+          <div class="searchRow">
+            <div class="fieldWrap">
+              <span class="icon">⌕</span>
+              <input id="searchInput" class="field" type="text" placeholder="Search any wine, spirit, or beer…" autocomplete="off">
+              <button id="clearSearchBtn" class="clearBtn hidden" type="button" aria-label="Clear search">×</button>
+            </div>
+            <button id="searchBtn" class="btn btn-primary" type="button">Build Search Links</button>
+          </div>
+
+          <div class="toolbar hidden" id="actionBar"></div>
+
+          <div id="statusBox" class="status">
+            Enter a product and hit <strong>Build Search Links</strong>. The site keeps the extra buttons hidden until you search, then shows clean store links that open correctly in new tabs.
+          </div>
+
+          <div class="results hidden" id="resultsGrid">
+            <article class="card" id="rumsonCard">
+              <div>
+                <h2>Rumson Wine &amp; Spirits</h2>
+                <p>Built from whatever is currently in the search bar.</p>
+              </div>
+              <div class="linkbar">
+                <a id="rumsonLink" class="btn btn-secondary" href="#" target="_blank" rel="noopener noreferrer">Open Rumson</a>
+              </div>
+            </article>
+
+            <article class="card" id="bottleshopCard">
+              <div>
+                <h2>Bottle Shop</h2>
+                <p>Direct search link using the same current term.</p>
+              </div>
+              <div class="linkbar">
+                <a id="bottleshopLink" class="btn btn-secondary" href="#" target="_blank" rel="noopener noreferrer">Open Bottle Shop</a>
+              </div>
+            </article>
+
+            <article class="card" id="totalwineCard">
+              <div>
+                <h2>Total Wine</h2>
+                <p>Quick comparison search using the exact same text.</p>
+              </div>
+              <div class="linkbar">
+                <a id="totalwineLink" class="btn btn-secondary" href="#" target="_blank" rel="noopener noreferrer">Open Total Wine</a>
+              </div>
+            </article>
+
+            <article class="card" id="winesearcherCard">
+              <div>
+                <h2>Wine-Searcher</h2>
+                <p>Separate reputable reference lookup, not part of the core three.</p>
+              </div>
+              <div class="linkbar">
+                <a id="winesearcherLink" class="btn btn-secondary" href="#" target="_blank" rel="noopener noreferrer">Open Wine-Searcher</a>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const LOADER_KEY = "competitorPricesFakeLoadSeen";
+
+    function buildUrls(term){
+      const q = encodeURIComponent((term || "").trim());
+      return {
+        rumson: `https://www.rumsonwineandspirits.com/s-10408/form-search/advance-filter?keyword=${q}`,
+        bottleshop: `https://www.bottleshop.com/search/term/${q}?`,
+        totalwine: `https://www.totalwine.com/search/all?text=${q}`,
+        winesearcher: `https://www.wine-searcher.com/find/${q}`
+      };
+    }
+
+    function getTerm(){
+      return document.getElementById("searchInput").value.trim();
+    }
+
+    function setStatus(msg){
+      document.getElementById("statusBox").innerHTML = msg;
+    }
+
+    function escapeHtml(str){
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function updateClearButton(){
+      const clearBtn = document.getElementById("clearSearchBtn");
+      const hasText = getTerm().length > 0;
+      clearBtn.classList.toggle("hidden", !hasText);
+    }
+
+    function buildSearchLinks(){
+      const term = getTerm();
+      if(!term){
+        setStatus("Type something first. Blank searches are for maniacs.");
+        return;
+      }
+
+      const urls = buildUrls(term);
+      window.currentUrls = urls;
+
+      document.getElementById("rumsonLink").href = urls.rumson;
+      document.getElementById("bottleshopLink").href = urls.bottleshop;
+      document.getElementById("totalwineLink").href = urls.totalwine;
+      document.getElementById("winesearcherLink").href = urls.winesearcher;
+
+      document.getElementById("resultsGrid").classList.remove("hidden");
+      document.getElementById("actionBar").classList.remove("hidden");
+
+      setStatus(
+        `Search links built for <strong>${escapeHtml(term)}</strong>. ` +
+        `Use the buttons below to open each site in a new tab.`
+      );
+    }
+
+    function wireClickedState(linkId, cardId){
+      const link = document.getElementById(linkId);
+      const card = document.getElementById(cardId);
+      link.addEventListener("click", function(){
+        if(card){
+          card.classList.add("clicked");
+        }
+      });
+    }
+
+    function resetLoaderState(){
+      const overlay = document.getElementById("loaderOverlay");
+      const fill = document.getElementById("loaderFill");
+      const status = document.getElementById("loaderStatus");
+      const heritageLine2 = document.getElementById("heritageLine2");
+
+      overlay.classList.remove("hidden");
+      fill.style.width = "0%";
+      status.textContent = "Sharpening rocks…";
+      heritageLine2.classList.remove("visible");
+    }
+
+    function runFakeLoader(forceReplay = false){
+      const overlay = document.getElementById("loaderOverlay");
+      const fill = document.getElementById("loaderFill");
+      const status = document.getElementById("loaderStatus");
+      const heritageLine2 = document.getElementById("heritageLine2");
+      const statuses = [
+        "Sharpening rocks…",
+        "Measuring rival bottle lines…",
+        "Checking merchant gossip…",
+        "Greasing the trebuchet axle…",
+        "Almost ready to fling prices…"
+      ];
+
+      if(!forceReplay && localStorage.getItem(LOADER_KEY) === "1"){
+        overlay.classList.add("hidden");
+        return;
+      }
+
+      resetLoaderState();
+
+      const totalDuration = 7000;
+      const progressSteps = statuses.length - 1;
+      const progressInterval = 1200;
+      let step = 0;
+
+      fill.style.width = "6%";
+      status.textContent = statuses[0];
+
+      const progressTimer = setInterval(() => {
+        step += 1;
+        const pct = Math.min(94, 6 + Math.round((step / progressSteps) * 88));
+        fill.style.width = pct + "%";
+        status.textContent = statuses[Math.min(step, statuses.length - 1)];
+      }, progressInterval);
+
+      setTimeout(() => {
+        heritageLine2.classList.add("visible");
+      }, 3000);
+
+      setTimeout(() => {
+        clearInterval(progressTimer);
+        fill.style.width = "100%";
+        status.textContent = "Trebuchet heritage acknowledged.";
+      }, totalDuration - 500);
+
+      setTimeout(() => {
+        overlay.classList.add("hidden");
+        localStorage.setItem(LOADER_KEY, "1");
+      }, totalDuration);
+    }
+
+    document.getElementById("searchBtn").addEventListener("click", buildSearchLinks);
+
+    wireClickedState("rumsonLink", "rumsonCard");
+    wireClickedState("bottleshopLink", "bottleshopCard");
+    wireClickedState("totalwineLink", "totalwineCard");
+    wireClickedState("winesearcherLink", "winesearcherCard");
+
+    document.getElementById("clearSearchBtn").addEventListener("click", function(){
+      const input = document.getElementById("searchInput");
+      input.value = "";
+      updateClearButton();
+      input.focus();
+    });
+
+    document.getElementById("searchInput").addEventListener("input", updateClearButton);
+
+    document.getElementById("searchInput").addEventListener("keydown", function(e){
+      if(e.key === "Enter"){
+        buildSearchLinks();
+      }
+      if(e.key === "Escape"){
+        const input = document.getElementById("searchInput");
+        input.value = "";
+        updateClearButton();
+      }
+    });
+
+    document.getElementById("replayLoaderBtn").addEventListener("click", function(){
+      runFakeLoader(true);
+    });
+
+    updateClearButton();
+    runFakeLoader();
+  </script>
+</body>
+</html>
