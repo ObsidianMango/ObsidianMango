@@ -1,0 +1,1094 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Booster Vault Pocket</title>
+<style>
+:root{
+  --bg:#121212;
+  --surface:#1e1e24;
+  --surface-2:#2a2a35;
+  --text:#fff;
+  --muted:#8b8b99;
+  --line:#3b3b49;
+  --primary:#ffcb05;
+  --primary-dim:#c7a008;
+  --gold:#d4af37;
+  --danger:#eb5757;
+  --success:#2ecc71;
+  --card-back:url('https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg');
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;outline:none}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;height:100%;overflow:hidden}
+body{display:flex;flex-direction:column;user-select:none}
+#dynamic-bg{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.09;background-repeat:repeat;background-position:center;background-size:120px;filter:grayscale(100%);transition:background-image .35s ease}
+#app{position:relative;z-index:5;flex:1;display:flex;flex-direction:column;height:100%}
+.view{position:absolute;inset:0 0 88px 0;display:none;flex-direction:column;overflow:hidden}
+.view.active{display:flex}
+#nav-bar{height:88px;background:var(--surface);display:flex;justify-content:space-around;align-items:center;border-top:1px solid #333;z-index:20;padding-bottom:24px;flex-shrink:0;box-shadow:0 -10px 30px rgba(0,0,0,.45)}
+.nav-item{display:flex;flex-direction:column;align-items:center;font-size:.75rem;color:var(--muted);cursor:pointer;width:50%;transition:.2s;font-weight:700}
+.nav-item.active{color:var(--primary);transform:translateY(-2px)}
+.nav-icon{font-size:1.6rem;margin-bottom:4px}
+.topbar{padding:10px 14px 8px;border-bottom:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0))}
+.title-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+h1{margin:0;font-size:1.45rem;letter-spacing:-.04em}
+.subtitle{color:var(--muted);font-size:.78rem;margin-top:4px;line-height:1.25}
+.btn{
+  background:linear-gradient(135deg,var(--primary),var(--primary-dim));color:#000;border:none;
+  padding:12px 14px;border-radius:12px;font-weight:800;font-size:1rem;cursor:pointer;width:100%;
+  text-align:center;box-shadow:0 4px 15px rgba(255,203,5,.2);display:inline-block;transition:transform .1s,filter .1s
+}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(1)}
+.btn.secondary{background:var(--surface-2);color:#fff;box-shadow:none;border:1px solid #444}
+.btn.danger{background:linear-gradient(135deg,#ff9d9d,#eb5757);color:#250808}
+.controls{padding:8px 14px 8px;display:grid;gap:7px;background:rgba(0,0,0,.12)}
+.segmented{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.segmented button{padding:11px 10px}
+.segmented button.active{background:linear-gradient(135deg,var(--primary),var(--primary-dim));color:#000}
+.segmented button:not(.active){background:var(--surface-2);color:var(--text);border:1px solid #444;box-shadow:none}
+.field{display:grid;gap:6px}
+.field label{font-size:.74rem;color:var(--muted);text-transform:uppercase;font-weight:800;letter-spacing:.08em}
+select,input{
+  width:100%;padding:12px;background:var(--surface-2);border:1px solid #444;color:#fff;border-radius:10px;
+  font-size:1rem;font-family:inherit
+}
+.compact-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.status{padding:0 14px 6px;color:var(--muted);min-height:18px;font-size:.81rem}
+.status.good{color:var(--success)}
+.status.warn{color:var(--primary)}
+.status.bad{color:var(--danger)}
+#view-pack .content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.pack-stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:4px 14px 10px;position:relative;min-height:0}
+.stats-row{width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+.stat{background:var(--surface);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:10px 8px;text-align:center}
+.stat .k{display:block;color:var(--muted);font-size:.66rem;text-transform:uppercase;font-weight:800;letter-spacing:.08em;margin-bottom:5px}
+.stat .v{display:block;font-size:1rem;font-weight:900}
+.pack-wrapper{width:min(88vw,360px);height:min(calc(88vw*1.52),540px);max-height:540px;position:relative;animation:float 6s ease-in-out infinite;cursor:pointer;flex:0 0 auto}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.pack-shell{width:100%;height:100%;background:linear-gradient(135deg,#111,#000);border-radius:20px;display:flex;align-items:center;justify-content:center;position:relative;box-shadow:0 24px 50px rgba(0,0,0,.75);border:1px solid #444;overflow:hidden}
+.pack-shell.booster-mode{background:linear-gradient(180deg,#080808,#000)}
+.pack-shell.proxy-mode{background:
+  radial-gradient(circle at 50% 35%, rgba(255,255,255,.10), transparent 35%),
+  linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,0) 28%),
+  linear-gradient(135deg,#181818,#020202)}
+.pack-shell::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.08) 47%,rgba(255,255,255,.08) 53%,transparent 70%);background-size:200% 100%;animation:shimmer 5s infinite linear;pointer-events:none}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.pack-art{position:absolute;inset:14px 12px 16px;display:flex;align-items:center;justify-content:center;padding:0}
+.pack-art img{display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;object-position:center center;aspect-ratio:auto;filter:drop-shadow(0 0 18px rgba(0,0,0,.7))}
+.pack-art.booster-art img{width:auto;height:100%;max-width:100%;max-height:100%;object-fit:contain}
+.pack-art.proxy-art{padding:34px 24px 82px}
+.pack-art.proxy-art img{max-width:68%;max-height:46%;object-fit:contain;opacity:.95}
+.pack-strip{position:absolute;top:0;left:0;right:0;height:62px;background:repeating-linear-gradient(45deg,#c00,#c00 10px,#f00 10px,#f00 20px);border-bottom:2px dashed rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:900;letter-spacing:.08em;z-index:2}
+.pack-meta{width:100%;max-width:380px;text-align:center;margin-top:10px;margin-bottom:8px;padding:0 6px}
+.pack-title{font-size:1.12rem;font-weight:900;color:var(--primary);text-transform:uppercase;line-height:1.05}
+.pack-subtitle{margin-top:5px;font-size:.77rem;color:#ddd;line-height:1.25}
+.pack-loading{position:absolute;inset:0;background:rgba(0,0,0,.93);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:10;border-radius:20px;color:var(--primary);font-weight:900;font-size:1.2rem;letter-spacing:.08em}
+.pack-loading small{margin-top:8px;font-size:.78rem;color:#fff;font-weight:600}
+.card-stack{width:min(88vw,360px);height:min(calc(88vw*1.52),540px);max-height:540px;position:relative;display:none;z-index:5;flex:0 0 auto}
+.card{width:100%;height:100%;position:absolute;top:0;left:0;border-radius:16px;background-size:cover;background-position:center;box-shadow:0 10px 40px rgba(0,0,0,.9);background-color:#222;border:1px solid #222;cursor:pointer}
+.card::after{content:"";position:absolute;inset:0;border-radius:16px;pointer-events:none;opacity:0}
+.card.sparkle::after{opacity:.7;background:linear-gradient(125deg,transparent 30%,rgba(255,255,255,.4) 50%,transparent 70%);mix-blend-mode:overlay}
+.card.fly-right{animation:flyRight .55s ease-out forwards;pointer-events:none}
+.card.fly-left{animation:flyLeft .55s ease-out forwards;pointer-events:none}
+@keyframes flyRight{0%{transform:scale(1)}15%{transform:scale(1.06);filter:brightness(1.7)}100%{transform:translateX(180%) rotate(60deg);opacity:0}}
+@keyframes flyLeft{0%{transform:scale(1)}15%{transform:scale(1.06);filter:brightness(1.7)}100%{transform:translateX(-180%) rotate(-60deg);opacity:0}}
+.card-info{width:100%;max-width:620px;margin-top:14px;background:var(--surface);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:12px}
+.card-info h3{margin:0 0 6px;font-size:1.02rem}
+.card-info p{margin:0;color:var(--muted);font-size:.86rem;line-height:1.35}
+.progress-wrap{margin-top:10px}
+.progress-bar{height:10px;background:#111;border-radius:999px;overflow:hidden;border:1px solid #343444}
+.progress-bar span{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--primary),#fff37e)}
+.pack-actions{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.summary-screen{display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:14px;width:100%;height:100%}
+.summary-screen h2{margin:0 0 6px;color:var(--primary)}
+.summary-screen p{margin:0;color:var(--muted)}
+.summary-value{font-size:1.85rem;font-weight:900;color:var(--success);margin:12px 0}
+.rare-pulls{display:flex;gap:10px;overflow-x:auto;max-width:100%;padding:10px 0 16px}
+.mini-card{width:72px;height:100px;border-radius:8px;background-size:cover;background-position:center;flex-shrink:0;border:1px solid #555;box-shadow:0 5px 15px rgba(0,0,0,.45)}
+#view-binder .binder-shell{padding:14px;display:flex;flex-direction:column;height:100%;min-height:0}
+.binder-toolbar{display:grid;grid-template-columns:1fr 120px;gap:8px;margin-bottom:10px}
+.binder-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.summary-card{background:var(--surface);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:10px;text-align:center}
+.summary-card .label{display:block;color:var(--muted);font-size:.66rem;text-transform:uppercase;font-weight:800;letter-spacing:.08em}
+.summary-card .value{display:block;font-size:1rem;font-weight:900;margin-top:4px}
+.page-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.pages{flex:1;overflow:auto;padding-bottom:12px}
+.binder-page{background:var(--surface);border:1px solid rgba(255,255,255,.07);border-radius:18px;padding:12px;margin-bottom:12px}
+.binder-page h4{margin:0 0 10px;font-size:.92rem;color:var(--primary)}
+.binder-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.binder-slot{background:#151519;border:1px solid #343444;border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.shot{aspect-ratio:2.5/3.5;background:#111;display:flex;align-items:center;justify-content:center}
+.shot img{width:100%;height:100%;object-fit:cover;display:block}
+.tiny{font-size:.72rem;color:var(--muted);text-align:center;padding:12px}
+.txt{padding:9px;display:grid;gap:4px}
+.txt strong{font-size:.84rem;line-height:1.15}
+.txt .muted{color:var(--muted);font-size:.7rem;line-height:1.25}
+.money{color:var(--success);font-weight:900;font-size:.82rem}
+.slot-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 9px 9px}
+.slot-actions button{padding:9px;font-size:.78rem}
+.empty{padding:34px 16px;text-align:center;color:#666}
+@media (max-width:520px){
+  .stats-row{grid-template-columns:1fr 1fr 1fr}
+  .binder-summary{grid-template-columns:1fr 1fr}
+  .binder-toolbar{grid-template-columns:1fr 110px}
+  .pack-actions{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="dynamic-bg"></div>
+<div id="app">
+  <div id="view-pack" class="view active">
+    <div class="topbar">
+      <div class="title-row">
+        <div>
+          <h1>Booster Vault Pocket</h1>
+          <div class="subtitle">Pick a set. Tap the pack. Rip through cardboard one card at a time.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="segmented">
+        <button id="btnPokemon" class="active" type="button">Pokémon</button>
+        <button id="btnMtg" type="button">Magic: The Gathering</button>
+      </div>
+      <div class="field">
+        <label for="setFilter">Find a set</label>
+        <input id="setFilter" type="text" placeholder="Type part of a set, series, or year if you want..." />
+      </div>
+      <div class="field">
+        <label for="setSelect">Set / expansion</label>
+        <select id="setSelect"><option>Loading sets...</option></select>
+      </div>
+    </div>
+    <div id="status" class="status">Loading set list…</div>
+
+    <div class="content">
+      <div class="pack-stage">
+        <div class="stats-row">
+          <div class="stat"><span class="k">Game</span><span class="v" id="miniGame">Pokémon</span></div>
+          <div class="stat"><span class="k">Revealed</span><span class="v" id="miniProgress">0 / 0</span></div>
+          <div class="stat"><span class="k">Pack value</span><span class="v" id="miniValue">$0.00</span></div>
+        </div>
+
+        <div id="packWrapper" class="pack-wrapper" aria-label="Pack preview">
+          <div id="packLoading" class="pack-loading">OPENING…<small id="packLoadingText">Fetching cardboard…</small></div>
+          <div id="packShell" class="pack-shell proxy-mode">
+            <div class="pack-strip">TAP PACK TO OPEN</div>
+            <div id="packArtWrap" class="pack-art proxy-art"><img id="packArt" alt="Pack art"></div>
+          </div>
+        </div>
+
+        <div class="pack-meta">
+          <div id="packTitle" class="pack-title">Choose a set</div>
+          <div id="packSubtitle" class="pack-subtitle">Original pack art when available. Clean proxy when it is not.</div>
+        </div>
+
+        <div id="cardStack" class="card-stack"></div>
+
+        <div id="cardInfo" class="card-info">
+          <h3 id="cardName">Waiting for a card</h3>
+          <p id="cardMeta">Pick a set, tap the pack, and the top card will be the first one you see. Tap left or right side of the visible card to chuck it away and reveal the next.</p>
+          <div class="progress-wrap">
+            <div class="progress-bar"><span id="progressBar"></span></div>
+          </div>
+          <div class="pack-actions">
+            <button id="addCurrentBtn" class="btn secondary" type="button" disabled>Add current card to binder</button>
+            <button id="addPackBtn" class="btn secondary" type="button" disabled>Add shown cards to binder</button>
+          </div>
+        </div>
+
+        <div id="summaryScreen" class="summary-screen">
+          <h2>PACK COMPLETE</h2>
+          <p id="summaryText">Your goblin spree has concluded.</p>
+          <div id="summaryValue" class="summary-value">$0.00</div>
+          <div id="summaryRares" class="rare-pulls"></div>
+          <div class="pack-actions" style="width:100%;max-width:320px">
+            <button id="openAnotherBtn" class="btn" type="button">Open another pack</button>
+            <button id="addWholePackBtn" class="btn secondary" type="button">Add whole pack to binder</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-binder" class="view">
+    <div class="topbar">
+      <div>
+        <h1>Binder</h1>
+        <div class="subtitle">Local storage only. It stays in this browser unless you clear it or export/import JSON.</div>
+      </div>
+    </div>
+    <div class="binder-shell">
+      <div class="binder-toolbar">
+        <input id="binderSearch" type="text" placeholder="Search binder cards..." />
+        <select id="binderGameFilter">
+          <option value="all">All games</option>
+          <option value="pokemon">Pokémon</option>
+          <option value="mtg">MTG</option>
+        </select>
+      </div>
+      <div class="binder-summary">
+        <div class="summary-card"><span class="label">Cards stored</span><span id="binderCount" class="value">0</span></div>
+        <div class="summary-card"><span class="label">Binder value</span><span id="binderValue" class="value">$0.00</span></div>
+        <div class="summary-card"><span class="label">Pokémon</span><span id="binderPokemonCount" class="value">0</span></div>
+        <div class="summary-card"><span class="label">MTG</span><span id="binderMtgCount" class="value">0</span></div>
+      </div>
+      <div class="page-actions">
+        <button id="exportBinderBtn" class="btn secondary" type="button">Export binder JSON</button>
+        <label class="btn secondary" style="display:flex;align-items:center;justify-content:center;cursor:pointer;">Import JSON<input id="importBinderInput" type="file" accept=".json,application/json" style="display:none"></label>
+      </div>
+      <div class="page-actions">
+        <button id="clearBinderBtn" class="btn danger" type="button">Clear binder</button>
+        <button id="backToPackBtn" class="btn secondary" type="button">Back to packs</button>
+      </div>
+      <div id="binderPages" class="pages"></div>
+    </div>
+  </div>
+
+  <div id="nav-bar">
+    <div class="nav-item active" data-view="pack"><div class="nav-icon">📦</div><div>Pack</div></div>
+    <div class="nav-item" data-view="binder"><div class="nav-icon">📕</div><div>Binder</div></div>
+  </div>
+</div>
+
+<script>
+const LS_KEYS = {
+  binder: 'booster-vault-pocket-binder-v2'
+};
+
+const state = {
+  game: 'pokemon',
+  allSets: { pokemon: [], mtg: [] },
+  filteredSets: [],
+  selectedSet: null,
+  pack: [],
+  currentIndex: -1,
+  shownIndexes: new Set(),
+  runningValue: 0,
+  binder: [],
+  cache: {
+    pokemonSetDetails: new Map(),
+    pokemonCardsBySet: new Map(),
+    pokemonTcgSets: new Map(),
+    mtgCardsBySet: new Map(),
+    mtgScryfallSets: new Map()
+  }
+};
+
+const els = {
+  btnPokemon: document.getElementById('btnPokemon'),
+  btnMtg: document.getElementById('btnMtg'),
+  setFilter: document.getElementById('setFilter'),
+  setSelect: document.getElementById('setSelect'),
+  status: document.getElementById('status'),
+  dynamicBg: document.getElementById('dynamic-bg'),
+
+  miniGame: document.getElementById('miniGame'),
+  miniProgress: document.getElementById('miniProgress'),
+  miniValue: document.getElementById('miniValue'),
+
+  packWrapper: document.getElementById('packWrapper'),
+  packShell: document.getElementById('packShell'),
+  packArtWrap: document.getElementById('packArtWrap'),
+  packLoading: document.getElementById('packLoading'),
+  packLoadingText: document.getElementById('packLoadingText'),
+  packArt: document.getElementById('packArt'),
+  packTitle: document.getElementById('packTitle'),
+  packSubtitle: document.getElementById('packSubtitle'),
+  cardStack: document.getElementById('cardStack'),
+  cardInfo: document.getElementById('cardInfo'),
+  cardName: document.getElementById('cardName'),
+  cardMeta: document.getElementById('cardMeta'),
+  progressBar: document.getElementById('progressBar'),
+  addCurrentBtn: document.getElementById('addCurrentBtn'),
+  addPackBtn: document.getElementById('addPackBtn'),
+  summaryScreen: document.getElementById('summaryScreen'),
+  summaryText: document.getElementById('summaryText'),
+  summaryValue: document.getElementById('summaryValue'),
+  summaryRares: document.getElementById('summaryRares'),
+  openAnotherBtn: document.getElementById('openAnotherBtn'),
+  addWholePackBtn: document.getElementById('addWholePackBtn'),
+
+  binderSearch: document.getElementById('binderSearch'),
+  binderGameFilter: document.getElementById('binderGameFilter'),
+  binderCount: document.getElementById('binderCount'),
+  binderValue: document.getElementById('binderValue'),
+  binderPokemonCount: document.getElementById('binderPokemonCount'),
+  binderMtgCount: document.getElementById('binderMtgCount'),
+  binderPages: document.getElementById('binderPages'),
+  exportBinderBtn: document.getElementById('exportBinderBtn'),
+  importBinderInput: document.getElementById('importBinderInput'),
+  clearBinderBtn: document.getElementById('clearBinderBtn'),
+  backToPackBtn: document.getElementById('backToPackBtn'),
+
+  navItems: [...document.querySelectorAll('.nav-item')],
+  packView: document.getElementById('view-pack'),
+  binderView: document.getElementById('view-binder')
+};
+
+function currency(n){
+  return Number(n || 0).toLocaleString(undefined, { style:'currency', currency:'USD' });
+}
+function setStatus(msg, tone=''){
+  els.status.textContent = msg;
+  els.status.className = 'status' + (tone ? ' ' + tone : '');
+}
+function escapeHtml(str=''){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function chooseRandom(arr){
+  if (!arr || !arr.length) return null;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+function shuffle(arr){
+  const out = [...arr];
+  for(let i = out.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+async function fetchJSON(url, options={}){
+  const response = await fetch(url, options);
+  if(!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return response.json();
+}
+function pokemonHeaders(){
+  return {};
+}
+function saveBinder(){
+  localStorage.setItem(LS_KEYS.binder, JSON.stringify(state.binder));
+}
+function loadBinder(){
+  try{
+    const raw = localStorage.getItem(LS_KEYS.binder);
+    return raw ? JSON.parse(raw) : [];
+  }catch{
+    return [];
+  }
+}
+function cryptoId(){
+  if(window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+function normalizeDate(dateStr){
+  if(!dateStr) return 0;
+  const normalized = String(dateStr).replace(/\//g, '-');
+  const t = new Date(normalized).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function switchView(view){
+  const pack = view === 'pack';
+  els.packView.classList.toggle('active', pack);
+  els.binderView.classList.toggle('active', !pack);
+  els.navItems.forEach(item => item.classList.toggle('active', item.dataset.view === view));
+}
+
+function setGame(game){
+  state.game = game;
+  els.btnPokemon.classList.toggle('active', game === 'pokemon');
+  els.btnMtg.classList.toggle('active', game === 'mtg');
+  els.miniGame.textContent = game === 'pokemon' ? 'Pokémon' : 'MTG';
+}
+
+async function loadSets(game){
+  setStatus(`Loading ${game === 'pokemon' ? 'Pokémon' : 'MTG'} sets…`);
+  if(game === 'pokemon' && state.allSets.pokemon.length){
+    state.filteredSets = [...state.allSets.pokemon];
+    return;
+  }
+  if(game === 'mtg' && state.allSets.mtg.length){
+    state.filteredSets = [...state.allSets.mtg];
+    return;
+  }
+
+  if(game === 'pokemon'){
+    const [tcgdexSets, ptcgSets] = await Promise.all([
+      fetchJSON('https://api.tcgdex.net/v2/en/sets'),
+      fetchJSON('https://api.pokemontcg.io/v2/sets?pageSize=250&orderBy=-releaseDate', { headers: pokemonHeaders() })
+    ]);
+    const ptcgMap = new Map((ptcgSets.data || []).map(set => [set.id, set]));
+    state.cache.pokemonTcgSets = ptcgMap;
+    state.allSets.pokemon = (tcgdexSets || []).map(set => ({
+      id: set.id,
+      name: set.name,
+      series: set.serie?.name || ptcgMap.get(set.id)?.series || '',
+      releaseDate: set.releaseDate || ptcgMap.get(set.id)?.releaseDate || '',
+      logo: set.logo ? `${set.logo}.png` : (ptcgMap.get(set.id)?.images?.logo || ''),
+      symbol: set.symbol ? `${set.symbol}.png` : (ptcgMap.get(set.id)?.images?.symbol || '')
+    })).sort((a,b) => normalizeDate(b.releaseDate) - normalizeDate(a.releaseDate));
+    state.filteredSets = [...state.allSets.pokemon];
+  } else {
+    const scry = await fetchJSON('https://api.scryfall.com/sets');
+    const validTypes = new Set(['core','expansion','masters','draft_innovation','commander','funny','starter','alchemy']);
+    state.allSets.mtg = (scry.data || [])
+      .filter(set => set.code && set.name && !set.digital && validTypes.has(set.set_type))
+      .map(set => ({
+        id: String(set.code).toUpperCase(),
+        name: set.name,
+        type: set.set_type || '',
+        releaseDate: set.released_at || '',
+        icon: set.icon_svg_uri || ''
+      }))
+      .sort((a,b) => normalizeDate(b.releaseDate) - normalizeDate(a.releaseDate));
+    state.filteredSets = [...state.allSets.mtg];
+  }
+}
+
+async function refreshSetList(){
+  const query = (els.setFilter.value || '').trim().toLowerCase();
+  const source = state.allSets[state.game] || [];
+  state.filteredSets = source.filter(set => {
+    const hay = `${set.name} ${set.series || ''} ${set.type || ''} ${set.releaseDate || ''} ${set.id}`.toLowerCase();
+    return hay.includes(query);
+  });
+
+  const previousId = state.selectedSet?.id || '';
+  const groups = new Map();
+  for(const set of state.filteredSets){
+    const key = state.game === 'pokemon' ? (set.series || 'Other series') : (set.type || 'Other type');
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(set);
+  }
+
+  const html = ['<option value="" disabled selected>Select expansion…</option>'];
+  [...groups.entries()].forEach(([groupName, items]) => {
+    html.push(`<optgroup label="${escapeHtml(groupName)}">`);
+    items.forEach(set => {
+      const year = set.releaseDate ? String(set.releaseDate).slice(0,4) : '';
+      html.push(`<option value="${escapeHtml(set.id)}">${escapeHtml(set.name)}${year ? ` (${escapeHtml(year)})` : ''}</option>`);
+    });
+    html.push('</optgroup>');
+  });
+  els.setSelect.innerHTML = html.join('');
+
+  if(previousId && state.filteredSets.some(set => set.id === previousId)){
+    els.setSelect.value = previousId;
+  } else if(state.filteredSets.length){
+    els.setSelect.value = state.filteredSets[0].id;
+  }
+  state.selectedSet = state.filteredSets.find(set => set.id === els.setSelect.value) || null;
+}
+
+async function getPokemonSetDetail(id){
+  if(state.cache.pokemonSetDetails.has(id)) return state.cache.pokemonSetDetails.get(id);
+  const detail = await fetchJSON(`https://api.tcgdex.net/v2/en/sets/${encodeURIComponent(id)}`);
+  state.cache.pokemonSetDetails.set(id, detail);
+  return detail;
+}
+async function getPokemonCardsForSet(id){
+  if(state.cache.pokemonCardsBySet.has(id)) return state.cache.pokemonCardsBySet.get(id);
+  let page = 1;
+  const all = [];
+  while(true){
+    const data = await fetchJSON(`https://api.pokemontcg.io/v2/cards?q=set.id:${encodeURIComponent(id)}&pageSize=250&page=${page}&orderBy=number`, { headers: pokemonHeaders() });
+    all.push(...(data.data || []));
+    if(!(data.page < data.totalCount / data.pageSize)) break;
+    page += 1;
+    if(page > 12) break;
+  }
+  state.cache.pokemonCardsBySet.set(id, all);
+  return all;
+}
+async function getMtgCardsForSet(code){
+  const key = String(code).toLowerCase();
+  if(state.cache.mtgCardsBySet.has(key)) return state.cache.mtgCardsBySet.get(key);
+  let next = `https://api.scryfall.com/cards/search?q=set%3A${encodeURIComponent(key)}+game%3Apaper+unique%3Acards&order=set`;
+  const cards = [];
+  let guard = 0;
+  while(next && guard < 20){
+    const data = await fetchJSON(next);
+    cards.push(...(data.data || []));
+    next = data.has_more ? data.next_page : null;
+    guard += 1;
+  }
+  state.cache.mtgCardsBySet.set(key, cards);
+  return cards;
+}
+
+
+function setPackPreviewMode(mode){
+  const booster = mode === 'booster';
+  els.packShell.classList.toggle('booster-mode', booster);
+  els.packShell.classList.toggle('proxy-mode', !booster);
+  els.packArtWrap.classList.toggle('booster-art', booster);
+  els.packArtWrap.classList.toggle('proxy-art', !booster);
+}
+
+async function updatePreview(forceStatus=false){  const set = state.selectedSet;
+  if(!set){
+    setPackPreviewMode('proxy');
+    els.packArt.src = '';
+    els.packArt.style.display = 'none';
+    els.packTitle.textContent = 'Choose a set';
+    els.packSubtitle.textContent = 'Original pack art when available. Clean proxy when it is not.';
+    els.dynamicBg.style.backgroundImage = '';
+    return;
+  }
+
+  if(state.game === 'pokemon'){
+    try{
+      const detail = await getPokemonSetDetail(set.id);
+      const boosters = Array.isArray(detail.boosters) ? detail.boosters : [];
+      const pickedBooster = chooseRandom(boosters) || null;
+      const boosterArt = pickedBooster?.artwork_front || '';
+      const fallbackArt = detail?.logo || set.logo || set.symbol || '';
+      const art = boosterArt || fallbackArt;
+      if(art){
+        setPackPreviewMode(boosterArt ? 'booster' : 'proxy');
+        els.packArt.src = /\.(png|jpg|jpeg|webp|svg)$/i.test(art) ? art : `${art}.png`;
+        els.packArt.style.display = 'block';
+      } else {
+        setPackPreviewMode('proxy');
+        els.packArt.style.display = 'none';
+      }
+      els.packTitle.textContent = set.name;
+      els.packSubtitle.textContent = `${set.series || 'Pokémon'}${set.releaseDate ? ' • ' + set.releaseDate : ''}`;
+      if(detail?.logo){
+        const bg = /\.(png|jpg|jpeg|webp|svg)$/i.test(detail.logo) ? detail.logo : `${detail.logo}.png`;
+        els.dynamicBg.style.backgroundImage = `url("${bg}")`;
+      } else if(set.logo){
+        els.dynamicBg.style.backgroundImage = `url("${set.logo}")`;
+      } else {
+        els.dynamicBg.style.backgroundImage = '';
+      }
+    }catch(err){
+      console.warn(err);
+      setPackPreviewMode('proxy');
+      els.packArt.src = set.logo || set.symbol || '';
+      els.packArt.style.display = els.packArt.src ? 'block' : 'none';
+      els.packTitle.textContent = set.name;
+      els.packSubtitle.textContent = `${set.series || 'Pokémon'}${set.releaseDate ? ' • ' + set.releaseDate : ''}`;
+    }
+  } else {
+    setPackPreviewMode('proxy');
+    els.packArt.src = set.icon || '';
+    els.packArt.style.display = els.packArt.src ? 'block' : 'none';
+    els.packTitle.textContent = set.name;
+    els.packSubtitle.textContent = `${set.type || 'MTG set'}${set.releaseDate ? ' • ' + set.releaseDate : ''} • set proxy`;
+    els.dynamicBg.style.backgroundImage = set.icon ? `url("${set.icon}")` : '';
+  }
+  if(forceStatus) setStatus(`Preview refreshed for ${set.name}.`, 'good');
+}
+
+function clearPackStage(showStatus=false){
+  state.pack = [];
+  state.currentIndex = -1;
+  state.shownIndexes = new Set();
+  state.runningValue = 0;
+  els.cardStack.innerHTML = '';
+  els.cardStack.style.display = 'none';
+  els.packWrapper.style.display = 'block';
+  els.summaryScreen.style.display = 'none';
+  els.cardInfo.style.display = 'block';
+  els.cardName.textContent = 'Waiting for a card';
+  els.cardMeta.textContent = 'Pick a set, tap the pack, and the top card will be the first one you see. Tap left or right side of the visible card to chuck it away and reveal the next.';
+  els.progressBar.style.width = '0%';
+  els.miniProgress.textContent = '0 / 0';
+  els.miniValue.textContent = currency(0);
+  els.addCurrentBtn.disabled = true;
+  els.addPackBtn.disabled = true;
+  if(showStatus) setStatus('Current pack cleared.', 'warn');
+}
+
+function hasPokemonRarity(card, needle){
+  return String(card.rarity || '').toLowerCase().includes(needle);
+}
+function hasPokemonFamily(card, family){
+  const r = String(card.rarity || '').toLowerCase();
+  return family.some(tag => r.includes(tag));
+}
+function estimatePokemonValue(card, finishHint){
+  const priceSets = card?.tcgplayer?.prices || {};
+  const order = finishHint === 'reverse'
+    ? ['reverseHolofoil','holofoil','normal','1stEditionHolofoil','1stEditionNormal']
+    : finishHint === 'holo-or-special'
+      ? ['holofoil','reverseHolofoil','normal','1stEditionHolofoil','1stEditionNormal']
+      : ['normal','holofoil','reverseHolofoil','1stEditionNormal','1stEditionHolofoil'];
+  for(const key of order){
+    const bucket = priceSets[key];
+    if(!bucket) continue;
+    const val = bucket.market ?? bucket.mid ?? bucket.low ?? bucket.high ?? bucket.directLow;
+    if(Number(val) > 0) return Number(val);
+  }
+  return 0;
+}
+async function simulatePokemonPack(set){
+  const cards = await getPokemonCardsForSet(set.id);
+  if(!cards.length) throw new Error('No cards found for that Pokémon set.');
+
+  const releaseYear = Number(String(set.releaseDate || '').slice(0,4)) || 0;
+  const classic = releaseYear && releaseYear < 2003;
+  const scarletVioletEra = releaseYear >= 2023;
+  const seen = new Set();
+  const pack = [];
+
+  const buckets = {
+    common: cards.filter(c => hasPokemonRarity(c, 'common')),
+    uncommon: cards.filter(c => hasPokemonRarity(c, 'uncommon')),
+    rare: cards.filter(c => hasPokemonFamily(c, ['rare'])),
+    ultra: cards.filter(c => hasPokemonFamily(c, ['double rare','ultra rare','rare ultra','rare holo ex','rare holo gx','rare holo v','rare holo vmax','rare holo vstar','ace spec','illustration rare','special illustration rare','rare secret','rainbow','hyper rare'])),
+    secret: cards.filter(c => hasPokemonFamily(c, ['secret','hyper rare','gold','rare rainbow','special illustration rare'])),
+    energy: cards.filter(c => String(c.supertype || '').toLowerCase() === 'energy')
+  };
+
+  function take(list, slotType, finishHint='normal'){
+    let pool = (list && list.length ? list : cards).filter(c => !seen.has(c.id));
+    if(!pool.length) pool = list && list.length ? list : cards;
+    const pick = chooseRandom(pool);
+    if(!pick) return;
+    seen.add(pick.id);
+    pack.push({
+      uid: cryptoId(),
+      game: 'pokemon',
+      setId: set.id,
+      setName: set.name,
+      slotType,
+      finishHint,
+      displayName: pick.name || 'Unknown card',
+      rarity: pick.rarity || pick.supertype || 'Unknown',
+      image: pick.images?.large || pick.images?.small || '',
+      value: estimatePokemonValue(pick, finishHint),
+      marketUrl: pick.tcgplayer?.url || '',
+      raw: pick
+    });
+  }
+
+  if(classic){
+    for(let i=0;i<7;i++) take(buckets.common, 'Common slot');
+    for(let i=0;i<3;i++) take(buckets.uncommon, 'Uncommon slot');
+    take([...buckets.secret, ...buckets.ultra, ...buckets.rare], 'Rare slot', 'holo-or-special');
+  } else if(scarletVioletEra){
+    for(let i=0;i<4;i++) take(buckets.common, 'Common slot');
+    for(let i=0;i<3;i++) take(buckets.uncommon, 'Uncommon slot');
+    take(cards, 'Reverse slot', 'reverse');
+    take(cards, 'Reverse / showcase slot', 'reverse');
+    const rareRoll = Math.random();
+    take(rareRoll < .68 ? buckets.rare : rareRoll < .92 ? buckets.ultra : buckets.secret, 'Rare+ slot', 'holo-or-special');
+    if(buckets.energy.length) take(buckets.energy, 'Energy slot');
+  } else {
+    for(let i=0;i<5;i++) take(buckets.common, 'Common slot');
+    for(let i=0;i<3;i++) take(buckets.uncommon, 'Uncommon slot');
+    take(cards, 'Reverse slot', 'reverse');
+    const rareRoll = Math.random();
+    take(rareRoll < .74 ? buckets.rare : rareRoll < .94 ? buckets.ultra : buckets.secret, 'Rare+ slot', 'holo-or-special');
+  }
+  return pack;
+}
+
+function normalizeMtgRarity(r){
+  const x = String(r || '').toLowerCase();
+  if(x.includes('mythic')) return 'mythic';
+  if(x.includes('rare')) return 'rare';
+  if(x.includes('uncommon')) return 'uncommon';
+  return 'common';
+}
+function mtgValue(card, foil=false){
+  const prices = card?.prices || {};
+  const picked = foil ? (prices.usd_foil ?? prices.usd ?? prices.eur) : (prices.usd ?? prices.usd_foil ?? prices.eur);
+  return Number(picked || 0);
+}
+async function simulateMtgPack(set){
+  const cards = (await getMtgCardsForSet(set.id)).filter(card => {
+    const img = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
+    return !!img;
+  });
+  if(!cards.length) throw new Error('No MTG cards found for that set.');
+
+  const seen = new Set();
+  const pack = [];
+  const buckets = {
+    common: cards.filter(c => normalizeMtgRarity(c.rarity) === 'common'),
+    uncommon: cards.filter(c => normalizeMtgRarity(c.rarity) === 'uncommon'),
+    rare: cards.filter(c => normalizeMtgRarity(c.rarity) === 'rare'),
+    mythic: cards.filter(c => normalizeMtgRarity(c.rarity) === 'mythic'),
+    land: cards.filter(c => {
+      const types = `${c.type_line || ''} ${(c.types || []).join(' ')} ${(c.subtypes || []).join(' ')}`.toLowerCase();
+      return types.includes('land');
+    })
+  };
+  function take(list, slotType, foil=false){
+    let pool = (list && list.length ? list : cards).filter(c => !seen.has(c.id));
+    if(!pool.length) pool = list && list.length ? list : cards;
+    const pick = chooseRandom(pool);
+    if(!pick) return;
+    seen.add(pick.id);
+    pack.push({
+      uid: cryptoId(),
+      game: 'mtg',
+      setId: set.id,
+      setName: set.name,
+      slotType,
+      finishHint: foil ? 'foil' : 'nonfoil',
+      displayName: pick.name || 'Unknown card',
+      rarity: pick.rarity || 'Unknown',
+      image: pick.image_uris?.normal || pick.image_uris?.large || pick.card_faces?.[0]?.image_uris?.normal || '',
+      value: mtgValue(pick, foil),
+      marketUrl: pick.purchase_uris?.tcgplayer || pick.scryfall_uri || '',
+      raw: pick
+    });
+  }
+  for(let i=0;i<10;i++) take(buckets.common, 'Common slot');
+  for(let i=0;i<3;i++) take(buckets.uncommon, 'Uncommon slot');
+  take(Math.random() < (1/8) && buckets.mythic.length ? buckets.mythic : buckets.rare, 'Rare / Mythic slot');
+  if(Math.random() < .3){
+    const foilPool = shuffle([...buckets.common, ...buckets.uncommon, ...buckets.rare, ...buckets.mythic]).filter(Boolean);
+    if(foilPool.length) take(foilPool, 'Foil slot', true);
+  } else if(buckets.land.length){
+    take(buckets.land, 'Land slot');
+  } else {
+    take(buckets.common, 'Flex slot');
+  }
+  return pack;
+}
+
+async function preloadPackImages(pack){
+  const loadImage = src => new Promise(resolve => {
+    if(!src) return resolve();
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = () => resolve();
+    img.src = src;
+  });
+  await Promise.all(pack.map(entry => loadImage(entry.image)));
+}
+
+function packEntryMeta(entry){
+  const market = entry.marketUrl ? ` <a href="${escapeHtml(entry.marketUrl)}" target="_blank" rel="noopener noreferrer">Market</a>.` : '';
+  return `${escapeHtml(entry.rarity || 'Unknown')} • ${escapeHtml(entry.slotType || 'Slot')}${entry.finishHint ? ` • ${escapeHtml(entry.finishHint)}` : ''} • ${escapeHtml(entry.setName || '')} • ${currency(entry.value)}.${market}`;
+}
+
+function renderStack(){
+  els.cardStack.innerHTML = '';
+  const pack = state.pack;
+  for(let i = pack.length - 1; i >= 0; i--){
+    const entry = pack[i];
+    const div = document.createElement('div');
+    div.className = 'card';
+    if(/\b(holo|secret|ultra|rare|mythic)\b/i.test(`${entry.rarity} ${entry.finishHint}`)) div.classList.add('sparkle');
+    div.style.backgroundImage = `url("${entry.image || ''}")`;
+    div.style.zIndex = String(pack.length - i);
+    div.dataset.index = String(i);
+    div.addEventListener('click', event => {
+      if(Number(div.dataset.index) !== state.currentIndex) return;
+      throwCurrentCard(div, event);
+    });
+    els.cardStack.appendChild(div);
+  }
+}
+
+function updateCurrentCardUI(){
+  const total = state.pack.length;
+  const idx = state.currentIndex;
+  if(idx < 0 || idx >= total) return;
+  const entry = state.pack[idx];
+  els.cardName.textContent = entry.displayName || 'Unknown card';
+  els.cardMeta.innerHTML = packEntryMeta(entry);
+  els.miniProgress.textContent = `${Math.min(idx + 1, total)} / ${total}`;
+  els.miniValue.textContent = currency(state.runningValue);
+  els.progressBar.style.width = `${((idx + 1) / total) * 100}%`;
+  els.addCurrentBtn.disabled = false;
+  els.addPackBtn.disabled = state.shownIndexes.size === 0;
+}
+
+function showSummary(){
+  els.cardStack.style.display = 'none';
+  els.cardInfo.style.display = 'none';
+  els.summaryScreen.style.display = 'flex';
+  els.summaryValue.textContent = currency(state.runningValue);
+  els.summaryText.textContent = `${state.pack.length} cards opened from ${state.selectedSet?.name || 'the set'}.`;
+  const highlights = state.pack.filter(entry => /\b(rare|mythic|secret|ultra|double rare|illustration)\b/i.test(entry.rarity || '')).slice(0, 10);
+  els.summaryRares.innerHTML = highlights.length
+    ? highlights.map(entry => `<div class="mini-card" title="${escapeHtml(entry.displayName)}" style="background-image:url('${escapeHtml(entry.image)}')"></div>`).join('')
+    : '<div class="tiny">No obvious shiny nonsense stood out in this one.</div>';
+  els.addCurrentBtn.disabled = true;
+  els.addPackBtn.disabled = false;
+}
+
+function throwCurrentCard(cardEl, event){
+  const rect = cardEl.getBoundingClientRect();
+  const clickX = (event.touches?.[0]?.clientX ?? event.clientX) - rect.left;
+  const dir = clickX > rect.width / 2 ? 'fly-right' : 'fly-left';
+  cardEl.classList.add(dir);
+  const prevIndex = state.currentIndex;
+  window.setTimeout(() => {
+    cardEl.remove();
+    const nextIndex = prevIndex + 1;
+    if(nextIndex >= state.pack.length){
+      state.currentIndex = state.pack.length;
+      els.miniProgress.textContent = `${state.pack.length} / ${state.pack.length}`;
+      els.progressBar.style.width = '100%';
+      showSummary();
+      setStatus(`Pack complete: ${currency(state.runningValue)} total.`, 'good');
+      return;
+    }
+    state.currentIndex = nextIndex;
+    if(!state.shownIndexes.has(nextIndex)){
+      state.shownIndexes.add(nextIndex);
+      state.runningValue += Number(state.pack[nextIndex].value || 0);
+    }
+    updateCurrentCardUI();
+    setStatus(`Revealed ${state.pack[nextIndex].displayName} — ${currency(state.pack[nextIndex].value)}.`, 'good');
+  }, 520);
+}
+
+async function openPack(){
+  if(!state.selectedSet){
+    setStatus('Pick a set first.', 'warn');
+    return;
+  }
+  clearPackStage(false);
+  els.packLoading.style.display = 'flex';
+  els.packLoadingText.textContent = 'Fetching cards…';
+  try{
+    const pack = state.game === 'pokemon'
+      ? await simulatePokemonPack(state.selectedSet)
+      : await simulateMtgPack(state.selectedSet);
+
+    els.packLoadingText.textContent = 'Preloading images…';
+    await preloadPackImages(pack);
+
+    state.pack = pack;
+    state.currentIndex = 0;
+    state.shownIndexes = new Set([0]);
+    state.runningValue = Number(pack[0]?.value || 0);
+
+    renderStack();
+    els.packLoading.style.display = 'none';
+    els.packWrapper.style.display = 'none';
+    els.cardStack.style.display = 'block';
+    els.summaryScreen.style.display = 'none';
+    els.cardInfo.style.display = 'block';
+
+    updateCurrentCardUI();
+    els.addPackBtn.disabled = false;
+    setStatus(`Pack loaded: ${pack.length} cards. First card is live. Tap it left or right to ditch it and reveal the next.`, 'good');
+  }catch(err){
+    console.error(err);
+    els.packLoading.style.display = 'none';
+    setStatus(`Could not open that pack. ${err.message}`, 'bad');
+  }
+}
+
+function addEntriesToBinder(entries){
+  const mapped = entries.map(entry => ({
+    uid: cryptoId(),
+    game: entry.game,
+    setId: entry.setId,
+    setName: entry.setName,
+    name: entry.displayName,
+    rarity: entry.rarity || '',
+    image: entry.image || '',
+    value: Number(entry.value || 0),
+    slotType: entry.slotType || '',
+    finishHint: entry.finishHint || '',
+    marketUrl: entry.marketUrl || '',
+    addedAt: new Date().toISOString()
+  }));
+  state.binder.unshift(...mapped);
+  saveBinder();
+  renderBinder();
+}
+function addCurrentCardToBinder(){
+  if(state.currentIndex < 0 || state.currentIndex >= state.pack.length) return;
+  const entry = state.pack[state.currentIndex];
+  addEntriesToBinder([entry]);
+  setStatus(`${entry.displayName} added to binder.`, 'good');
+}
+function addShownPackToBinder(){
+  const entries = [...state.shownIndexes].sort((a,b) => a - b).map(i => state.pack[i]).filter(Boolean);
+  if(!entries.length) return;
+  addEntriesToBinder(entries);
+  setStatus(`${entries.length} shown cards added to binder.`, 'good');
+}
+function addWholePackToBinder(){
+  if(!state.pack.length) return;
+  addEntriesToBinder(state.pack);
+  setStatus(`${state.pack.length} cards added to binder.`, 'good');
+}
+
+function renderBinder(){
+  const query = (els.binderSearch.value || '').trim().toLowerCase();
+  const gameFilter = els.binderGameFilter.value;
+  const filtered = state.binder.filter(card => {
+    if(gameFilter !== 'all' && card.game !== gameFilter) return false;
+    const hay = `${card.name} ${card.setName} ${card.rarity} ${card.slotType}`.toLowerCase();
+    return hay.includes(query);
+  });
+
+  const total = state.binder.reduce((sum, card) => sum + Number(card.value || 0), 0);
+  els.binderCount.textContent = String(state.binder.length);
+  els.binderValue.textContent = currency(total);
+  els.binderPokemonCount.textContent = String(state.binder.filter(card => card.game === 'pokemon').length);
+  els.binderMtgCount.textContent = String(state.binder.filter(card => card.game === 'mtg').length);
+
+  if(!filtered.length){
+    els.binderPages.innerHTML = '<div class="empty">Binder is empty for this filter.</div>';
+    return;
+  }
+
+  const pages = [];
+  for(let i=0;i<filtered.length;i+=9) pages.push(filtered.slice(i, i + 9));
+
+  els.binderPages.innerHTML = pages.map((page, pageIndex) => `
+    <section class="binder-page">
+      <h4>Binder page ${pageIndex + 1}</h4>
+      <div class="binder-grid">
+        ${page.map(card => `
+          <article class="binder-slot">
+            <div class="shot">${card.image ? `<img src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}">` : `<div class="tiny">No image</div>`}</div>
+            <div class="txt">
+              <strong>${escapeHtml(card.name)}</strong>
+              <span class="muted">${escapeHtml(card.setName)} • ${escapeHtml(card.rarity || 'Unknown')}</span>
+              <span class="muted">${escapeHtml(card.slotType || '')}${card.finishHint ? ' • ' + escapeHtml(card.finishHint) : ''}</span>
+              <span class="money">${currency(card.value)}</span>
+            </div>
+            <div class="slot-actions">
+              ${card.marketUrl ? `<button class="btn secondary" data-market="${escapeHtml(card.marketUrl)}" type="button">Market</button>` : `<button class="btn secondary" type="button" disabled>Market</button>`}
+              <button class="btn secondary" data-remove="${escapeHtml(card.uid)}" type="button">Remove</button>
+            </div>
+          </article>
+        `).join('')}
+      </div>
+    </section>
+  `).join('');
+}
+
+function exportBinderJSON(){
+  const blob = new Blob([JSON.stringify(state.binder, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'booster-vault-pocket-binder.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  setStatus('Binder exported.', 'good');
+}
+
+async function importBinderJSON(event){
+  const file = event.target.files?.[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const incoming = JSON.parse(text);
+    if(!Array.isArray(incoming)) throw new Error('JSON must contain an array of cards.');
+    state.binder = incoming.concat(state.binder).map(card => ({
+      uid: card.uid || cryptoId(),
+      game: card.game || 'pokemon',
+      setId: card.setId || '',
+      setName: card.setName || '',
+      name: card.name || 'Unknown',
+      rarity: card.rarity || '',
+      image: card.image || '',
+      value: Number(card.value || 0),
+      slotType: card.slotType || '',
+      finishHint: card.finishHint || '',
+      marketUrl: card.marketUrl || '',
+      addedAt: card.addedAt || new Date().toISOString()
+    }));
+    saveBinder();
+    renderBinder();
+    switchView('binder');
+    setStatus(`Imported ${incoming.length} cards into binder.`, 'good');
+  }catch(err){
+    console.error(err);
+    setStatus(`Could not import binder JSON. ${err.message}`, 'bad');
+  }finally{
+    event.target.value = '';
+  }
+}
+
+function bindEvents(){
+  els.btnPokemon.addEventListener('click', async () => {
+    if(state.game === 'pokemon') return;
+    setGame('pokemon');
+    await loadSets('pokemon');
+    await refreshSetList();
+    await updatePreview();
+    clearPackStage(false);
+    renderBinder();
+    setStatus(`${state.filteredSets.length} Pokémon sets loaded.`, 'good');
+  });
+  els.btnMtg.addEventListener('click', async () => {
+    if(state.game === 'mtg') return;
+    setGame('mtg');
+    await loadSets('mtg');
+    await refreshSetList();
+    await updatePreview();
+    clearPackStage(false);
+    renderBinder();
+    setStatus(`${state.filteredSets.length} MTG sets loaded.`, 'good');
+  });
+  els.setFilter.addEventListener('input', async () => {
+    await refreshSetList();
+    await updatePreview();
+  });
+  els.setSelect.addEventListener('change', async () => {
+    state.selectedSet = state.filteredSets.find(set => set.id === els.setSelect.value) || null;
+    clearPackStage(false);
+    await updatePreview();
+    if(state.selectedSet) setStatus(`${state.selectedSet.name} loaded. Tap the pack when ready.`, 'good');
+  });
+  els.packWrapper.addEventListener('click', openPack);
+  els.addCurrentBtn.addEventListener('click', addCurrentCardToBinder);
+  els.addPackBtn.addEventListener('click', addShownPackToBinder);
+  els.openAnotherBtn.addEventListener('click', () => {
+    clearPackStage(false);
+    openPack();
+  });
+  els.addWholePackBtn.addEventListener('click', addWholePackToBinder);
+
+  els.navItems.forEach(item => item.addEventListener('click', () => switchView(item.dataset.view)));
+  els.backToPackBtn.addEventListener('click', () => switchView('pack'));
+  els.binderSearch.addEventListener('input', renderBinder);
+  els.binderGameFilter.addEventListener('change', renderBinder);
+  els.exportBinderBtn.addEventListener('click', exportBinderJSON);
+  els.importBinderInput.addEventListener('change', importBinderJSON);
+  els.clearBinderBtn.addEventListener('click', () => {
+    if(!confirm('Clear the whole binder stored in this browser?')) return;
+    state.binder = [];
+    saveBinder();
+    renderBinder();
+    setStatus('Binder cleared. The cardboard graveyard is empty again.', 'warn');
+  });
+  els.binderPages.addEventListener('click', event => {
+    const removeBtn = event.target.closest('[data-remove]');
+    if(removeBtn){
+      const uid = removeBtn.getAttribute('data-remove');
+      state.binder = state.binder.filter(card => card.uid !== uid);
+      saveBinder();
+      renderBinder();
+      setStatus('Card removed from binder.', 'warn');
+      return;
+    }
+    const marketBtn = event.target.closest('[data-market]');
+    if(marketBtn){
+      const url = marketBtn.getAttribute('data-market');
+      if(url) window.open(url, '_blank', 'noopener');
+    }
+  });
+}
+
+async function init(){
+  state.binder = loadBinder();
+  bindEvents();
+  setGame('pokemon');
+  await loadSets('pokemon');
+  await refreshSetList();
+  await updatePreview();
+  clearPackStage(false);
+  renderBinder();
+  setStatus(`${state.filteredSets.length} Pokémon sets loaded. Pick one and tap the pack.`, 'good');
+}
+init();
+</script>
+</body>
+</html>
