@@ -301,6 +301,16 @@ select,input{
 @media (min-width: 600px){
   .dense-binder-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
 }
+
+.binder-card-inner{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px;gap:12px;position:relative}
+.binder-card-close{position:absolute;top:12px;right:12px;z-index:3}
+.binder-card-stage{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;padding:40px 8px 8px}
+.binder-card-stage img{display:block;max-width:min(96vw,560px);max-height:74vh;width:auto;height:auto;object-fit:contain;filter:drop-shadow(0 14px 30px rgba(0,0,0,.55))}
+.binder-card-meta{width:100%;max-width:420px;display:grid;gap:8px;text-align:center;padding-bottom:8px}
+.binder-card-name{font-size:1.02rem;font-weight:900;line-height:1.15}
+.binder-card-sub{color:var(--muted);font-size:.84rem;line-height:1.3}
+.binder-link-hidden{display:none !important}
+
 </style>
 </head>
 <body>
@@ -381,6 +391,21 @@ select,input{
     </div>
   </div>
 
+
+  <div id="binderCardModal" class="modal-overlay">
+    <div class="binder-card-inner">
+      <button id="closeBinderCardBtn" class="icon-btn binder-card-close" type="button">×</button>
+      <div class="binder-card-stage">
+        <img id="binderCardImage" alt="Binder card view">
+      </div>
+      <div class="binder-card-meta">
+        <div id="binderCardName" class="binder-card-name">Card</div>
+        <div id="binderCardSub" class="binder-card-sub"></div>
+        <a id="binderCardLink" class="btn secondary" href="#" target="_blank" rel="noopener noreferrer">TCG Link ↗</a>
+      </div>
+    </div>
+  </div>
+
   <div id="packModal" class="modal-overlay">
     <div class="pack-modal-inner minimal-pack-modal">
       <div class="pack-modal-stage">
@@ -431,10 +456,14 @@ const state = {
   binderSort: 'added',
   cache: {
     pokemonSetDetails: new Map(),
+    pokemonSetDetailPromises: new Map(),
     pokemonCardsBySet: new Map(),
+    pokemonCardsBySetPromises: new Map(),
     pokemonTcgSets: new Map(),
-    mtgCardsBySet: new Map()
-  }
+    mtgCardsBySet: new Map(),
+    mtgCardsBySetPromises: new Map()
+  },
+  activeBinderCardUid: null
 };
 
 const els = {
@@ -446,6 +475,12 @@ const els = {
   openBinderBtn: document.getElementById('openBinderBtn'),
   closeBinderBtn: document.getElementById('closeBinderBtn'),
   binderBadge: document.getElementById('binderBadge'),
+  binderCardModal: document.getElementById('binderCardModal'),
+  closeBinderCardBtn: document.getElementById('closeBinderCardBtn'),
+  binderCardImage: document.getElementById('binderCardImage'),
+  binderCardName: document.getElementById('binderCardName'),
+  binderCardSub: document.getElementById('binderCardSub'),
+  binderCardLink: document.getElementById('binderCardLink'),
 
   packWrapper: document.getElementById('packWrapper'),
   packShell: document.getElementById('packShell'),
@@ -559,6 +594,39 @@ function loadBinder(){
 function openBinder(){ els.binderView.classList.add('open'); renderBinder(); }
 function closeBinder(){ els.binderView.classList.remove('open'); }
 
+function openBinderCard(cardUid){
+  const card = state.binder.find(entry => entry.uid === cardUid);
+  if(!card) return;
+  state.activeBinderCardUid = cardUid;
+  els.binderCardImage.src = card.image || '';
+  els.binderCardImage.alt = card.name || 'Binder card';
+  els.binderCardName.textContent = card.name || 'Unknown card';
+  const bits = [card.setName || '', card.cardNumber ? `#${card.cardNumber}` : '', currency(card.value || 0)];
+  els.binderCardSub.textContent = bits.filter(Boolean).join(' • ');
+  if(card.marketUrl){
+    els.binderCardLink.href = card.marketUrl;
+    els.binderCardLink.classList.remove('binder-link-hidden');
+  } else {
+    els.binderCardLink.removeAttribute('href');
+    els.binderCardLink.classList.add('binder-link-hidden');
+  }
+  els.binderCardModal.style.display = 'flex';
+}
+
+function closeBinderCard(){
+  state.activeBinderCardUid = null;
+  els.binderCardModal.style.display = 'none';
+}
+
+function preloadSelectedSetData(set = state.selectedSet, game = state.game){
+  if(!set?.id) return;
+  if(game === 'pokemon'){
+    Promise.allSettled([getPokemonSetDetail(set.id), getPokemonCardsForSet(set.id)]).catch(() => {});
+    return;
+  }
+  getMtgCardsForSet(set.id).catch(() => {});
+}
+
 function setGame(game){
   state.game = game;
   els.btnPokemon.classList.toggle('active', game === 'pokemon');
@@ -628,39 +696,70 @@ async function refreshSetList(){
 
 async function getPokemonSetDetail(id){
   if(state.cache.pokemonSetDetails.has(id)) return state.cache.pokemonSetDetails.get(id);
-  const detail = await fetchJSON(`https://api.tcgdex.net/v2/en/sets/${encodeURIComponent(id)}`);
-  state.cache.pokemonSetDetails.set(id, detail);
-  return detail;
+  if(state.cache.pokemonSetDetailPromises.has(id)) return state.cache.pokemonSetDetailPromises.get(id);
+  const pending = fetchJSON(`https://api.tcgdex.net/v2/en/sets/${encodeURIComponent(id)}`)
+    .then(detail => {
+      state.cache.pokemonSetDetails.set(id, detail);
+      state.cache.pokemonSetDetailPromises.delete(id);
+      return detail;
+    })
+    .catch(err => {
+      state.cache.pokemonSetDetailPromises.delete(id);
+      throw err;
+    });
+  state.cache.pokemonSetDetailPromises.set(id, pending);
+  return pending;
 }
+
 async function getPokemonCardsForSet(id){
   if(state.cache.pokemonCardsBySet.has(id)) return state.cache.pokemonCardsBySet.get(id);
-  let page = 1;
-  const all = [];
-  while(true){
-    const data = await fetchJSON(`https://api.pokemontcg.io/v2/cards?q=set.id:${encodeURIComponent(id)}&pageSize=250&page=${page}&orderBy=number`, { headers: pokemonHeaders() });
-    all.push(...(data.data || []));
-    if(!(data.page < data.totalCount / data.pageSize)) break;
-    page += 1;
-    if(page > 12) break;
-  }
-  state.cache.pokemonCardsBySet.set(id, all);
-  return all;
+  if(state.cache.pokemonCardsBySetPromises.has(id)) return state.cache.pokemonCardsBySetPromises.get(id);
+  const pending = (async () => {
+    let page = 1;
+    const all = [];
+    while(true){
+      const data = await fetchJSON(`https://api.pokemontcg.io/v2/cards?q=set.id:${encodeURIComponent(id)}&pageSize=250&page=${page}&orderBy=number`, { headers: pokemonHeaders() });
+      all.push(...(data.data || []));
+      if(!(data.page < data.totalCount / data.pageSize)) break;
+      page += 1;
+      if(page > 12) break;
+    }
+    state.cache.pokemonCardsBySet.set(id, all);
+    state.cache.pokemonCardsBySetPromises.delete(id);
+    return all;
+  })().catch(err => {
+    state.cache.pokemonCardsBySetPromises.delete(id);
+    throw err;
+  });
+  state.cache.pokemonCardsBySetPromises.set(id, pending);
+  return pending;
 }
+
 async function getMtgCardsForSet(code){
   const key = String(code).toLowerCase();
   if(state.cache.mtgCardsBySet.has(key)) return state.cache.mtgCardsBySet.get(key);
-  let next = `https://api.scryfall.com/cards/search?q=set%3A${encodeURIComponent(key)}+game%3Apaper+unique%3Acards&order=set`;
-  const cards = [];
-  let guard = 0;
-  while(next && guard < 20){
-    const data = await fetchJSON(next);
-    cards.push(...(data.data || []));
-    next = data.has_more ? data.next_page : null;
-    guard += 1;
-  }
-  state.cache.mtgCardsBySet.set(key, cards);
-  return cards;
+  if(state.cache.mtgCardsBySetPromises.has(key)) return state.cache.mtgCardsBySetPromises.get(key);
+  const pending = (async () => {
+    let next = `https://api.scryfall.com/cards/search?q=set%3A${encodeURIComponent(key)}+game%3Apaper+unique%3Acards&order=set`;
+    const cards = [];
+    let guard = 0;
+    while(next && guard < 20){
+      const data = await fetchJSON(next);
+      cards.push(...(data.data || []));
+      next = data.has_more ? data.next_page : null;
+      guard += 1;
+    }
+    state.cache.mtgCardsBySet.set(key, cards);
+    state.cache.mtgCardsBySetPromises.delete(key);
+    return cards;
+  })().catch(err => {
+    state.cache.mtgCardsBySetPromises.delete(key);
+    throw err;
+  });
+  state.cache.mtgCardsBySetPromises.set(key, pending);
+  return pending;
 }
+
 
 function setPackPreviewMode(mode){
   const booster = mode === 'booster';
@@ -1081,9 +1180,9 @@ function renderBinder(){
     <section class="binder-page dense-binder-page">
       <div class="binder-grid dense-binder-grid">
         ${filtered.map(card => `
-          <article class="binder-slot dense-slot">
+          <article class="binder-slot dense-slot" data-open-card="${escapeHtml(card.uid)}">
             <button class="remove-mini" data-remove="${escapeHtml(card.uid)}" type="button" aria-label="Remove ${escapeHtml(card.name)}">×</button>
-            <div class="shot dense-shot" ${card.marketUrl ? `data-market="${escapeHtml(card.marketUrl)}"` : ''}>
+            <div class="shot dense-shot">
               ${card.image ? `<img src="${escapeHtml(card.image)}" alt="${escapeHtml(card.name)}">` : `<div class="tiny">No image</div>`}
               ${Number(card.qty || 1) > 1 ? `<span class="count-pill">×${Number(card.qty || 1)}</span>` : ''}
             </div>
@@ -1170,6 +1269,7 @@ function bindEvents(){
     state.selectedSet = state.filteredSets.find(set => set.id === els.setSelect.value) || null;
     clearPackStage(false);
     await updatePreview();
+    preloadSelectedSetData(state.selectedSet, state.game);
     if(state.selectedSet) setStatus('', '');
   });
 
@@ -1178,14 +1278,21 @@ function bindEvents(){
   els.packModal.addEventListener('click', event => {
     if(event.target === els.packModal) clearPackStage(false, false);
   });
+  els.summaryScreen.addEventListener('click', event => {
+    if(event.target.closest('#openAnotherBtn')) return;
+    clearPackStage(false, false);
+  });
 
-  els.openAnotherBtn.addEventListener('click', () => {
+  els.openAnotherBtn.addEventListener('click', event => {
+    event.stopPropagation();
     clearPackStage(false, true);
     openPack();
   });
 
   els.openBinderBtn.addEventListener('click', openBinder);
   els.closeBinderBtn.addEventListener('click', closeBinder);
+  els.closeBinderCardBtn.addEventListener('click', closeBinderCard);
+  els.binderCardModal.addEventListener('click', event => { if(event.target === els.binderCardModal) closeBinderCard(); });
   els.binderView.addEventListener('click', event => { if(event.target === els.binderView) closeBinder(); });
   els.binderSearch.addEventListener('input', renderBinder);
   els.binderSort.addEventListener('change', () => {
@@ -1220,10 +1327,9 @@ function bindEvents(){
       setStatus('Removed one copy from binder.', 'warn');
       return;
     }
-    const marketBtn = event.target.closest('[data-market]');
-    if(marketBtn){
-      const url = marketBtn.getAttribute('data-market');
-      if(url) window.open(url, '_blank', 'noopener');
+    const openCard = event.target.closest('[data-open-card]');
+    if(openCard){
+      openBinderCard(openCard.getAttribute('data-open-card'));
     }
   });
 }
@@ -1235,6 +1341,7 @@ async function init(){
   await loadSets('pokemon');
   await refreshSetList();
   await updatePreview();
+  preloadSelectedSetData(state.selectedSet, state.game);
   clearPackStage(false);
   els.binderSort.value = state.binderSort;
   renderBinder();
