@@ -377,8 +377,7 @@ select,input{
           <button id="exportBinderBtn" class="btn secondary" type="button">Export</button>
           <button id="clearBinderBtn" class="btn danger" type="button">Clear</button>
         </div>
-        <label class="btn secondary compact-import" style="display:flex;align-items:center;justify-content:center;cursor:pointer;margin-top:8px;">Import<input id="importBinderInput" type="file" accept=".json,application/json" style="display:none"></label>
-      </div>
+              </div>
     </div>
   </div>
 
@@ -396,8 +395,7 @@ select,input{
           <div id="summaryRares" class="rare-pulls"></div>
           <div class="pack-actions" style="width:100%;max-width:320px">
             <button id="openAnotherBtn" class="btn" type="button">Open another pack</button>
-            <button id="addWholePackBtn" class="btn secondary" type="button">Add whole pack</button>
-          </div>
+                      </div>
         </div>
       </div>
       <div id="packBottomBar" class="pack-bottom-bar">
@@ -427,6 +425,7 @@ const state = {
   currentIndex: -1,
   shownIndexes: new Set(),
   runningValue: 0,
+  packStored: false,
   binder: [],
   binderViewGame: 'all',
   binderSort: 'added',
@@ -469,7 +468,6 @@ const els = {
   summaryValue: document.getElementById('summaryValue'),
   summaryRares: document.getElementById('summaryRares'),
   openAnotherBtn: document.getElementById('openAnotherBtn'),
-  addWholePackBtn: document.getElementById('addWholePackBtn'),
 
   binderSearch: document.getElementById('binderSearch'),
   binderSort: document.getElementById('binderSort'),
@@ -733,6 +731,7 @@ function clearPackStage(showStatus=false, keepModal=false){
   state.currentIndex = -1;
   state.shownIndexes = new Set();
   state.runningValue = 0;
+  state.packStored = false;
   els.cardStack.innerHTML = '';
   els.cardStack.style.display = 'none';
   els.summaryScreen.style.display = 'none';
@@ -935,6 +934,10 @@ function updateCurrentCardUI(){
 function showSummary(){
   els.cardStack.style.display = 'none';
   els.summaryScreen.style.display = 'flex';
+  if(!state.packStored && state.pack.length){
+    addEntriesToBinder(state.pack);
+    state.packStored = true;
+  }
   els.summaryValue.textContent = currency(state.runningValue);
   els.summaryText.textContent = `${state.pack.length} cards opened from ${state.selectedSet?.name || 'the set'}.`;
   const highlights = state.pack.filter(entry => /\b(rare|mythic|secret|ultra|double rare|illustration)\b/i.test(entry.rarity || '')).slice(0, 10);
@@ -991,6 +994,7 @@ async function openPack(){
     state.currentIndex = 0;
     state.shownIndexes = new Set([0]);
     state.runningValue = Number(pack[0]?.value || 0);
+    state.packStored = false;
 
     renderStack();
     els.packModalLoading.style.display = 'none';
@@ -1011,17 +1015,17 @@ async function openPack(){
 function addEntriesToBinder(entries){
   const mapped = entries.map(entry => ({
     uid: cryptoId(),
-    game: entry.game,
-    setId: entry.setId,
-    setName: entry.setName,
-    name: entry.displayName,
+    game: entry.game || state.game,
+    setId: entry.setId || '',
+    setName: entry.setName || state.selectedSet?.name || '',
+    name: entry.displayName || entry.name || 'Unknown',
     rarity: entry.rarity || '',
     image: entry.image || '',
     value: Number(entry.value || 0),
     slotType: entry.slotType || '',
     finishHint: entry.finishHint || '',
     marketUrl: entry.marketUrl || '',
-    cardNumber: entry.raw?.number || entry.raw?.collector_number || '',
+    cardNumber: entry.cardNumber || entry.raw?.number || entry.raw?.collector_number || '',
     addedAt: new Date().toISOString(),
     qty: 1
   }));
@@ -1030,8 +1034,9 @@ function addEntriesToBinder(entries){
   renderBinder();
 }
 function addWholePackToBinder(){
-  if(!state.pack.length) return;
+  if(!state.pack.length || state.packStored) return;
   addEntriesToBinder(state.pack);
+  state.packStored = true;
   setStatus('', '');
 }
 
@@ -1178,7 +1183,6 @@ function bindEvents(){
     clearPackStage(false, true);
     openPack();
   });
-  els.addWholePackBtn.addEventListener('click', addWholePackToBinder);
 
   els.openBinderBtn.addEventListener('click', openBinder);
   els.closeBinderBtn.addEventListener('click', closeBinder);
@@ -1193,7 +1197,7 @@ function bindEvents(){
   els.binderTabMtg.addEventListener('click', () => { state.binderViewGame = 'mtg'; renderBinder(); });
 
   els.exportBinderBtn.addEventListener('click', exportBinderJSON);
-  els.importBinderInput.addEventListener('change', importBinderJSON);
+  if(els.importBinderInput) els.importBinderInput.addEventListener('change', importBinderJSON);
   els.clearBinderBtn.addEventListener('click', () => {
     if(!confirm('Clear the whole binder stored in this browser?')) return;
     state.binder = [];
