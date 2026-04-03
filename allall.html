@@ -461,7 +461,9 @@ const state = {
     pokemonCardsBySetPromises: new Map(),
     pokemonTcgSets: new Map(),
     mtgCardsBySet: new Map(),
-    mtgCardsBySetPromises: new Map()
+    mtgCardsBySetPromises: new Map(),
+    secretLairCards: [],
+    secretLairCardsPromise: null
   },
   activeBinderCardUid: null
 };
@@ -624,6 +626,10 @@ function preloadSelectedSetData(set = state.selectedSet, game = state.game){
     Promise.allSettled([getPokemonSetDetail(set.id), getPokemonCardsForSet(set.id)]).catch(() => {});
     return;
   }
+  if(set.mode === 'secret_lair'){
+    getSecretLairCards().catch(() => {});
+    return;
+  }
   getMtgCardsForSet(set.id).catch(() => {});
 }
 
@@ -655,7 +661,8 @@ async function loadSets(game){
   } else {
     const scry = await fetchJSON('https://api.scryfall.com/sets');
     const validTypes = new Set(['core','expansion','masters','draft_innovation','commander','funny','starter','alchemy']);
-    state.allSets.mtg = (scry.data || [])
+    const sldSet = (scry.data || []).find(set => String(set.code || '').toLowerCase() === 'sld');
+    const mtgSets = (scry.data || [])
       .filter(set => set.code && set.name && !set.digital && validTypes.has(set.set_type))
       .map(set => ({
         id: String(set.code).toUpperCase(),
@@ -665,6 +672,17 @@ async function loadSets(game){
         icon: set.icon_svg_uri || ''
       }))
       .sort((a,b) => normalizeDate(b.releaseDate) - normalizeDate(a.releaseDate));
+
+    mtgSets.unshift({
+      id: '__SECRET_LAIR__',
+      name: 'Secret Lair Surprise',
+      type: 'Secret Lair',
+      releaseDate: sldSet?.released_at || '',
+      icon: sldSet?.icon_svg_uri || '',
+      mode: 'secret_lair'
+    });
+
+    state.allSets.mtg = mtgSets;
   }
   state.filteredSets = [...state.allSets[game]];
 }
@@ -820,7 +838,9 @@ async function updatePreview(){
     els.packArt.src = set.icon || '';
     els.packArt.style.display = els.packArt.src ? 'block' : 'none';
     els.packTitle.textContent = set.name;
-    els.packSubtitle.textContent = `${set.type || 'MTG set'}${set.releaseDate ? ' • ' + set.releaseDate : ''} • set proxy`;
+    els.packSubtitle.textContent = set.mode === 'secret_lair'
+      ? 'Random Secret Lair drop with a bonus mystery card'
+      : `${set.type || 'MTG set'}${set.releaseDate ? ' • ' + set.releaseDate : ''} • set proxy`;
     els.dynamicBg.style.backgroundImage = set.icon ? `url("${set.icon}")` : '';
   }
 }
@@ -921,6 +941,128 @@ async function simulatePokemonPack(set){
     take(rareRoll < .74 ? buckets.rare : rareRoll < .94 ? buckets.ultra : buckets.secret, 'Rare+ slot', 'holo-or-special');
   }
   return pack;
+}
+
+async function getSecretLairCards(){
+  if(Array.isArray(state.cache.secretLairCards) && state.cache.secretLairCards.length) return state.cache.secretLairCards;
+  if(state.cache.secretLairCardsPromise) return state.cache.secretLairCardsPromise;
+  state.cache.secretLairCardsPromise = (async () => {
+    let next = 'https://api.scryfall.com/cards/search?q=set%3Asld+game%3Apaper+unique%3Aprints&order=set';
+    const cards = [];
+    let guard = 0;
+    while(next && guard < 80){
+      const data = await fetchJSON(next);
+      cards.push(...(data.data || []));
+      next = data.has_more ? data.next_page : null;
+      guard += 1;
+    }
+    state.cache.secretLairCards = cards.filter(card => {
+      const img = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
+      return !!img;
+    });
+    state.cache.secretLairCardsPromise = null;
+    return state.cache.secretLairCards;
+  })().catch(err => {
+    state.cache.secretLairCardsPromise = null;
+    throw err;
+  });
+  return state.cache.secretLairCardsPromise;
+}
+
+function clusterSecretLairBundles(cards){
+  const byDate = new Map();
+  for(const card of cards){
+    const key = card.released_at || 'undated';
+    if(!byDate.has(key)) byDate.set(key, []);
+    byDate.get(key).push(card);
+  }
+  const bundles = [];
+  for(const [date, group] of byDate.entries()){
+    const sorted = [...group].sort((a,b) =>
+      parseCollectorNumber(a.collector_number) - parseCollectorNumber(b.collector_number) ||
+      String(a.name || '').localeCompare(String(b.name || ''))
+    );
+    let current = [];
+    let prevNum = null;
+    const flush = () => {
+      if(current.length >= 3){
+        bundles.push({
+          date,
+          label: `Secret Lair Drop • ${date}`,
+          cards: [...current]
+        });
+      }
+      current = [];
+      prevNum = null;
+    };
+    for(const card of sorted){
+      const num = parseCollectorNumber(card.collector_number);
+      const gap = prevNum === null ? 0 : num - prevNum;
+      if(current.length && (gap > 8 || current.length >= 6)){
+        flush();
+      }
+      current.push(card);
+      prevNum = num;
+    }
+    flush();
+  }
+  return bundles;
+}
+
+async function simulateSecretLairPack(set){
+  const cards = await getSecretLairCards();
+  if(!cards.length) throw new Error('No Secret Lair cards found.');
+  const bundles = clusterSecretLairBundles(cards);
+  const pickedBundle = chooseRandom(bundles) || null;
+  const sourceCards = pickedBundle?.cards?.length ? pickedBundle.cards : shuffle(cards).slice(0, 5);
+  const seen = new Set();
+  const pack = [];
+
+  const bonusPool = pickedBundle
+    ? cards.filter(card => (card.released_at || '') === pickedBundle.date && !sourceCards.some(base => base.id === card.id))
+    : cards.filter(card => !sourceCards.some(base => base.id === card.id));
+
+  function pushCard(card, slotType='Drop slot', explicitLabel=''){
+    if(!card || seen.has(card.id)) return;
+    seen.add(card.id);
+    const finish = (Array.isArray(card.finishes) && card.finishes.includes('foil')) || (card.foil && !card.nonfoil) ? 'foil' : 'nonfoil';
+    pack.push({
+      uid: cryptoId(),
+      game: 'mtg',
+      setId: set.id,
+      setName: explicitLabel || pickedBundle?.label || set.name,
+      slotType,
+      finishHint: finish,
+      displayName: card.name || 'Unknown card',
+      rarity: card.rarity || 'rare',
+      image: card.image_uris?.normal || card.image_uris?.large || card.card_faces?.[0]?.image_uris?.normal || '',
+      value: mtgValue(card, finish === 'foil'),
+      marketUrl: card.purchase_uris?.tcgplayer || card.scryfall_uri || '',
+      raw: card,
+      cardNumber: card.collector_number || ''
+    });
+  }
+
+  sourceCards.forEach(card => pushCard(card, 'Secret Lair slot', pickedBundle?.label || set.name));
+  const bonusCard = chooseRandom(bonusPool.length ? bonusPool : cards.filter(card => !seen.has(card.id)));
+  if(bonusCard){
+    pushCard(bonusCard, 'Bonus mystery slot', pickedBundle?.label || set.name);
+  }
+  return pack.length ? pack : shuffle(cards).slice(0, 6).map(card => ({
+    uid: cryptoId(),
+    game: 'mtg',
+    setId: set.id,
+    setName: set.name,
+    slotType: 'Secret Lair slot',
+    finishHint: 'nonfoil',
+    displayName: card.name || 'Unknown card',
+    rarity: card.rarity || 'rare',
+    image: card.image_uris?.normal || card.image_uris?.large || card.card_faces?.[0]?.image_uris?.normal || '',
+    value: mtgValue(card, false),
+    marketUrl: card.purchase_uris?.tcgplayer || card.scryfall_uri || '',
+    raw: card,
+    cardNumber: card.collector_number || ''
+  }));
 }
 
 function normalizeMtgRarity(r){
@@ -1038,7 +1180,9 @@ function showSummary(){
     state.packStored = true;
   }
   els.summaryValue.textContent = currency(state.runningValue);
-  els.summaryText.textContent = `${state.pack.length} cards opened from ${state.selectedSet?.name || 'the set'}.`;
+  const packLabels = [...new Set(state.pack.map(entry => entry.setName).filter(Boolean))];
+  const shownSetName = packLabels[0] || state.selectedSet?.name || 'the set';
+  els.summaryText.textContent = `${state.pack.length} cards opened from ${shownSetName}.`;
   const highlights = state.pack.filter(entry => /\b(rare|mythic|secret|ultra|double rare|illustration)\b/i.test(entry.rarity || '')).slice(0, 10);
   els.summaryRares.innerHTML = highlights.length
     ? highlights.map(entry => `<div class="mini-card" title="${escapeHtml(entry.displayName)}" style="background-image:url('${escapeHtml(entry.image)}')"></div>`).join('')
@@ -1084,7 +1228,9 @@ async function openPack(){
   try{
     const pack = state.game === 'pokemon'
       ? await simulatePokemonPack(state.selectedSet)
-      : await simulateMtgPack(state.selectedSet);
+      : state.selectedSet?.mode === 'secret_lair'
+        ? await simulateSecretLairPack(state.selectedSet)
+        : await simulateMtgPack(state.selectedSet);
 
     els.packModalLoadingText.textContent = 'Preloading images…';
     await preloadPackImages(pack);
