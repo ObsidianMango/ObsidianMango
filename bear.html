@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Bear Escape</title>
+  <style>
+    :root{
+      --bg:#f2efe8;
+      --ink:#2d2630;
+      --panel:#fffaf0;
+      --green:#2f8a4d;
+      --blue:#cde9ff;
+      --brown:#6f4526;
+      --gold:#f1d44f;
+    }
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;
+      height:100%;
+      background:radial-gradient(circle at top, #f7f4ee 0%, #ece7de 60%, #ded7cb 100%);
+      font-family:Arial, Helvetica, sans-serif;
+      color:var(--ink);
+      overflow:hidden;
+    }
+    .wrap{
+      height:100%;
+      display:grid;
+      grid-template-rows:auto 1fr auto;
+      gap:10px;
+      padding:10px;
+      max-width:900px;
+      margin:0 auto;
+    }
+    .topbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      padding:12px 14px;
+      background:rgba(255,250,240,.85);
+      border:3px solid rgba(45,38,48,.12);
+      border-radius:18px;
+      box-shadow:0 10px 30px rgba(0,0,0,.08);
+      backdrop-filter: blur(6px);
+      flex-wrap:wrap;
+    }
+    .title{
+      font-size:clamp(20px, 4vw, 34px);
+      font-weight:900;
+      letter-spacing:.3px;
+    }
+    .subtitle{
+      font-size:14px;
+      opacity:.8;
+      margin-top:3px;
+    }
+    .status{
+      font-weight:800;
+      font-size:14px;
+      padding:10px 12px;
+      border-radius:999px;
+      background:#fff;
+      border:2px dashed rgba(45,38,48,.25);
+      max-width:100%;
+    }
+    .canvas-shell{
+      min-height:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:4px;
+    }
+    canvas{
+      width:min(100%, 720px);
+      height:auto;
+      aspect-ratio:3/4;
+      background:#fbf7ef;
+      border-radius:20px;
+      box-shadow:0 20px 50px rgba(0,0,0,.14);
+      touch-action:none;
+      border:3px solid rgba(45,38,48,.10);
+    }
+    .controls{
+      display:grid;
+      grid-template-columns:1fr auto;
+      gap:12px;
+      align-items:center;
+      padding-bottom:4px;
+    }
+    .legend{
+      background:rgba(255,250,240,.88);
+      border:3px solid rgba(45,38,48,.12);
+      border-radius:18px;
+      padding:12px 14px;
+      font-size:14px;
+      line-height:1.35;
+    }
+    .legend b{font-size:15px}
+    .mobile-pad{
+      display:grid;
+      grid-template-columns:64px 64px 64px;
+      grid-template-rows:64px 64px 64px;
+      gap:6px;
+      justify-content:end;
+      user-select:none;
+    }
+    .pad{
+      border:none;
+      border-radius:16px;
+      background:#fffaf0;
+      box-shadow:0 8px 20px rgba(0,0,0,.1);
+      font-size:26px;
+      font-weight:900;
+      color:var(--ink);
+      border:3px solid rgba(45,38,48,.08);
+      touch-action:none;
+    }
+    .pad:active{transform:translateY(1px) scale(.98)}
+    .empty{visibility:hidden}
+    .restart{
+      margin-left:8px;
+      border:none;
+      padding:11px 14px;
+      border-radius:999px;
+      background:var(--gold);
+      color:#3a2f00;
+      font-weight:900;
+      box-shadow:0 6px 14px rgba(0,0,0,.1);
+    }
+    @media (max-width:700px){
+      .controls{grid-template-columns:1fr}
+      .mobile-pad{justify-content:center}
+      .topbar{justify-content:center}
+      .status{text-align:center}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <div class="title">Bear Escape</div>
+        <div class="subtitle">Find the bear, then get the smiley out through the exit.</div>
+      </div>
+      <div>
+        <span class="status" id="statusText">Find the bear first.</span>
+        <button class="restart" id="restartBtn" type="button">Restart</button>
+      </div>
+    </div>
+
+    <div class="canvas-shell">
+      <canvas id="game" width="720" height="960" aria-label="Bear Escape game"></canvas>
+    </div>
+
+    <div class="controls">
+      <div class="legend">
+        <b>How to play</b><br>
+        Move the smiley with <b>WASD</b>, <b>arrow keys</b>, or the big thumb buttons. Touch the bear to pick it up. After that, head for the exit at the top-left. The deer and duck are always hanging around because apparently they pay no rent and never leave.
+      </div>
+      <div class="mobile-pad" aria-label="Touch controls">
+        <div class="empty"></div>
+        <button class="pad" data-dir="up">▲</button>
+        <div class="empty"></div>
+        <button class="pad" data-dir="left">◀</button>
+        <button class="pad" data-dir="down">▼</button>
+        <button class="pad" data-dir="right">▶</button>
+        <div class="empty"></div>
+        <div class="empty"></div>
+        <div class="empty"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const statusText = document.getElementById('statusText');
+    const restartBtn = document.getElementById('restartBtn');
+
+    const W = canvas.width;
+    const H = canvas.height;
+
+    const keys = {up:false,down:false,left:false,right:false};
+
+    const player = {x:64, y:900, r:18, speed:2.6, hasBear:false};
+    const bear = {x:300, y:720, r:22, found:false};
+    const duck = {x:360, y:208, t:0};
+    const deer = {x:418, y:204, t:1.3};
+    const exitZone = {x:66, y:64, w:70, h:55};
+    let won = false;
+
+    function resetGame(){
+      player.x = 64;
+      player.y = 900;
+      player.hasBear = false;
+      bear.found = false;
+      won = false;
+      duck.t = 0;
+      deer.t = 1.3;
+      setStatus('Find the bear first.');
+    }
+
+    function setStatus(msg){
+      statusText.textContent = msg;
+    }
+
+    restartBtn.addEventListener('click', resetGame);
+
+    document.addEventListener('keydown', (e)=>{
+      const k = e.key.toLowerCase();
+      if(['arrowup','w'].includes(k)) { keys.up = true; e.preventDefault(); }
+      if(['arrowdown','s'].includes(k)) { keys.down = true; e.preventDefault(); }
+      if(['arrowleft','a'].includes(k)) { keys.left = true; e.preventDefault(); }
+      if(['arrowright','d'].includes(k)) { keys.right = true; e.preventDefault(); }
+      if(k === 'r') resetGame();
+    }, {passive:false});
+
+    document.addEventListener('keyup', (e)=>{
+      const k = e.key.toLowerCase();
+      if(['arrowup','w'].includes(k)) keys.up = false;
+      if(['arrowdown','s'].includes(k)) keys.down = false;
+      if(['arrowleft','a'].includes(k)) keys.left = false;
+      if(['arrowright','d'].includes(k)) keys.right = false;
+    });
+
+    document.querySelectorAll('.pad').forEach(btn => {
+      const dir = btn.dataset.dir;
+      const start = (e) => { e.preventDefault(); keys[dir] = true; };
+      const end = (e) => { e.preventDefault(); keys[dir] = false; };
+      btn.addEventListener('pointerdown', start);
+      btn.addEventListener('pointerup', end);
+      btn.addEventListener('pointerleave', end);
+      btn.addEventListener('pointercancel', end);
+    });
+
+    function dist(ax, ay, bx, by){
+      return Math.hypot(ax - bx, ay - by);
+    }
+
+    function circleRectCollision(cx, cy, cr, rect){
+      const closestX = Math.max(rect.x, Math.min(cx, rect.x + rect.w));
+      const closestY = Math.max(rect.y, Math.min(cy, rect.y + rect.h));
+      const dx = cx - closestX;
+      const dy = cy - closestY;
+      return dx*dx + dy*dy < cr*cr;
+    }
+
+    function drawCrayonLine(points, color, width, jitter=2.5, alpha=0.95){
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for(let p=0; p<3; p++){
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = alpha * (0.45 + p * 0.15);
+        ctx.lineWidth = width + (Math.random()*1.8 - 0.9);
+        points.forEach((pt, i) => {
+          const x = pt.x + (Math.random()*jitter - jitter/2);
+          const y = pt.y + (Math.random()*jitter - jitter/2);
+          if(i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        });
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawCrayonFill(rect, color, strokes=50, vertical=false){
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.33;
+      for(let i=0; i<strokes; i++){
+        ctx.lineWidth = 7 + Math.random()*4;
+        if(vertical){
+          const x = rect.x + Math.random()*rect.w;
+          const y1 = rect.y + Math.random()*8;
+          const y2 = rect.y + rect.h - Math.random()*8;
+          ctx.beginPath();
+          ctx.moveTo(x + Math.random()*8 - 4, y1);
+          ctx.lineTo(x + Math.random()*8 - 4, y2);
+          ctx.stroke();
+        } else {
+          const y = rect.y + Math.random()*rect.h;
+          const x1 = rect.x + Math.random()*8;
+          const x2 = rect.x + rect.w - Math.random()*8;
+          ctx.beginPath();
+          ctx.moveTo(x1, y + Math.random()*8 - 4);
+          ctx.lineTo(x2, y + Math.random()*8 - 4);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    // Hand-drawn map regions based on the drawing.
+    const walls = [
+      {x:0, y:0, w:W, h:24},
+      {x:0, y:0, w:24, h:H},
+      {x:0, y:H-24, w:W, h:24},
+      {x:W-24, y:0, w:24, h:H},
+
+      {x:170, y:24, w:440, h:70},
+      {x:580, y:90, w:110, h:840},
+      {x:180, y:430, w:430, h:90},
+      {x:170, y:850, w:440, h:80},
+
+      {x:210, y:590, w:300, h:28},
+      {x:482, y:590, w:28, h:220},
+      {x:210, y:810, w:300, h:28},
+      {x:210, y:590, w:28, h:150}
+    ];
+
+    const waterZones = [
+      {x:36, y:48, w:132, h:650},
+      {x:190, y:120, w:360, h:250},
+      {x:224, y:604, w:260, h:210}
+    ];
+
+    const grassZones = [
+      {x:170, y:24, w:460, h:70},
+      {x:586, y:90, w:100, h:404},
+      {x:220, y:430, w:470, h:90},
+      {x:160, y:430, w:85, h:500},
+      {x:590, y:490, w:100, h:440},
+      {x:160, y:850, w:470, h:80}
+    ];
+
+    function collidesWorld(nx, ny){
+      if(nx - player.r < 0 || ny - player.r < 0 || nx + player.r > W || ny + player.r > H) return true;
+      for(const rect of walls){
+        if(circleRectCollision(nx, ny, player.r, rect)) return true;
+      }
+      return false;
+    }
+
+    function update(){
+      if(!won){
+        let dx = 0;
+        let dy = 0;
+        if(keys.up) dy -= 1;
+        if(keys.down) dy += 1;
+        if(keys.left) dx -= 1;
+        if(keys.right) dx += 1;
+
+        if(dx || dy){
+          const len = Math.hypot(dx, dy) || 1;
+          dx = dx / len * player.speed;
+          dy = dy / len * player.speed;
+
+          const nx = player.x + dx;
+          const ny = player.y + dy;
+
+          if(!collidesWorld(nx, player.y)) player.x = nx;
+          if(!collidesWorld(player.x, ny)) player.y = ny;
+        }
+
+        if(!bear.found && dist(player.x, player.y, bear.x, bear.y) < player.r + bear.r + 2){
+          bear.found = true;
+          player.hasBear = true;
+          setStatus('Bear found. Now get out through the exit.');
+        }
+
+        if(player.hasBear &&
+           player.x > exitZone.x && player.x < exitZone.x + exitZone.w &&
+           player.y > exitZone.y && player.y < exitZone.y + exitZone.h){
+          won = true;
+          setStatus('You escaped with the bear. Magnificent little chaos goblin behavior.');
+        }
+      }
+
+      duck.t += 0.022;
+      deer.t += 0.015;
+    }
+
+    function drawPaper(){
+      ctx.fillStyle = '#fbf7ef';
+      ctx.fillRect(0,0,W,H);
+      ctx.save();
+      ctx.globalAlpha = 0.05;
+      for(let i=0;i<500;i++){
+        ctx.fillStyle = i % 2 ? '#000' : '#805f3b';
+        ctx.fillRect(Math.random()*W, Math.random()*H, 1, 1);
+      }
+      ctx.restore();
+    }
+
+    function drawZones(){
+      waterZones.forEach(z => drawCrayonFill(z, '#93ccff', 42, false));
+      grassZones.forEach(z => drawCrayonFill(z, '#2ea24b', 56, false));
+
+      // scribbly brown area in bear pen
+      drawCrayonFill({x:230, y:608, w:246, h:190}, '#76502e', 52, true);
+      drawCrayonFill({x:230, y:608, w:246, h:190}, '#76502e', 35, false);
+
+      // little tree in bear zone
+      drawTree(318, 700, 1.1);
+
+      // water edge and map outline
+      drawCrayonLine([
+        {x:175, y:95},{x:560, y:95},{x:595, y:116},{x:590, y:395},{x:555, y:430},
+        {x:230, y:430},{x:180, y:458},{x:180, y:838},{x:600, y:842}
+      ], '#4b3b48', 6, 2.4, .95);
+
+      drawCrayonLine([
+        {x:175, y:95},{x:164, y:116},{x:148, y:162},{x:122, y:230},{x:104, y:328},
+        {x:84, y:430},{x:70, y:532},{x:62, y:622},{x:63, y:705}
+      ], '#4b3b48', 6, 2.4, .95);
+
+      // bear pen border
+      drawCrayonLine([
+        {x:224,y:606},{x:480,y:606},{x:480,y:800},{x:224,y:800},{x:224,y:606}
+      ], '#5a3b22', 5, 2.1, .9);
+
+      // entrance gap in pen is left open between y760..800
+      drawCrayonLine([{x:224,y:606},{x:224,y:760}], '#5a3b22', 5, 2.1, .9);
+      drawCrayonLine([{x:224,y:800},{x:480,y:800}], '#5a3b22', 5, 2.1, .9);
+      drawCrayonLine([{x:480,y:606},{x:480,y:800}], '#5a3b22', 5, 2.1, .9);
+
+      // exit marker
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,.78)';
+      ctx.fillRect(exitZone.x, exitZone.y, exitZone.w, exitZone.h);
+      ctx.restore();
+      drawCrayonLine([
+        {x:exitZone.x+6,y:exitZone.y+8},{x:exitZone.x+exitZone.w-8,y:exitZone.y+8},
+        {x:exitZone.x+exitZone.w-8,y:exitZone.y+exitZone.h-8},{x:exitZone.x+6,y:exitZone.y+exitZone.h-8},{x:exitZone.x+6,y:exitZone.y+8}
+      ], '#2d2630', 3, 1.4, .9);
+      ctx.save();
+      ctx.fillStyle = '#2d2630';
+      ctx.font = 'bold 22px Arial';
+      ctx.fillText('EXIT', 40, 42);
+      ctx.beginPath();
+      ctx.moveTo(78, 52);
+      ctx.lineTo(98, 72);
+      ctx.lineTo(86, 73);
+      ctx.lineTo(94, 86);
+      ctx.strokeStyle = '#2d2630';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.restore();
+
+      // drawing labels like the original
+      ctx.save();
+      ctx.fillStyle = '#2d2630';
+      ctx.font = 'bold 28px Arial';
+      ctx.fillText('bear', 52, 733);
+      ctx.beginPath();
+      ctx.moveTo(104, 736);
+      ctx.lineTo(170, 730);
+      ctx.lineTo(224, 724);
+      ctx.strokeStyle = '#2d2630';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.font = 'bold 30px Arial';
+      ctx.fillText('you', 105, 936);
+      ctx.beginPath();
+      ctx.moveTo(161, 922);
+      ctx.lineTo(138, 922);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawTree(x,y,s=1){
+      ctx.save();
+      ctx.fillStyle = '#6c4526';
+      ctx.fillRect(x-10*s, y+24*s, 20*s, 44*s);
+      ctx.beginPath();
+      ctx.fillStyle = '#3c9b44';
+      ctx.arc(x, y, 44*s, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawBear(){
+      const x = bear.x;
+      const y = bear.y;
+      ctx.save();
+      if(bear.found) ctx.globalAlpha = 0.22;
+      ctx.fillStyle = '#5c3520';
+      ctx.beginPath();
+      ctx.arc(x, y, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x-16, y-16, 9, 0, Math.PI * 2);
+      ctx.arc(x+16, y-16, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#7a4a29';
+      ctx.beginPath();
+      ctx.arc(x, y+5, 9, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.arc(x-7, y-2, 2.4, 0, Math.PI*2);
+      ctx.arc(x+7, y-2, 2.4, 0, Math.PI*2);
+      ctx.arc(x, y+7, 2.6, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawDuck(){
+      const x = 343 + Math.cos(duck.t) * 26;
+      const y = 202 + Math.sin(duck.t * 1.4) * 14;
+      ctx.save();
+      ctx.fillStyle = '#efc93f';
+      ctx.beginPath();
+      ctx.ellipse(x, y, 22, 18, 0.1, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x-22, y+6, 10, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#cf7c25';
+      ctx.beginPath();
+      ctx.moveTo(x+18, y);
+      ctx.lineTo(x+34, y+4);
+      ctx.lineTo(x+18, y+9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.arc(x+6, y-5, 2.3, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawDeer(){
+      const x = 420 + Math.cos(deer.t * 1.3) * 22;
+      const y = 208 + Math.sin(deer.t) * 10;
+      ctx.save();
+      ctx.fillStyle = '#8b5b2e';
+      ctx.beginPath();
+      ctx.ellipse(x, y, 16, 10, -0.15, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x+15, y-8, 7, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillRect(x-8, y+8, 3, 14);
+      ctx.fillRect(x+2, y+8, 3, 14);
+      ctx.fillRect(x+12, y+7, 3, 15);
+      ctx.fillRect(x-18, y+7, 3, 15);
+      ctx.strokeStyle = '#6e441f';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(x+18,y-13);
+      ctx.lineTo(x+23,y-22);
+      ctx.lineTo(x+28,y-16);
+      ctx.moveTo(x+17,y-13);
+      ctx.lineTo(x+14,y-24);
+      ctx.lineTo(x+9,y-16);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawSmiley(){
+      const x = player.x;
+      const y = player.y;
+      ctx.save();
+      ctx.fillStyle = '#f4d82f';
+      ctx.beginPath();
+      ctx.arc(x, y, player.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = '#222';
+      ctx.stroke();
+      ctx.fillStyle = '#222';
+      ctx.beginPath();
+      ctx.arc(x-6, y-4, 2.5, 0, Math.PI*2);
+      ctx.arc(x+6, y-4, 2.5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, y+2, 7, 0.15*Math.PI, 0.85*Math.PI);
+      ctx.stroke();
+      if(player.hasBear){
+        ctx.fillStyle = '#5c3520';
+        ctx.beginPath();
+        ctx.arc(x + 22, y - 10, 10, 0, Math.PI*2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + 15, y - 18, 4, 0, Math.PI*2);
+        ctx.arc(x + 29, y - 18, 4, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawWinBanner(){
+      if(!won) return;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,250,240,.88)';
+      ctx.fillRect(110, 390, 500, 170);
+      drawCrayonLine([
+        {x:110,y:390},{x:610,y:390},{x:610,y:560},{x:110,y:560},{x:110,y:390}
+      ], '#2d2630', 4, 1.5, .9);
+      ctx.fillStyle = '#2d2630';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 42px Arial';
+      ctx.fillText('YOU ESCAPED', 360, 454);
+      ctx.font = 'bold 24px Arial';
+      ctx.fillText('with the bear, like a tiny legend', 360, 496);
+      ctx.font = 'bold 18px Arial';
+      ctx.fillText('Press R or tap Restart to do it again.', 360, 530);
+      ctx.restore();
+    }
+
+    function draw(){
+      drawPaper();
+      drawZones();
+      drawDuck();
+      drawDeer();
+      drawBear();
+      drawSmiley();
+      drawWinBanner();
+    }
+
+    function loop(){
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    resetGame();
+    loop();
+  </script>
+</body>
+</html>
