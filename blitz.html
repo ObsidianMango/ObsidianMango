@@ -306,6 +306,17 @@
       width:100%; height:100%; object-fit:cover; display:block;
       pointer-events:none;
     }
+    .mini-card.selected{
+      outline:3px solid rgba(255,77,141,.95);
+      transform:translateY(-4px);
+      box-shadow:0 0 0 4px rgba(255,77,141,.18), 0 16px 30px rgba(0,0,0,.35);
+    }
+    .pile-drop.active-target,
+    .tray-grid.active-target{
+      border-color:rgba(255,77,141,.9);
+      box-shadow:inset 0 0 0 2px rgba(255,77,141,.22);
+      background:rgba(255,77,141,.05);
+    }
     .tray{
       background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));
       border:1px solid rgba(255,255,255,.08);
@@ -736,7 +747,8 @@ const state = {
   selectedEntity: null,
   trayOpen: false,
   z: 10,
-  cardsCache: {}
+  cardsCache: {},
+  selectedBuildCard: null
 };
 
 const $ = (id) => document.getElementById(id);
@@ -869,6 +881,7 @@ async function openPack(){
     state.boardCards = [];
     state.looseCounters = [];
     state.selectedEntity = null;
+    state.selectedBuildCard = null;
     state.life = 5;
     state.match = 0;
     state.pack.forEach(c => state.cardZone[c.id] = "tray");
@@ -924,19 +937,29 @@ function renderBuild(){
   });
 
   const unsorted = state.pack.filter(c => state.cardZone[c.id] === "tray");
-  $("unsortedCount").textContent = `${unsorted.length} left`;
+  $("unsortedCount").textContent = state.selectedBuildCard ? `Selected • tap a pile to place` : `${unsorted.length} left`;
   const tray = $("trayGrid");
   tray.innerHTML = "";
+  tray.classList.toggle("active-target", state.selectedBuildCard && state.cardZone[state.selectedBuildCard] !== "tray");
   wireDropZone(tray, "tray");
   unsorted.forEach(card => tray.appendChild(makeMiniCard(card.id)));
+  document.querySelectorAll('.pile-drop').forEach(drop => {
+    const idx = Number(drop.dataset.pile);
+    drop.classList.toggle('active-target', !!state.selectedBuildCard && state.cardZone[state.selectedBuildCard] !== idx && state.piles[idx].length < 3);
+  });
 }
 function makeMiniCard(cardId){
   const card = state.pack.find(c => c.id === cardId);
   const el = document.createElement("div");
-  el.className = "mini-card";
+  el.className = `mini-card ${state.selectedBuildCard === cardId ? 'selected' : ''}`;
   el.draggable = true;
   el.dataset.cardId = cardId;
   el.innerHTML = `<img src="${card.image}" alt="${escapeHtml(card.name)}">`;
+  el.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleBuildCardSelection(cardId);
+  });
   el.addEventListener("dragstart", e => {
     e.dataTransfer.setData("text/plain", cardId);
     setTimeout(() => el.classList.add("ghost"), 0);
@@ -944,35 +967,50 @@ function makeMiniCard(cardId){
   el.addEventListener("dragend", () => el.classList.remove("ghost"));
   return el;
 }
+function toggleBuildCardSelection(cardId){
+  state.selectedBuildCard = state.selectedBuildCard === cardId ? null : cardId;
+  renderBuild();
+}
+function moveBuildCard(cardId, target){
+  if(!cardId) return;
+  const currentZone = state.cardZone[cardId];
+  if(Number.isInteger(currentZone)){
+    state.piles[currentZone] = state.piles[currentZone].filter(id => id !== cardId);
+  }
+  if(target === "tray"){
+    state.cardZone[cardId] = "tray";
+  }else{
+    const pileIndex = Number(target);
+    if(Number.isNaN(pileIndex)) return;
+    if(state.piles[pileIndex].length >= 3 && !state.piles[pileIndex].includes(cardId)) return;
+    if(!state.piles[pileIndex].includes(cardId)) state.piles[pileIndex].push(cardId);
+    state.cardZone[cardId] = pileIndex;
+  }
+  state.selectedBuildCard = null;
+  renderBuild();
+}
 function wireDropZone(el, type="pile") {
   if (el.dataset.bound === "1") return;
   el.dataset.bound = "1";
+  el.addEventListener("click", e => {
+    if(e.target.closest('.mini-card')) return;
+    if(!state.selectedBuildCard) return;
+    if(type === "tray"){
+      moveBuildCard(state.selectedBuildCard, "tray");
+    }else{
+      moveBuildCard(state.selectedBuildCard, Number(el.dataset.pile));
+    }
+  });
   el.addEventListener("dragover", e => e.preventDefault());
   el.addEventListener("drop", e => {
     e.preventDefault();
     const cardId = e.dataTransfer.getData("text/plain");
     if(!cardId) return;
     if(type === "tray"){
-      state.cardZone[cardId] = "tray";
+      moveBuildCard(cardId, "tray");
     }else{
-      const pileIndex = Number(el.dataset.pile);
-      const pile = state.piles[pileIndex];
-      if(pile.length >= 3 && !pile.includes(cardId)) return;
-      const currentZone = state.cardZone[cardId];
-      if(currentZone !== "tray" && Number.isInteger(currentZone)){
-        state.piles[currentZone] = state.piles[currentZone].filter(id => id !== cardId);
-      }
-      if(!pile.includes(cardId)) pile.push(cardId);
-      state.cardZone[cardId] = pileIndex;
+      moveBuildCard(cardId, Number(el.dataset.pile));
     }
-    if(type === "tray"){
-      const currentZone = state.cardZone[cardId];
-      if(Number.isInteger(currentZone)){
-        state.piles[currentZone] = state.piles[currentZone].filter(id => id !== cardId);
-      }
-      state.cardZone[cardId] = "tray";
-    }
-    renderBuild();
   });
 }
 function lockPiles(){
