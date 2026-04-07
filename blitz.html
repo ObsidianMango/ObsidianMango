@@ -234,7 +234,7 @@
     .build-screen{
       min-height:100%;
       display:grid;
-      grid-template-rows:auto 1fr auto;
+      grid-template-rows:auto auto 1fr;
       gap:14px;
       padding:16px;
     }
@@ -252,8 +252,8 @@
       align-content:start;
     }
     .pile{
-      min-height:190px;
-      background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));
+      min-height:230px;
+      background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.02));
       border:1px solid rgba(255,255,255,.08);
       border-radius:22px;
       padding:12px;
@@ -283,24 +283,25 @@
       font-weight:900;
     }
     .pile-drop{
-      min-height:118px;
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      align-content:flex-start;
-      border-radius:16px;
-      padding:4px;
+      min-height:160px;
+      display:grid;
+      place-items:center;
+      border-radius:18px;
+      padding:10px;
       border:1px dashed rgba(255,255,255,.12);
+      background:rgba(255,255,255,.02);
+      overflow:hidden;
     }
     .mini-card{
-      width:70px;
+      width:min(34vw,142px);
       aspect-ratio:63/88;
-      border-radius:12px;
+      border-radius:16px;
       overflow:hidden;
       border:1px solid rgba(255,255,255,.1);
       background:#0d1017;
-      box-shadow:0 8px 25px rgba(0,0,0,.25);
+      box-shadow:0 10px 28px rgba(0,0,0,.28);
       position:relative;
+      flex:0 0 auto;
     }
     .mini-card img{
       width:100%; height:100%; object-fit:cover; display:block;
@@ -310,6 +311,46 @@
       outline:3px solid rgba(255,77,141,.95);
       transform:translateY(-4px);
       box-shadow:0 0 0 4px rgba(255,77,141,.18), 0 16px 30px rgba(0,0,0,.35);
+    }
+    .pile-preview{
+      position:relative;
+      width:min(34vw,142px);
+      aspect-ratio:63/88;
+      border-radius:16px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.1);
+      background:#0d1017;
+      box-shadow:0 12px 28px rgba(0,0,0,.32);
+    }
+    .pile-preview img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+      pointer-events:none;
+    }
+    .pile-empty{
+      color:rgba(255,255,255,.42);
+      text-transform:uppercase;
+      letter-spacing:.16em;
+      font-size:.82rem;
+      font-weight:900;
+    }
+    .pile-top-tag{
+      position:absolute;
+      left:8px;
+      right:8px;
+      bottom:8px;
+      border-radius:999px;
+      padding:6px 10px;
+      background:rgba(10,12,16,.8);
+      border:1px solid rgba(255,255,255,.08);
+      font-size:.68rem;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      text-align:center;
+      font-weight:900;
+      backdrop-filter:blur(4px);
     }
     .pile-drop.active-target,
     .tray-grid.active-target{
@@ -333,9 +374,16 @@
     }
     .tray-grid{
       display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-      min-height:96px;
+      flex-wrap:nowrap;
+      gap:12px;
+      min-height:188px;
+      overflow-x:auto;
+      overflow-y:hidden;
+      padding:2px 2px 8px;
+      scroll-snap-type:x proximity;
+    }
+    .tray-grid .mini-card{
+      scroll-snap-align:start;
     }
 
     .pick-screen{
@@ -485,6 +533,14 @@
       touch-action:none;
       user-select:none;
     }
+    .board-card.selected-card{
+      outline:3px solid rgba(255,77,141,.9);
+      box-shadow:0 0 0 4px rgba(255,77,141,.18), 0 18px 36px rgba(0,0,0,.4);
+    }
+    .board-card.tapped{
+      transform:rotate(90deg);
+      transform-origin:center center;
+    }
     .board-card img{
       width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;
     }
@@ -516,6 +572,10 @@
       font-weight:900;
       touch-action:none;
       user-select:none;
+    }
+    .counter-chip.selected-counter{
+      outline:3px solid rgba(255,77,141,.9);
+      box-shadow:0 0 0 4px rgba(255,77,141,.18), 0 18px 36px rgba(0,0,0,.35);
     }
     .counter-chip small{
       position:absolute;
@@ -582,7 +642,8 @@
       .pick-grid,.piles{grid-template-columns:1fr}
       .hud{grid-template-columns:1fr; gap:8px}
       .hud-left{justify-content:space-between}
-      .board-card{width:min(29vw,138px)}
+      .board-card{width:min(31vw,138px)}
+      .mini-card,.pile-preview{width:min(42vw,132px)}
       .selection-bar{flex-direction:column; align-items:stretch}
       .reveal-screen,.build-screen,.pick-screen,.play-screen{padding:12px}
     }
@@ -654,15 +715,15 @@
           <button class="btn-green" id="lockPilesBtn">Lock Piles</button>
         </div>
 
-        <div class="piles" id="piles"></div>
-
         <div class="tray">
           <div class="tray-head">
-            <strong>Unsorted</strong>
+            <strong>Cards</strong>
             <span class="muted" id="unsortedCount">12 left</span>
           </div>
           <div class="tray-grid" id="trayGrid"></div>
         </div>
+
+        <div class="piles" id="piles"></div>
       </div>
     </section>
 
@@ -922,6 +983,8 @@ function renderBuild(){
   pilesWrap.innerHTML = "";
   state.piles.forEach((pile, idx) => {
     const pileEl = document.createElement("div");
+    const topCardId = pile[pile.length - 1];
+    const topCard = topCardId ? state.pack.find(c => c.id === topCardId) : null;
     pileEl.className = "pile";
     pileEl.innerHTML = `
       <div class="pile-head">
@@ -932,12 +995,21 @@ function renderBuild(){
     `;
     const drop = pileEl.querySelector(".pile-drop");
     wireDropZone(drop);
-    pile.forEach(id => drop.appendChild(makeMiniCard(id)));
+    if(topCard){
+      drop.innerHTML = `
+        <div class="pile-preview">
+          <img src="${topCard.image}" alt="${escapeHtml(topCard.name)}">
+          <div class="pile-top-tag">Top card</div>
+        </div>
+      `;
+    }else{
+      drop.innerHTML = `<div class="pile-empty">Drop here</div>`;
+    }
     pilesWrap.appendChild(pileEl);
   });
 
   const unsorted = state.pack.filter(c => state.cardZone[c.id] === "tray");
-  $("unsortedCount").textContent = state.selectedBuildCard ? `Selected • tap a pile to place` : `${unsorted.length} left`;
+  $("unsortedCount").textContent = state.selectedBuildCard ? `Selected` : `${unsorted.length} left`;
   const tray = $("trayGrid");
   tray.innerHTML = "";
   tray.classList.toggle("active-target", state.selectedBuildCard && state.cardZone[state.selectedBuildCard] !== "tray");
@@ -994,11 +1066,19 @@ function wireDropZone(el, type="pile") {
   el.dataset.bound = "1";
   el.addEventListener("click", e => {
     if(e.target.closest('.mini-card')) return;
-    if(!state.selectedBuildCard) return;
     if(type === "tray"){
-      moveBuildCard(state.selectedBuildCard, "tray");
-    }else{
-      moveBuildCard(state.selectedBuildCard, Number(el.dataset.pile));
+      if(state.selectedBuildCard) moveBuildCard(state.selectedBuildCard, "tray");
+      return;
+    }
+    const pileIndex = Number(el.dataset.pile);
+    if(state.selectedBuildCard){
+      moveBuildCard(state.selectedBuildCard, pileIndex);
+      return;
+    }
+    const pile = state.piles[pileIndex];
+    if(pile && pile.length){
+      const topCardId = pile[pile.length - 1];
+      moveBuildCard(topCardId, "tray");
     }
   });
   el.addEventListener("dragover", e => e.preventDefault());
@@ -1049,6 +1129,7 @@ function beginPile(index){
     x: 40 + i * 120,
     y: 0,
     placed: false,
+    tapped: false,
     type: "card"
   }));
   renderPick();
@@ -1064,8 +1145,9 @@ function renderBoard(){
   const field = $("battlefield");
   field.innerHTML = `<div class="zone-label">Battlefield</div>`;
   state.boardCards.forEach((card, i) => {
+    const isSelected = state.selectedEntity?.kind === "card" && state.selectedEntity.id === card.id;
     const el = document.createElement("div");
-    el.className = "board-card";
+    el.className = `board-card ${card.tapped ? 'tapped' : ''} ${isSelected ? 'selected-card' : ''}`.trim();
     el.dataset.entityId = card.id;
     el.style.left = `${card.x}px`;
     el.style.top = `${card.y}px`;
@@ -1077,14 +1159,17 @@ function renderBoard(){
     makeDraggable(el, card, "card");
     el.addEventListener("click", (e) => {
       e.stopPropagation();
+      card.tapped = !card.tapped;
       selectEntity({kind:"card", id:card.id});
+      renderBoard();
     });
     field.appendChild(el);
   });
 
   state.looseCounters.forEach(counter => {
+    const isSelected = state.selectedEntity?.kind === "counter" && state.selectedEntity.id === counter.id;
     const el = document.createElement("div");
-    el.className = "counter-chip";
+    el.className = `counter-chip ${isSelected ? 'selected-counter' : ''}`.trim();
     el.dataset.entityId = counter.id;
     el.style.left = `${counter.x}px`;
     el.style.top = `${counter.y}px`;
@@ -1094,6 +1179,7 @@ function renderBoard(){
     el.addEventListener("click", (e) => {
       e.stopPropagation();
       selectEntity({kind:"counter", id:counter.id});
+      renderBoard();
     });
     field.appendChild(el);
   });
@@ -1169,6 +1255,7 @@ function selectEntity(ref){
 function clearSelection(){
   state.selectedEntity = null;
   renderSelectionBar();
+  if(state.currentScreen === "screen-play") renderBoard();
 }
 function renderSelectionBar(){
   const bar = $("selectionBar");
