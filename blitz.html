@@ -544,6 +544,59 @@
     .board-card img{
       width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;
     }
+    .token-face{
+      position:absolute;
+      inset:0;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      padding:12px;
+      background:
+        radial-gradient(circle at top, rgba(255,255,255,.12), transparent 35%),
+        linear-gradient(180deg,#3b2f63,#1c1930 52%,#10131c);
+      color:#fff;
+      pointer-events:none;
+    }
+    .token-face .token-title{
+      font-weight:900;
+      font-size:1rem;
+      line-height:1.05;
+      text-shadow:0 2px 8px rgba(0,0,0,.45);
+    }
+    .token-face .token-type{
+      font-size:.68rem;
+      text-transform:uppercase;
+      letter-spacing:.16em;
+      opacity:.78;
+      font-weight:800;
+    }
+    .token-face .token-pt{
+      align-self:flex-end;
+      padding:6px 9px;
+      border-radius:999px;
+      background:rgba(8,10,14,.65);
+      border:1px solid rgba(255,255,255,.12);
+      font-weight:900;
+      font-size:.82rem;
+    }
+    .flip-pill{
+      position:absolute;
+      left:8px;
+      top:8px;
+      height:24px;
+      min-width:24px;
+      padding:0 7px;
+      border-radius:999px;
+      display:none;
+      place-items:center;
+      background:rgba(20,24,32,.92);
+      border:1px solid rgba(255,255,255,.12);
+      color:#fff;
+      font-size:.78rem;
+      font-weight:900;
+      pointer-events:none;
+    }
+    .flip-pill.show{display:grid}
     .card-badge{
       position:absolute;
       right:8px; top:8px;
@@ -773,6 +826,7 @@
             <div class="btn-row">
               <button class="btn-soft tiny" id="selectedMinus">−1</button>
               <button class="btn-soft tiny" id="selectedPlus">+1</button>
+              <button class="btn-soft tiny" id="selectedFlip">Flip</button>
               <button class="btn-red tiny" id="selectedDelete">Delete</button>
             </div>
           </div>
@@ -780,6 +834,7 @@
           <div class="counter-tray" id="counterTray">
             <button class="btn-soft tiny" id="addCounterBtn">Add Counter</button>
             <button class="btn-soft tiny" id="addPlusOneBtn">Add +1/+1</button>
+            <button class="btn-soft tiny" id="addTokenBtn">Add Token</button>
             <button class="btn-soft tiny" id="resetBoardBtn">Reset Board</button>
           </div>
         </div>
@@ -809,7 +864,8 @@ const state = {
   trayOpen: false,
   z: 10,
   cardsCache: {},
-  selectedBuildCard: null
+  selectedBuildCard: null,
+  tokenCounter: 1
 };
 
 const $ = (id) => document.getElementById(id);
@@ -848,6 +904,24 @@ function imgForCard(card){
          card.card_faces?.find(f=>f.image_uris)?.image_uris?.normal ||
          card.card_faces?.find(f=>f.image_uris)?.image_uris?.large ||
          "";
+}
+function facesForCard(card){
+  const faces = (card.card_faces || [])
+    .filter(f => f.image_uris?.normal || f.image_uris?.large)
+    .map(f => ({
+      name: f.name || card.name,
+      image: f.image_uris?.normal || f.image_uris?.large || "",
+      type: f.type_line || card.type_line || "",
+      oracle: f.oracle_text || ""
+    }));
+  if(faces.length) return faces;
+  const image = imgForCard(card);
+  return image ? [{
+    name: card.name,
+    image,
+    type: card.type_line || "",
+    oracle: card.oracle_text || ""
+  }] : [];
 }
 function setStatus(message, spinning=true){
   $("setStatus").innerHTML = spinning
@@ -907,16 +981,21 @@ async function fetchSetCards(code){
     pages++;
   }
   const cards = all
-    .filter(c => imgForCard(c))
-    .map(c => ({
-      id: c.id,
-      name: c.name,
-      image: imgForCard(c),
-      mana: c.mana_cost || "",
-      type: c.type_line || "",
-      oracle: c.oracle_text || "",
-      rarity: c.rarity || "",
-    }));
+    .map(c => {
+      const faces = facesForCard(c);
+      return {
+        id: c.id,
+        name: c.name,
+        image: faces[0]?.image || "",
+        mana: c.mana_cost || "",
+        type: c.type_line || "",
+        oracle: c.oracle_text || "",
+        rarity: c.rarity || "",
+        faces,
+        canFlip: faces.length > 1
+      };
+    })
+    .filter(c => c.image);
   state.cardsCache[code] = cards;
   return cards;
 }
@@ -945,6 +1024,7 @@ async function openPack(){
     state.selectedBuildCard = null;
     state.life = 5;
     state.match = 0;
+    state.tokenCounter = 1;
     state.pack.forEach(c => state.cardZone[c.id] = "tray");
     renderReveal();
     renderBuild();
@@ -1120,18 +1200,28 @@ function beginPile(index){
   if(!state.usedPiles.includes(index)) state.usedPiles.push(index);
   state.selectedEntity = null;
   state.looseCounters = [];
-  state.boardCards = state.piles[index].map((cardId, i) => ({
-    id: `board-${cardId}`,
-    cardId,
-    name: cardById(cardId).name,
-    image: cardById(cardId).image,
-    count: 0,
-    x: 40 + i * 120,
-    y: 0,
-    placed: false,
-    tapped: false,
-    type: "card"
-  }));
+  state.boardCards = state.piles[index].map((cardId, i) => {
+    const source = cardById(cardId);
+    return {
+      id: `board-${cardId}`,
+      cardId,
+      name: source.name,
+      image: source.image,
+      faces: source.faces || [{ name: source.name, image: source.image, type: source.type || "", oracle: source.oracle || "" }],
+      faceIndex: 0,
+      canFlip: !!source.canFlip,
+      isToken: false,
+      tokenLabel: "",
+      tokenType: "",
+      tokenPT: "",
+      count: 0,
+      x: 40 + i * 120,
+      y: 0,
+      placed: false,
+      tapped: false,
+      type: "card"
+    };
+  });
   renderPick();
   renderBoard();
   showScreen("screen-play");
@@ -1146,14 +1236,23 @@ function renderBoard(){
   field.innerHTML = `<div class="zone-label">Battlefield</div>`;
   state.boardCards.forEach((card, i) => {
     const isSelected = state.selectedEntity?.kind === "card" && state.selectedEntity.id === card.id;
+    const face = card.faces?.[card.faceIndex || 0] || {};
     const el = document.createElement("div");
     el.className = `board-card ${card.tapped ? 'tapped' : ''} ${isSelected ? 'selected-card' : ''}`.trim();
     el.dataset.entityId = card.id;
     el.style.left = `${card.x}px`;
     el.style.top = `${card.y}px`;
     el.style.zIndex = ++state.z;
-    el.innerHTML = `
-      <img src="${card.image}" alt="${escapeHtml(card.name)}">
+    el.innerHTML = card.isToken ? `
+      <div class="token-face">
+        <div class="token-type">${escapeHtml(card.tokenType || "Token Creature")}</div>
+        <div class="token-title">${escapeHtml(card.tokenLabel || "Token")}</div>
+        <div class="token-pt">${escapeHtml(card.tokenPT || "")}</div>
+      </div>
+      <div class="card-badge ${card.count ? 'show' : ''}">${card.count}</div>
+    ` : `
+      <img src="${face.image || card.image}" alt="${escapeHtml(face.name || card.name)}">
+      <div class="flip-pill ${card.canFlip ? 'show' : ''}">↻</div>
       <div class="card-badge ${card.count ? 'show' : ''}">${card.count}</div>
     `;
     makeDraggable(el, card, "card");
@@ -1260,6 +1359,7 @@ function clearSelection(){
 function renderSelectionBar(){
   const bar = $("selectionBar");
   if(!state.selectedEntity){
+    $("selectedFlip").style.display = "none";
     bar.classList.remove("active");
     return;
   }
@@ -1267,13 +1367,16 @@ function renderSelectionBar(){
   if(state.selectedEntity.kind === "card"){
     entity = state.boardCards.find(c => c.id === state.selectedEntity.id);
     if(!entity){ bar.classList.remove("active"); return; }
-    $("selectionName").textContent = entity.name;
-    $("selectedDelete").style.display = "none";
+    const face = entity.faces?.[entity.faceIndex || 0];
+    $("selectionName").textContent = entity.isToken ? (entity.tokenLabel || "Token") : (face?.name || entity.name);
+    $("selectedDelete").style.display = entity.isToken ? "" : "none";
+    $("selectedFlip").style.display = (!entity.isToken && entity.canFlip) ? "" : "none";
   }else{
     entity = state.looseCounters.find(c => c.id === state.selectedEntity.id);
     if(!entity){ bar.classList.remove("active"); return; }
     $("selectionName").textContent = entity.label;
     $("selectedDelete").style.display = "";
+    $("selectedFlip").style.display = "none";
   }
   bar.classList.add("active");
 }
@@ -1291,8 +1394,14 @@ function adjustSelected(delta){
   renderBoard();
 }
 function deleteSelected(){
-  if(!state.selectedEntity || state.selectedEntity.kind !== "counter") return;
-  state.looseCounters = state.looseCounters.filter(c => c.id !== state.selectedEntity.id);
+  if(!state.selectedEntity) return;
+  if(state.selectedEntity.kind === "counter"){
+    state.looseCounters = state.looseCounters.filter(c => c.id !== state.selectedEntity.id);
+  }else{
+    const card = state.boardCards.find(c => c.id === state.selectedEntity.id);
+    if(!card || !card.isToken) return;
+    state.boardCards = state.boardCards.filter(c => c.id !== state.selectedEntity.id);
+  }
   state.selectedEntity = null;
   renderBoard();
 }
@@ -1309,12 +1418,50 @@ function addCounter(label="Counter"){
   });
   renderBoard();
 }
+function createToken(){
+  const label = prompt("Token name", "Creature Token") || "Creature Token";
+  const pt = prompt("Power / Toughness", "1/1") || "1/1";
+  const subType = prompt("Token type", "Token Creature") || "Token Creature";
+  const field = $("battlefield").getBoundingClientRect();
+  const id = `token-${Math.random().toString(36).slice(2,9)}`;
+  state.boardCards.push({
+    id,
+    cardId: id,
+    name: label,
+    image: "",
+    faces: [],
+    faceIndex: 0,
+    canFlip: false,
+    isToken: true,
+    tokenLabel: label,
+    tokenType: subType,
+    tokenPT: pt,
+    count: 0,
+    x: Math.max(12, field.width * 0.5 - 60 + Math.random()*60 - 30),
+    y: Math.max(18, field.height * 0.34 + Math.random()*50 - 25),
+    placed: true,
+    tapped: false,
+    type: "card"
+  });
+  state.tokenCounter += 1;
+  renderBoard();
+}
+function flipSelected(){
+  if(!state.selectedEntity || state.selectedEntity.kind !== "card") return;
+  const card = state.boardCards.find(c => c.id === state.selectedEntity.id);
+  if(!card || card.isToken || !card.canFlip || !card.faces?.length) return;
+  card.faceIndex = (card.faceIndex + 1) % card.faces.length;
+  renderBoard();
+}
 function resetBoard(){
   state.selectedEntity = null;
   state.looseCounters = [];
+  state.boardCards = state.boardCards.filter(c => !c.isToken);
   state.boardCards.forEach(c => {
     c.count = 0;
     c.placed = false;
+    c.tapped = false;
+    c.faceIndex = 0;
   });
   renderBoard();
 }
@@ -1355,9 +1502,11 @@ function bindEvents(){
   });
   $("selectedMinus").addEventListener("click", () => adjustSelected(-1));
   $("selectedPlus").addEventListener("click", () => adjustSelected(1));
+  $("selectedFlip").addEventListener("click", flipSelected);
   $("selectedDelete").addEventListener("click", deleteSelected);
   $("addCounterBtn").addEventListener("click", () => addCounter("Counter"));
   $("addPlusOneBtn").addEventListener("click", () => addCounter("+1/+1"));
+  $("addTokenBtn").addEventListener("click", createToken);
   $("resetBoardBtn").addEventListener("click", resetBoard);
   window.addEventListener("resize", () => {
     if(state.currentScreen === "screen-play") setTimeout(positionBoardCardsIfNeeded, 40);
