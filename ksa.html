@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Kaleidoscope</title>
+  <title>Glass Kaleidoscope</title>
 
   <style>
     html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background: black;
       height: 100%;
+      background: #020008;
       touch-action: none;
       font-family: Arial, sans-serif;
     }
@@ -27,11 +27,12 @@
       left: 10px;
       right: 10px;
       bottom: 10px;
-      background: rgba(0, 0, 0, 0.55);
-      color: white;
       padding: 12px;
       border-radius: 16px;
+      background: rgba(0, 0, 0, 0.55);
+      color: white;
       font-size: 14px;
+      backdrop-filter: blur(10px);
     }
 
     label {
@@ -45,14 +46,14 @@
 
     button {
       width: 100%;
-      padding: 12px;
       margin-top: 10px;
+      padding: 12px;
       border: none;
       border-radius: 12px;
       background: white;
       color: black;
-      font-weight: bold;
       font-size: 16px;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -62,13 +63,16 @@
 
   <div id="controls">
     <label>Speed</label>
-    <input id="speed" type="range" min="0" max="5" step="0.1" value="1.5">
+    <input id="speed" type="range" min="0" max="4" step="0.05" value="1.1">
+
+    <label>Glass Pieces</label>
+    <input id="pieces" type="range" min="10" max="80" step="1" value="42">
 
     <label>Segments</label>
-    <input id="segments" type="range" min="4" max="24" step="1" value="12">
+    <input id="segments" type="range" min="6" max="28" step="1" value="16">
 
     <label>Glow</label>
-    <input id="glow" type="range" min="1" max="40" step="1" value="18">
+    <input id="glow" type="range" min="0" max="1" step="0.01" value="0.55">
 
     <button onclick="randomize()">Randomize</button>
     <button onclick="toggleControls()">Hide / Show Controls</button>
@@ -78,77 +82,197 @@
     const canvas = document.getElementById("screen");
     const ctx = canvas.getContext("2d");
 
+    const pattern = document.createElement("canvas");
+    const pctx = pattern.getContext("2d");
+
     const speedSlider = document.getElementById("speed");
+    const piecesSlider = document.getElementById("pieces");
     const segmentSlider = document.getElementById("segments");
     const glowSlider = document.getElementById("glow");
     const controls = document.getElementById("controls");
 
     let w, h;
     let time = 0;
-    let hue = 0;
+    let hue = 210;
     let touchX = 0.5;
     let touchY = 0.5;
     let controlsHidden = false;
 
+    const glass = [];
+
     function resize() {
-      w = canvas.width = window.innerWidth;
-      h = canvas.height = window.innerHeight;
+      w = canvas.width = pattern.width = window.innerWidth;
+      h = canvas.height = pattern.height = window.innerHeight;
+      makeGlass();
     }
 
     window.addEventListener("resize", resize);
-    resize();
 
-    function drawBlob(x, y, size, color) {
-      const gradient = ctx.createRadialGradient(x, y, 0, x, y, size);
-      gradient.addColorStop(0, color);
-      gradient.addColorStop(1, "transparent");
+    function makeGlass() {
+      glass.length = 0;
 
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
+      for (let i = 0; i < 100; i++) {
+        glass.push({
+          x: Math.random(),
+          y: Math.random(),
+          size: 25 + Math.random() * 120,
+          sides: 3 + Math.floor(Math.random() * 4),
+          angle: Math.random() * Math.PI * 2,
+          spin: -0.01 + Math.random() * 0.02,
+          hue: Math.random() * 360,
+          alpha: 0.18 + Math.random() * 0.32,
+          shine: Math.random()
+        });
+      }
     }
 
-    function drawPattern() {
+    function polygonPoints(x, y, size, sides, angle) {
+      const pts = [];
+
+      for (let i = 0; i < sides; i++) {
+        const a = angle + i * Math.PI * 2 / sides;
+        const r = size * (0.65 + Math.random() * 0.35);
+        pts.push({
+          x: x + Math.cos(a) * r,
+          y: y + Math.sin(a) * r
+        });
+      }
+
+      return pts;
+    }
+
+    function drawShard(g, index, total) {
       const speed = Number(speedSlider.value);
       const glow = Number(glowSlider.value);
-
-      ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
-      ctx.fillRect(0, 0, w, h);
 
       const cx = w * touchX;
       const cy = h * touchY;
 
-      for (let i = 0; i < 25; i++) {
-        const angle = time * speed + i * 0.7;
-        const radius = 40 + i * 18;
+      const drift = time * speed;
+      const orbit = drift * (0.3 + index * 0.002);
 
-        const x = cx + Math.cos(angle + i) * radius;
-        const y = cy + Math.sin(angle * 1.4 + i) * radius;
+      const x = cx + (g.x - 0.5) * w * 1.4 + Math.cos(orbit + index) * 80;
+      const y = cy + (g.y - 0.5) * h * 1.4 + Math.sin(orbit * 1.3 + index) * 80;
 
-        const color = `hsla(${hue + i * 14}, 100%, 60%, 0.5)`;
+      const size = g.size * (0.75 + Math.sin(time + index) * 0.15);
+      const angle = g.angle + time * speed * g.spin * 40;
 
-        drawBlob(x, y, glow * 6, color);
+      const pts = polygonPoints(x, y, size, g.sides, angle);
+
+      const gradient = pctx.createLinearGradient(x - size, y - size, x + size, y + size);
+      gradient.addColorStop(0, `hsla(${g.hue + hue}, 100%, 80%, ${g.alpha})`);
+      gradient.addColorStop(0.35, `hsla(${g.hue + hue + 70}, 100%, 55%, ${g.alpha * 0.65})`);
+      gradient.addColorStop(0.7, `hsla(${g.hue + hue + 180}, 100%, 65%, ${g.alpha * 0.45})`);
+      gradient.addColorStop(1, `hsla(${g.hue + hue + 260}, 100%, 90%, ${g.alpha})`);
+
+      pctx.beginPath();
+      pctx.moveTo(pts[0].x, pts[0].y);
+
+      for (let i = 1; i < pts.length; i++) {
+        pctx.lineTo(pts[i].x, pts[i].y);
+      }
+
+      pctx.closePath();
+
+      pctx.fillStyle = gradient;
+      pctx.fill();
+
+      pctx.lineWidth = 1.3;
+      pctx.strokeStyle = `rgba(255, 255, 255, ${0.25 + glow * 0.45})`;
+      pctx.stroke();
+
+      pctx.lineWidth = 4;
+      pctx.strokeStyle = `rgba(120, 220, 255, ${0.05 + glow * 0.12})`;
+      pctx.stroke();
+
+      pctx.save();
+      pctx.clip();
+
+      const shine = pctx.createLinearGradient(x - size, y - size, x + size, y + size);
+      shine.addColorStop(0, "rgba(255,255,255,0)");
+      shine.addColorStop(0.48, `rgba(255,255,255,${0.08 + glow * 0.24})`);
+      shine.addColorStop(0.52, `rgba(255,255,255,${0.22 + glow * 0.35})`);
+      shine.addColorStop(1, "rgba(255,255,255,0)");
+
+      pctx.fillStyle = shine;
+      pctx.fillRect(x - size, y - size, size * 2, size * 2);
+
+      pctx.restore();
+
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i];
+        const b = pts[(i + 1) % pts.length];
+
+        pctx.beginPath();
+        pctx.moveTo(a.x, a.y);
+        pctx.lineTo(b.x, b.y);
+        pctx.strokeStyle = `rgba(255,255,255,${0.12 + Math.random() * 0.15})`;
+        pctx.lineWidth = 0.6;
+        pctx.stroke();
+      }
+
+      if (g.shine > 0.72) {
+        pctx.beginPath();
+        pctx.moveTo(x - size * 0.45, y);
+        pctx.lineTo(x + size * 0.45, y);
+        pctx.moveTo(x, y - size * 0.45);
+        pctx.lineTo(x, y + size * 0.45);
+        pctx.strokeStyle = `rgba(255,255,255,${0.18 + glow * 0.4})`;
+        pctx.lineWidth = 1;
+        pctx.stroke();
+      }
+    }
+
+    function drawPattern() {
+      const pieces = Number(piecesSlider.value);
+      const glow = Number(glowSlider.value);
+
+      pctx.globalCompositeOperation = "source-over";
+      pctx.fillStyle = "rgba(0, 0, 12, 0.18)";
+      pctx.fillRect(0, 0, w, h);
+
+      const bg = pctx.createRadialGradient(
+        w * touchX, h * touchY, 10,
+        w * touchX, h * touchY, Math.max(w, h)
+      );
+
+      bg.addColorStop(0, `hsla(${hue}, 100%, 55%, ${0.12 + glow * 0.16})`);
+      bg.addColorStop(0.4, `hsla(${hue + 90}, 100%, 35%, ${0.06 + glow * 0.09})`);
+      bg.addColorStop(1, "rgba(0,0,0,0)");
+
+      pctx.fillStyle = bg;
+      pctx.fillRect(0, 0, w, h);
+
+      pctx.globalCompositeOperation = "lighter";
+
+      for (let i = 0; i < pieces; i++) {
+        drawShard(glass[i], i, pieces);
+      }
+
+      pctx.globalCompositeOperation = "screen";
+
+      for (let i = 0; i < 8; i++) {
+        const r = 80 + i * 55 + Math.sin(time + i) * 20;
+        pctx.beginPath();
+        pctx.arc(w * touchX, h * touchY, r, 0, Math.PI * 2);
+        pctx.strokeStyle = `hsla(${hue + i * 30}, 100%, 70%, ${0.025 + glow * 0.045})`;
+        pctx.lineWidth = 2;
+        pctx.stroke();
       }
     }
 
     function drawKaleidoscope() {
       const segments = Number(segmentSlider.value);
-      const slice = (Math.PI * 2) / segments;
+      const slice = Math.PI * 2 / segments;
       const radius = Math.sqrt(w * w + h * h);
 
-      const temp = document.createElement("canvas");
-      const tempCtx = temp.getContext("2d");
-
-      temp.width = w;
-      temp.height = h;
-      tempCtx.drawImage(canvas, 0, 0);
-
+      ctx.globalCompositeOperation = "source-over";
       ctx.fillStyle = "black";
       ctx.fillRect(0, 0, w, h);
 
       ctx.save();
       ctx.translate(w / 2, h / 2);
+      ctx.rotate(time * 0.04);
 
       for (let i = 0; i < segments; i++) {
         ctx.save();
@@ -164,16 +288,30 @@
           ctx.scale(1, -1);
         }
 
-        ctx.drawImage(temp, -w / 2, -h / 2);
+        ctx.drawImage(pattern, -w / 2, -h / 2);
         ctx.restore();
       }
 
       ctx.restore();
+
+      const vignette = ctx.createRadialGradient(
+        w / 2, h / 2, Math.min(w, h) * 0.15,
+        w / 2, h / 2, Math.max(w, h) * 0.72
+      );
+
+      vignette.addColorStop(0, "rgba(255,255,255,0.05)");
+      vignette.addColorStop(0.6, "rgba(0,0,0,0)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.72)");
+
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, w, h);
     }
 
     function loop() {
-      time += 0.015;
-      hue += 0.8;
+      const speed = Number(speedSlider.value);
+
+      time += 0.016;
+      hue += 0.18 + speed * 0.35;
 
       drawPattern();
       drawKaleidoscope();
@@ -182,21 +320,29 @@
     }
 
     function randomize() {
-      speedSlider.value = Math.random() * 5;
-      segmentSlider.value = 4 + Math.floor(Math.random() * 20);
-      glowSlider.value = 8 + Math.floor(Math.random() * 32);
+      speedSlider.value = (Math.random() * 3.5).toFixed(2);
+      piecesSlider.value = 20 + Math.floor(Math.random() * 55);
+      segmentSlider.value = 8 + Math.floor(Math.random() * 18);
+      glowSlider.value = (0.25 + Math.random() * 0.7).toFixed(2);
       hue = Math.random() * 360;
+      makeGlass();
     }
 
     function toggleControls() {
       controlsHidden = !controlsHidden;
-      controls.style.opacity = controlsHidden ? "0.08" : "1";
+      controls.style.opacity = controlsHidden ? "0.06" : "1";
     }
 
+    canvas.addEventListener("touchstart", function(e) {
+      const t = e.touches[0];
+      touchX = t.clientX / w;
+      touchY = t.clientY / h;
+    });
+
     canvas.addEventListener("touchmove", function(e) {
-      const touch = e.touches[0];
-      touchX = touch.clientX / w;
-      touchY = touch.clientY / h;
+      const t = e.touches[0];
+      touchX = t.clientX / w;
+      touchY = t.clientY / h;
     });
 
     canvas.addEventListener("mousemove", function(e) {
@@ -206,6 +352,7 @@
 
     canvas.addEventListener("click", randomize);
 
+    resize();
     loop();
   </script>
 </body>
