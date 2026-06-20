@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Kaleidoscope</title>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: black;
+      height: 100%;
+      touch-action: none;
+      font-family: Arial, sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #controls {
+      position: fixed;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      background: rgba(0, 0, 0, 0.55);
+      color: white;
+      padding: 12px;
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    label {
+      display: block;
+      margin-top: 8px;
+    }
+
+    input {
+      width: 100%;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 12px;
+      background: white;
+      color: black;
+      font-weight: bold;
+      font-size: 16px;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="screen"></canvas>
+
+  <div id="controls">
+    <label>Speed</label>
+    <input id="speed" type="range" min="0" max="5" step="0.1" value="1.5">
+
+    <label>Segments</label>
+    <input id="segments" type="range" min="4" max="24" step="1" value="12">
+
+    <label>Glow</label>
+    <input id="glow" type="range" min="1" max="40" step="1" value="18">
+
+    <button onclick="randomize()">Randomize</button>
+    <button onclick="toggleControls()">Hide / Show Controls</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("screen");
+    const ctx = canvas.getContext("2d");
+
+    const speedSlider = document.getElementById("speed");
+    const segmentSlider = document.getElementById("segments");
+    const glowSlider = document.getElementById("glow");
+    const controls = document.getElementById("controls");
+
+    let w, h;
+    let time = 0;
+    let hue = 0;
+    let touchX = 0.5;
+    let touchY = 0.5;
+    let controlsHidden = false;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+
+    window.addEventListener("resize", resize);
+    resize();
+
+    function drawBlob(x, y, size, color) {
+      const gradient = ctx.createRadialGradient(x, y, 0, x, y, size);
+      gradient.addColorStop(0, color);
+      gradient.addColorStop(1, "transparent");
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawPattern() {
+      const speed = Number(speedSlider.value);
+      const glow = Number(glowSlider.value);
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+      ctx.fillRect(0, 0, w, h);
+
+      const cx = w * touchX;
+      const cy = h * touchY;
+
+      for (let i = 0; i < 25; i++) {
+        const angle = time * speed + i * 0.7;
+        const radius = 40 + i * 18;
+
+        const x = cx + Math.cos(angle + i) * radius;
+        const y = cy + Math.sin(angle * 1.4 + i) * radius;
+
+        const color = `hsla(${hue + i * 14}, 100%, 60%, 0.5)`;
+
+        drawBlob(x, y, glow * 6, color);
+      }
+    }
+
+    function drawKaleidoscope() {
+      const segments = Number(segmentSlider.value);
+      const slice = (Math.PI * 2) / segments;
+      const radius = Math.sqrt(w * w + h * h);
+
+      const temp = document.createElement("canvas");
+      const tempCtx = temp.getContext("2d");
+
+      temp.width = w;
+      temp.height = h;
+      tempCtx.drawImage(canvas, 0, 0);
+
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+
+      for (let i = 0; i < segments; i++) {
+        ctx.save();
+        ctx.rotate(i * slice);
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, radius, -slice / 2, slice / 2);
+        ctx.closePath();
+        ctx.clip();
+
+        if (i % 2 === 0) {
+          ctx.scale(1, -1);
+        }
+
+        ctx.drawImage(temp, -w / 2, -h / 2);
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
+    function loop() {
+      time += 0.015;
+      hue += 0.8;
+
+      drawPattern();
+      drawKaleidoscope();
+
+      requestAnimationFrame(loop);
+    }
+
+    function randomize() {
+      speedSlider.value = Math.random() * 5;
+      segmentSlider.value = 4 + Math.floor(Math.random() * 20);
+      glowSlider.value = 8 + Math.floor(Math.random() * 32);
+      hue = Math.random() * 360;
+    }
+
+    function toggleControls() {
+      controlsHidden = !controlsHidden;
+      controls.style.opacity = controlsHidden ? "0.08" : "1";
+    }
+
+    canvas.addEventListener("touchmove", function(e) {
+      const touch = e.touches[0];
+      touchX = touch.clientX / w;
+      touchY = touch.clientY / h;
+    });
+
+    canvas.addEventListener("mousemove", function(e) {
+      touchX = e.clientX / w;
+      touchY = e.clientY / h;
+    });
+
+    canvas.addEventListener("click", randomize);
+
+    loop();
+  </script>
+</body>
+</html>
