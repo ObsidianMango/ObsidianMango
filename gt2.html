@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Gas Shift: Krauzer's Run</title>
+<style>
+  *{box-sizing:border-box;touch-action:none;user-select:none}
+  body{
+    margin:0;
+    background:#080b12;
+    overflow:hidden;
+    font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    color:white;
+  }
+  canvas{
+    display:block;
+    width:100vw;
+    height:100vh;
+    background:#111;
+  }
+  #ui{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+  }
+  #top{
+    position:absolute;
+    top:10px;
+    left:10px;
+    right:10px;
+    display:flex;
+    justify-content:space-between;
+    gap:8px;
+    font-size:13px;
+    text-shadow:0 2px 3px #000;
+  }
+  .pill{
+    background:rgba(0,0,0,.45);
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:999px;
+    padding:7px 10px;
+    backdrop-filter:blur(6px);
+  }
+  #msg{
+    position:absolute;
+    top:58px;
+    left:12px;
+    right:12px;
+    min-height:44px;
+    text-align:center;
+    font-weight:700;
+    font-size:15px;
+    text-shadow:0 2px 3px #000;
+    pointer-events:none;
+  }
+  #stick{
+    position:absolute;
+    left:22px;
+    bottom:28px;
+    width:116px;
+    height:116px;
+    border-radius:50%;
+    background:rgba(255,255,255,.10);
+    border:2px solid rgba(255,255,255,.18);
+    pointer-events:auto;
+  }
+  #nub{
+    position:absolute;
+    left:38px;
+    top:38px;
+    width:40px;
+    height:40px;
+    border-radius:50%;
+    background:rgba(255,255,255,.45);
+    box-shadow:0 0 18px rgba(255,255,255,.25);
+  }
+  #action{
+    position:absolute;
+    right:22px;
+    bottom:36px;
+    width:104px;
+    height:104px;
+    border-radius:50%;
+    background:linear-gradient(#ffdf66,#e98c15);
+    border:3px solid rgba(255,255,255,.45);
+    box-shadow:0 8px 0 #8a4d00,0 0 20px rgba(255,200,70,.35);
+    color:#231200;
+    font-weight:900;
+    font-size:18px;
+    display:grid;
+    place-items:center;
+    pointer-events:auto;
+  }
+  #action:active{transform:translateY(5px);box-shadow:0 3px 0 #8a4d00}
+  #start{
+    position:fixed;
+    inset:0;
+    background:radial-gradient(circle at 50% 20%,#273554,#07090e 70%);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    z-index:9;
+  }
+  #card{
+    max-width:430px;
+    width:100%;
+    background:rgba(0,0,0,.55);
+    border:1px solid rgba(255,255,255,.2);
+    border-radius:24px;
+    padding:24px;
+    box-shadow:0 30px 80px #000;
+    text-align:center;
+  }
+  h1{
+    margin:0 0 8px;
+    font-size:32px;
+    line-height:1;
+  }
+  p{
+    opacity:.9;
+    line-height:1.35;
+  }
+  button{
+    border:0;
+    border-radius:16px;
+    padding:15px 20px;
+    font-weight:900;
+    font-size:17px;
+    background:#ffcf33;
+    color:#241500;
+    box-shadow:0 6px 0 #9a6900;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div id="top">
+    <div class="pill" id="cash">$0</div>
+    <div class="pill" id="shift">Shift 1</div>
+    <div class="pill" id="rep">Charm 0</div>
+  </div>
+  <div id="msg"></div>
+  <div id="stick"><div id="nub"></div></div>
+  <div id="action">ACTION</div>
+</div>
+
+<div id="start">
+  <div id="card">
+    <h1>GAS SHIFT:<br>KRAUZER'S RUN</h1>
+    <p>
+      Work the pumps, dodge psycho Jersey traffic, cross the street to Krauzer's,
+      buy Red Bull and cigarettes, and flirt like a civilized menace.
+    </p>
+    <p>
+      Fill cars before they rage-quit. Red Bull makes you faster. Cigarettes add “gas station aura”
+      but cost cash. Flirting works better when you are not ignoring customers.
+    </p>
+    <button id="play">START SHIFT</button>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const cashEl = document.getElementById("cash");
+const shiftEl = document.getElementById("shift");
+const repEl = document.getElementById("rep");
+const msgEl = document.getElementById("msg");
+const start = document.getElementById("start");
+const playBtn = document.getElementById("play");
+const stick = document.getElementById("stick");
+const nub = document.getElementById("nub");
+const actionBtn = document.getElementById("action");
+
+let W = 0, H = 0, DPR = 1;
+let scale = 1, ox = 0, oy = 0;
+const world = { w: 420, h: 760 };
+
+function resize(){
+  DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  W = innerWidth;
+  H = innerHeight;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+
+  scale = Math.min(W / world.w, H / world.h);
+  ox = (W - world.w * scale) / 2;
+  oy = (H - world.h * scale) / 2;
+}
+addEventListener("resize", resize);
+resize();
+
+function sx(x){ return ox + x * scale; }
+function sy(y){ return oy + y * scale; }
+function sw(v){ return v * scale; }
+
+let audioCtx = null;
+function beep(freq=440, dur=.08, type="square", vol=.04){
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.stop(audioCtx.currentTime + dur);
+  }catch(e){}
+}
+
+const saveKey = "krauzersGasShiftSave";
+const saved = JSON.parse(localStorage.getItem(saveKey) || "{}");
+
+const player = {
+  x: 210,
+  y: 610,
+  r: 13,
+  vx: 0,
+  vy: 0,
+  speed: 130,
+  dir: 0,
+  redBull: 0,
+  smoke: 0,
+  charm: saved.charm || 0,
+  cash: saved.cash || 0,
+  total: saved.total || 0
+};
+
+let shift = saved.shift || 1;
+let actionDown = false;
+let actionTap = false;
+let joy = { x:0, y:0, active:false, id:null };
+
+const pumps = [
+  {x:110,y:505, car:null},
+  {x:300,y:505, car:null},
+  {x:110,y:625, car:null},
+  {x:300,y:625, car:null}
+];
+
+const traffic = [];
+const girls = [
+  {x:104,y:134,t:0, mood:0, line:"Nice weather for emotional labor."},
+  {x:304,y:134,t:1.4, mood:0, line:"Is that Red Bull or are you always moving like that?"}
+];
+
+let spawnTimer = 0;
+let trafficTimer = 0;
+let message = "";
+let messageTime = 0;
+let particles = [];
+let running = false;
+let gameTime = 0;
+let shiftTime = 180;
+let levelFlash = 0;
+
+function say(t, time=2.2){
+  message = t;
+  messageTime = time;
+  msgEl.textContent = t;
+}
+
+function rand(a,b){ return a + Math.random() * (b-a); }
+function dist(a,b,c,d){ return Math.hypot(a-c,b-d); }
+function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+
+function rectHit(px,py,x,y,w,h){
+  return px >= x && px <= x+w && py >= y && py <= y+h;
+}
+
+function nearestPump(){
+  let best = null, bd = 999;
+  for(const p of pumps){
+    const d = dist(player.x, player.y, p.x, p.y);
+    if(d < bd){ bd = d; best = p; }
+  }
+  return bd < 55 ? best : null;
+}
+
+function inStore(){
+  return rectHit(player.x, player.y, 62, 52, 296, 120);
+}
+
+function nearGirls(){
+  for(const g of girls){
+    if(dist(player.x,player.y,g.x,g.y) < 42) return g;
+  }
+  return null;
+}
+
+function save(){
+  localStorage.setItem(saveKey, JSON.stringify({
+    cash: Math.floor(player.cash),
+    charm: player.charm,
+    shift,
+    total: player.total
+  }));
+}
+
+function spawnCar(){
+  const open = pumps.filter(p => !p.car);
+  if(!open.length) return;
+  const p = open[Math.floor(Math.random() * open.length)];
+  const colors = ["#d54b35","#38a8d9","#e6d552","#67c46b","#c478df","#ddd"];
+  p.car = {
+    fill: 0,
+    need: rand(60,100),
+    patience: rand(30,45),
+    maxPatience: 45,
+    color: colors[Math.floor(Math.random()*colors.length)],
+    tip: Math.floor(rand(3,9))
+  };
+  say("Customer pulled up. Pump " + (pumps.indexOf(p)+1) + " needs gas.");
+}
+
+function spawnTraffic(){
+  const lane = Math.random() < .5 ? 315 : 372;
+  const dir = lane === 315 ? 1 : -1;
+  traffic.push({
+    x: dir === 1 ? -70 : 490,
+    y: lane,
+    w: rand(48,80),
+    h: 28,
+    dir,
+    speed: rand(115,210),
+    color: Math.random()<.5 ? "#222" : "#662222"
+  });
+}
+
+function addParticles(x,y,color,n=16){
+  for(let i=0;i<n;i++){
+    particles.push({
+      x,y,
+      vx: rand(-80,80),
+      vy: rand(-90,50),
+      life: rand(.35,.8),
+      max: .8,
+      color,
+      r: rand(2,5)
+    });
+  }
+}
+
+function interact(){
+  const p = nearestPump();
+  const g = nearGirls();
+
+  if(inStore()){
+    if(player.cash >= 3){
+      player.cash -= 3;
+      player.redBull = 12;
+      say("Krauzer's run: Red Bull acquired. Wings installed.");
+      beep(740,.08,"sawtooth");
+      save();
+    } else {
+      say("Krauzer's clerk: “Three bucks, boss. This ain't charity with fluorescent lights.”");
+      beep(160,.1,"square");
+    }
+    return;
+  }
+
+  if(g){
+    const busy = pumps.filter(p => p.car).length;
+    if(busy >= 3){
+      say("She laughs: “Go save those pumps first, hero.”");
+      player.charm = Math.max(0, player.charm - 1);
+    } else {
+      const hasAura = player.redBull > 0 || player.smoke > 0;
+      const gain = hasAura ? 2 : 1;
+      player.charm += gain;
+      g.mood = 1;
+      say("You flirt respectfully. +" + gain + " charm. She says: “" + g.line + "”");
+      beep(520,.05,"triangle");
+      beep(780,.08,"triangle");
+      save();
+    }
+    return;
+  }
+
+  if(p && p.car){
+    say("Hold ACTION by the car to pump gas.");
+    return;
+  }
+
+  if(player.cash >= 10){
+    player.cash -= 10;
+    player.smoke = 20;
+    say("Cigarettes bought from your pocket stash. Aura +1. Lungs file complaint.");
+    player.charm += 1;
+    beep(300,.08,"sawtooth");
+    save();
+    return;
+  }
+
+  say("Nothing to do here. Find a pump, Krauzer's, or somebody worth talking to.");
+}
+
+function fillCar(p, dt){
+  if(!p || !p.car) return;
+  const c = p.car;
+  c.fill += dt * 32 * (player.redBull > 0 ? 1.45 : 1);
+  addParticles(p.x, p.y-10, "#ffd66b", 2);
+  beep(180 + c.fill * 2, .025, "square", .015);
+
+  if(c.fill >= c.need){
+    const pay = Math.floor(14 + c.tip + player.charm * .4);
+    player.cash += pay;
+    player.total += pay;
+    addParticles(p.x, p.y, "#7cff7c", 26);
+    p.car = null;
+    say("Tank full. Customer paid $" + pay + ". You are basically the Sinatra of unleaded.");
+    beep(440,.07,"triangle");
+    beep(660,.08,"triangle");
+    save();
+  }
+}
+
+function resetShift(){
+  shift++;
+  shiftTime = 180 + shift * 20;
+  for(const p of pumps) p.car = null;
+  traffic.length = 0;
+  particles.length = 0;
+  player.x = 210;
+  player.y = 610;
+  player.redBull = 0;
+  player.smoke = 0;
+  levelFlash = 1;
+  say("Shift " + shift + " started. Jersey demands tribute.");
+  save();
+}
+
+function update(dt){
+  if(!running) return;
+  gameTime += dt;
+  shiftTime -= dt;
+  if(shiftTime <= 0){
+    player.cash += 25 + shift * 5;
+    say("Shift cleared. Bonus paid. You survived capitalism again.");
+    resetShift();
+  }
+
+  if(messageTime > 0){
+    messageTime -= dt;
+    if(messageTime <= 0){
+      message = "";
+      msgEl.textContent = "";
+    }
+  }
+
+  if(levelFlash > 0) levelFlash -= dt;
+  if(player.redBull > 0) player.redBull -= dt;
+  if(player.smoke > 0) player.smoke -= dt;
+
+  const spd = player.speed * (player.redBull > 0 ? 1.45 : 1);
+  player.vx = joy.x * spd;
+  player.vy = joy.y * spd;
+
+  player.x += player.vx * dt;
+  player.y += player.vy * dt;
+
+  player.x = clamp(player.x, 25, world.w - 25);
+  player.y = clamp(player.y, 35, world.h - 25);
+
+  if(Math.abs(player.vx)+Math.abs(player.vy)>1){
+    player.dir = Math.atan2(player.vy, player.vx);
+  }
+
+  spawnTimer -= dt;
+  if(spawnTimer <= 0){
+    spawnCar();
+    spawnTimer = Math.max(2.2, 7.5 - shift * .35 + rand(-1,1));
+  }
+
+  trafficTimer -= dt;
+  if(trafficTimer <= 0){
+    spawnTraffic();
+    trafficTimer = rand(.65,1.15);
+  }
+
+  for(let i=traffic.length-1;i>=0;i--){
+    const t = traffic[i];
+    t.x += t.dir * t.speed * dt;
+    if(t.x < -120 || t.x > 540) traffic.splice(i,1);
+
+    if(rectHit(player.x, player.y, t.x-8, t.y-20, t.w+16, t.h+18)){
+      player.x -= t.dir * 42;
+      player.y += t.y < 340 ? 28 : -28;
+      player.cash = Math.max(0, player.cash - 2);
+      say("You got clipped by traffic. -$2 dignity fee.");
+      addParticles(player.x,player.y,"#fff",18);
+      beep(90,.15,"sawtooth");
+    }
+  }
+
+  for(const p of pumps){
+    if(p.car){
+      p.car.patience -= dt;
+      if(p.car.patience <= 0){
+        say("Customer bailed. They will now write a Yelp review like a war crime.");
+        addParticles(p.x,p.y,"#ff5050",18);
+        p.car = null;
+        player.charm = Math.max(0, player.charm - 1);
+        beep(120,.12,"square");
+        save();
+      }
+    }
+  }
+
+  const p = nearestPump();
+  if(actionDown && p && p.car){
+    fillCar(p, dt);
+  }
+
+  if(actionTap){
+    interact();
+    actionTap = false;
+  }
+
+  for(const g of girls){
+    g.t += dt;
+    g.y += Math.sin(g.t*2) * .08;
+  }
+
+  for(let i=particles.length-1;i>=0;i--){
+    const q = particles[i];
+    q.life -= dt;
+    q.x += q.vx * dt;
+    q.y += q.vy * dt;
+    q.vy += 80 * dt;
+    if(q.life <= 0) particles.splice(i,1);
+  }
+
+  cashEl.textContent = "$" + Math.floor(player.cash);
+  shiftEl.textContent = "Shift " + shift + " · " + Math.ceil(shiftTime) + "s";
+  repEl.textContent = "Charm " + player.charm + (player.redBull>0 ? " · RB" : "") + (player.smoke>0 ? " · Aura" : "");
+}
+
+function drawRect(x,y,w,h,color){
+  ctx.fillStyle = color;
+  ctx.fillRect(sx(x),sy(y),sw(w),sw(h));
+}
+
+function drawText(txt,x,y,size,color="#fff",align="center"){
+  ctx.fillStyle = color;
+  ctx.font = "900 " + sw(size) + "px system-ui";
+  ctx.textAlign = align;
+  ctx.textBaseline = "middle";
+  ctx.fillText(txt,sx(x),sy(y));
+}
+
+function drawWorld(){
+  ctx.clearRect(0,0,W,H);
+
+  const grd = ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0,"#121a2b");
+  grd.addColorStop(1,"#090b0f");
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,W,H);
+
+  drawRect(0,0,420,760,"#182235");
+
+  drawRect(0,285,420,125,"#30343a");
+  for(let x=0;x<420;x+=52){
+    drawRect(x+10,345,26,5,"#f5d76b");
+  }
+  drawText("DO NOT TRUST ROUTE 35",210,425,13,"#99a");
+
+  drawRect(42,38,336,145,"#2f2733");
+  drawRect(62,52,296,120,"#4f2630");
+  drawRect(76,62,268,58,"#f6e48b");
+  drawText("KRAUZER'S",210,91,28,"#432");
+  drawText("RED BULL · CIGS · BAD DECISIONS",210,135,10,"#ffe");
+  drawRect(184,143,52,29,"#1b2330");
+
+  drawRect(20,445,380,280,"#252b28");
+  drawRect(44,464,332,240,"#1d2d24");
+  drawText("STEVE'S FULL SERVE",210,468,18,"#ffdc75");
+  drawText("NO SELF SERVE. THIS IS JERSEY.",210,489,10,"#b7d6c4");
+
+  for(const p of pumps){
+    drawPump(p);
+  }
+
+  for(const t of traffic){
+    drawCar(t.x,t.y,t.w,t.h,t.color,t.dir);
+  }
+
+  for(const g of girls){
+    drawGirl(g);
+  }
+
+  drawPlayer();
+
+  for(const q of particles){
+    ctx.globalAlpha = Math.max(0, q.life/q.max);
+    ctx.fillStyle = q.color;
+    ctx.beginPath();
+    ctx.arc(sx(q.x),sy(q.y),sw(q.r),0,Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  if(levelFlash > 0){
+    ctx.globalAlpha = levelFlash * .35;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawPump(p){
+  drawRect(p.x-18,p.y-28,36,56,"#c93c2e");
+  drawRect(p.x-11,p.y-19,22,16,"#101820");
+  drawRect(p.x+18,p.y-10,8,34,"#111");
+  drawText("P"+(pumps.indexOf(p)+1),p.x,p.y+18,10,"#fff");
+
+  if(p.car){
+    const c = p.car;
+    drawCar(p.x-44,p.y-75,88,40,c.color,1);
+    const pct = c.fill / c.need;
+    drawRect(p.x-44,p.y-103,88,8,"#000");
+    drawRect(p.x-44,p.y-103,88*pct,8,"#66ff7a");
+
+    const pat = c.patience / c.maxPatience;
+    drawRect(p.x-44,p.y-92,88,5,"#000");
+    drawRect(p.x-44,p.y-92,88*pat,5,pat>.35 ? "#ffd95a" : "#ff4444");
+  }
+}
+
+function drawCar(x,y,w,h,color,dir){
+  drawRect(x,y,w,h,color);
+  drawRect(x+w*.18,y-10,w*.45,14,"#8ed7ff");
+  drawRect(x+8,y+h-4,16,8,"#050505");
+  drawRect(x+w-24,y+h-4,16,8,"#050505");
+  drawRect(dir>0?x+w-4:x,y+8,4,10,"#fff6a0");
+}
+
+function drawGirl(g){
+  const bob = Math.sin(g.t*4)*2;
+  ctx.fillStyle = g.mood ? "#ff9ed8" : "#e99bd0";
+  ctx.beginPath();
+  ctx.arc(sx(g.x),sy(g.y-11+bob),sw(10),0,Math.PI*2);
+  ctx.fill();
+  drawRect(g.x-8,g.y+bob,16,28,g.mood ? "#fd5" : "#9cf");
+  drawText("♡",g.x,g.y-32+bob,16,g.mood ? "#ff7" : "#fff");
+}
+
+function drawPlayer(){
+  const x = player.x, y = player.y;
+  const run = Math.sin(gameTime*12) * (Math.abs(player.vx)+Math.abs(player.vy)>5 ? 4 : 1);
+
+  ctx.fillStyle = player.redBull>0 ? "#7cf7ff" : "#ffd2a6";
+  ctx.beginPath();
+  ctx.arc(sx(x),sy(y-18),sw(10),0,Math.PI*2);
+  ctx.fill();
+
+  drawRect(x-9,y-8,18,26,player.smoke>0 ? "#222" : "#2859b8");
+
+  ctx.strokeStyle = "#111";
+  ctx.lineWidth = sw(4);
+  ctx.beginPath();
+  ctx.moveTo(sx(x-6),sy(y+17));
+  ctx.lineTo(sx(x-12-run),sy(y+31));
+  ctx.moveTo(sx(x+6),sy(y+17));
+  ctx.lineTo(sx(x+12+run),sy(y+31));
+  ctx.stroke();
+
+  ctx.strokeStyle = "#ffd2a6";
+  ctx.lineWidth = sw(4);
+  ctx.beginPath();
+  ctx.moveTo(sx(x-8),sy(y));
+  ctx.lineTo(sx(x-18),sy(y+10+run));
+  ctx.moveTo(sx(x+8),sy(y));
+  ctx.lineTo(sx(x+18),sy(y+10-run));
+  ctx.stroke();
+
+  drawText("YOU",x,y-38,9,"#fff");
+}
+
+function drawHint(){
+  let hint = "";
+  if(inStore()) hint = "ACTION: Buy Red Bull at Krauzer's";
+  else if(nearGirls()) hint = "ACTION: Flirt respectfully";
+  else {
+    const p = nearestPump();
+    if(p && p.car) hint = "HOLD ACTION: Pump gas";
+    else if(player.cash >= 10) hint = "ACTION: Buy cigarettes from pocket stash";
+  }
+  if(hint){
+    drawRect(56,724,308,25,"rgba(0,0,0,.55)");
+    drawText(hint,210,737,11,"#fff");
+  }
+}
+
+function loop(){
+  const now = performance.now();
+  const dt = Math.min(.033, (now - last) / 1000);
+  last = now;
+  update(dt);
+  drawWorld();
+  drawHint();
+  requestAnimationFrame(loop);
+}
+let last = performance.now();
+
+playBtn.onclick = () => {
+  start.style.display = "none";
+  running = true;
+  say("Shift started. Pump gas, dodge traffic, hit Krauzer's when you can.");
+  beep(440,.08,"triangle");
+};
+
+actionBtn.addEventListener("touchstart", e => {
+  e.preventDefault();
+  actionDown = true;
+  actionTap = true;
+}, {passive:false});
+actionBtn.addEventListener("touchend", e => {
+  e.preventDefault();
+  actionDown = false;
+}, {passive:false});
+actionBtn.addEventListener("mousedown", () => {
+  actionDown = true;
+  actionTap = true;
+});
+addEventListener("mouseup", () => actionDown = false);
+
+function stickPos(e){
+  const r = stick.getBoundingClientRect();
+  const touch = e.touches ? [...e.touches].find(t => joy.id === null || t.identifier === joy.id) : e;
+  if(!touch) return;
+  if(e.touches && joy.id === null) joy.id = touch.identifier;
+
+  const cx = r.left + r.width/2;
+  const cy = r.top + r.height/2;
+  let dx = touch.clientX - cx;
+  let dy = touch.clientY - cy;
+  const len = Math.hypot(dx,dy);
+  const max = 42;
+  if(len > max){
+    dx = dx / len * max;
+    dy = dy / len * max;
+  }
+  joy.x = dx / max;
+  joy.y = dy / max;
+  nub.style.left = (38 + dx) + "px";
+  nub.style.top = (38 + dy) + "px";
+}
+
+stick.addEventListener("touchstart", e => {
+  e.preventDefault();
+  joy.active = true;
+  stickPos(e);
+}, {passive:false});
+stick.addEventListener("touchmove", e => {
+  e.preventDefault();
+  stickPos(e);
+}, {passive:false});
+stick.addEventListener("touchend", e => {
+  e.preventDefault();
+  joy.active = false;
+  joy.id = null;
+  joy.x = 0;
+  joy.y = 0;
+  nub.style.left = "38px";
+  nub.style.top = "38px";
+}, {passive:false});
+
+stick.addEventListener("mousedown", e => {
+  joy.active = true;
+  stickPos(e);
+});
+addEventListener("mousemove", e => {
+  if(joy.active) stickPos(e);
+});
+addEventListener("mouseup", () => {
+  joy.active = false;
+  joy.x = 0;
+  joy.y = 0;
+  nub.style.left = "38px";
+  nub.style.top = "38px";
+});
+
+const keys = {};
+addEventListener("keydown", e => {
+  keys[e.key.toLowerCase()] = true;
+  if(e.key === " "){
+    actionDown = true;
+    actionTap = true;
+  }
+});
+addEventListener("keyup", e => {
+  keys[e.key.toLowerCase()] = false;
+  if(e.key === " ") actionDown = false;
+});
+
+function keyboardJoy(){
+  let x = 0, y = 0;
+  if(keys.a || keys.arrowleft) x--;
+  if(keys.d || keys.arrowright) x++;
+  if(keys.w || keys.arrowup) y--;
+  if(keys.s || keys.arrowdown) y++;
+  if(x || y){
+    const l = Math.hypot(x,y);
+    joy.x = x/l;
+    joy.y = y/l;
+  } else if(!joy.active) {
+    joy.x = 0;
+    joy.y = 0;
+  }
+  requestAnimationFrame(keyboardJoy);
+}
+keyboardJoy();
+
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
