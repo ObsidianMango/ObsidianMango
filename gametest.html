@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<title>STEVEWARE: THE MAN WHO DEBUGGED REALITY</title>
+<style>
+  :root{
+    --bg:#070812;--panel:#101629dd;--panel2:#1a2240ee;--ink:#f3f7ff;--muted:#9fb0d0;
+    --hot:#ff4fd8;--neon:#39f6d5;--warn:#ffd36a;--bad:#ff5e6c;--good:#9cff83;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#05060b;color:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;}
+  #wrap{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(circle at 50% 25%,#151a3a,#03040a 70%);}
+  canvas{width:100vw;height:100vh;display:block;background:#070812;image-rendering:auto;}
+  #ui{position:fixed;inset:0;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  #topbar{position:absolute;top:8px;left:8px;right:8px;display:flex;gap:6px;align-items:flex-start;justify-content:space-between;pointer-events:none;}
+  .chip{background:linear-gradient(180deg,#121a33ee,#080b16dd);border:1px solid #ffffff24;border-radius:12px;padding:6px 8px;box-shadow:0 8px 20px #0008;text-shadow:0 1px #000;font-size:11px;line-height:1.25;}
+  #areaChip{max-width:58%;}
+  #statChip{text-align:right;min-width:136px;}
+  #buttons{position:absolute;right:8px;bottom:calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(2,82px);gap:7px;pointer-events:auto;}
+  button{font:700 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink);background:linear-gradient(180deg,#26335f,#12182d);border:1px solid #ffffff38;border-bottom-color:#000;border-radius:14px;padding:12px 8px;box-shadow:0 5px 0 #0008,0 0 18px #0008;letter-spacing:.2px;text-transform:uppercase;min-height:43px;}
+  button:active{transform:translateY(3px);box-shadow:0 2px 0 #0008;filter:brightness(1.3);}
+  button:disabled{opacity:.38;filter:grayscale(1);}
+  #joyZone{position:absolute;left:10px;bottom:calc(16px + env(safe-area-inset-bottom));width:154px;height:154px;border-radius:50%;pointer-events:auto;background:radial-gradient(circle,#24304b66,#06091222 66%,transparent 67%);border:1px solid #ffffff18;box-shadow:inset 0 0 30px #0008;}
+  #joyKnob{position:absolute;left:52px;top:52px;width:50px;height:50px;border-radius:50%;background:radial-gradient(circle at 35% 25%,#fff8,#4cf6d6cc 40%,#182747dd 75%);border:1px solid #ffffff66;box-shadow:0 0 22px #39f6d588;}
+  #dialogue,#toast,#modal,#start,#invPanel{position:absolute;pointer-events:auto;}
+  #dialogue{left:10px;right:10px;bottom:calc(184px + env(safe-area-inset-bottom));background:linear-gradient(180deg,#10162bee,#060813f2);border:1px solid #ffffff30;border-radius:16px;padding:12px 13px;box-shadow:0 12px 34px #000b;display:none;max-height:36vh;overflow:auto;}
+  #speaker{color:var(--neon);font-weight:900;margin-bottom:6px;}
+  #dialogueText{white-space:pre-wrap;font-size:12px;line-height:1.42;}
+  #dialogue small{display:block;color:var(--muted);margin-top:8px;}
+  #toast{top:74px;left:50%;transform:translateX(-50%);background:#070a14ee;border:1px solid #ffffff2c;border-radius:99px;padding:8px 12px;color:#fff;font-size:12px;box-shadow:0 8px 24px #000b;display:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis;}
+  #modal{inset:0;background:#02030acb;display:none;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(4px);}
+  .card{width:min(560px,96vw);max-height:88vh;overflow:auto;background:linear-gradient(180deg,#141d38f8,#060812f8);border:1px solid #ffffff34;border-radius:22px;padding:16px;box-shadow:0 18px 60px #000d,0 0 80px #4824ff33;}
+  .card h1,.card h2,.card h3{margin:0 0 8px;letter-spacing:-.03em;}
+  .card p{font-size:12px;line-height:1.45;color:#d9e4ff;}
+  .choiceGrid{display:grid;grid-template-columns:1fr;gap:8px;margin-top:12px;}
+  .choiceGrid button{text-align:left;text-transform:none;font-size:13px;line-height:1.2;min-height:48px;}
+  #start{inset:0;background:radial-gradient(circle at 50% 22%,#243078,#090b18 50%,#030308 100%);display:flex;align-items:center;justify-content:center;padding:18px;z-index:5;}
+  #start .title{font-size:clamp(25px,8vw,52px);line-height:.9;letter-spacing:-.08em;text-transform:uppercase;text-shadow:0 0 24px #ff4fd877,0 5px #000;margin-bottom:12px;}
+  #start .subtitle{color:#39f6d5;font-weight:900;margin-bottom:10px;text-transform:uppercase;}
+  #start p{color:#c9d7ff;font-size:12px;line-height:1.45;}
+  #start .menu{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;}
+  #invPanel{left:10px;right:10px;top:78px;bottom:calc(184px + env(safe-area-inset-bottom));display:none;background:linear-gradient(180deg,#0e152af7,#050710fa);border:1px solid #ffffff2f;border-radius:18px;padding:12px;box-shadow:0 14px 50px #000d;overflow:auto;}
+  #invPanel h2{margin:0 0 8px;font-size:15px;color:#fff;}
+  #invPanel .item{border-top:1px solid #ffffff1d;padding:8px 0;font-size:12px;line-height:1.35;color:#d7e0ff;}
+  #invPanel .item b{color:#ffd36a;}
+  #invPanel .close{position:sticky;bottom:0;width:100%;margin-top:8px;}
+  @media (min-width:700px){#buttons{grid-template-columns:repeat(4,96px)}#dialogue{left:50%;transform:translateX(-50%);max-width:720px;bottom:20px;}#joyZone{width:130px;height:130px}.chip{font-size:12px}}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="ui">
+  <div id="topbar">
+    <div id="areaChip" class="chip">STEVEWARE</div>
+    <div id="statChip" class="chip"></div>
+  </div>
+  <div id="toast"></div>
+  <div id="joyZone"><div id="joyKnob"></div></div>
+  <div id="buttons">
+    <button id="btnObserve">Observe</button>
+    <button id="btnJoke">Joke</button>
+    <button id="btnSketch">Sketch</button>
+    <button id="btnName">Name</button>
+    <button id="btnRefuse">Refuse</button>
+    <button id="btnRewrite">Rewrite</button>
+    <button id="btnInv">Inventory</button>
+    <button id="btnSave">Save</button>
+  </div>
+  <div id="dialogue"><div id="speaker"></div><div id="dialogueText"></div><small>Tap this box to continue.</small></div>
+  <div id="invPanel"></div>
+  <div id="modal"></div>
+  <div id="start">
+    <div class="card">
+      <div class="subtitle">single file mobile canvas RPG</div>
+      <div class="title">STEVEWARE:<br>THE MAN WHO DEBUGGED REALITY</div>
+      <p>“The night Steve realized reality had a user interface, he was standing in a Wawa parking lot, arguing with God through a broken Bluetooth headset.”</p>
+      <p>Walk with the left pad or tap the world. Use Observe, Joke, Sketch, and Name to transform Woundforms. You do not win by killing monsters. You win by correctly identifying what is wearing the monster costume.</p>
+      <div class="menu">
+        <button id="newGame">New Game</button>
+        <button id="continueGame">Continue</button>
+      </div>
+      <p style="color:#91a0c2">No libraries. No assets. No downloads. Just one haunted HTML file and a suspiciously meaningful receipt.</p>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+'use strict';
+
+const $ = id => document.getElementById(id);
+const canvas = $('game');
+const ctx = canvas.getContext('2d', { alpha:false });
+const KEY = 'STEVEWARE_DEBUGGED_REALITY_SAVE_v1';
+const TAU = Math.PI * 2;
+let DPR = 1, W = 390, H = 760, t = 0, last = performance.now();
+let audio = null;
+let joy = { active:false, id:null, x:0, y:0, vx:0, vy:0 };
+let keys = Object.create(null);
+let running = false;
+let targetPoint = null;
+let nearby = null;
+let pulse = 0;
+
+const TRUE_NAMES = ['shame','grief','rage','abandonment','cowardice','loyalty','lust','fear','pride','love','envy','regret','control','silence','denial','hunger','loneliness','hope','avoidance'];
+
+const ITEM_TEXT = {
+  'Broken Bluetooth Headset':'Hears tutorial messages from reality. Unfortunately reality has a budget microphone and unresolved theological opinions.',
+  'Sketchbook':'Records symbols, Woundforms, clues, and the occasional drawing of a hot dog as a wizard.',
+  'The Joke':'A weapon/tool that creates contradiction shockwaves. It is not always funny. Sometimes it is just technically a joke, like municipal government.',
+  'Mother’s Ring':'Reveals hidden emotional paths. Overuse increases Static because truth is bright and the brain is a cheap motel lampshade.',
+  'Old Controller':'Lets you replay certain memory rooms from weird angles. Drifts left, spiritually and mechanically.',
+  'Wawa Receipt':'Useless until the end. Then it becomes proof that the ordinary world was magical the whole time.',
+  'Goatee of Questionable Authority':'Humor +2. Some NPCs take you less seriously. Other NPCs fear your podcast potential.',
+  'Pocket Dice':'Randomizes minor encounter bonuses. The dice are not cursed. They are just opinionated.',
+  'Arcade Token':'Opens the Basement Arcade. Smells like quarters, carpet, and a birthday party you only half remember.',
+  'Author Fragment':'A shard of authorship. Reality becomes less locked every time you recover one.'
+};
+
+const AREAS = [
+  {
+    id:'wawa', name:'Wawa Parking Lot of First Contact', short:'Wawa Lot',
+    palette:['#07111f','#142b42','#39f6d5','#ff4fd8','#ffd36a'],
+    desc:'Neon asphalt. Ghost shopping carts. The air smells like hoagie bread and cosmic litigation.',
+    safe:true,
+    npcs:[
+      {x:.18,y:.42,r:32,title:'Broken Bluetooth Voice', speaker:'Broken Bluetooth', text:'Steve. Steve. This is Reality Support. Your ticket number is infinity. First lesson: look at the thing before you name it.'},
+      {x:.78,y:.68,r:35,title:'Ghost Cart', speaker:'Ghost Shopping Cart', text:'I roll in circles because nobody returns me to the corral. This is not a metaphor unless you are emotionally available.'}
+    ],
+    portals:[{x:.86,y:.20,to:1,label:'Diner Neon'},{x:.10,y:.75,to:5,label:'Parking Lot Arena'}],
+    woundforms:['receipt']
+  },
+  {
+    id:'diner', name:'The Diner of Things Unsaid', short:'Diner',
+    palette:['#14080c','#2b1422','#ff7abf','#ffe0a3','#61f7da'],
+    desc:'Booths hold conversations that almost happened. Coffee refills itself, but it remembers every silence.',
+    safe:true,
+    npcs:[
+      {x:.19,y:.28,r:32,title:'Waitress With No Name Tag', speaker:'Waitress', text:'Honey, every booth has two menus: what you order, and what you refuse to say. Tip accordingly.'},
+      {x:.72,y:.74,r:30,title:'Self-Filling Coffee', speaker:'Coffee', text:'I am not here to wake you up. I am here to keep you from sleeping through your own plot.'}
+    ],
+    portals:[{x:.07,y:.18,to:0,label:'Wawa Lot'},{x:.86,y:.33,to:2,label:'Looping Hallway'}],
+    woundforms:['mirror']
+  },
+  {
+    id:'condo', name:'The Condo Hallway That Loops', short:'Loop Hallway',
+    palette:['#090d14','#1e2231','#9fb0d0','#85ffb3','#ff6c9e'],
+    desc:'The hallway repeats unless you notice what changes. The doors whisper excuses in different fonts.',
+    npcs:[
+      {x:.18,y:.70,r:30,title:'Door 3B', speaker:'Door 3B', text:'I did not slam. I emotionally closed with force.'},
+      {x:.66,y:.33,r:34,title:'Changed Exit Sign', speaker:'Exit Sign', text:'Every loop I lose one letter. When I only say “IT,” you will understand bureaucracy.'}
+    ],
+    portals:[{x:.08,y:.50,to:1,label:'Diner'},{x:.83,y:.17,to:3,label:'Boardwalk'},{x:.88,y:.72,to:6,label:'Room With No Safe Memory'}],
+    woundforms:['doorwhisper']
+  },
+  {
+    id:'boardwalk', name:'Boardwalk of Dead Radios', short:'Boardwalk',
+    palette:['#071225','#14314b','#ffdb78','#4df6ff','#ff5e6c'],
+    desc:'The ocean sounds like static. Arcade machines ask personal questions. Seagulls speak in legal disclaimers.',
+    npcs:[
+      {x:.23,y:.25,r:34,title:'Legal Seagull', speaker:'Seagull Esq.', text:'CAW. By hearing this caw you waive the right to pretend the ocean is not your subconscious. CAW.'},
+      {x:.74,y:.63,r:34,title:'Dead Radio Kiosk', speaker:'Dead Radio', text:'Static is not silence. Static is every channel fighting for rent.'}
+    ],
+    portals:[{x:.06,y:.20,to:2,label:'Loop Hallway'},{x:.83,y:.80,to:4,label:'Basement Arcade'}],
+    woundforms:['radio']
+  },
+  {
+    id:'arcade', name:'The Basement Arcade', short:'Basement Arcade',
+    palette:['#0c0615','#21113d','#b96cff','#39f6d5','#fff17a'],
+    desc:'Old machines blink like memory shrines. Each cabinet contains a joke, a fear, or a plan that never paid rent.',
+    npcs:[
+      {x:.22,y:.67,r:34,title:'Cabinet: MANGO RAIN', speaker:'Arcade Cabinet', text:'Insert courage. Receive low-resolution enlightenment.'},
+      {x:.76,y:.26,r:30,title:'Token Slot', speaker:'Token Slot', text:'The machine accepts quarters, arcade tokens, and certain regrets minted before 2008.'}
+    ],
+    portals:[{x:.08,y:.82,to:3,label:'Boardwalk'},{x:.88,y:.50,to:5,label:'Parking Lot Arena'}],
+    woundforms:['cabinet']
+  },
+  {
+    id:'arena', name:'The Parking Lot Arena', short:'Lot Arena',
+    palette:['#110d08','#2e2417','#ff9d4d','#ffd36a','#ff4fd8'],
+    desc:'Traffic cones, headlights, potholes, and loose receipts gather to settle ancient asphalt grudges.',
+    npcs:[
+      {x:.22,y:.24,r:31,title:'Traffic Cone Gladiator', speaker:'Traffic Cone', text:'I protect nothing. I warn everybody. This is a career.'},
+      {x:.72,y:.70,r:32,title:'Headlight Oracle', speaker:'Headlight Oracle', text:'Blink once for yes. Blink twice for “your inspection sticker is an allegory.”'}
+    ],
+    portals:[{x:.08,y:.20,to:0,label:'Wawa Lot'},{x:.89,y:.22,to:4,label:'Basement Arcade'},{x:.80,y:.82,to:7,label:'Temple Overpass'}],
+    woundforms:['pothole']
+  },
+  {
+    id:'nosafe', name:'The Room With No Safe Memory', short:'No Safe Memory',
+    palette:['#080808','#18171d','#d0d3db','#7558ff','#ff5e6c'],
+    desc:'Every object contradicts itself. The wall looks more honest than the furniture.',
+    npcs:[
+      {x:.18,y:.35,r:32,title:'Contradictory Chair', speaker:'Chair', text:'I was comfortable. I was not. You sat here. You never did. Both statements have teeth.'},
+      {x:.73,y:.27,r:34,title:'Blank Photo Frame', speaker:'Blank Frame', text:'A perfect memory is not required to leave a room built by absence.'}
+    ],
+    portals:[{x:.06,y:.55,to:2,label:'Loop Hallway'},{x:.88,y:.52,to:7,label:'Walk Through Wall'}],
+    woundforms:['safememory']
+  },
+  {
+    id:'temple', name:'Temple Under the Overpass', short:'Overpass Temple',
+    palette:['#070a0e','#20242c','#8ad2ff','#caa8ff','#a6ff8f'],
+    desc:'Concrete pillars become cathedral columns. Graffiti rearranges itself into prophecy and bad band names.',
+    npcs:[
+      {x:.24,y:.65,r:34,title:'Graffiti Prophet', speaker:'Graffiti Prophet', text:'THE WALL SAYS: THE ORDINARY WAS NEVER ORDINARY. THE WALL ALSO SAYS: MIKE OWES TONY $40.'},
+      {x:.76,y:.31,r:32,title:'Concrete Saint', speaker:'Concrete Saint', text:'Endurance is not the same as worship. Stop praying to locked doors.'}
+    ],
+    portals:[{x:.05,y:.76,to:5,label:'Lot Arena'},{x:.84,y:.18,to:8,label:'Father-Shaped Door'}],
+    woundforms:['pillar']
+  },
+  {
+    id:'fatherdoor', name:'The Father-Shaped Door', short:'Father Door',
+    palette:['#0b0808','#241616','#b6b6b6','#ff5e6c','#ffd36a'],
+    desc:'It does not attack. It blocks progress and denies everything. The knob is an argument. The hinges are bait.',
+    npcs:[
+      {x:.22,y:.72,r:31,title:'Small Side Path', speaker:'Small Side Path', text:'Nobody dramatic ever looks at me. That is why I work.'}
+    ],
+    portals:[{x:.06,y:.72,to:7,label:'Temple'},{x:.88,y:.52,to:9,label:'Author’s Desk'}],
+    woundforms:['fatherdoor']
+  },
+  {
+    id:'desk', name:'The Author’s Desk', short:'Author Desk',
+    palette:['#070812','#202a55','#39f6d5','#ff4fd8','#fff17a'],
+    desc:'Reality becomes an editable canvas. The cursor blinks like a heartbeat. The receipt finally matters.',
+    safe:true,
+    npcs:[
+      {x:.24,y:.30,r:34,title:'The Cursor', speaker:'The Cursor', text:'Creative Mode is not “nothing hurts.” Creative Mode is “you can build with what happened without asking the wound for permission.”'},
+      {x:.73,y:.68,r:36,title:'Ordinary Magical Receipt', speaker:'Wawa Receipt', text:'I told you I was important. Total: $7.77. Payment method: lived experience.'}
+    ],
+    portals:[{x:.07,y:.52,to:8,label:'Door Area'}],
+    woundforms:['finaldesk']
+  }
+];
+
+const WOUNDS = {
+  receipt:{
+    area:0,boss:true,x:.52,y:.42,title:'The Receipt That Wouldn’t Print', form:'an infinite paper serpent from a gas station printer', trueName:'avoidance',
+    decoys:['grief','control','hunger'],
+    symbol:'a white ribbon looping away from the exit',
+    clues:['It grows longer whenever Steve says “I’ll deal with it tomorrow.”','The paper has no prices, only postponed decisions.','The printer jams exactly when the truth is about to come out.'],
+    start:'The pump clicks. The printer screams. A receipt-serpent unspools from the machine and asks if you want your emotional baggage itemized.',
+    wrong:'The serpent prints three more excuses and papercuts your confidence.',
+    solved:'The serpent shrinks into a small, honest receipt. It says: “You came back.”',
+    reward:{xp:30,items:['Sketchbook','The Joke'],fragment:true,unlock:1,stats:{lucidity:1,compassion:1}}
+  },
+  mirror:{
+    area:1,boss:true,x:.53,y:.52,title:'The Diner Mirror', form:'a reflection with a diner spoon for a mouth', trueName:'shame', decoys:['pride','rage','regret'],
+    symbol:'a face drawn twice, once cruel and once tired',
+    clues:['It only speaks in insults stolen from other people.','It gets louder when Steve believes it is being objective.','It hates jokes because jokes prove the room has another angle.'],
+    start:'The napkin dispenser becomes a mirror. Your reflection leans forward and says, “Nice try, too-many-halves man.”',
+    wrong:'The reflection smiles with your mouth and spends your Nerve like loose change.',
+    solved:'The mirror cracks into a window. The reflection is still there, but smaller, and weirdly unemployed.',
+    requires:'joke', teach:'Joke it before you Name it. Absurdity breaks the insult-loop.',
+    reward:{xp:40,fragment:true,unlock:2,stats:{humor:2,compassion:1}}
+  },
+  doorwhisper:{
+    area:2,x:.57,y:.39,title:'The Whispering Door', form:'a condo door sweating apology notes', trueName:'abandonment', decoys:['silence','cowardice','envy'],
+    symbol:'a keyhole shaped like a person walking away',
+    clues:['It promises to open if you become easier to leave.','Every knock echoes as “not yet.”','It is less a door than a rehearsed goodbye.'],
+    start:'A hallway door grows an eye, then pretends it was always a peephole.',
+    wrong:'The hallway adds another loop and another excuse.',
+    solved:'The door becomes a small side table with a lamp. It is still sad, but it is useful now.',
+    reward:{xp:35,items:['Mother’s Ring'],unlock:3,stats:{lucidity:1,compassion:1}}
+  },
+  radio:{
+    area:3,x:.50,y:.54,title:'The Dead Radio Whale', form:'a beached radio with ribs made of antennas', trueName:'loneliness', decoys:['fear','silence','hunger'],
+    symbol:'a signal tower broadcasting to an empty kitchen',
+    clues:['It plays every station at once because one voice is never enough.','The ocean answers in static, but the static keeps trying.','It asks personal questions in the voice of an old arcade machine.'],
+    start:'The boardwalk radio swells into a whale of static. A seagull reads the terms and conditions of being alone.',
+    wrong:'A thousand channels interrupt each other until your hands forget the controls.',
+    solved:'The whale exhales a clean note and becomes an Arcade Token.',
+    reward:{xp:38,items:['Arcade Token'],unlock:4,stats:{compassion:1,lucidity:1}}
+  },
+  cabinet:{
+    area:4,x:.54,y:.47,title:'The Cabinet That Wanted Quarters Forever', form:'a hungry arcade machine with ticket teeth', trueName:'hunger', decoys:['hope','envy','lust'],
+    symbol:'a coin slot in the shape of a mouth',
+    clues:['It keeps asking for one more try, but never says what would be enough.','The high-score board is filled with almosts.','It cannot tell appetite from purpose.'],
+    start:'The arcade cabinet coughs tickets onto the carpet and calls you PLAYER 1 like a threat.',
+    wrong:'It eats your confidence and dispenses one sticky ticket that says “try harder.”',
+    solved:'The cabinet becomes an Old Controller. The A button sighs with relief.',
+    reward:{xp:42,items:['Old Controller','Pocket Dice'],unlock:5,stats:{humor:1,lucidity:1}}
+  },
+  pothole:{
+    area:5,boss:true,x:.52,y:.56,title:'The Laughing Pothole', form:'a mouth in the road widening whenever ignored', trueName:'denial', decoys:['rage','regret','fear'],
+    symbol:'a black circle wearing a smile it stole from a warning sign',
+    clues:['It gets bigger when everyone drives around it and says “not my department.”','Its laugh sounds like loose suspension and family systems.','It is a hole fed by pretending the road is fine.'],
+    start:'A pothole laughs so hard the parking stripes bend around it. Traffic cones chant for violence but cannot define “healing.”',
+    wrong:'The hole grows. Your Nerve takes a rim-bending hit.',
+    solved:'The pothole becomes a fountain of black glitter. The arena applauds with hazard lights.',
+    reward:{xp:55,items:['Goatee of Questionable Authority'],fragment:true,unlock:6,stats:{humor:1,compassion:1}}
+  },
+  safememory:{
+    area:6,boss:true,x:.54,y:.50,title:'The Perfect Safe Memory', form:'a clean living room that keeps changing its witness statement', trueName:'grief', decoys:['love','control','silence'],
+    symbol:'an empty frame with the wall visible through it',
+    clues:['Every object offers a different version, and none of them feel safe.','The room becomes calmer when you stop demanding it prove something impossible.','The wall is softer than the memories. That is suspicious, but useful.'],
+    start:'The room assembles a perfect memory out of borrowed furniture. It smiles too hard. The couch has lawyer eyes.',
+    wrong:'The furniture contradicts itself until your Nerve has to sit down.',
+    solved:'The perfect room collapses into an honest doorway. You did not find safety. You found the exit.',
+    reward:{xp:65,items:['Author Fragment'],fragment:true,unlock:7,ability:'Refuse',stats:{lucidity:1,compassion:2}}
+  },
+  pillar:{
+    area:7,x:.55,y:.42,title:'The Pillar That Mistook Endurance For Worship', form:'a concrete saint with rebar ribs', trueName:'hope', decoys:['loyalty','pride','cowardice'],
+    symbol:'a crack in concrete with a plant growing through it',
+    clues:['It is tired of being praised for surviving weight.','The graffiti around it keeps rewriting “endure” into “build.”','It wants the future without pretending the past was fine.'],
+    start:'The overpass pillar kneels, or maybe the world tilts. Graffiti halos appear, badly spelled but sincere.',
+    wrong:'The pillar drops a cathedral of shoulds onto your shoulders.',
+    solved:'A plant grows through the concrete and hands you a Rewrite cursor.',
+    reward:{xp:70,fragment:true,unlock:8,ability:'Rewrite',stats:{lucidity:1,compassion:1}}
+  },
+  fatherdoor:{
+    area:8,boss:true,x:.58,y:.48,title:'The Father-Shaped Door', form:'a locked door wearing the posture of an argument', trueName:'refusal', decoys:['rage','control','loyalty'],
+    symbol:'a door with no hinges on your side',
+    clues:['It never attacks. It only invites you to waste your life proving the obvious.','Every answer you give becomes another lock.','The side path exists when you stop staring at the door.'],
+    start:'The Door denies being a door. It denies blocking you. It denies that you are standing here. It asks for one more explanation.',
+    wrong:'The Door feeds on the argument. It grows more official-looking.',
+    solved:'You step around it. The Door remains closed, which is its problem now.',
+    special:'refuse',
+    reward:{xp:100,fragment:true,unlock:9,stats:{nerve:2,lucidity:1,compassion:2}}
+  },
+  finaldesk:{
+    area:9,boss:true,x:.56,y:.44,title:'The Blank Page With Teeth', form:'a manuscript cursor blinking like a hungry lighthouse', trueName:'love', decoys:['pride','hope','regret'],
+    symbol:'a heart-shaped cursor inside a bracket',
+    clues:['It is not asking you to make a perfect story.','It bites when you confuse authorship with control.','The receipt in your pocket glows like proof that ordinary life had magic all along.'],
+    start:'The blank page opens its teeth and says, “So what kind of story are we writing, too-many-halves man?”',
+    wrong:'The page autocompletes your fear in a font nobody asked for.',
+    solved:'The page becomes a canvas. You unlock Creative Mode.',
+    requires:'rewrite',
+    reward:{xp:120,items:['Wawa Receipt'],fragment:true,creative:true,stats:{humor:1,lucidity:1,compassion:2}}
+  }
+};
+
+function freshState(){
+  return {
+    area:0, player:{x:.50,y:.72}, nerve:8, maxNerve:8, lucidity:1, humor:1, compassion:1, static:0, authorRank:1, xp:0,
+    fragments:0, inventory:['Broken Bluetooth Headset','Wawa Receipt'], abilities:['Observe','Name'], resolved:{}, unlocked:{0:true}, seen:{}, learned:{}, flags:{}, log:[], edits:[], creative:false, started:false,
+    encounter:null, messageQueue:[]
+  };
+}
+let S = freshState();
+
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = Math.floor(innerWidth); H = Math.floor(innerHeight);
+  canvas.width = Math.floor(W*DPR); canvas.height = Math.floor(H*DPR);
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize', resize, {passive:true}); resize();
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function lerp(a,b,k){ return a+(b-a)*k; }
+function rnd(n=1){ return Math.random()*n; }
+function dist(ax,ay,bx,by){ return Math.hypot(ax-bx,ay-by); }
+function area(){ return AREAS[S.area]; }
+function hasItem(i){ return S.inventory.includes(i); }
+function hasAbility(a){ return S.abilities.includes(a); }
+function addItem(i){ if(!S.inventory.includes(i)) S.inventory.push(i); }
+function addAbility(a){ if(!S.abilities.includes(a)) S.abilities.push(a); }
+function isUnlocked(i){ return !!S.unlocked[i]; }
+function worldX(f){ return f*W; }
+function worldY(f){ return f*H; }
+function safeBottom(){ return H - (innerWidth < 700 ? 205 : 95); }
+
+function beginAudio(){
+  if(audio) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return;
+  audio = new AC();
+}
+function tone(freq=220, dur=.08, type='sine', gain=.04, slide=0){
+  beginAudio(); if(!audio) return;
+  const now = audio.currentTime;
+  const o = audio.createOscillator(); const g = audio.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, now);
+  if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq+slide), now+dur);
+  g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(gain, now+.012); g.gain.exponentialRampToValueAtTime(0.0001, now+dur);
+  o.connect(g); g.connect(audio.destination); o.start(now); o.stop(now+dur+.03);
+}
+function noiseBurst(dur=.12, gain=.045){
+  beginAudio(); if(!audio) return;
+  const size = Math.max(1, Math.floor(audio.sampleRate*dur));
+  const buffer = audio.createBuffer(1, size, audio.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i=0;i<size;i++) data[i] = (Math.random()*2-1) * (1 - i/size);
+  const src = audio.createBufferSource(); src.buffer = buffer;
+  const g = audio.createGain(); g.gain.value = gain;
+  src.connect(g); g.connect(audio.destination); src.start();
+}
+function chord(root=220){ tone(root,.12,'triangle',.035); setTimeout(()=>tone(root*1.25,.14,'triangle',.025),40); setTimeout(()=>tone(root*1.5,.18,'triangle',.025),80); }
+
+function save(silent=false){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); if(!silent) toast('Saved to localStorage. Reality has been locally cached.'); }
+  catch(e){ toast('Save failed. Reality refused paperwork.'); }
+}
+function load(){
+  try{ const raw = localStorage.getItem(KEY); if(!raw) return false; S = Object.assign(freshState(), JSON.parse(raw)); return true; }
+  catch(e){ return false; }
+}
+function reset(){ S = freshState(); startGame(true); }
+
+function toast(msg, ms=1700){
+  const el = $('toast'); el.textContent = msg; el.style.display = 'block';
+  clearTimeout(toast._t); toast._t = setTimeout(()=>el.style.display='none', ms);
+}
+function say(speaker, text){
+  $('speaker').textContent = speaker || 'Reality';
+  $('dialogueText').textContent = text;
+  $('dialogue').style.display = 'block';
+  tone(320,.05,'square',.02);
+}
+function closeDialogue(){ $('dialogue').style.display = 'none'; }
+$('dialogue').addEventListener('pointerdown', closeDialogue);
+
+function modal(html){ const m=$('modal'); m.innerHTML = `<div class="card">${html}</div>`; m.style.display='flex'; }
+function closeModal(){ const m=$('modal'); m.style.display='none'; m.innerHTML=''; }
+
+function grantReward(w){
+  const r = w.reward || {};
+  if(r.xp) S.xp += r.xp;
+  if(r.items) r.items.forEach(addItem);
+  if(r.ability) addAbility(r.ability);
+  if(r.unlock !== undefined) S.unlocked[r.unlock] = true;
+  if(r.fragment){ S.fragments++; addItem('Author Fragment'); }
+  if(r.creative){ S.creative = true; addAbility('Creative Mode'); }
+  if(r.stats){
+    for(const k in r.stats){
+      if(k === 'nerve') S.maxNerve += r.stats[k];
+      else S[k] = (S[k]||0) + r.stats[k];
+    }
+  }
+  const oldRank = S.authorRank;
+  S.authorRank = 1 + Math.floor((S.xp + S.fragments*35)/85);
+  S.nerve = clamp(S.nerve + 2, 1, S.maxNerve);
+  S.static = Math.max(0, S.static - 1);
+  if(S.authorRank > oldRank){ chord(240 + S.authorRank*40); toast('Author Rank increased. Reality pretends not to notice.'); }
+  save(true);
+}
+
+function startGame(isNew=false){
+  running = true;
+  $('start').style.display = 'none';
+  if(isNew){
+    S.started = true;
+    showOpening();
+  } else if(!S.started){
+    S.started = true; showOpening();
+  } else {
+    toast('Loaded. The dream remembers you.');
+  }
+  updateButtons();
+  save(true);
+}
+function showOpening(){
+  say('Narrator', 'The night Steve realized reality had a user interface, he was standing in a Wawa parking lot, arguing with God through a broken Bluetooth headset.\n\nA shopping cart drifted past without wind. The receipt printer coughed. Somewhere above the pumps, a hidden cursor blinked.');
+}
+
+function updateButtons(){
+  $('btnJoke').disabled = !hasItem('The Joke') && !hasAbility('Joke');
+  $('btnSketch').disabled = !hasItem('Sketchbook');
+  $('btnRefuse').disabled = !hasAbility('Refuse') && !(S.encounter && WOUNDS[S.encounter.id]?.special==='refuse');
+  $('btnRewrite').disabled = !hasAbility('Rewrite') && !S.creative;
+  $('continueGame').disabled = !localStorage.getItem(KEY);
+}
+
+function mapButtons(){
+  const rows = AREAS.map((a,i)=>{
+    const unlocked = isUnlocked(i);
+    const here = i===S.area ? ' ← here' : '';
+    return `<button ${unlocked?'':'disabled'} data-area="${i}">${unlocked?'Go to ':'Locked: '}${a.short}${here}</button>`;
+  }).join('');
+  return `<h3>Dream Map</h3><div class="choiceGrid">${rows}</div>`;
+}
+function showInventory(){
+  closeDialogue(); closeModal();
+  const el = $('invPanel');
+  if(el.style.display === 'block'){ el.style.display='none'; return; }
+  const items = S.inventory.map(i=>`<div class="item"><b>${i}</b><br>${ITEM_TEXT[i]||'A strange thing. It probably means something, because this is that kind of game.'}</div>`).join('');
+  const learned = Object.keys(S.learned).map(id=>`<div class="item"><b>${WOUNDS[id].title}</b><br>True Name: ${S.learned[id]}. Symbol: ${WOUNDS[id].symbol}</div>`).join('') || '<div class="item">No Woundforms named yet. Go spiritually harass a printer.</div>';
+  el.innerHTML = `<h2>Inventory / Stats</h2>
+    <div class="item"><b>Steve</b><br>Author Rank ${S.authorRank}. Nerve ${S.nerve}/${S.maxNerve}. Lucidity ${S.lucidity}. Humor ${S.humor}. Compassion ${S.compassion}. Static ${S.static}. Fragments ${S.fragments}/7.</div>
+    ${items}
+    <h2>Named Woundforms</h2>${learned}
+    ${mapButtons()}
+    <button class="close" id="restBtn">Rest at Safe Location</button>
+    <button class="close" id="closeInv">Close</button>`;
+  el.style.display = 'block';
+  el.querySelectorAll('[data-area]').forEach(b=>b.onclick = () => { const i=+b.dataset.area; if(isUnlocked(i)){ S.area=i; S.player.x=.5; S.player.y=.65; targetPoint=null; el.style.display='none'; enterArea(); }});
+  $('closeInv').onclick = () => el.style.display='none';
+  $('restBtn').onclick = () => { rest(); el.style.display='none'; };
+}
+function rest(){
+  if(!area().safe){ toast('This place is not safe enough to rest. Even the dust has an agenda.'); return; }
+  S.nerve = S.maxNerve; S.static = Math.max(0, S.static - 2); save(true); chord(180); toast('Rested. Nerve restored. Static reduced.');
+}
+
+function hotspots(){
+  const a = area();
+  const list = [];
+  (a.npcs||[]).forEach((o,idx)=>list.push({...o,type:'npc',id:'npc'+idx}));
+  (a.portals||[]).forEach((p,idx)=>list.push({...p,type:'portal',id:'portal'+idx,r:34,title:p.label}));
+  (a.woundforms||[]).forEach(id=>{
+    const w = WOUNDS[id];
+    if(!S.resolved[id]) list.push({x:w.x,y:w.y,r:w.boss?45:38,type:'wound',id,title:w.title});
+    else if(w.reward && w.reward.fragment) list.push({x:w.x,y:w.y,r:25,type:'echo',id,title:'Resolved Echo'});
+  });
+  if(S.creative) S.edits.filter(e=>e.area===S.area).forEach((e,i)=>list.push({x:e.x,y:e.y,r:26,type:'edit',id:'edit'+i,title:'Rewrite Mark'}));
+  return list;
+}
+function nearestHotspot(){
+  const px=worldX(S.player.x), py=worldY(S.player.y);
+  let best=null, bd=9999;
+  for(const h of hotspots()){
+    const d = dist(px,py,worldX(h.x),worldY(h.y));
+    if(d < (h.r||34)+34 && d < bd){ best=h; bd=d; }
+  }
+  return best;
+}
+function enterArea(){
+  closeDialogue(); closeModal(); $('invPanel').style.display='none';
+  const a = area();
+  if(!S.seen[a.id]){
+    S.seen[a.id] = true;
+    say(a.name, a.desc);
+  } else if(a.safe) {
+    S.nerve = Math.min(S.maxNerve, S.nerve+1);
+  }
+  updateButtons(); save(true);
+}
+function travel(to){
+  if(!isUnlocked(to)){ toast('Locked. Need more authorship. Or less nonsense. Usually both.'); noiseBurst(.08,.03); return; }
+  S.area = to; S.player.x=.5; S.player.y=.68; targetPoint=null; enterArea(); chord(200+to*15);
+}
+
+function interact(kind){
+  beginAudio();
+  if(S.encounter){ encounterAction(kind); return; }
+  const h = nearestHotspot(); nearby = h;
+  if(kind === 'inventory'){ showInventory(); return; }
+  if(kind === 'save'){ save(); return; }
+  if(kind === 'rewrite'){ doRewrite(); return; }
+  if(!h){
+    if(kind==='observe') say('Steve', 'You observe the vibe. It is extremely New Jersey and legally difficult to prove.');
+    else if(kind==='joke') doJokeFree();
+    else if(kind==='sketch') doSketchFree();
+    else if(kind==='name') toast('Nothing nearby is ready to be Named. Try walking up to the weirdest thing, which is saying something.');
+    else if(kind==='refuse') toast('There is nothing here worth refusing. Rare but refreshing.');
+    return;
+  }
+  if(h.type==='portal'){
+    if(kind==='observe') say('Exit: '+h.label, `This path leads to ${AREAS[h.to].name}. ${isUnlocked(h.to)?'It is open. Press Name near it to commit to the bit.':'It is locked behind an unresolved Woundform.'}`);
+    else if(kind==='name') travel(h.to);
+    else toast('The exit waits. Press Name near it to travel. Weird UI choice, but reality just discovered menus.');
+    return;
+  }
+  if(h.type==='npc'){
+    if(kind==='joke') { tone(380,.07,'square',.03); say(h.speaker||h.title, 'That was almost a joke. I respect the attempt like I respect a gas station hot dog: cautiously.'); }
+    else if(kind==='sketch') { addSketch(`Sketch: ${h.title}`); say('Sketchbook', `You sketch ${h.title}. The linework reveals a tiny symbol hiding in plain sight.`); }
+    else say(h.speaker||h.title, h.text || 'It stares back with municipal intensity.');
+    return;
+  }
+  if(h.type==='echo'){
+    const w = WOUNDS[h.id];
+    say('Resolved Echo', `${w.title} is quiet now. Its True Name was ${w.trueName}. The world around it looks editable, but not erased.`);
+    return;
+  }
+  if(h.type==='edit'){
+    say('Rewrite Mark', 'A tiny edit you made to reality. It wiggles proudly, like clip art with a soul.');
+    return;
+  }
+  if(h.type==='wound'){
+    startEncounter(h.id);
+    if(kind !== 'name') encounterAction(kind);
+    else openNameChoices();
+  }
+}
+
+function addSketch(note){
+  S.log.push({area:S.area,t:Date.now(),note});
+  if(S.log.length>50) S.log.shift();
+}
+function doJokeFree(){
+  if(!hasItem('The Joke')){ toast('You do not have The Joke yet. This is tragic but fixable.'); return; }
+  tone(170,.05,'sawtooth',.03,300); noiseBurst(.05,.018);
+  say('Steve', 'Steve makes a joke so specific the asphalt briefly develops self-awareness. Somewhere, a traffic cone files a complaint.');
+  S.humor = Math.max(S.humor, 2);
+}
+function doSketchFree(){
+  if(!hasItem('Sketchbook')){ toast('You need the Sketchbook first.'); return; }
+  const notes = ['a cart shaped like a question mark','a neon halo around a puddle','a door that is mostly eyebrow','a seagull wearing invisible lawyer glasses','a pothole with theater training'];
+  addSketch(notes[Math.floor(rnd(notes.length))]);
+  tone(500,.05,'triangle',.02);
+  toast('Sketch added. A hidden symbol twitches.');
+}
+function doRewrite(){
+  if(!hasAbility('Rewrite') && !S.creative){ toast('Rewrite is locked. Reality is still in read-only mode.'); return; }
+  const x = clamp(S.player.x + (rnd(.22)-.11), .12, .88);
+  const y = clamp(S.player.y + (rnd(.22)-.11), .18, .78);
+  const glyphs = ['✦','⌁','✎','☉','◇','?','!','♥','⟲'];
+  S.edits.push({area:S.area,x,y,g:glyphs[Math.floor(rnd(glyphs.length))],c:Math.floor(rnd(5)),born:t});
+  if(S.edits.length>80) S.edits.shift();
+  S.static = Math.max(0, S.static-1);
+  chord(300); toast('Rewrite mark placed. Static reduced.'); save(true);
+}
+
+function startEncounter(id){
+  const w = WOUNDS[id];
+  S.encounter = {id, observed:0, joked:false, sketched:false, stunned:0, wrongs:0, refuse:0, clarity:0};
+  say(w.title, w.start + (w.teach ? '\n\n' + w.teach : ''));
+  tone(80,.18,'sawtooth',.05,80); updateButtons();
+}
+function encounter(){ return S.encounter ? WOUNDS[S.encounter.id] : null; }
+function encounterAction(kind){
+  const e = S.encounter, w = encounter(); if(!e||!w) return;
+  if(kind==='inventory'){ showInventory(); return; }
+  if(kind==='save'){ save(); return; }
+  if(kind==='observe'){
+    const clue = w.clues[Math.min(e.observed, w.clues.length-1)];
+    e.observed++; e.clarity++; S.lucidity += e.observed===1 ? 1 : 0;
+    tone(420+e.observed*30,.06,'triangle',.025);
+    say('Observe', clue + `\n\nClarity: ${e.clarity}. True Name choices get easier when you actually look. Revolutionary stuff.`);
+  } else if(kind==='joke'){
+    if(!hasItem('The Joke') && !hasAbility('Joke')){ toast('The Joke is not unlocked yet.'); return; }
+    e.joked = true; e.stunned = 2; e.clarity++; S.humor += .25;
+    tone(160,.05,'square',.03,360); setTimeout(()=>noiseBurst(.06,.025),30);
+    const lines = [
+      'Steve says, “Buddy, I have seen more stable systems running on a gas station touchscreen.”',
+      'Steve points at the monster and says, “That is a lot of emotional labor for something with no dental plan.”',
+      'Steve performs one joke so dumb the scene briefly forgets to be terrifying.'
+    ];
+    say('Joke', lines[Math.floor(rnd(lines.length))] + '\n\nThe contradiction shockwave stuns the Woundform.');
+  } else if(kind==='sketch'){
+    if(!hasItem('Sketchbook')){ toast('Need Sketchbook.'); return; }
+    e.sketched = true; e.clarity += 2; S.lucidity += .25;
+    addSketch(`${w.title}: ${w.symbol}`);
+    tone(540,.07,'triangle',.025);
+    say('Sketch', `You sketch the Woundform. The drawing reveals: ${w.symbol}.\n\nClarity rises. The monster looks less like an enemy and more like a sentence missing its subject.`);
+  } else if(kind==='name'){
+    openNameChoices();
+  } else if(kind==='refuse'){
+    doRefuse();
+  } else if(kind==='rewrite'){
+    if(w.requires==='rewrite' || hasAbility('Rewrite')){
+      e.rewritten = true; e.clarity += 2; doRewrite();
+      say('Rewrite', 'You edit the edge of the scene. The Woundform loses its assumption that it owns the whole screen.');
+    } else toast('Rewrite is not available yet.');
+  }
+  maybeCounterattack(kind);
+  save(true); updateButtons();
+}
+function maybeCounterattack(kind){
+  const e=S.encounter, w=encounter(); if(!e||!w) return;
+  if(kind==='name' || kind==='inventory' || kind==='save') return;
+  if(e.stunned>0){ e.stunned--; return; }
+  const chance = w.boss ? .45 : .30;
+  if(Math.random() < chance && kind!=='observe'){
+    damage(w.boss?2:1, 1, `${w.title} pushes back. Static crawls into the UI.`);
+  }
+}
+function damage(nerve=1, stat=1, msg='Nerve drops. Static rises. Real classy, reality.'){
+  S.nerve -= nerve; S.static += stat;
+  noiseBurst(.14,.04); pulse = 1;
+  if(S.nerve <= 0) setback(); else toast(msg);
+}
+function setback(){
+  S.static += 2; S.nerve = Math.max(3, Math.floor(S.maxNerve/2));
+  S.encounter = null;
+  const safe = [0,1,9].filter(i=>isUnlocked(i)).pop() || 0;
+  S.area = safe; S.player.x=.5; S.player.y=.65;
+  closeModal(); updateButtons(); save(true);
+  say('Wake-Up Setback', 'Steve does not die. He wakes back at the last safe place with more Static and the gross kind of wisdom.\n\nKnowledge remains. The wound does not get to un-teach you what you saw.');
+}
+function openNameChoices(){
+  const e=S.encounter, w=encounter(); if(!e||!w) return;
+  if(w.special==='refuse'){
+    say(w.title, 'This is not a naming fight. Naming it keeps you arguing with it. Use Refuse. The side path is waiting like a petty miracle.'); return;
+  }
+  if(w.requires==='joke' && !e.joked){ say(w.title, 'The reflection is insult-loop armor. Use Joke first. Not because it is mature. Because it works.'); return; }
+  if(w.requires==='rewrite' && !e.rewritten && !S.creative){ say(w.title, 'The blank page needs a Rewrite mark first. Authorship before answer.'); return; }
+  const opts = shuffle([w.trueName, ...w.decoys]).slice(0,4);
+  const clueText = e.clarity < 2 ? 'You have barely looked. The choices feel slippery.' : e.clarity < 4 ? 'Some clues are visible. Your gut has evidence.' : 'The symbol is nearly shouting.';
+  const buttons = opts.map(o=>`<button data-name="${o}">${displayName(o)}</button>`).join('');
+  modal(`<h2>NAME THE WOUNDFORM</h2><p><b>${w.title}</b><br>${w.form}</p><p>${clueText}</p><div class="choiceGrid">${buttons}</div><p style="color:#9fb0d0">Static ${S.static}: higher Static may distort words and controls.</p>`);
+  $('modal').querySelectorAll('[data-name]').forEach(b=>b.onclick = () => chooseName(b.dataset.name));
+}
+function displayName(n){
+  if(S.static < 5) return n.toUpperCase();
+  const chars = n.toUpperCase().split('');
+  const noise = ['#','?','/','░','Ø','_'];
+  return chars.map(ch=>Math.random()<Math.min(.45,S.static*.05)?noise[Math.floor(rnd(noise.length))]:ch).join('');
+}
+function chooseName(name){
+  const e=S.encounter, w=encounter(); if(!e||!w) return;
+  closeModal();
+  if(name === w.trueName){
+    S.resolved[e.id] = true; S.learned[e.id] = w.trueName; S.encounter = null;
+    grantReward(w); chord(260 + S.fragments*30);
+    say(w.title, `${w.solved}\n\nTrue Name: ${w.trueName.toUpperCase()}\nReward gained. Author Fragments: ${S.fragments}.` + (w.reward?.creative?'\n\nCREATIVE MODE UNLOCKED. The world is now editable.':''));
+    updateButtons();
+  } else {
+    e.wrongs++; e.clarity = Math.max(0, e.clarity-1);
+    const n = w.boss ? 2 : 1;
+    damage(n, 1, 'Wrong Name. The Woundform gets louder.');
+    if(S.encounter){ say(w.title, `${w.wrong}\n\n“${name.toUpperCase()}” is close enough to hurt, not close enough to heal.`); }
+  }
+}
+function doRefuse(){
+  const e=S.encounter, w=encounter();
+  if(!e || !w || w.special !== 'refuse'){
+    toast('Refuse works best against impossible arguments, locked loops, and forms with main-character door energy.'); return;
+  }
+  e.refuse++;
+  const lines = [
+    'Steve stops preparing a perfect explanation. The Door loses one hinge of power.',
+    'Steve refuses the bait. The Door asks the same question in a suit. Steve keeps walking.',
+    'Steve says: “I do not need this door to open.” The side path becomes real enough to use.'
+  ];
+  tone(120+e.refuse*70,.14,'triangle',.04);
+  if(e.refuse >= 3){
+    S.resolved[e.id]=true; S.learned[e.id]='refusal'; S.encounter=null; grantReward(w);
+    say(w.title, w.solved + '\n\nBoss resolved by REFUSAL, not victory. That matters.');
+    updateButtons();
+  } else say('Refuse', lines[e.refuse-1]);
+}
+function shuffle(arr){
+  arr = arr.slice();
+  for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  return arr;
+}
+
+function finalChoice(){
+  const buttons = [
+    ['Comedic Myth','Write a story where pain becomes timing, not prison.'],
+    ['Playable Memoir','Write a game where the weirdest truth is still useful.'],
+    ['Open World Compassion','Write a world where power means fewer locked doors.'],
+    ['Absurd Hope Engine','Write a machine that runs on jokes, grief, and stubborn beauty.']
+  ].map(([a,b])=>`<button data-end="${a}"><b>${a}</b><br>${b}</button>`).join('');
+  modal(`<h2>THE AUTHOR’S DESK</h2><p>The final goal was never to defeat reality. It was to unlock Creative Mode.</p><p>Choose the kind of story Steve is writing.</p><div class="choiceGrid">${buttons}</div>`);
+  $('modal').querySelectorAll('[data-end]').forEach(b=>b.onclick=()=>{
+    const end=b.dataset.end; closeModal(); S.creative=true; addAbility('Creative Mode'); save(true);
+    say('Creative Mode', `${end} selected.\n\nThe Wawa Receipt glows. The ordinary world was magical the whole time — not because it was easy, but because it was editable.\n\nUse Rewrite anywhere to leave marks on reality.`);
+  });
+}
+
+function draw(){
+  const a = area(), p = a.palette;
+  const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,p[0]); g.addColorStop(.55,p[1]); g.addColorStop(1,'#02030a');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  drawProcedural(a,p);
+  drawWorld(a,p);
+  drawPlayer(p);
+  if(S.encounter) drawEncounterOverlay(WOUNDS[S.encounter.id], p);
+  if(pulse>0){ ctx.fillStyle=`rgba(255,50,90,${pulse*.2})`; ctx.fillRect(0,0,W,H); pulse*=.88; if(pulse<.01)pulse=0; }
+  if(S.static>0) drawStatic();
+  updateHUD();
+}
+function drawProcedural(a,p){
+  const time=t*.001;
+  ctx.save();
+  ctx.globalAlpha=.35;
+  for(let i=0;i<34;i++){
+    const y = (i*43 + (time*15*(i%3+1))) % (H+60) - 30;
+    ctx.strokeStyle = i%2 ? p[2]+'33' : p[3]+'22'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for(let x=-20;x<W+20;x+=30){ ctx.lineTo(x, y + Math.sin(x*.02+time+i)*8); }
+    ctx.stroke();
+  }
+  ctx.globalAlpha=.18;
+  for(let i=0;i<16;i++){
+    const x = (Math.sin(time*.4+i*2.1)*.5+.5)*W;
+    const y = (Math.cos(time*.25+i)*.5+.5)*safeBottom();
+    ctx.fillStyle = p[(i%3)+2]+'55';
+    ctx.beginPath(); ctx.arc(x,y, 8+(i%5)*7 + Math.sin(time+i)*4,0,TAU); ctx.fill();
+  }
+  ctx.restore();
+
+  if(a.id==='wawa') drawWawa(p); else if(a.id==='diner') drawDiner(p); else if(a.id==='condo') drawHallway(p); else if(a.id==='boardwalk') drawBoardwalk(p); else if(a.id==='arcade') drawArcade(p); else if(a.id==='arena') drawArena(p); else if(a.id==='nosafe') drawNoSafe(p); else if(a.id==='temple') drawTemple(p); else if(a.id==='fatherdoor') drawDoorArea(p); else drawDesk(p);
+}
+function drawWawa(p){
+  ctx.fillStyle='#0007'; for(let i=0;i<8;i++){ ctx.fillRect(i*70-20, H*.54+(i%2)*25, 44, 7); }
+  neonText('WAWA', W*.08, H*.18, p[2], 28);
+  drawPump(W*.52,H*.38,p[4]); drawCart(W*.78,H*.68,p[2]);
+}
+function drawDiner(p){
+  for(let i=0;i<4;i++) drawBooth(W*(.18+i*.20), H*(.38+(i%2)*.18), p[i%2?3:4]);
+  neonText('DINER', W*.10, H*.18, p[3], 26);
+}
+function drawHallway(p){
+  ctx.strokeStyle=p[2]+'88'; ctx.lineWidth=3;
+  for(let i=0;i<5;i++){ ctx.strokeRect(W*(.16+i*.16), H*(.26+Math.sin(t*.002+i)*.02), W*.10, H*.28); }
+  neonText('EXIT?', W*.68, H*.18, p[4], 22);
+}
+function drawBoardwalk(p){
+  ctx.strokeStyle='#ffffff18'; for(let y=H*.52;y<safeBottom();y+=22){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y+Math.sin(t*.002+y)*8);ctx.stroke(); }
+  neonText('DEAD RADIO PIER', W*.08, H*.18, p[4], 18);
+  for(let i=0;i<5;i++) drawGull(W*(.14+i*.18), H*(.30+Math.sin(t*.002+i)*.04), p[3]);
+}
+function drawArcade(p){
+  for(let i=0;i<5;i++) drawCabinet(W*(.12+i*.18), H*(.35+(i%2)*.14), p[2+i%3]);
+  neonText('BASEMENT ARCADE', W*.07, H*.18, p[2], 17);
+}
+function drawArena(p){
+  ctx.strokeStyle=p[4]+'66'; ctx.lineWidth=4; ctx.beginPath(); ctx.ellipse(W*.5,H*.50,W*.36,H*.22,0,0,TAU); ctx.stroke();
+  for(let i=0;i<7;i++) drawCone(W*(.1+i*.13),H*(.68+Math.sin(i+t*.002)*.03),p[3]);
+}
+function drawNoSafe(p){
+  ctx.strokeStyle='#fff3'; ctx.lineWidth=2;
+  for(let i=0;i<6;i++){ const x=W*(.12+i*.15), y=H*(.28+(i%2)*.16); ctx.strokeRect(x,y,54,45); ctx.strokeRect(x+8,y+8,38,29); }
+  neonText('NO PERFECT MEMORY REQUIRED', W*.08, H*.17, p[2], 14);
+}
+function drawTemple(p){
+  for(let i=0;i<5;i++){ const x=W*(.12+i*.19); ctx.fillStyle='#ffffff12'; ctx.fillRect(x,H*.22,34,H*.58); ctx.strokeStyle=p[2]+'55'; ctx.strokeRect(x,H*.22,34,H*.58); }
+  neonText('UNDERPASS TEMPLE', W*.10, H*.17, p[3], 18);
+}
+function drawDoorArea(p){
+  ctx.fillStyle='#000b'; ctx.fillRect(W*.42,H*.23,W*.26,H*.48); ctx.strokeStyle=p[2]; ctx.lineWidth=4; ctx.strokeRect(W*.42,H*.23,W*.26,H*.48);
+  ctx.fillStyle=p[4]; ctx.beginPath(); ctx.arc(W*.62,H*.48,5,0,TAU); ctx.fill();
+  neonText('THE DOOR DENIES THIS SIGN', W*.06, H*.16, p[3], 14);
+}
+function drawDesk(p){
+  ctx.fillStyle='#382515'; ctx.fillRect(W*.12,H*.54,W*.76,H*.18); ctx.fillStyle='#e9d8ad'; ctx.fillRect(W*.24,H*.34,W*.52,H*.23);
+  ctx.strokeStyle=p[2]; ctx.strokeRect(W*.24,H*.34,W*.52,H*.23);
+  neonText('CREATIVE MODE', W*.12, H*.18, p[2], 23);
+}
+function neonText(txt,x,y,color,size){
+  ctx.save(); ctx.font=`900 ${size}px ui-monospace,monospace`; ctx.shadowColor=color; ctx.shadowBlur=12; ctx.fillStyle=color; ctx.fillText(txt,x,y); ctx.restore();
+}
+function drawPump(x,y,c){ ctx.fillStyle='#111b2f'; ctx.fillRect(x-22,y-40,44,78); ctx.fillStyle=c; ctx.fillRect(x-14,y-32,28,16); ctx.strokeStyle='#fff4'; ctx.strokeRect(x-22,y-40,44,78); }
+function drawCart(x,y,c){ ctx.strokeStyle=c; ctx.lineWidth=2; ctx.strokeRect(x-24,y-18,42,22); ctx.beginPath();ctx.moveTo(x+18,y-18);ctx.lineTo(x+31,y-31);ctx.stroke(); ctx.beginPath();ctx.arc(x-13,y+9,5,0,TAU);ctx.arc(x+13,y+9,5,0,TAU);ctx.stroke(); }
+function drawBooth(x,y,c){ ctx.fillStyle=c+'55'; ctx.fillRect(x-38,y-22,76,44); ctx.fillStyle='#0006'; ctx.fillRect(x-34,y-10,68,20); }
+function drawGull(x,y,c){ ctx.strokeStyle=c; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x-10,y); ctx.quadraticCurveTo(x,y-9,x+10,y); ctx.stroke(); }
+function drawCabinet(x,y,c){ ctx.fillStyle='#090a14'; ctx.fillRect(x-20,y-36,40,72); ctx.strokeStyle=c; ctx.strokeRect(x-20,y-36,40,72); ctx.fillStyle=c+'88'; ctx.fillRect(x-14,y-28,28,20); ctx.fillRect(x-10,y+6,20,4); }
+function drawCone(x,y,c){ ctx.fillStyle=c; ctx.beginPath(); ctx.moveTo(x,y-28);ctx.lineTo(x-18,y+18);ctx.lineTo(x+18,y+18);ctx.closePath();ctx.fill(); ctx.fillStyle='#fff8'; ctx.fillRect(x-10,y+2,20,5); }
+
+function drawWorld(a,p){
+  for(const h of hotspots()){
+    const x=worldX(h.x), y=worldY(h.y); const bob=Math.sin(t*.004 + x)*4;
+    ctx.save(); ctx.translate(x,y+bob);
+    const near = nearby && nearby.id===h.id;
+    ctx.globalAlpha = near ? 1 : .82;
+    if(h.type==='wound') drawWound(h.id,p,near);
+    else if(h.type==='npc') drawNPC(h,p,near);
+    else if(h.type==='portal') drawPortal(h,p,near);
+    else if(h.type==='echo') drawEcho(h,p,near);
+    else if(h.type==='edit') drawEdit(h,p,near);
+    ctx.restore();
+    if(near) label(h.title||h.label||h.id, x, y-42);
+  }
+}
+function drawNPC(h,p,near){
+  ctx.fillStyle=p[2]+'44'; ctx.beginPath(); ctx.arc(0,0,near?25:21,0,TAU); ctx.fill();
+  ctx.strokeStyle=p[2]; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.fillRect(-8,-4,5,5); ctx.fillRect(4,-4,5,5); ctx.fillStyle=p[4]; ctx.fillRect(-10,9,20,3);
+}
+function drawPortal(h,p,near){
+  ctx.strokeStyle=near?p[4]:p[2]; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(0,0,near?28:22,0,TAU); ctx.stroke();
+  ctx.rotate(t*.002); ctx.strokeRect(-14,-14,28,28);
+}
+function drawEcho(h,p,near){
+  ctx.strokeStyle=p[3]+'aa'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,near?22:18,0,TAU); ctx.stroke();
+  ctx.fillStyle=p[3]+'33'; ctx.fill(); ctx.fillStyle='#fff'; ctx.font='18px monospace'; ctx.fillText('✓',-7,7);
+}
+function drawEdit(h,p,near){
+  const edit = S.edits.find(e=>('edit'+S.edits.filter(q=>q.area===S.area).indexOf(e))===h.id) || {g:'✎',c:2};
+  ctx.font=`900 ${near?30:24}px monospace`; ctx.fillStyle=p[edit.c%p.length]; ctx.shadowColor=ctx.fillStyle; ctx.shadowBlur=12; ctx.fillText(edit.g,-10,9); ctx.shadowBlur=0;
+}
+function drawWound(id,p,near){
+  const w=WOUNDS[id]; const r=near?38:32; ctx.save();
+  ctx.shadowColor=p[3]; ctx.shadowBlur=18;
+  if(id==='receipt'){
+    ctx.strokeStyle=p[4]; ctx.lineWidth=5; ctx.beginPath(); for(let i=0;i<9;i++){ ctx.lineTo(Math.sin(i+t*.006)*24, -40+i*10); } ctx.stroke(); ctx.fillStyle='#fff'; ctx.fillRect(-17,-48,34,18);
+  } else if(id==='mirror'){
+    ctx.fillStyle='#05060c'; ctx.fillRect(-24,-42,48,84); ctx.strokeStyle=p[2]; ctx.lineWidth=3; ctx.strokeRect(-24,-42,48,84); ctx.fillStyle=p[3]; ctx.fillRect(-10,-4,20,5);
+  } else if(id==='pothole'){
+    ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(0,0,r*1.25,r*.65,0,0,TAU); ctx.fill(); ctx.strokeStyle=p[4];ctx.stroke(); ctx.fillStyle=p[4]; ctx.fillRect(-15,4,30,4);
+  } else if(id==='fatherdoor'){
+    ctx.fillStyle='#090707'; ctx.fillRect(-28,-55,56,110); ctx.strokeStyle=p[2]; ctx.lineWidth=4; ctx.strokeRect(-28,-55,56,110); ctx.fillStyle=p[4]; ctx.beginPath(); ctx.arc(14,0,4,0,TAU); ctx.fill();
+  } else if(id==='finaldesk'){
+    ctx.fillStyle='#fff'; ctx.fillRect(-32,-20,64,40); ctx.strokeStyle=p[3]; ctx.strokeRect(-32,-20,64,40); ctx.fillStyle='#000'; ctx.fillRect(8,-13,4,26);
+  } else {
+    ctx.fillStyle=p[3]+'aa'; ctx.beginPath(); for(let i=0;i<8;i++){ const ang=i/8*TAU+t*.002; const rr=r*(.75+Math.sin(t*.004+i)*.22); ctx.lineTo(Math.cos(ang)*rr, Math.sin(ang)*rr); } ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=p[4]; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(-8,-4,4,0,TAU); ctx.arc(9,-4,4,0,TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+function label(text,x,y){
+  ctx.save(); ctx.font='900 11px ui-monospace,monospace'; const w=ctx.measureText(text).width+14;
+  ctx.fillStyle='#03050dde'; ctx.strokeStyle='#ffffff30'; roundRect(x-w/2,y-18,w,24,10,true,true);
+  ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.fillText(text,x,y-2); ctx.restore();
+}
+function roundRect(x,y,w,h,r,fill,stroke){
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); if(fill)ctx.fill(); if(stroke)ctx.stroke();
+}
+function drawPlayer(p){
+  const x=worldX(S.player.x), y=worldY(S.player.y); const jitter = S.static>6 ? Math.sin(t*.05)*3 : 0;
+  ctx.save(); ctx.translate(x+jitter,y); ctx.shadowColor=p[2]; ctx.shadowBlur=16;
+  ctx.fillStyle='#111827'; ctx.beginPath(); ctx.arc(0,-16,13,0,TAU); ctx.fill();
+  ctx.fillStyle='#ffd7b3'; ctx.beginPath(); ctx.arc(0,-20,10,0,TAU); ctx.fill();
+  ctx.fillStyle='#2c354f'; ctx.fillRect(-10,-8,20,30);
+  ctx.fillStyle=p[4]; ctx.fillRect(-12,4,24,5);
+  ctx.strokeStyle=p[2]; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-10,2); ctx.lineTo(-22,15+Math.sin(t*.009)*4); ctx.moveTo(10,2); ctx.lineTo(23,9+Math.cos(t*.008)*4); ctx.stroke();
+  ctx.fillStyle='#101010'; ctx.fillRect(-8,-13,16,4); // questionable authority goatee/mouth zone
+  ctx.restore();
+}
+function drawEncounterOverlay(w,p){
+  ctx.save();
+  ctx.fillStyle='#00000055'; ctx.fillRect(0,0,W,H);
+  const x=W*.5, y=H*.34; ctx.translate(x,y);
+  drawWound(S.encounter.id,p,true);
+  ctx.restore();
+  label('ENCOUNTER: '+w.title, W*.5, H*.14);
+  const e=S.encounter;
+  const barW=W*.66, bx=W*.17, by=H*.19;
+  ctx.fillStyle='#0008'; roundRect(bx,by,barW,12,6,true,false);
+  ctx.fillStyle=p[2]; roundRect(bx,by,barW*clamp((e.clarity||0)/6,0,1),12,6,true,false);
+  ctx.fillStyle='#fff'; ctx.font='10px monospace'; ctx.fillText('CLARITY', bx, by-4);
+}
+function drawStatic(){
+  const n = Math.min(260, S.static*28);
+  ctx.save(); ctx.globalAlpha = Math.min(.28, .04+S.static*.025);
+  for(let i=0;i<n;i++){
+    ctx.fillStyle = Math.random()<.5 ? '#fff' : '#39f6d5';
+    ctx.fillRect(Math.random()*W, Math.random()*H, Math.random()*3+1, 1);
+  }
+  if(S.static>7){
+    ctx.globalAlpha=.08; ctx.fillStyle='#ff4fd8'; ctx.fillRect(Math.sin(t*.02)*8,0,W,H);
+  }
+  ctx.restore();
+}
+function updateHUD(){
+  const a=area(); nearby = nearestHotspot();
+  $('areaChip').innerHTML = `<b>${a.short}</b><br><span style="color:#9fb0d0">${nearby ? 'Near: '+(nearby.title||nearby.label) : a.desc.slice(0,54)+'…'}</span>`;
+  $('statChip').innerHTML = `Nerve ${S.nerve}/${S.maxNerve} · Static ${S.static}<br>Luc ${Math.floor(S.lucidity)} Hum ${Math.floor(S.humor)} Comp ${Math.floor(S.compassion)}<br>Rank ${S.authorRank} · Frags ${S.fragments}/7`;
+}
+
+function step(dt){
+  t += dt; pulse *= .98;
+  if(!running){ draw(); requestAnimationFrame(loop); return; }
+  movePlayer(dt);
+  if(S.area===9 && S.resolved.finaldesk && S.creative && Math.random()<.002) toast('Creative Mode active. Rewrite the weird world, Mango.');
+  draw();
+  requestAnimationFrame(loop);
+}
+function loop(now){ const dt = Math.min(32, now-last); last=now; step(dt); }
+requestAnimationFrame(loop);
+function movePlayer(dt){
+  if(S.encounter) return;
+  let vx=0, vy=0;
+  if(keys.ArrowLeft||keys.a) vx-=1; if(keys.ArrowRight||keys.d) vx+=1; if(keys.ArrowUp||keys.w) vy-=1; if(keys.ArrowDown||keys.s) vy+=1;
+  vx += joy.vx; vy += joy.vy;
+  if(targetPoint && Math.abs(vx)+Math.abs(vy)<.1){
+    const px=worldX(S.player.x), py=worldY(S.player.y); const dx=targetPoint.x-px, dy=targetPoint.y-py; const d=Math.hypot(dx,dy);
+    if(d>7){ vx=dx/d; vy=dy/d; } else targetPoint=null;
+  }
+  const mag=Math.hypot(vx,vy); if(mag>1){ vx/=mag; vy/=mag; }
+  if(S.static>6){ vx += Math.sin(t*.019)*.12*S.static; vy += Math.cos(t*.021)*.08*S.static; }
+  const speed = (0.00024 * dt) * (1 + Math.min(.25,S.authorRank*.02));
+  S.player.x = clamp(S.player.x + vx*speed, .06, .94);
+  S.player.y = clamp(S.player.y + vy*speed, .16, safeBottom()/H);
+}
+
+function pointerToLocal(e){ const r=canvas.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
+canvas.addEventListener('pointerdown', e=>{
+  beginAudio();
+  const p=pointerToLocal(e);
+  if(p.y < safeBottom() && !S.encounter){ targetPoint=p; tone(300,.03,'triangle',.012); }
+});
+
+const joyZone = $('joyZone'), joyKnob = $('joyKnob');
+function setJoy(e){
+  const r=joyZone.getBoundingClientRect(); const cx=r.left+r.width/2, cy=r.top+r.height/2;
+  let dx=e.clientX-cx, dy=e.clientY-cy; const max=r.width*.34; const d=Math.hypot(dx,dy)||1;
+  if(d>max){ dx=dx/d*max; dy=dy/d*max; }
+  joy.vx=dx/max; joy.vy=dy/max; joyKnob.style.transform=`translate(${dx}px,${dy}px)`;
+}
+joyZone.addEventListener('pointerdown', e=>{ beginAudio(); joy.active=true; joy.id=e.pointerId; joyZone.setPointerCapture(e.pointerId); setJoy(e); });
+joyZone.addEventListener('pointermove', e=>{ if(joy.active && e.pointerId===joy.id) setJoy(e); });
+function endJoy(e){ if(e.pointerId!==joy.id) return; joy.active=false; joy.vx=joy.vy=0; joyKnob.style.transform='translate(0,0)'; }
+joyZone.addEventListener('pointerup', endJoy); joyZone.addEventListener('pointercancel', endJoy);
+
+addEventListener('keydown', e=>{
+  keys[e.key]=true;
+  if(e.key===' '||e.key==='Enter') interact('observe');
+  if(e.key==='1') interact('observe'); if(e.key==='2') interact('joke'); if(e.key==='3') interact('sketch'); if(e.key==='4') interact('name'); if(e.key==='5') interact('inventory'); if(e.key==='r') interact('refuse'); if(e.key==='e') interact('rewrite');
+});
+addEventListener('keyup', e=>{ keys[e.key]=false; });
+
+$('btnObserve').onclick = ()=>interact('observe');
+$('btnJoke').onclick = ()=>interact('joke');
+$('btnSketch').onclick = ()=>interact('sketch');
+$('btnName').onclick = ()=>interact('name');
+$('btnRefuse').onclick = ()=>interact('refuse');
+$('btnRewrite').onclick = ()=>interact('rewrite');
+$('btnInv').onclick = ()=>interact('inventory');
+$('btnSave').onclick = ()=>interact('save');
+$('newGame').onclick = ()=>{ beginAudio(); reset(); };
+$('continueGame').onclick = ()=>{ beginAudio(); if(load()) startGame(false); else toast('No save found. Reality is blank, unfortunately.'); };
+$('modal').addEventListener('pointerdown', e=>{ if(e.target.id==='modal') closeModal(); });
+
+function drawStartBlink(){ updateButtons(); }
+setInterval(drawStartBlink, 1000);
+
+// Soft area-specific progression nudges.
+setInterval(()=>{
+  if(!running || S.encounter || $('dialogue').style.display==='block' || $('modal').style.display==='flex') return;
+  const a=area();
+  if(a.id==='desk' && S.resolved.finaldesk && S.creative && !S.flags.finalChoiceShown){ S.flags.finalChoiceShown=true; finalChoice(); }
+  if(a.safe && S.static>0 && Math.random()<.25){ S.static=Math.max(0,S.static-1); save(true); }
+}, 2800);
+
+// Load state availability without auto-starting.
+if(localStorage.getItem(KEY)) $('continueGame').disabled = false; else $('continueGame').disabled = true;
+
+})();
+</script>
+</body>
+</html>
