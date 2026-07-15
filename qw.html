@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f5f2eb" />
+  <title>Quiet Writer</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f2eb;
+      --paper: #fffdf8;
+      --text: #242321;
+      --muted: #8a857d;
+      --border: rgba(36, 35, 33, 0.12);
+      --button: rgba(36, 35, 33, 0.06);
+      --shadow: 0 18px 60px rgba(35, 31, 24, 0.08);
+      --width: 780px;
+      --font-size: 20px;
+      --line-height: 1.75;
+    }
+
+    body.dark {
+      color-scheme: dark;
+      --bg: #161616;
+      --paper: #1d1d1d;
+      --text: #e8e5df;
+      --muted: #918d86;
+      --border: rgba(255, 255, 255, 0.1);
+      --button: rgba(255, 255, 255, 0.07);
+      --shadow: none;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, "Times New Roman", serif;
+      transition: background 180ms ease, color 180ms ease;
+    }
+
+    .app {
+      min-height: 100vh;
+      padding: 28px 18px 70px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 14px;
+      z-index: 10;
+      width: min(var(--width), 100%);
+      margin: 0 auto 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      opacity: 0.25;
+      transition: opacity 160ms ease;
+    }
+
+    .toolbar:hover,
+    .toolbar:focus-within {
+      opacity: 1;
+    }
+
+    .status {
+      min-width: 130px;
+      color: var(--muted);
+      font: 13px/1.4 system-ui, sans-serif;
+      letter-spacing: 0.02em;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--button);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: 13px/1 system-ui, sans-serif;
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .page {
+      width: min(var(--width), 100%);
+      min-height: calc(100vh - 130px);
+      margin: 0 auto;
+      padding: clamp(34px, 6vw, 72px);
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    #title,
+    #editor {
+      display: block;
+      width: 100%;
+      border: 0;
+      outline: 0;
+      resize: none;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+    }
+
+    #title {
+      margin: 0 0 28px;
+      overflow: hidden;
+      font-size: clamp(30px, 5vw, 48px);
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    #title::placeholder,
+    #editor::placeholder {
+      color: var(--muted);
+      opacity: 0.72;
+    }
+
+    #editor {
+      min-height: calc(100vh - 320px);
+      overflow: hidden;
+      font-size: var(--font-size);
+      line-height: var(--line-height);
+      letter-spacing: 0.005em;
+    }
+
+    .focus .toolbar {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .focus .page {
+      border-color: transparent;
+      box-shadow: none;
+      background: transparent;
+    }
+
+    @media (max-width: 640px) {
+      .app {
+        padding: 10px 10px 50px;
+      }
+
+      .toolbar {
+        top: 8px;
+        margin-bottom: 8px;
+      }
+
+      .status {
+        min-width: 0;
+      }
+
+      .page {
+        min-height: calc(100vh - 82px);
+        padding: 28px 22px;
+        border-radius: 14px;
+      }
+
+      #editor {
+        min-height: calc(100vh - 230px);
+      }
+
+      button {
+        padding: 8px 10px;
+      }
+    }
+
+    @media print {
+      body {
+        background: white;
+      }
+
+      .toolbar {
+        display: none;
+      }
+
+      .app {
+        padding: 0;
+      }
+
+      .page {
+        width: 100%;
+        min-height: auto;
+        padding: 0;
+        border: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <header class="toolbar">
+      <div class="status" id="status">Saved locally</div>
+      <div class="controls">
+        <button id="focusBtn" type="button" title="Focus mode (Ctrl/Cmd + Shift + F)">Focus</button>
+        <button id="themeBtn" type="button" title="Toggle dark mode">Dark</button>
+        <button id="exportBtn" type="button" title="Download as a text file">Export</button>
+      </div>
+    </header>
+
+    <section class="page">
+      <textarea id="title" rows="1" spellcheck="true" placeholder="Untitled"></textarea>
+      <textarea id="editor" spellcheck="true" autofocus placeholder="Start writing..."></textarea>
+    </section>
+  </main>
+
+  <script>
+    const title = document.getElementById("title");
+    const editor = document.getElementById("editor");
+    const status = document.getElementById("status");
+    const app = document.getElementById("app");
+    const focusBtn = document.getElementById("focusBtn");
+    const themeBtn = document.getElementById("themeBtn");
+    const exportBtn = document.getElementById("exportBtn");
+
+    const STORAGE_KEY = "quiet-writer-document";
+    const THEME_KEY = "quiet-writer-theme";
+
+    let saveTimer;
+
+    function resizeTextarea(element) {
+      element.style.height = "auto";
+      element.style.height = `${element.scrollHeight}px`;
+    }
+
+    function countWords(text) {
+      const cleaned = text.trim();
+      return cleaned ? cleaned.split(/\s+/).length : 0;
+    }
+
+    function updateStatus(message) {
+      if (message) {
+        status.textContent = message;
+        return;
+      }
+
+      const words = countWords(editor.value);
+      const characters = editor.value.length;
+      status.textContent = `${words} ${words === 1 ? "word" : "words"} · ${characters} chars`;
+    }
+
+    function saveDocument() {
+      const documentData = {
+        title: title.value,
+        text: editor.value,
+        updatedAt: Date.now()
+      };
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(documentData));
+      updateStatus("Saved locally");
+
+      window.setTimeout(() => updateStatus(), 700);
+    }
+
+    function scheduleSave() {
+      updateStatus("Saving...");
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(saveDocument, 350);
+    }
+
+    function loadDocument() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+
+        if (saved) {
+          title.value = saved.title || "";
+          editor.value = saved.text || "";
+        }
+      } catch (error) {
+        console.warn("Could not load saved writing:", error);
+      }
+
+      resizeTextarea(title);
+      resizeTextarea(editor);
+      updateStatus();
+    }
+
+    function applyTheme(theme) {
+      const dark = theme === "dark";
+      document.body.classList.toggle("dark", dark);
+      themeBtn.textContent = dark ? "Light" : "Dark";
+      localStorage.setItem(THEME_KEY, theme);
+    }
+
+    function toggleTheme() {
+      applyTheme(document.body.classList.contains("dark") ? "light" : "dark");
+    }
+
+    function toggleFocus() {
+      app.classList.toggle("focus");
+      focusBtn.textContent = app.classList.contains("focus") ? "Exit Focus" : "Focus";
+    }
+
+    function exportText() {
+      const safeTitle = (title.value.trim() || "untitled")
+        .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "")
+        .slice(0, 80);
+
+      const content = title.value.trim()
+        ? `${title.value.trim()}\n\n${editor.value}`
+        : editor.value;
+
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `${safeTitle}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      URL.revokeObjectURL(url);
+      updateStatus("Exported");
+      window.setTimeout(() => updateStatus(), 700);
+    }
+
+    function handleInput(event) {
+      resizeTextarea(event.target);
+      updateStatus();
+      scheduleSave();
+    }
+
+    title.addEventListener("input", handleInput);
+    editor.addEventListener("input", handleInput);
+    focusBtn.addEventListener("click", toggleFocus);
+    themeBtn.addEventListener("click", toggleTheme);
+    exportBtn.addEventListener("click", exportText);
+
+    document.addEventListener("keydown", event => {
+      const modifier = event.ctrlKey || event.metaKey;
+
+      if (modifier && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        saveDocument();
+      }
+
+      if (modifier && event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        toggleFocus();
+      }
+
+      if (event.key === "Escape" && app.classList.contains("focus")) {
+        toggleFocus();
+      }
+    });
+
+    window.addEventListener("beforeunload", saveDocument);
+
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    const preferredTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+
+    applyTheme(savedTheme || preferredTheme);
+    loadDocument();
+  </script>
+</body>
+</html>
