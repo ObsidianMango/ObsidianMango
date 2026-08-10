@@ -1,562 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🎲 d20v7 - True Physics & Framing</title>
-    <style>
-      body {
-        margin: 0;
-        overflow: hidden;
-        background: #050505;
-        font-family: 'Courier New', Courier, monospace;
-        color: #0f0;
-        user-select: none;
-      }
-      
-      #container { width: 100vw; height: 100vh; }
-
-      /* UI Overlay */
-      .ui-layer {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        padding: 30px;
-        box-sizing: border-box;
-      }
-
-      /* Settings Button */
-      #settings-btn {
-        pointer-events: auto;
-        background: rgba(0, 20, 0, 0.8);
-        border: 2px solid #0f0;
-        color: #0f0;
-        font-size: 20px;
-        padding: 12px 24px;
-        cursor: pointer;
-        align-self: flex-end;
-        border-radius: 6px;
-        text-transform: uppercase;
-        font-weight: bold;
-        box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
-        transition: all 0.2s;
-      }
-      #settings-btn:hover { 
-        background: #0f0; 
-        color: #000; 
-      }
-
-      /* Result Display */
-      #result-display {
-        text-align: center;
-        font-size: 56px;
-        font-weight: bold;
-        text-shadow: 0 0 20px #0f0;
-        pointer-events: auto;
-        background: rgba(0, 20, 0, 0.8);
-        padding: 15px 40px;
-        border-radius: 12px;
-        margin-bottom: 20px;
-        align-self: center;
-        border: 1px solid rgba(0, 255, 0, 0.3);
-        transition: transform 0.1s;
-      }
-      #result-display:active { transform: scale(0.95); }
-
-      /* Modal */
-      #settings-modal {
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.9);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
-        pointer-events: auto;
-      }
-      
-      .modal-content {
-        border: 2px solid #0f0;
-        padding: 40px;
-        background: #0a0a0a;
-        text-align: center;
-        box-shadow: 0 0 40px rgba(0, 255, 0, 0.3);
-        border-radius: 10px;
-        max-width: 90%;
-        width: 400px;
-      }
-
-      .btn-row {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
-        margin-top: 15px;
-        margin-bottom: 25px;
-        flex-wrap: wrap;
-      }
-
-      .option-btn {
-        background: transparent;
-        border: 1px solid #0f0;
-        color: #0f0;
-        padding: 10px 15px;
-        font-size: 18px;
-        cursor: pointer;
-        transition: 0.2s;
-        border-radius: 4px;
-        flex: 1;
-        min-width: 50px;
-      }
-      .option-btn:hover, .option-btn.active {
-        background: #0f0;
-        color: #000;
-        box-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
-        font-weight: bold;
-      }
-      
-      h2 { margin-top: 0; text-shadow: 0 0 10px #0f0; font-size: 32px;}
-      p { margin: 0; font-size: 14px; opacity: 0.7; letter-spacing: 2px; }
-    </style>
-  </head>
-  <body>
-    <div id="container"></div>
-
-    <div class="ui-layer">
-      <button id="settings-btn">⚙️ OPTIONS</button>
-      <div id="result-display">CLICK TO ROLL</div>
-    </div>
-
-    <div id="settings-modal">
-      <div class="modal-content">
-        <h2>CONFIG</h2>
-        
-        <p>TYPE</p>
-        <div class="btn-row" id="type-row">
-          <button class="option-btn" data-type="d4">D4</button>
-          <button class="option-btn" data-type="d6">D6</button>
-          <button class="option-btn" data-type="d8">D8</button>
-          <button class="option-btn" data-type="d12">D12</button>
-          <button class="option-btn active" data-type="d20">D20</button>
-        </div>
-
-        <p>COUNT</p>
-        <div class="btn-row" id="count-row">
-          <button class="option-btn active" data-count="1">1</button>
-          <button class="option-btn" data-count="2">2</button>
-          <button class="option-btn" data-count="3">3</button>
-          <button class="option-btn" data-count="4">4</button>
-          <button class="option-btn" data-count="5">5</button>
-        </div>
-        
-        <button class="option-btn" id="close-modal" style="width: 100%; margin-top: 10px;">DONE</button>
-      </div>
-    </div>
-
-    <script type="module">
-      import * as THREE from "https://unpkg.com/three@0.152.2/build/three.module.js";
-
-      const CONFIG = {
-        bg: 0x050505,
-        diceColor: 0x151515,
-        lineColor: 0x00ff00, 
-        textColor: "#00ff00",
-        rollTime: 1800 
-      };
-
-      let scene, camera, renderer;
-      let diceObjects = []; 
-      let isRolling = false;
-      let currentType = "d20";
-      let currentCount = 1;
-
-      function init() {
-        const container = document.getElementById("container");
-        
-        scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(CONFIG.bg, 0.015);
-
-        // Camera defaults - will be updated dynamically based on dice count
-        camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
-        
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(CONFIG.bg);
-        container.appendChild(renderer.domElement);
-
-        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambient);
-
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(5, 15, 5);
-        scene.add(dirLight);
-
-        const grid = new THREE.GridHelper(50, 50, 0x003300, 0x111111);
-        grid.position.y = 0;
-        scene.add(grid);
-
-        window.addEventListener("resize", onResize);
-        container.addEventListener("click", () => { if(!isRolling) rollDice(); });
-        
-        setupUI();
-        updateCameraAndSpacing();
-        spawnDice(); 
-        animate();
-      }
-
-      // Dynamically moves camera back based on how many dice there are
-      function updateCameraAndSpacing() {
-        // Much steeper overhead angle so numbers face directly up at you
-        const yPos = 16 + (currentCount * 2);
-        const zPos = 6 + (currentCount * 1.5);
-        camera.position.set(0, yPos, zPos);
-        camera.lookAt(0, 0, 0);
-      }
-
-      function onResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      }
-
-      function animate() {
-        requestAnimationFrame(animate);
-        renderer.render(scene, camera);
-      }
-
-      function setupUI() {
-        const modal = document.getElementById("settings-modal");
-        
-        document.getElementById("settings-btn").onclick = (e) => {
-          e.stopPropagation();
-          modal.style.display = "flex";
-        };
-        document.getElementById("close-modal").onclick = (e) => {
-          e.stopPropagation();
-          modal.style.display = "none";
-        };
-
-        document.querySelectorAll("#type-row .option-btn").forEach(btn => {
-          btn.onclick = (e) => {
-            e.stopPropagation();
-            document.querySelectorAll("#type-row .option-btn").forEach(b=>b.classList.remove("active"));
-            e.target.classList.add("active");
-            currentType = e.target.dataset.type;
-            updateCameraAndSpacing();
-            spawnDice();
-          };
-        });
-
-        document.querySelectorAll("#count-row .option-btn").forEach(btn => {
-          btn.onclick = (e) => {
-            e.stopPropagation();
-            document.querySelectorAll("#count-row .option-btn").forEach(b=>b.classList.remove("active"));
-            e.target.classList.add("active");
-            currentCount = parseInt(e.target.dataset.count);
-            updateCameraAndSpacing();
-            spawnDice();
-          };
-        });
-      }
-
-      function getGeometry(type) {
-        switch (type) {
-          case "d4": return new THREE.TetrahedronGeometry(1.5, 0);
-          case "d6": return new THREE.BoxGeometry(2, 2, 2);
-          case "d8": return new THREE.OctahedronGeometry(1.5, 0);
-          case "d12": return new THREE.DodecahedronGeometry(1.5, 0);
-          case "d20": default: return new THREE.IcosahedronGeometry(1.5, 0);
-        }
-      }
-
-      function getTrisPerFace(type) {
-        if (type === "d6") return 2;
-        if (type === "d12") return 3;
-        return 1;
-      }
-      
-      function getMaxFaces(type) {
-          return parseInt(type.replace('d', ''));
-      }
-
-      function createDiceMesh() {
-        const geo = getGeometry(currentType);
-        const mat = new THREE.MeshStandardMaterial({ 
-          color: CONFIG.diceColor,
-          roughness: 0.3,
-          metalness: 0.6,
-          polygonOffset: true,
-          polygonOffsetFactor: 1,
-          polygonOffsetUnits: 1
-        });
-        const mesh = new THREE.Mesh(geo, mat);
-
-        const edges = new THREE.EdgesGeometry(geo);
-        const lineMat = new THREE.LineBasicMaterial({ color: CONFIG.lineColor });
-        const lines = new THREE.LineSegments(edges, lineMat);
-        mesh.add(lines);
-
-        addNumbers(mesh);
-        return mesh;
-      }
-
-      function addNumbers(mesh) {
-        const geometry = mesh.geometry;
-        if (!geometry.index) {
-          const pos = geometry.attributes.position;
-          const idx = [];
-          for(let i=0; i<pos.count; i++) idx.push(i);
-          geometry.setIndex(idx);
-        }
-
-        const indices = geometry.index.array;
-        const posAttr = geometry.attributes.position;
-        const trisPerFace = getTrisPerFace(currentType);
-        
-        let number = 1;
-        
-        for (let i = 0; i < indices.length; i += (3 * trisPerFace)) {
-          let center = new THREE.Vector3();
-          let normalSum = new THREE.Vector3();
-
-          for (let t = 0; t < trisPerFace; t++) {
-            const idxOffset = i + (t * 3);
-            const a = indices[idxOffset];
-            const b = indices[idxOffset+1];
-            const c = indices[idxOffset+2];
-
-            const vA = new THREE.Vector3().fromBufferAttribute(posAttr, a);
-            const vB = new THREE.Vector3().fromBufferAttribute(posAttr, b);
-            const vC = new THREE.Vector3().fromBufferAttribute(posAttr, c);
-
-            center.add(vA).add(vB).add(vC);
-
-            const edge1 = new THREE.Vector3().subVectors(vB, vA);
-            const edge2 = new THREE.Vector3().subVectors(vC, vA);
-            normalSum.add(new THREE.Vector3().crossVectors(edge1, edge2).normalize());
-          }
-
-          center.divideScalar(trisPerFace * 3);
-          const normal = normalSum.normalize();
-
-          const label = createLabel(number.toString());
-          label.position.copy(center.add(normal.multiplyScalar(0.01))); 
-          label.lookAt(center.clone().add(normal));
-          
-          label.userData = { 
-              isLabel: true, 
-              value: number,
-              localNormal: normal.clone() 
-          };
-          
-          mesh.add(label);
-          number++;
-        }
-      }
-
-      function createLabel(text) {
-        const canvas = document.createElement("canvas");
-        canvas.width = 256; 
-        canvas.height = 256;
-        const ctx = canvas.getContext("2d");
-        
-        ctx.fillStyle = CONFIG.textColor;
-        ctx.font = "bold 150px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(text, 128, 128);
-
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-        
-        const mat = new THREE.MeshBasicMaterial({
-          map: tex,
-          transparent: true,
-          side: THREE.DoubleSide,
-          depthWrite: false
-        });
-
-        return new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), mat);
-      }
-
-      function spawnDice() {
-        diceObjects.forEach(d => scene.remove(d.mesh));
-        diceObjects = [];
-        
-        const spacing = currentType === "d12" || currentType === "d20" ? 4 : 3.5;
-        const startX = -((currentCount - 1) * spacing) / 2;
-
-        for (let i = 0; i < currentCount; i++) {
-          const mesh = createDiceMesh();
-          const x = startX + i * spacing;
-          
-          mesh.position.set(x, 1.5, 0); 
-          mesh.rotation.set(Math.random()*6, Math.random()*6, Math.random()*6);
-          
-          scene.add(mesh);
-          diceObjects.push({
-            mesh: mesh,
-            homePos: new THREE.Vector3(x, 1.5, 0) // Y=1.5 is the resting radius
-          });
-        }
-        document.getElementById("result-display").innerText = "CLICK TO ROLL";
-        document.getElementById("result-display").style.color = CONFIG.textColor;
-      }
-
-      // Calculate perfect parabolic arcs for bouncing
-      function getBounceHeight(t) {
-        function parabola(t, start, end, height) {
-            const mid = (start + end) / 2;
-            const normalized = (t - mid) / ((end - start) / 2);
-            return (1 - normalized * normalized) * height;
-        }
-
-        // 4 distinct physical phases: Initial throw, Bounce 1, Bounce 2, Settle
-        if (t < 0.45) return parabola(t, 0, 0.45, 12);     // Big throw
-        if (t < 0.70) return parabola(t, 0.45, 0.70, 4);   // First bounce
-        if (t < 0.88) return parabola(t, 0.70, 0.88, 1.5); // Second bounce
-        if (t < 1.00) return parabola(t, 0.88, 1.00, 0.3); // Final tiny settling hop
-        return 0;
-      }
-
-      function rollDice() {
-        if (isRolling) return;
-        isRolling = true;
-        document.getElementById("result-display").innerText = "...";
-        document.getElementById("result-display").style.color = CONFIG.textColor;
-
-        diceObjects.forEach(d => {
-            d.mesh.children.forEach(c => {
-                if(c.userData.isLabel) {
-                    c.material.color.setHex(0xffffff);
-                    c.scale.set(1, 1, 1);
-                }
-            });
-        });
-
-        const maxFaces = getMaxFaces(currentType);
-
-        diceObjects.forEach(d => {
-            d.resultValue = Math.floor(Math.random() * maxFaces) + 1;
-            
-            const winningLabel = d.mesh.children.find(c => c.userData.value === d.resultValue);
-            const normal = winningLabel.userData.localNormal;
-            
-            // Align winning face perfectly up (+Y)
-            const upVector = new THREE.Vector3(0, 1, 0);
-            const alignQuat = new THREE.Quaternion().setFromUnitVectors(normal, upVector);
-            
-            // Random yaw so it doesn't look like a cloned animation
-            const randomYaw = new THREE.Quaternion().setFromAxisAngle(upVector, Math.random() * Math.PI * 2);
-            d.targetQuat = randomYaw.multiply(alignQuat);
-
-            d.startPos = d.mesh.position.clone();
-            d.startPos.set(d.homePos.x + (Math.random()-0.5)*4, 1.5, (Math.random()-0.5)*6 - 8);
-            
-            d.spinAxis = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize();
-        });
-
-        const startTime = performance.now();
-
-        function loop() {
-          const now = performance.now();
-          const elapsed = now - startTime;
-          let t = elapsed / CONFIG.rollTime;
-          
-          if (t >= 1) {
-            isRolling = false;
-            finalize();
-            return; 
-          }
-
-          // Lateral friction: slows down as it gets closer to settling
-          const lateralEase = 1 - Math.pow(1 - t, 1.8);
-          const currentHeight = getBounceHeight(t);
-
-          diceObjects.forEach(d => {
-            d.mesh.position.x = THREE.MathUtils.lerp(d.startPos.x, d.homePos.x, lateralEase);
-            d.mesh.position.z = THREE.MathUtils.lerp(d.startPos.z, d.homePos.z, lateralEase);
-            d.mesh.position.y = d.homePos.y + currentHeight;
-
-            // Spin math: heavily tied to the bounces, snapping to 0 at the very end
-            const spinAmount = Math.pow(1 - t, 2) * Math.PI * 18;
-            const spinQuat = new THREE.Quaternion().setFromAxisAngle(d.spinAxis, spinAmount);
-            
-            const currentQuat = d.targetQuat.clone().multiply(spinQuat);
-            d.mesh.quaternion.copy(currentQuat);
-          });
-          
-          requestAnimationFrame(loop);
-        }
-        loop();
-      }
-
-      function finalize() {
-        diceObjects.forEach(d => {
-          d.mesh.position.copy(d.homePos);
-          d.mesh.quaternion.copy(d.targetQuat);
-        });
-        calculateResults();
-      }
-
-      function calculateResults() {
-        const results = diceObjects.map(d => d.resultValue);
-        
-        diceObjects.forEach(d => {
-          d.mesh.children.forEach(c => {
-             if(c.userData.value === d.resultValue) {
-                 c.material.color.setHex(0xffffff); 
-                 c.scale.set(1.4, 1.4, 1.4);
-             }
-          });
-        });
-
-        const sum = results.reduce((a,b)=>a+b, 0);
-        const display = document.getElementById("result-display");
-        display.innerText = results.length > 1 ? `${results.join(" + ")} = ${sum}` : `${sum}`;
-          
-        if (currentType === "d20" && currentCount === 1) {
-            if(sum === 20) {
-                flash(0x00ff00);
-                display.style.color = "#fff";
-                display.innerText = "CRIT! 20";
-            }
-            if(sum === 1) {
-                flash(0xff0000);
-                display.style.color = "#ff0000";
-                display.innerText = "FAIL! 1";
-            }
-        }
-      }
-      
-      function flash(colorHex) {
-          const div = document.createElement("div");
-          div.style.position = "fixed";
-          div.style.top = 0; div.style.left = 0;
-          div.style.width = "100%"; div.style.height = "100%";
-          div.style.background = "#" + new THREE.Color(colorHex).getHexString();
-          div.style.opacity = 0.4;
-          div.style.pointerEvents = "none";
-          div.style.zIndex = 999;
-          document.body.appendChild(div);
-          
-          let op = 0.4;
-          const timer = setInterval(() => {
-              op -= 0.02;
-              div.style.opacity = op;
-              if(op <= 0) {
-                  clearInterval(timer);
-                  div.remove();
-              }
-          }, 30);
-      }
-
-      init();
-    </script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#050807">
+<title>Poly Roller v2</title>
+<style>
+:root{--a:#43ffc3;--bg:#050807;--text:#eafff8;--muted:#80a99b;--danger:#ff4f67}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}body:before{content:"";position:fixed;inset:0;z-index:2;pointer-events:none;background:radial-gradient(circle at 50% 40%,rgba(67,255,195,.09),transparent 35%),radial-gradient(circle at 50% 110%,rgba(67,255,195,.07),transparent 40%)}#container{position:fixed;inset:0;cursor:pointer}.ui{position:fixed;inset:0;z-index:10;pointer-events:none;display:grid;grid-template-rows:auto 1fr auto;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}.top{display:flex;align-items:center;justify-content:space-between}.brand{display:flex;align-items:center;gap:10px}.dot{width:10px;height:10px;border-radius:50%;background:var(--a);box-shadow:0 0 18px var(--a)}.brand strong{display:block;font-size:13px;letter-spacing:.16em}.brand small{display:block;margin-top:4px;color:var(--muted);font-size:10px;letter-spacing:.12em}.glass,.opt{appearance:none;border:1px solid rgba(67,255,195,.3);background:rgba(7,16,13,.76);color:var(--text);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:inset 0 1px rgba(255,255,255,.06),0 14px 40px rgba(0,0,0,.25);cursor:pointer}.glass:active,.opt:active{transform:scale(.96)}#settings{pointer-events:auto;width:46px;height:46px;border-radius:14px;font-size:18px}.hint{align-self:end;justify-self:center;margin-bottom:10px;color:rgba(225,255,246,.42);font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;transition:opacity .2s}.result-wrap{display:flex;justify-content:center}.result{pointer-events:auto;min-width:min(500px,92vw);max-width:92vw;padding:12px 22px 15px;border:1px solid rgba(67,255,195,.27);border-radius:22px;background:linear-gradient(180deg,rgba(11,22,18,.9),rgba(5,12,10,.84));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:inset 0 1px rgba(255,255,255,.07),0 22px 60px rgba(0,0,0,.34),0 0 38px rgba(67,255,195,.06);text-align:center;cursor:pointer}.result .label{color:var(--muted);font-size:10px;font-weight:850;letter-spacing:.18em;text-transform:uppercase}.result .value{margin-top:2px;font-size:clamp(34px,7vw,58px);font-weight:900;line-height:1;letter-spacing:-.03em;text-shadow:0 0 24px rgba(67,255,195,.18)}.result.rolling{border-color:rgba(67,255,195,.72);box-shadow:0 0 42px rgba(67,255,195,.13),0 22px 60px rgba(0,0,0,.34)}.result.crit{border-color:var(--a);box-shadow:0 0 48px rgba(67,255,195,.22),0 22px 60px rgba(0,0,0,.34)}.result.fail{border-color:rgba(255,79,103,.7);box-shadow:0 0 42px rgba(255,79,103,.18),0 22px 60px rgba(0,0,0,.34)}#modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,5,4,.76);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);pointer-events:auto}#modal.open{display:flex}.panel{width:min(450px,100%);padding:24px;border:1px solid rgba(67,255,195,.3);border-radius:24px;background:linear-gradient(180deg,rgba(11,22,18,.98),rgba(5,12,10,.98));box-shadow:0 30px 90px rgba(0,0,0,.56),0 0 60px rgba(67,255,195,.06)}h2{margin:0 0 5px;font-size:25px}.sub{margin:0 0 24px;color:var(--muted);font-size:12px}.section{margin:0 0 9px;color:var(--muted);font-size:10px;font-weight:850;letter-spacing:.16em;text-transform:uppercase}.row{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-bottom:21px}.opt{height:44px;border-radius:12px;font-size:13px;font-weight:850}.opt:hover,.opt.active{border-color:var(--a);background:rgba(67,255,195,.12);box-shadow:0 0 22px rgba(67,255,195,.08)}#done{width:100%;background:var(--a);border-color:var(--a);color:#04120d}@media(max-width:600px){.brand small{display:none}.panel{padding:20px}.row{gap:5px}.opt{font-size:12px}}
+</style>
+</head>
+<body>
+<div id="container"></div>
+<div class="ui">
+  <div class="top"><div class="brand"><span class="dot"></span><div><strong>POLY ROLLER</strong><small id="mode">D20 · 1 DIE</small></div></div><button class="glass" id="settings" aria-label="Options">⚙</button></div>
+  <div class="hint" id="hint">Tap anywhere to roll</div>
+  <div class="result-wrap"><div class="result" id="result" role="button" tabindex="0" aria-live="polite"><div class="label" id="resultLabel">Ready</div><div class="value" id="resultValue">ROLL</div></div></div>
+</div>
+<div id="modal" aria-hidden="true"><div class="panel"><h2>Dice setup</h2><p class="sub">Pick a die and how many to throw.</p><p class="section">Die type</p><div class="row" id="types"><button class="opt" data-type="d4">D4</button><button class="opt" data-type="d6">D6</button><button class="opt" data-type="d8">D8</button><button class="opt" data-type="d12">D12</button><button class="opt active" data-type="d20">D20</button></div><p class="section">Dice count</p><div class="row" id="counts"><button class="opt active" data-count="1">1</button><button class="opt" data-count="2">2</button><button class="opt" data-count="3">3</button><button class="opt" data-count="4">4</button><button class="opt" data-count="5">5</button></div><button class="opt" id="done">DONE</button></div></div>
+<script type="module">
+import * as THREE from "https://unpkg.com/three@0.152.2/build/three.module.js";
+const C={bg:0x050807,dice:0x111a18,edge:0x43ffc3,text:"#eafff8",roll:1950},UP=new THREE.Vector3(0,1,0),Z=new THREE.Vector3(0,0,1);
+let scene,camera,renderer,dice=[],rolling=false,type="d20",count=1;
+const result=document.getElementById("result"),resultLabel=document.getElementById("resultLabel"),resultValue=document.getElementById("resultValue"),mode=document.getElementById("mode"),hint=document.getElementById("hint"),modal=document.getElementById("modal");
+function init(){
+ const container=document.getElementById("container");scene=new THREE.Scene();scene.background=new THREE.Color(C.bg);scene.fog=new THREE.FogExp2(C.bg,.02);camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.1,100);
+ renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;container.appendChild(renderer.domElement);
+ scene.add(new THREE.HemisphereLight(0xdffff4,0x06100d,1.25));const key=new THREE.DirectionalLight(0xffffff,2.1);key.position.set(6,14,7);key.castShadow=true;key.shadow.mapSize.set(1024,1024);scene.add(key);const rim=new THREE.PointLight(C.edge,9,24,2);rim.position.set(-5,5,-4);scene.add(rim);
+ const floor=new THREE.Mesh(new THREE.PlaneGeometry(50,50),new THREE.ShadowMaterial({color:0,opacity:.4}));floor.rotation.x=-Math.PI/2;floor.position.y=-.03;floor.receiveShadow=true;scene.add(floor);const grid=new THREE.GridHelper(50,50,0x164f40,0x0b201a);grid.material.transparent=true;grid.material.opacity=.42;scene.add(grid);
+ addEventListener("resize",resize);container.addEventListener("click",()=>{if(!rolling&&!modal.classList.contains("open"))roll()});addEventListener("keydown",e=>{if((e.code==="Space"||e.code==="Enter")&&!rolling&&!modal.classList.contains("open")){e.preventDefault();roll()}});ui();cameraFit();spawn();animate();
+}
+function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(innerWidth,innerHeight);cameraFit()}
+function cameraFit(){const portrait=innerHeight>innerWidth,s=Math.max(0,count-1);camera.position.set(0,(portrait?17:15.5)+s*(portrait?1.8:1.05),(portrait?7.7:6.2)+s*.75);camera.lookAt(0,.75,0)}
+function animate(){requestAnimationFrame(animate);renderer.render(scene,camera)}
+function ui(){
+ document.getElementById("settings").onclick=e=>{e.stopPropagation();modal.classList.add("open");modal.setAttribute("aria-hidden","false")};document.getElementById("done").onclick=e=>{e.stopPropagation();closeModal()};modal.onclick=e=>{if(e.target===modal)closeModal()};result.onclick=e=>{e.stopPropagation();if(!rolling)roll()};result.onkeydown=e=>{if((e.code==="Space"||e.code==="Enter")&&!rolling){e.preventDefault();roll()}};
+ document.querySelectorAll("#types .opt").forEach(b=>b.onclick=e=>{e.stopPropagation();document.querySelectorAll("#types .opt").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;cameraFit();spawn()});document.querySelectorAll("#counts .opt").forEach(b=>b.onclick=e=>{e.stopPropagation();document.querySelectorAll("#counts .opt").forEach(x=>x.classList.remove("active"));b.classList.add("active");count=+b.dataset.count;cameraFit();spawn()});
+}
+function closeModal(){modal.classList.remove("open");modal.setAttribute("aria-hidden","true")}
+function geometry(){switch(type){case"d4":return new THREE.TetrahedronGeometry(1.5,0);case"d6":return new THREE.BoxGeometry(2.2,2.2,2.2);case"d8":return new THREE.OctahedronGeometry(1.58,0);case"d12":return new THREE.DodecahedronGeometry(1.6,0);default:return new THREE.IcosahedronGeometry(1.64,0)}}
+function trisPerFace(){return type==="d6"?2:type==="d12"?3:1}function restY(){return type==="d6"?1.12:type==="d4"?1.02:type==="d8"?1.15:1.34}function labelSize(){return type==="d4"?.68:type==="d6"?.82:type==="d8"?.7:type==="d12"?.62:.56}
+function makeDie(){
+ const g=geometry(),m=new THREE.MeshStandardMaterial({color:C.dice,roughness:.2,metalness:.72,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}),mesh=new THREE.Mesh(g,m);mesh.castShadow=true;mesh.receiveShadow=true;const edge=new THREE.LineSegments(new THREE.EdgesGeometry(g,8),new THREE.LineBasicMaterial({color:C.edge,transparent:true,opacity:.84}));edge.userData.edge=true;mesh.add(edge);addNumbers(mesh);return mesh;
+}
+function addNumbers(mesh){
+ const g=mesh.geometry;if(!g.index){const a=[];for(let i=0;i<g.attributes.position.count;i++)a.push(i);g.setIndex(a)}const idx=g.index.array,p=g.attributes.position,tpf=trisPerFace();let n=1;
+ for(let i=0;i<idx.length;i+=3*tpf){let center=new THREE.Vector3(),normal=new THREE.Vector3();for(let t=0;t<tpf;t++){const o=i+t*3,A=new THREE.Vector3().fromBufferAttribute(p,idx[o]),B=new THREE.Vector3().fromBufferAttribute(p,idx[o+1]),D=new THREE.Vector3().fromBufferAttribute(p,idx[o+2]);center.add(A).add(B).add(D);normal.add(new THREE.Vector3().crossVectors(B.clone().sub(A),D.clone().sub(A)).normalize())}center.multiplyScalar(1/(tpf*3));normal.normalize();if(normal.dot(center)<0)normal.negate();const label=makeLabel(String(n));label.position.copy(center.clone().add(normal.clone().multiplyScalar(.018)));label.quaternion.setFromUnitVectors(Z,normal);label.userData={label:true,value:n,normal:normal.clone()};mesh.add(label);n++}
+}
+function makeLabel(text){const c=document.createElement("canvas");c.width=c.height=512;const x=c.getContext("2d"),fs=text.length>1?176:208;x.textAlign="center";x.textBaseline="middle";x.lineJoin="round";x.font=`900 ${fs}px Arial`;x.lineWidth=34;x.strokeStyle="rgba(0,8,6,.96)";x.strokeText(text,256,268);x.fillStyle=C.text;x.fillText(text,256,268);const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),8);return new THREE.Mesh(new THREE.PlaneGeometry(labelSize(),labelSize()),new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide,depthWrite:false,toneMapped:false}))}
+function spawn(){dice.forEach(d=>scene.remove(d.mesh));dice=[];const spacing=(type==="d12"||type==="d20")?3.7:3.35,start=-((count-1)*spacing)/2,y=restY();for(let i=0;i<count;i++){const mesh=makeDie(),x=start+i*spacing;mesh.position.set(x,y,0);mesh.rotation.set(Math.random()*Math.PI,Math.random()*Math.PI,Math.random()*Math.PI);scene.add(mesh);dice.push({mesh,home:new THREE.Vector3(x,y,0)})}mode.textContent=`${type.toUpperCase()} · ${count} ${count===1?"DIE":"DICE"}`;setResult("Ready","ROLL");hint.style.opacity=1}
+function setResult(label,value,state=""){resultLabel.textContent=label;resultValue.textContent=value;resultValue.style.color="";result.classList.remove("rolling","crit","fail");if(state)result.classList.add(state)}
+function resetLabels(){dice.forEach(d=>d.mesh.children.forEach(c=>{if(c.userData.label){c.material.color.set(0xffffff);c.material.opacity=.95;c.scale.setScalar(1)}}))}
+function bounce(t){const p=(t,a,b,h)=>{const m=(a+b)/2,q=(t-m)/((b-a)/2);return Math.max(0,(1-q*q)*h)};if(t<.43)return p(t,0,.43,9.5);if(t<.69)return p(t,.43,.69,3.1);if(t<.87)return p(t,.69,.87,1);if(t<1)return p(t,.87,1,.22);return 0}
+function randAxis(){const v=new THREE.Vector3(Math.random()-.5,Math.random()-.5,Math.random()-.5);return v.lengthSq()>.0001?v.normalize():new THREE.Vector3(1,0,0)}
+function roll(){
+ if(rolling||!dice.length)return;rolling=true;hint.style.opacity=0;resetLabels();setResult("Rolling","•••","rolling");dice.forEach(d=>{const labels=d.mesh.children.filter(c=>c.userData.label),target=labels[Math.floor(Math.random()*labels.length)],align=new THREE.Quaternion().setFromUnitVectors(target.userData.normal.clone().normalize(),UP),yaw=new THREE.Quaternion().setFromAxisAngle(UP,Math.random()*Math.PI*2);d.target=yaw.multiply(align);d.start=new THREE.Vector3(d.home.x+(Math.random()-.5)*4.5,d.home.y,-7.5-Math.random()*3.5);d.axis=randAxis();d.angle=Math.PI*(9+Math.random()*5)});const start=performance.now();
+ function frame(now){const t=Math.min(1,(now-start)/C.roll),move=1-Math.pow(1-t,2.1),settle=1-Math.pow(1-t,3.1),h=bounce(t);dice.forEach(d=>{d.mesh.position.x=THREE.MathUtils.lerp(d.start.x,d.home.x,move);d.mesh.position.z=THREE.MathUtils.lerp(d.start.z,d.home.z,move);d.mesh.position.y=d.home.y+h;const tumble=new THREE.Quaternion().setFromAxisAngle(d.axis,(1-settle)*d.angle);d.mesh.quaternion.copy(d.target.clone().multiply(tumble))});if(t<1)requestAnimationFrame(frame);else finish()}
+ requestAnimationFrame(frame)
+}
+function topFace(d){let best=null,dot=-Infinity;d.mesh.children.forEach(c=>{if(!c.userData.label)return;const world=c.userData.normal.clone().applyQuaternion(d.mesh.quaternion).normalize(),score=world.dot(UP);if(score>dot){dot=score;best={value:c.userData.value,label:c,score}}});return best}
+function finish(){
+ dice.forEach(d=>{d.mesh.position.copy(d.home);d.mesh.quaternion.copy(d.target)});const faces=dice.map(topFace),values=faces.map(f=>f.value);faces.forEach(f=>{f.label.material.color.set(0xffffff);f.label.material.opacity=1;f.label.scale.setScalar(1.38)});const sum=values.reduce((a,b)=>a+b,0),single=type==="d20"&&count===1;if(single&&sum===20){setResult("Natural twenty","20","crit");flash("#43ffc3",.28)}else if(single&&sum===1){setResult("Natural one","1","fail");resultValue.style.color="var(--danger)";flash("#ff4f67",.2)}else if(values.length>1)setResult(`${type.toUpperCase()} · TOTAL`,`${values.join(" + ")} = ${sum}`);else setResult(`${type.toUpperCase()} · LANDED`,String(sum));rolling=false
+}
+function flash(color,opacity){const d=document.createElement("div");Object.assign(d.style,{position:"fixed",inset:0,zIndex:999,background:color,opacity,pointerEvents:"none",transition:"opacity .5s ease-out"});document.body.appendChild(d);requestAnimationFrame(()=>d.style.opacity=0);setTimeout(()=>d.remove(),540)}
+init();
+</script>
+</body>
 </html>
