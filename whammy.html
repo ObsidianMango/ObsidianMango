@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#050505" />
+<title>WHAMMY! Big Board</title>
+<style>
+  :root{
+    --bg:#060606;
+    --panel:#111;
+    --gold:#ffd447;
+    --red:#ff2b2b;
+    --cyan:#36e7ff;
+    --pink:#ff49c8;
+    --green:#5cff79;
+    --tile-border:#fff8b0;
+    --shadow:0 0 18px rgba(255,212,71,.65), 0 0 42px rgba(255,50,50,.22);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:
+    radial-gradient(circle at 50% 12%,#351700 0,#0a0906 24%,#050505 62%);
+    color:white;font-family:Impact,Haettenschweiler,"Arial Narrow Bold",system-ui,sans-serif;
+    overflow-x:hidden}
+  body{padding:12px 12px 28px}
+  button,input,select,textarea{font:inherit}
+  .wrap{width:min(1100px,100%);margin:auto}
+  .title{
+    text-align:center;letter-spacing:.06em;margin:4px 0 10px;
+    font-size:clamp(30px,6vw,64px);line-height:.9;
+    color:#ffe357;text-shadow:3px 3px 0 #d22,6px 6px 0 #161616,0 0 24px #ff9c00;
+  }
+  .sub{
+    text-align:center;margin:0 0 12px;font:700 13px/1.2 system-ui,sans-serif;
+    color:#ffeec1;letter-spacing:.12em;text-transform:uppercase
+  }
+  .board-shell{
+    background:linear-gradient(#cb2020,#790d0d);
+    padding:10px;border:4px solid #ffd65a;border-radius:18px;
+    box-shadow:0 14px 50px #000, inset 0 0 0 3px #3b0505,0 0 28px rgba(255,198,31,.25);
+  }
+  #board{
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    grid-template-rows:repeat(5,minmax(68px,1fr));
+    gap:6px;
+    aspect-ratio:6/5;
+    min-height:460px;
+    background:#170000;
+    border-radius:10px;
+    padding:6px;
+    position:relative;
+  }
+  .tile{
+    border:3px solid var(--tile-border);
+    background:
+      linear-gradient(145deg,rgba(255,255,255,.15),transparent 32%),
+      linear-gradient(160deg,#104eb2 0 45%,#063370 46% 100%);
+    border-radius:9px;
+    display:flex;align-items:center;justify-content:center;
+    text-align:center;padding:6px;
+    font-size:clamp(14px,2.5vw,28px);
+    line-height:.95;letter-spacing:.02em;
+    text-shadow:2px 2px 0 #000,-1px -1px 0 #000;
+    position:relative;overflow:hidden;
+    box-shadow:inset 0 0 14px rgba(255,255,255,.08),0 0 0 1px #000;
+    user-select:none;
+    transition:transform .08s,filter .08s,box-shadow .08s,border-color .08s;
+  }
+  .tile::after{
+    content:"";position:absolute;inset:3px;border-radius:5px;
+    border:1px dashed rgba(255,255,255,.45);pointer-events:none
+  }
+  .tile.money{background:linear-gradient(145deg,#10702a,#0b4a20 55%,#063818)}
+  .tile.prize{background:linear-gradient(145deg,#5a24b8,#371177 58%,#21094b)}
+  .tile.whammy{background:linear-gradient(145deg,#e62323,#8f0a0a 58%,#520303)}
+  .tile.move{background:linear-gradient(145deg,#ff8d15,#b54205 58%,#6c2400)}
+  .tile.active{
+    z-index:4;transform:scale(1.055);
+    filter:brightness(1.55) saturate(1.25);
+    border-color:white;
+    box-shadow:0 0 5px white,0 0 18px #fff176,0 0 38px #ffae00,inset 0 0 18px rgba(255,255,255,.55)
+  }
+  .tile.landed{animation:land .5s ease 0s 3}
+  @keyframes land{50%{transform:scale(1.09);filter:brightness(1.8)}}
+  #center{
+    grid-column:2/6;grid-row:2/5;
+    border:4px solid #ffe46a;border-radius:14px;
+    background:
+      radial-gradient(circle at 50% 35%,#463102,#0e0800 58%,#030303);
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    text-align:center;padding:16px;position:relative;overflow:hidden;
+    box-shadow:inset 0 0 36px #000,0 0 18px rgba(255,230,90,.45);
+  }
+  #center::before{
+    content:"";position:absolute;inset:-30%;
+    background:repeating-conic-gradient(from 0deg,rgba(255,222,60,.09) 0 7deg,transparent 7deg 15deg);
+    animation:rotate 14s linear infinite
+  }
+  @keyframes rotate{to{transform:rotate(360deg)}}
+  .center-content{position:relative;z-index:2;width:100%}
+  .whammy-word{
+    color:#ff3b2f;font-size:clamp(38px,8vw,90px);line-height:.78;
+    text-shadow:3px 3px 0 #ffe04a,6px 6px 0 #111,0 0 24px #ff0000;
+    transform:skew(-6deg) rotate(-2deg);
+  }
+  #status{
+    margin-top:14px;font:900 clamp(16px,2.2vw,25px)/1.05 system-ui,sans-serif;
+    color:#fff8ca;text-shadow:0 2px 3px #000;min-height:54px;
+    display:flex;align-items:center;justify-content:center
+  }
+  .stats{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+    width:100%;margin-top:14px
+  }
+  .stat{
+    background:#090909;border:2px solid #764f00;border-radius:9px;
+    padding:7px 5px;font-family:system-ui,sans-serif;box-shadow:inset 0 0 10px #000
+  }
+  .stat b{display:block;color:#ffd94f;font-size:clamp(11px,1.7vw,17px);letter-spacing:.06em}
+  .stat span{display:block;font-weight:1000;font-size:clamp(18px,3vw,32px);margin-top:2px}
+  .controls{
+    margin-top:12px;display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:8px
+  }
+  button{
+    border:0;border-radius:12px;padding:13px 10px;cursor:pointer;
+    color:white;background:linear-gradient(#444,#181818);
+    box-shadow:0 5px 0 #000,0 7px 14px rgba(0,0,0,.5);
+    text-transform:uppercase;letter-spacing:.04em
+  }
+  button:active{transform:translateY(3px);box-shadow:0 2px 0 #000}
+  #spinBtn{
+    background:linear-gradient(#ff4537,#b70b00);
+    color:#fffada;font-size:clamp(20px,4vw,36px);
+    text-shadow:2px 2px 0 #750000;
+    border:2px solid #ffd65a;
+  }
+  #spinBtn.running{background:linear-gradient(#ffe55b,#e58c00);color:#310c00}
+  #addSpinBtn{background:linear-gradient(#2296ff,#0c4c9a)}
+  #editBtn{background:linear-gradient(#8b46ff,#43178f)}
+  .help{
+    margin:12px 4px 0;text-align:center;color:#d7c68b;
+    font:700 12px/1.4 system-ui,sans-serif
+  }
+  .modal{
+    position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:100;
+    display:none;align-items:flex-start;justify-content:center;
+    padding:18px;overflow:auto
+  }
+  .modal.open{display:flex}
+  .editor{
+    width:min(920px,100%);background:#131313;border:3px solid #ffd447;border-radius:16px;
+    padding:16px;box-shadow:0 0 50px #000;
+    font-family:system-ui,sans-serif
+  }
+  .editor h2{font-family:Impact,sans-serif;letter-spacing:.06em;color:#ffd447;margin:0 0 4px;font-size:32px}
+  .editor p{margin:0 0 14px;color:#ccc;font-size:13px}
+  .editor-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .row{
+    display:grid;grid-template-columns:42px 1fr 120px 105px;gap:6px;align-items:center;
+    background:#1d1d1d;border-radius:8px;padding:6px
+  }
+  .row .n{text-align:center;color:#ffd447;font-weight:900}
+  input,select,textarea{
+    width:100%;border:1px solid #555;border-radius:7px;background:#080808;color:#fff;
+    padding:9px
+  }
+  .editor-actions{
+    display:flex;flex-wrap:wrap;gap:8px;margin-top:14px
+  }
+  .editor-actions button{font-family:Impact,sans-serif;flex:1;min-width:135px}
+  .danger{background:linear-gradient(#dd3838,#7f1010)}
+  .good{background:linear-gradient(#39a956,#146428)}
+  .gold{background:linear-gradient(#d99d13,#7c4f00)}
+  .jsonbox{margin-top:12px;display:none}
+  .jsonbox.open{display:block}
+  textarea{min-height:150px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  @media(max-width:760px){
+    body{padding:6px 6px 22px}
+    .board-shell{padding:6px;border-width:3px}
+    #board{gap:3px;padding:3px;min-height:390px}
+    .tile{border-width:2px;padding:3px;font-size:clamp(10px,2.9vw,17px)}
+    #center{padding:8px;border-width:3px}
+    .stats{gap:4px;margin-top:8px}
+    .stat{padding:4px 2px}
+    .controls{grid-template-columns:1fr 1fr}
+    #spinBtn{grid-column:1/3}
+    .editor-grid{grid-template-columns:1fr}
+    .row{grid-template-columns:34px 1fr 92px 80px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="title">PRESS YOUR LUCK</div>
+  <div class="sub">Big Bucks • No Whammies • Custom Chaos Edition</div>
+
+  <div class="board-shell">
+    <div id="board">
+      <div id="center">
+        <div class="center-content">
+          <div class="whammy-word">WHAMMY!</div>
+          <div id="status">Add spins, then hit SPIN. Hit it again to STOP.</div>
+          <div class="stats">
+            <div class="stat"><b>BANK</b><span id="bank">$0</span></div>
+            <div class="stat"><b>SPINS</b><span id="spins">0</span></div>
+            <div class="stat"><b>EARNED</b><span id="earned">0</span></div>
+            <div class="stat"><b>WHAMMIES</b><span id="whammies">0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="spinBtn">SPIN</button>
+    <button id="addSpinBtn">+ SPIN</button>
+    <button id="editBtn">EDIT BOARD</button>
+    <button id="resetBtn">RESET GAME</button>
+  </div>
+  <div class="help">Spacebar = spin / stop • Board editor saves automatically on this device.</div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="editor">
+    <h2>BOARD EDITOR</h2>
+    <p>Change every square. “Value” is money won for Money/Prize squares. WHAMMY wipes the bank. Move squares can also award money and/or a spin.</p>
+    <div class="editor-grid" id="editorGrid"></div>
+    <div class="editor-actions">
+      <button class="good" id="saveBtn">SAVE BOARD</button>
+      <button class="gold" id="jsonBtn">JSON IMPORT / EXPORT</button>
+      <button class="danger" id="defaultsBtn">RESTORE DEFAULTS</button>
+      <button id="closeBtn">CLOSE</button>
+    </div>
+    <div class="jsonbox" id="jsonBox">
+      <textarea id="jsonArea"></textarea>
+      <div class="editor-actions">
+        <button class="good" id="applyJsonBtn">APPLY JSON</button>
+        <button id="copyJsonBtn">COPY JSON</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const DEFAULT_BOARD = [
+    {label:"$500",type:"money",value:500,spin:false},
+    {label:"$750 + SPIN",type:"money",value:750,spin:true},
+    {label:"TRIP\\n$1,200",type:"prize",value:1200,spin:false},
+    {label:"WHAMMY!",type:"whammy",value:0,spin:false},
+    {label:"$1,000",type:"money",value:1000,spin:false},
+    {label:"$1,500 + SPIN",type:"money",value:1500,spin:true},
+    {label:"$700",type:"money",value:700,spin:false},
+    {label:"WHAMMY!",type:"whammy",value:0,spin:false},
+    {label:"$2,000",type:"money",value:2000,spin:false},
+    {label:"BIG BUCKS\\n$3,000",type:"money",value:3000,spin:false},
+    {label:"$500 + SPIN",type:"money",value:500,spin:true},
+    {label:"MYSTERY PRIZE\\n$900",type:"prize",value:900,spin:false},
+    {label:"WHAMMY!",type:"whammy",value:0,spin:false},
+    {label:"$1,250",type:"money",value:1250,spin:false},
+    {label:"MOVE 2 SPACES\\n+ $500",type:"move",value:500,spin:false},
+    {label:"$2,500 + SPIN",type:"money",value:2500,spin:true},
+    {label:"$800",type:"money",value:800,spin:false},
+    {label:"WHAMMY!",type:"whammy",value:0,spin:false}
+  ];
+
+  const positions = [
+    [1,1],[1,2],[1,3],[1,4],[1,5],[1,6],
+    [2,6],[3,6],[4,6],[5,6],
+    [5,5],[5,4],[5,3],[5,2],[5,1],
+    [4,1],[3,1],[2,1]
+  ];
+
+  const $ = s => document.querySelector(s);
+  const boardEl = $("#board");
+  const statusEl = $("#status");
+  const bankEl = $("#bank");
+  const spinsEl = $("#spins");
+  const earnedEl = $("#earned");
+  const whammiesEl = $("#whammies");
+  const spinBtn = $("#spinBtn");
+
+  let board = loadBoard();
+  let bank = 0, spins = 0, earned = 0, whammies = 0;
+  let running = false, ticker = null, active = 0, speed = 92;
+  let tiles = [];
+
+  function loadBoard(){
+    try{
+      const saved = JSON.parse(localStorage.getItem("whammyBoardV1"));
+      if(Array.isArray(saved) && saved.length === 18) return saved;
+    }catch(e){}
+    return structuredClone(DEFAULT_BOARD);
+  }
+
+  function money(n){
+    return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(n);
+  }
+
+  function renderBoard(){
+    tiles.forEach(t => t.remove());
+    tiles = board.map((item,i)=>{
+      const d = document.createElement("div");
+      d.className = "tile " + item.type;
+      d.style.gridRow = positions[i][0];
+      d.style.gridColumn = positions[i][1];
+      d.innerHTML = escapeHtml(item.label).replaceAll("\\n","<br>");
+      d.dataset.index = i;
+      boardEl.appendChild(d);
+      return d;
+    });
+    setActive(active);
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+  }
+
+  function setActive(i){
+    tiles.forEach(t=>t.classList.remove("active"));
+    active = (i + tiles.length) % tiles.length;
+    tiles[active]?.classList.add("active");
+  }
+
+  function updateStats(){
+    bankEl.textContent = money(bank);
+    spinsEl.textContent = spins;
+    earnedEl.textContent = earned;
+    whammiesEl.textContent = whammies + "/4";
+  }
+
+  function startSpin(){
+    if(running) return stopSpin();
+    if(spins <= 0){
+      statusEl.textContent = "NO SPINS — hit + SPIN first.";
+      bump(statusEl);
+      return;
+    }
+    if(whammies >= 4){
+      statusEl.textContent = "FOUR WHAMMIES — you're out!";
+      return;
+    }
+
+    spins--;
+    updateStats();
+    running = true;
+    spinBtn.classList.add("running");
+    spinBtn.textContent = "STOP!";
+    statusEl.textContent = "BIG BUCKS... NO WHAMMIES!";
+    speed = 76;
+
+    let step = () => {
+      if(!running) return;
+      setActive(active + 1);
+      clickTone(230 + active * 12, .022);
+      ticker = setTimeout(step, speed);
+    };
+    step();
+  }
+
+  function stopSpin(){
+    if(!running) return;
+    running = false;
+    clearTimeout(ticker);
+    spinBtn.disabled = true;
+    statusEl.textContent = "STOPPING...";
+
+    let hops = 5 + Math.floor(Math.random()*13);
+    let delay = 90;
+
+    const ease = () => {
+      setActive(active + 1);
+      clickTone(300 + active * 14, .025);
+      hops--;
+      delay *= 1.18;
+      if(hops > 0){
+        setTimeout(ease, delay);
+      }else{
+        spinBtn.classList.remove("running");
+        spinBtn.textContent = "SPIN";
+        spinBtn.disabled = false;
+        resolveSquare(active);
+      }
+    };
+    ease();
+  }
+
+  function resolveSquare(i){
+    const item = board[i];
+    const tile = tiles[i];
+    tile.classList.add("landed");
+    setTimeout(()=>tile.classList.remove("landed"),1700);
+
+    if(item.type === "whammy"){
+      whammies++;
+      bank = 0;
+      whammySound();
+      statusEl.textContent = whammies >= 4
+        ? "WHAMMY! Bank wiped — FOUR WHAMMIES, GAME OVER."
+        : "WHAMMY! Your bank just got vaporized.";
+    }else{
+      bank += Number(item.value)||0;
+      if(item.spin){
+        earned++;
+        spins++;
+      }
+      winSound();
+      const extra = item.spin ? " + ONE SPIN!" : "";
+      statusEl.textContent = item.label.replaceAll("\\n"," ") + extra;
+    }
+    updateStats();
+  }
+
+  function bump(el){
+    el.animate([{transform:"scale(1)"},{transform:"scale(1.08)"},{transform:"scale(1)"}],{duration:260});
+  }
+
+  function resetGame(){
+    running = false;
+    clearTimeout(ticker);
+    bank = spins = earned = whammies = 0;
+    active = 0;
+    spinBtn.disabled = false;
+    spinBtn.classList.remove("running");
+    spinBtn.textContent = "SPIN";
+    statusEl.textContent = "Fresh board. Big bucks. Questionable decisions.";
+    setActive(0);
+    updateStats();
+  }
+
+  function audioCtx(){
+    if(!window._ctx) window._ctx = new (window.AudioContext||window.webkitAudioContext)();
+    return window._ctx;
+  }
+  function clickTone(freq=300,d=.03){
+    try{
+      const c=audioCtx(),o=c.createOscillator(),g=c.createGain();
+      o.type="square";o.frequency.value=freq;
+      g.gain.setValueAtTime(.025,c.currentTime);
+      g.gain.exponentialRampToValueAtTime(.001,c.currentTime+d);
+      o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+d);
+    }catch(e){}
+  }
+  function winSound(){
+    [440,554,659,880].forEach((f,i)=>setTimeout(()=>clickTone(f,.11),i*75));
+  }
+  function whammySound(){
+    [160,130,100,72].forEach((f,i)=>setTimeout(()=>clickTone(f,.18),i*95));
+  }
+
+  const modal = $("#modal"), editorGrid = $("#editorGrid");
+  function openEditor(){
+    renderEditor();
+    modal.classList.add("open");
+  }
+  function closeEditor(){ modal.classList.remove("open"); }
+
+  function renderEditor(){
+    editorGrid.innerHTML="";
+    board.forEach((item,i)=>{
+      const row=document.createElement("div");
+      row.className="row";
+      row.innerHTML=`
+        <div class="n">${i+1}</div>
+        <input class="e-label" value="${escapeAttr(item.label)}" aria-label="Label ${i+1}">
+        <select class="e-type" aria-label="Type ${i+1}">
+          <option value="money">Money</option>
+          <option value="prize">Prize</option>
+          <option value="whammy">Whammy</option>
+          <option value="move">Move/Special</option>
+        </select>
+        <input class="e-value" type="number" step="50" value="${Number(item.value)||0}" aria-label="Value ${i+1}">
+      `;
+      row.querySelector(".e-type").value=item.type;
+      if(item.spin) row.querySelector(".e-label").dataset.spin="1";
+      row.title="Tip: put + SPIN anywhere in the label to award a spin.";
+      editorGrid.appendChild(row);
+    });
+  }
+
+  function saveEditor(){
+    const rows=[...editorGrid.querySelectorAll(".row")];
+    board=rows.map(row=>{
+      const label=row.querySelector(".e-label").value.trim() || "$0";
+      const type=row.querySelector(".e-type").value;
+      const value=Number(row.querySelector(".e-value").value)||0;
+      const spin=/\+\s*SPIN/i.test(label);
+      return {label,type,value,spin};
+    });
+    localStorage.setItem("whammyBoardV1",JSON.stringify(board));
+    renderBoard();
+    $("#jsonArea").value=JSON.stringify(board,null,2);
+    statusEl.textContent="Custom board saved.";
+  }
+
+  function escapeAttr(s){
+    return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  $("#spinBtn").addEventListener("click",startSpin);
+  $("#addSpinBtn").addEventListener("click",()=>{
+    spins++; updateStats(); statusEl.textContent="One spin added.";
+  });
+  $("#resetBtn").addEventListener("click",resetGame);
+  $("#editBtn").addEventListener("click",openEditor);
+  $("#closeBtn").addEventListener("click",closeEditor);
+  $("#saveBtn").addEventListener("click",saveEditor);
+
+  $("#defaultsBtn").addEventListener("click",()=>{
+    board=structuredClone(DEFAULT_BOARD);
+    localStorage.removeItem("whammyBoardV1");
+    renderEditor();renderBoard();
+    $("#jsonArea").value=JSON.stringify(board,null,2);
+    statusEl.textContent="Default board restored.";
+  });
+
+  $("#jsonBtn").addEventListener("click",()=>{
+    $("#jsonBox").classList.toggle("open");
+    $("#jsonArea").value=JSON.stringify(board,null,2);
+  });
+
+  $("#applyJsonBtn").addEventListener("click",()=>{
+    try{
+      const x=JSON.parse($("#jsonArea").value);
+      if(!Array.isArray(x)||x.length!==18) throw new Error("Need exactly 18 squares.");
+      board=x.map(o=>({
+        label:String(o.label??"$0"),
+        type:["money","prize","whammy","move"].includes(o.type)?o.type:"money",
+        value:Number(o.value)||0,
+        spin:Boolean(o.spin)||/\+\s*SPIN/i.test(String(o.label))
+      }));
+      localStorage.setItem("whammyBoardV1",JSON.stringify(board));
+      renderBoard();renderEditor();
+      statusEl.textContent="JSON board loaded.";
+    }catch(e){ alert("Could not load board: "+e.message); }
+  });
+
+  $("#copyJsonBtn").addEventListener("click",async()=>{
+    $("#jsonArea").value=JSON.stringify(board,null,2);
+    try{
+      await navigator.clipboard.writeText($("#jsonArea").value);
+      $("#copyJsonBtn").textContent="COPIED";
+      setTimeout(()=>$("#copyJsonBtn").textContent="COPY JSON",900);
+    }catch(e){
+      $("#jsonArea").select();
+      document.execCommand("copy");
+    }
+  });
+
+  modal.addEventListener("click",e=>{ if(e.target===modal) closeEditor(); });
+
+  window.addEventListener("keydown",e=>{
+    if(e.code==="Space" && !modal.classList.contains("open")){
+      e.preventDefault();startSpin();
+    }
+  });
+
+  renderBoard();
+  updateStats();
+})();
+</script>
+</body>
+</html>
