@@ -1,5 +1,14 @@
-const CACHE='custom-luck-v14';
-const CORE=["./","index.html","style.css","script.js","manifest.webmanifest","code/00.txt","code/01.txt","code/02.txt","code/03.txt","code/04.txt","code/05.txt","assets/art/00.b64","assets/art/01.b64","assets/art/02.b64","assets/art/03.b64","assets/art/04.b64","assets/art/05.b64","assets/art/06.b64","assets/art/07.b64","assets/art/08.b64","assets/art/09.b64","assets/art/10.b64","assets/art/11.b64"];
+const CACHE='custom-luck-v17';
+const CORE=['./','index.html','style.css','script.js','manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(caches.match(e.request).then(h=>h||fetch(e.request).then(r=>{const c=r.clone();caches.open(CACHE).then(x=>x.put(e.request,c));return r})))})
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE&&k.startsWith('custom-luck-')).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
+self.addEventListener('fetch',e=>{
+  if(e.request.method!=='GET')return;
+  const u=new URL(e.request.url);
+  const dynamic=/\.(?:html|js|css|txt)$/.test(u.pathname)||u.pathname.endsWith('/whammy/');
+  if(dynamic){
+    e.respondWith(fetch(e.request).then(r=>{const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy));return r;}).catch(()=>caches.match(e.request)));
+  }else{
+    e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request).then(r=>{const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy));return r;})));
+  }
+});
