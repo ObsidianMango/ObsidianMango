@@ -1,0 +1,50 @@
+sound:'boom',frames:[
+      ['point',280,'pose-pop','MAKE A WISH!'],['cake',900,'pose-pop','SURPRISE!','burst'],['shock',430,'pose-shake','FROSTED!']
+    ]},
+    {name:'boxing',sound:'smash',frames:[
+      ['boxing',800,'pose-shake','COME OUT SWINGING!'],['smash',450,'pose-smash','ONE-TWO!','burst',true],['shock',480,'pose-shake','KNOCKOUT!']
+    ]},
+    {name:'fire hose',sound:'zap',frames:[
+      ['firehose',900,'pose-shake','FULL PRESSURE!'],['run',420,'pose-exit','WASHED AWAY!','smoke']
+    ]},
+    {name:'vampire',sound:'zap',frames:[
+      ['vampire',900,'pose-float','COUNT WHAMMY STRIKES!'],['shock',430,'pose-spin','YOUR BANK HAS BEEN DRAINED!']
+    ]},
+    {name:'circus',sound:'cash',frames:[
+      ['ringmaster',850,'pose-pop','WELCOME TO THE BIG TOP!'],['dance',600,'pose-shake','AND NOW... THE WHAMMY!'],['money_rain',500,'pose-exit','THE MONEY DISAPPEARS!','money']
+    ]},
+    {name:'lawn job',sound:'smash',frames:[
+      ['mower',900,'pose-run','MOWING DOWN YOUR TOTAL!'],['shock',430,'pose-shake','SCALPED!','smoke']
+    ]}
+  ];
+
+  const players=[1,2,3].map(i=>({name:`PLAYER ${i}`,bank:0,earned:0,passed:0,whammies:0,out:false}));
+  let board=loadBoard(),activePlayer=0,selector=0,running=false,timer=null,stopping=false,sceneBusy=false,sceneToken=0;
+  const settings=Object.assign({sfx:true,fast:false,tv:true},(()=>{try{return JSON.parse(localStorage.getItem('customLuckSettingsV1'))||{}}catch{return{}}})());
+
+  function loadBoard(){try{const b=JSON.parse(localStorage.getItem('customLuckBoardV3'));if(Array.isArray(b)&&b.length===18)return b}catch{}return structuredClone(defaultBoard)}
+  function saveBoard(){localStorage.setItem('customLuckBoardV3',JSON.stringify(board))}
+
+  const positions=[];
+  for(let i=0;i<6;i++)positions.push({left:18.3+i*10.65,top:2.7,width:10.2,height:13.1});
+  for(let i=0;i<3;i++)positions.push({left:74.3,top:16.7+i*11.35,width:11.0,height:10.7});
+  for(let i=0;i<6;i++)positions.push({left:74.3-i*10.65,top:49.6,width:10.2,height:12.0});
+  for(let i=0;i<3;i++)positions.push({left:13.6,top:39.4-i*11.35,width:11.0,height:10.7});
+
+  function renderBoard(){
+    const layer=$('#boardLayer');layer.innerHTML='';
+    board.forEach((sq,i)=>{
+      const el=document.createElement('div');el.className=`board-tile ${sq.type}`;el.dataset.i=i;
+      Object.assign(el.style,{left:positions[i].left+'%',top:positions[i].top+'%',width:positions[i].width+'%',height:positions[i].height+'%'});
+      const img=document.createElement('div');img.className='tile-art tile-sprite';const pool=tileImages[sq.type]||tileImages.money;sprite(img,'tiles',pool[i%pool.length]);
+      const copy=document.createElement('div');copy.className='tile-copy';copy.textContent=sq.label;
+      el.append(img,copy);layer.appendChild(el);
+    });
+    setSelector(selector);
+  }
+  function setSelector(i){selector=(i+18)%18;document.querySelectorAll('.board-tile').forEach((el,n)=>el.classList.toggle('active',n===selector))}
+
+  function renderPlayers(){
+    const box=$('#players');box.innerHTML='';
+    players.forEach((p,i)=>{const d=document.createElement('div');d.className='player-card'+(i===activePlayer?' current':'')+(p.out?' out':'');d.innerHTML=`<div class="player-name">${p.name}</div><div class="player-bank">${money(p.bank)}</div><div class="player-meta">EARNED ${p.earned} · PASSED ${p.passed} · WHAMMY ${p.whammies}/4</div>`;box.appendChild(d)});
+    const p=players[activePlayer];$('#activeBank').textContent=money(p.bank);$('#activeSpins').textContent=`E ${p.earned} · P ${p.passed}`;$(

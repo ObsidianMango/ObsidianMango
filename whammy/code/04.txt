@@ -1,0 +1,38 @@
+);return}
+    audio();if(p.passed>0)p.passed--;else p.earned--;renderPlayers();running=true;$('#spinSprite').className='button-sprite button-sprite-stop';say('BIG BUCKS','NO WHAMMIES!');
+    const tick=()=>{if(!running)return;setSelector(selector+1);tickSound();timer=setTimeout(tick,settings.fast?44:72)};tick();
+  }
+
+  function stopSpin(){
+    if(!running)return;running=false;clearTimeout(timer);stopping=true;$('#spinBtn').disabled=true;let hops=(settings.fast?5:7)+Math.floor(Math.random()*(settings.fast?7:12)),delay=settings.fast?48:75;
+    const ease=()=>{setSelector(selector+1);tickSound();hops--;delay*=1.13;if(hops>0)setTimeout(ease,delay);else{stopping=false;$('#spinSprite').className='button-sprite button-sprite-spin';resolve(selector)}};ease();
+  }
+
+  async function resolve(i){
+    const sq=board[i],p=players[activePlayer],el=document.querySelector(`.board-tile[data-i="${i}"]`);el.classList.add('hit');setTimeout(()=>el.classList.remove('hit'),1100);
+    if(sq.type==='whammy'){
+      p.bank=0;p.whammies++;if(p.passed>0){p.earned+=p.passed;p.passed=0;}renderPlayers();const seq=sequences[Math.floor(Math.random()*sequences.length)];say('WHAMMY!',`${seq.name.toUpperCase()} — BANK WIPED!`);await playSequence(seq);
+      if(p.whammies>=4){p.out=true;say('FOUR WHAMMIES','YOU ARE OUT');setMascot('shock','pose-shake')}
+    }else{
+      p.bank+=Number(sq.value)||0;if(sq.spin)p.earned++;renderPlayers();winSound();
+      if(sq.type==='prize'){say(sq.label,'PRIZE ADDED!');await playSequence({sound:'cash',frames:[['money_rain',650,'pose-pop','PRIZE!','money'],['dance',480,'pose-shake','BIG BUCKS!']]},{whammy:false})}
+      else if(sq.type==='move'){say(sq.label,sq.spin?'+ ONE SPIN':'SPECIAL');await playSequence({sound:'zap',frames:[['jump',420,'pose-pop','MOVE IT!'],['dance',420,'pose-shake',sq.spin?'+ ONE SPIN!':'SPECIAL']]},{whammy:false})}
+      else {say(sq.label,sq.spin?'+ ONE SPIN!':'BIG BUCKS!');setMascot(sq.spin?'dance':'point',sq.spin?'pose-shake':'pose-pop');await sleep(650);setMascot('idle','pose-pop');sceneBusy=false;$('#spinBtn').disabled=false}
+    }
+    renderPlayers();if(!sceneBusy)$('#spinBtn').disabled=false;
+  }
+
+  function nextPlayer(){
+    if(running||stopping||sceneBusy)return;let start=activePlayer;do{activePlayer=(activePlayer+1)%players.length}while(players[activePlayer].out&&activePlayer!==start);renderPlayers();say(players[activePlayer].name,'YOUR TURN')
+  }
+  function passSpins(){
+    if(running||stopping||sceneBusy)return;const p=players[activePlayer];
+    if(p.passed>0){say('PLAY PASSED SPINS','THEY CANNOT BE RE-PASSED');return}
+    if(p.earned<=0){say('NOTHING TO PASS','NO EARNED SPINS');return}
+    const candidates=players.map((x,i)=>({x,i})).filter(o=>o.i!==activePlayer&&!o.x.out).sort((a,b)=>b.x.bank-a.x.bank);
+    if(!candidates.length)return;const target=candidates[0].i;players[target].passed+=p.earned;const count=p.earned;p.earned=0;activePlayer=target;renderPlayers();say(`${count} SPIN${count===1?'':'S'} PASSED`,`${players[target].name} MUST PLAY`);
+  }
+  function addSpin(){if(running||stopping||sceneBusy)return;players[activePlayer].earned++;renderPlayers();say('+ ONE SPIN','EARNED');tone(620,.08,.025);tone(820,.1,.025,'square',.06)}
+
+  function renderGallery(){
+    const g=$('#animationGallery');g.innerHTML='';gagNames.forEach(name=>{const b=document.createElement('button');b.className='gag-card';b.innerHTML=`<div class="gag-image char-sprite" role="img" aria-label="${gagLabel(name)}"></div><span>${gagLabel(name)}</span>`;sprite(b.qu
