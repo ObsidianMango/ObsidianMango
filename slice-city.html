@@ -12,28 +12,26 @@
     canvas{position:fixed;inset:0;width:100%;height:100%;display:block;background:#000;outline:0;touch-action:none}
     .hint{position:fixed;z-index:2;left:50%;bottom:max(13px,env(safe-area-inset-bottom));translate:-50% 0;padding:6px 9px;border:1px solid #35404a;background:#000b;color:#aeb8c0;font:700 9px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.08em;white-space:nowrap;pointer-events:none;transition:opacity 1.2s}
     .hint.hide{opacity:0}
+    .mobile-hint{display:none}
     .touch{display:none;position:fixed;z-index:3;left:14px;right:14px;bottom:max(14px,env(safe-area-inset-bottom));justify-content:space-between;align-items:flex-end;pointer-events:none}
-    .pad{display:grid;grid-template:42px 42px/42px 42px 42px;grid-template-areas:". up ." "left down right";gap:5px}
-    .pad button:nth-child(1){grid-area:up}.pad button:nth-child(2){grid-area:left}.pad button:nth-child(3){grid-area:down}.pad button:nth-child(4){grid-area:right}
+    .stick{position:relative;width:98px;height:98px;border:1px solid #65727d;border-radius:50%;background:#0008;pointer-events:auto;touch-action:none}
+    .stick::before,.stick::after{content:"";position:absolute;background:#65727d55;pointer-events:none}.stick::before{left:48px;top:10px;width:1px;height:78px}.stick::after{left:10px;top:48px;width:78px;height:1px}
+    .nub{position:absolute;left:31px;top:31px;width:36px;height:36px;border:1px solid #aeb8c0;border-radius:50%;background:#202933cc;pointer-events:none;will-change:transform}
     .touch button{border:1px solid #65727d;color:#dbe3e8;background:#000a;font:700 15px/1 ui-monospace,monospace;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent}
     .touch button:active{background:#dbe3e8;color:#000}
     .run{width:58px;height:58px;border-radius:50%;font-size:8px!important;letter-spacing:.1em}
     @media(max-width:760px){
       .touch{display:flex}
-      .hint{bottom:max(145px,calc(env(safe-area-inset-bottom) + 132px));font-size:7px}
+      .hint{bottom:max(129px,calc(env(safe-area-inset-bottom) + 116px));font-size:7px}
+      .desktop-hint{display:none}.mobile-hint{display:inline}
     }
   </style>
 </head>
 <body>
   <canvas id="city" tabindex="0" aria-label="Explore an infinite ASCII city"></canvas>
-  <div class="hint" id="hint">WASD MOVE · ARROWS LOOK · DRAG LOOK · SHIFT RUN</div>
+  <div class="hint" id="hint"><span class="desktop-hint">WASD MOVE · ARROWS/QE LOOK · DRAG LOOK · SHIFT RUN</span><span class="mobile-hint">LEFT STICK MOVE · SWIPE LOOK · RUN</span></div>
   <div class="touch" aria-label="Touch controls">
-    <div class="pad">
-      <button type="button" data-key="w" aria-label="Move forward">▲</button>
-      <button type="button" data-key="a" aria-label="Move left">◀</button>
-      <button type="button" data-key="s" aria-label="Move backward">▼</button>
-      <button type="button" data-key="d" aria-label="Move right">▶</button>
-    </div>
+    <div class="stick" id="stick" aria-label="Move"><div class="nub" id="nub"></div></div>
     <button type="button" class="run" data-key="shift" aria-label="Run">RUN</button>
   </div>
   <script>
@@ -71,14 +69,20 @@
   const canvas=document.getElementById("city");
   const context=canvas.getContext("2d",{alpha:false});
   const hint=document.getElementById("hint");
+  const stick=document.getElementById("stick");
+  const nub=document.getElementById("nub");
   const keys=new Set();
   const blockCache=new Map();
+  const GLYPHS=Array.from({length:128},(_,index)=>String.fromCharCode(index));
+  const coarsePointer=typeof matchMedia==="function"&&matchMedia("(pointer:coarse)").matches;
 
   const player={
-    x:4.5,
-    y:4.5,
-    yaw:Math.PI/2+.055,
-    pitch:.035
+    x:82.5,
+    y:46.5,
+    yaw:0,
+    pitch:.06,
+    forward:0,
+    strafe:0
   };
 
   let screenWidth=1;
@@ -92,12 +96,28 @@
   let chars=[];
   let colors=new Uint8Array(1);
   let depths=new Float32Array(1);
-  let usedColors=new Set();
+  let candidateColumns=[];
+  let heightSlopes=new Float32Array(1);
+  let depthScales=new Float32Array(1);
+  const hitDistances=new Float32Array(14);
+  const hitFaces=new Uint8Array(14);
+  const hitBuildings=new Array(14);
+  let sceneCache=null;
+  let sceneAnchorX=Infinity;
+  let sceneAnchorY=Infinity;
+  let qualityScale=1;
+  let slowFrames=0;
+  let fastFrames=0;
+  let lastQualityChange=0;
   let lastTick=0;
   let lastPaint=0;
   let activePointer=null;
   let pointerX=0;
   let pointerY=0;
+  let touchForward=0;
+  let touchStrafe=0;
+  let stickPointer=null;
+  let resizeTimer=0;
 
   function mod(value,divisor){
     return ((value%divisor)+divisor)%divisor;
@@ -123,6 +143,9 @@
       height:top,
       theme:mod(theme,THEMES.length),
       seed:seed>>>0,
+      roof:(seed>>>6)%4,
+      facade:(seed>>>10)%4,
+      crown:3+unit(hash3(seed,18,4))*Math.min(13,top*.2),
       sign:(seed&7)===2,
       signZ:4+unit(hash3(seed,9,3))*Math.min(16,top*.38)
     };
@@ -145,7 +168,7 @@
     const core=Math.max(0,1-Math.hypot(coreX,coreY)/8.5);
     const base=18+core*65+unit(hash3(bx,by,92))*15;
     const theme=seed%THEMES.length;
-    const variant=(seed>>>5)%6;
+    const variant=(seed>>>5)%10;
 
     const add=(x0,y0,x1,y1,height,tone,extra)=>{
       structures.push(makeBuilding(ox,oy,x0,y0,x1,y1,height,theme+tone,hash3(bx,by,extra)));
@@ -168,11 +191,28 @@
         add(13,13,34,20.8,base*.65,0,109);
         add(13,22.5,22.4,34,base*1.05,1,110);
         add(24.1,22.5,34,34,base*.82,-1,111);
-      }else{
+      }else if(variant===5){
         add(13,13,22.5,22.5,base*1.15,0,112);
         add(24.2,13,34,26.2,base*.78,1,113);
         add(13,24.2,22.5,34,base*.57,-1,114);
         add(24.2,27.9,34,34,base*.46,2,115);
+      }else if(variant===6){
+        add(13,13,20.6,34,base*1.22,0,116);
+        add(22.6,13,30.2,34,base*.96,2,117);
+        add(32.1,13,34,34,base*.52,-1,118);
+      }else if(variant===7){
+        add(13,13,34,18.8,base*.58,0,119);
+        add(13,20.6,19.4,34,base*.92,-1,120);
+        add(27.6,20.6,34,34,base*1.13,1,121);
+      }else if(variant===8){
+        add(13,13,34,20.2,base*.46,1,122);
+        add(13,22.2,22.2,34,base*1.2,0,123);
+        add(24.3,22.2,34,34,base*.88,-2,124);
+      }else{
+        add(13,13,21.8,21.8,base*.74,0,125);
+        add(24.1,13,34,21.8,base*1.18,1,126);
+        add(13,24.1,21.8,34,base*1.02,-1,127);
+        add(24.1,24.1,34,34,base*.61,2,128);
       }
 
       if((seed&3)!==0){
@@ -181,6 +221,10 @@
       }
       if((seed&15)===3){
         trees.push({x:ox+sideValue(seed),y:oy+10.45,seed:hash3(bx,by,202)});
+      }
+      if((seed&31)===9){
+        trees.push({x:ox+10.45,y:oy+31.2,seed:hash3(bx,by,204)});
+        trees.push({x:ox+29.4,y:oy+10.45,seed:hash3(bx,by,205)});
       }
     }else if(kind==="park"){
       for(let gy=0;gy<3;gy++){
@@ -218,22 +262,26 @@
   function resize(){
     screenWidth=Math.max(1,innerWidth);
     screenHeight=Math.max(1,innerHeight);
-    dpr=Math.min(devicePixelRatio||1,1.75);
+    dpr=Math.min(devicePixelRatio||1,coarsePointer?1.35:1.75);
     canvas.width=Math.round(screenWidth*dpr);
     canvas.height=Math.round(screenHeight*dpr);
     canvas.style.width=screenWidth+"px";
     canvas.style.height=screenHeight+"px";
-    columns=screenWidth<600
+    const baseColumns=screenWidth<600
       ? Math.max(86,Math.min(108,Math.floor(screenWidth/3.8)))
       : Math.max(150,Math.min(240,Math.floor(screenWidth/6.8)));
+    columns=Math.max(coarsePointer?78:132,Math.floor(baseColumns*qualityScale));
     cellWidth=screenWidth/columns;
     cellHeight=cellWidth/.61;
-    rows=Math.max(62,Math.min(142,Math.floor(screenHeight/cellHeight)));
+    rows=Math.max(58,Math.min(coarsePointer?118:142,Math.floor(screenHeight/cellHeight)));
     cellHeight=screenHeight/rows;
-    tanHalfVertical=TAN_HALF_FOV*(screenHeight/screenWidth);
+    tanHalfVertical=TAN_HALF_FOV*Math.max(screenHeight/screenWidth,.78);
     chars=new Array(columns*rows).fill(" ");
     colors=new Uint8Array(columns*rows);
     depths=new Float32Array(columns*rows);
+    candidateColumns=Array.from({length:columns},()=>[]);
+    heightSlopes=new Float32Array(rows);
+    depthScales=new Float32Array(rows);
     context.imageSmoothingEnabled=false;
   }
 
@@ -241,7 +289,6 @@
     chars.fill(" ");
     colors.fill(0);
     depths.fill(Infinity);
-    usedColors.clear();
   }
 
   function put(column,row,char,color,depth){
@@ -253,8 +300,15 @@
       chars[index]=char;
       colors[index]=color;
       depths[index]=depth;
-      usedColors.add(color);
     }
+  }
+
+  function putCode(column,row,style,depth){
+    put(column,row,GLYPHS[style&127],style>>>8,depth);
+  }
+
+  function styleCode(char,color){
+    return (color<<8)|char.charCodeAt(0);
   }
 
   function fadeGroundColor(color,distance){
@@ -262,6 +316,93 @@
     if(color>=8&&color<=37)return THEMES[((color-8)/3)|0][distance>132?0:1];
     if(distance>138)return Math.min(color,2);
     return Math.min(color,4);
+  }
+
+  function currentWeather(time){
+    return Math.floor(time/48)%5;
+  }
+
+  function renderSky(time,weather,cosPitch,sinPitch){
+    const sunWave=Math.sin(time*.0105+.65);
+    const daylight=Math.max(0,sunWave);
+    const drift=Math.floor(time*1.25);
+
+    for(let column=0;column<columns;column++){
+      const displayX=(column+.5)/columns*2-1;
+      const curve=BARREL*.20*displayX*displayX;
+      const horizon=Math.max(0,Math.min(rows,Math.floor((Math.tan(player.pitch)/tanHalfVertical+curve+1)*.5*rows)));
+      for(let row=0;row<horizon;row++){
+        const grain=hash3(column,row,811);
+        if(daylight>.12){
+          if(grain%4!==0){
+            const nearHorizon=row>horizon*.68;
+            const skyColor=nearHorizon?(daylight<.42?21:15):(daylight<.42?32:17);
+            put(column,row,grain%9===0?":":".",skyColor,MAX_VIEW*2.4);
+          }
+        }else if(grain%31===0){
+          put(column,row,grain%5===0?"*":".",grain%7===0?7:19,MAX_VIEW*2.4);
+        }
+      }
+    }
+
+    const celestialColumn=Math.round(columns*(.5+.34*Math.sin(time*.0065)));
+    const celestialRow=Math.max(3,Math.round(rows*(.17+.07*Math.cos(time*.0065))));
+    const celestialColor=daylight>.12?10:7;
+    for(let y=-1;y<=1;y++){
+      for(let x=-2;x<=2;x++){
+        if(Math.abs(x)+Math.abs(y)>2)continue;
+        put(celestialColumn+x,celestialRow+y,x===0&&y===0?"O":"*",celestialColor,MAX_VIEW*2.2);
+      }
+    }
+
+    const cloudStrength=weather===1?72:weather===2?59:weather===3?38:weather===4?22:10;
+    for(let column=0;column<columns;column++){
+      const displayX=(column+.5)/columns*2-1;
+      const curve=BARREL*.20*displayX*displayX;
+      const horizon=Math.max(0,Math.min(rows,Math.floor((Math.tan(player.pitch)/tanHalfVertical+curve+1)*.5*rows)));
+      for(let row=2;row<horizon;row++){
+        const cellX=Math.floor((column+drift)/5);
+        const cellY=Math.floor(row/2.4);
+        const cloud=hash3(cellX,cellY,823)%100;
+        const band=row>horizon*.18&&row<horizon*.72;
+        if(band&&cloud<cloudStrength){
+          const edge=cloud>cloudStrength-12;
+          const char=edge?"~":"=-"[(column+row+drift)&1];
+          const color=weather===2?4:weather===3?5:6;
+          put(column,row,char,color,MAX_VIEW*2.1);
+        }
+      }
+    }
+  }
+
+  function renderWeather(time,weather){
+    if(weather===2){
+      const drops=Math.floor(columns*(coarsePointer ? .38 : .56)*qualityScale);
+      const fall=Math.floor(time*34);
+      for(let i=0;i<drops;i++){
+        const seed=hash3(i,17,901);
+        const column=mod((seed%columns)+Math.floor(time*3),columns);
+        const row=mod(((seed>>>8)%rows)+fall+(i%7)*3,rows);
+        put(column,row,"|",i%8===0?16:5,.03);
+        if(row+1<rows&&i%3===0)put(column,row+1,"'",4,.031);
+      }
+    }else if(weather===3){
+      const shift=Math.floor(time*2);
+      for(let row=Math.floor(rows*.42);row<rows;row+=3){
+        for(let column=mod(row+shift,4);column<columns;column+=4){
+          const grain=hash3(column+shift,row,902);
+          if(grain%5<3)put(column,row,grain&1?"~":".",grain%7===0?5:3,.035);
+        }
+      }
+    }else if(weather===4){
+      const flakes=Math.floor(columns*(coarsePointer ? .18 : .28)*qualityScale);
+      for(let i=0;i<flakes;i++){
+        const seed=hash3(i,29,903);
+        const column=mod((seed%columns)+Math.floor(Math.sin(time+i)*4),columns);
+        const row=mod(((seed>>>9)%rows)+Math.floor(time*(4+i%3)),rows);
+        put(column,row,i%6===0?"*":".",i%5===0?7:6,.03);
+      }
+    }
   }
 
   function groundGlyph(wx,wy,distance){
@@ -278,21 +419,21 @@
     if(vertical||horizontal){
       if(vertical&&horizontal){
         const cross=(Math.floor(lx*1.45)+Math.floor(ly*1.45))%3===0;
-        return [cross?"=":charsRoad[grain%charsRoad.length],fadeGroundColor(cross?5:2,distance)];
+        return styleCode(cross?"=":charsRoad[grain%charsRoad.length],fadeGroundColor(cross?5:2,distance));
       }
       if(vertical&&Math.abs(lx-DRIVE*.5)<.34&&mod(Math.floor(wy),8)<4){
-        return ["|",fadeGroundColor(5,distance)];
+        return styleCode("|",fadeGroundColor(5,distance));
       }
       if(horizontal&&Math.abs(ly-DRIVE*.5)<.34&&mod(Math.floor(wx),8)<4){
-        return ["-",fadeGroundColor(5,distance)];
+        return styleCode("-",fadeGroundColor(5,distance));
       }
       const curb=(vertical&&lx>DRIVE-.42)||(horizontal&&ly>DRIVE-.42);
-      return [curb?"#":charsRoad[grain%charsRoad.length],fadeGroundColor(curb?4:2,distance)];
+      return styleCode(curb?"#":charsRoad[grain%charsRoad.length],fadeGroundColor(curb?4:2,distance));
     }
 
     if(lx<LOT||ly<LOT){
       const seam=Math.abs(mod(wx,2)-1)>.91||Math.abs(mod(wy,2)-1)>.91;
-      return [seam?"+":charsWalk[grain%charsWalk.length],fadeGroundColor(seam?4:3,distance)];
+      return styleCode(seam?"+":charsWalk[grain%charsWalk.length],fadeGroundColor(seam?4:3,distance));
     }
 
     const seed=hash3(bx,by,71);
@@ -302,15 +443,15 @@
     if(kind==="park"){
       const theme=THEMES[6];
       const pick=".,;*+x"[grain%6];
-      return [pick,fadeGroundColor(theme[grain%7===0?2:grain%3===0?1:0],distance)];
+      return styleCode(pick,fadeGroundColor(theme[grain%11===0?1:0],distance));
     }
 
     if(kind==="plaza"){
       const tile=(Math.floor(wx)+Math.floor(wy))&3;
-      return [tile===0?"+":tile===1?".":":",fadeGroundColor(tile===0?5:3,distance)];
+      return styleCode(tile===0?"+":tile===1?".":":",fadeGroundColor(tile===0?5:3,distance));
     }
 
-    return [grain%9===0?"+":grain%3===0?",":".",fadeGroundColor(2,distance)];
+    return styleCode(grain%9===0?"+":grain%3===0?",":".",fadeGroundColor(2,distance));
   }
 
   function renderGround(cosYaw,sinYaw,cosPitch,sinPitch){
@@ -332,13 +473,15 @@
         const sideScale=warpedX*TAN_HALF_FOV;
         const wx=player.x+distance*(cosYaw*forwardScale+rightX*sideScale);
         const wy=player.y+distance*(sinYaw*forwardScale+rightY*sideScale);
-        const style=groundGlyph(wx,wy,distance);
-        put(column,row,style[0],style[1],distance);
+        putCode(column,row,groundGlyph(wx,wy,distance),distance);
       }
     }
   }
 
   function gatherScene(){
+    if(sceneCache&&Math.abs(player.x-sceneAnchorX)<12&&Math.abs(player.y-sceneAnchorY)<12){
+      return sceneCache;
+    }
     const range=Math.ceil(MAX_VIEW/BLOCK)+2;
     const centerX=Math.floor(player.x/BLOCK);
     const centerY=Math.floor(player.y/BLOCK);
@@ -356,7 +499,19 @@
         for(const tree of block.trees)trees.push(tree);
       }
     }
-    return {blocks,buildings,trees};
+    const keepRange=range+3;
+    for(const [key,block] of blockCache){
+      if(Math.abs(block.bx-centerX)>keepRange||Math.abs(block.by-centerY)>keepRange){
+        blockCache.delete(key);
+      }
+    }
+    while(blockCache.size>360){
+      blockCache.delete(blockCache.keys().next().value);
+    }
+    sceneAnchorX=player.x;
+    sceneAnchorY=player.y;
+    sceneCache={blocks,buildings,trees};
+    return sceneCache;
   }
 
   function rayBox(px,py,dx,dy,box){
@@ -366,7 +521,7 @@
     let farY=Infinity;
 
     if(Math.abs(dx)<1e-8){
-      if(px<=box.x0||px>=box.x1)return null;
+      if(px<=box.x0||px>=box.x1)return 0;
     }else{
       const ax=(box.x0-px)/dx;
       const bx=(box.x1-px)/dx;
@@ -375,7 +530,7 @@
     }
 
     if(Math.abs(dy)<1e-8){
-      if(py<=box.y0||py>=box.y1)return null;
+      if(py<=box.y0||py>=box.y1)return 0;
     }else{
       const ay=(box.y0-py)/dy;
       const by=(box.y1-py)/dy;
@@ -385,8 +540,8 @@
 
     const enter=Math.max(nearX,nearY);
     const leave=Math.min(farX,farY);
-    if(leave<=Math.max(enter,.02)||enter<=.02||enter>MAX_VIEW)return null;
-    return {distance:enter,face:nearX>nearY?"x":"y"};
+    if(leave<=Math.max(enter,.02)||enter<=.02||enter>MAX_VIEW)return 0;
+    return nearX>nearY?enter:-enter;
   }
 
   function projectedRow(distance,z,displayX,cosPitch,sinPitch){
@@ -407,18 +562,38 @@
     return CAMERA_HEIGHT+distance*(sinPitch+q*cosPitch)/denominator;
   }
 
-  function wallGlyph(building,z,along,face,distance){
+  function buildingTop(building,along,face){
+    const start=face==="x"?building.y0:building.x0;
+    const finish=face==="x"?building.y1:building.x1;
+    const ratio=Math.max(0,Math.min(1,(along-start)/(finish-start)));
+    if(building.roof===1){
+      if(ratio<.18||ratio>.82)return building.height-building.crown;
+      if(ratio<.31||ratio>.69)return building.height-building.crown*.45;
+    }else if(building.roof===2){
+      if(ratio>.39&&ratio<.61)return building.height-building.crown;
+    }else if(building.roof===3){
+      return building.height-Math.abs(ratio-.5)*building.crown*1.65;
+    }
+    return building.height;
+  }
+
+  function wallGlyph(building,z,along,face,distance,wallTop){
     const theme=THEMES[building.theme];
     const start=face==="x"?building.y0:building.x0;
     const finish=face==="x"?building.y1:building.x1;
     const local=along-start;
     const width=finish-start;
-    const floor=Math.floor(z/2.15);
-    const column=Math.floor(local/1.16);
+    const floorSize=[2.15,2.65,1.78,2.35][building.facade];
+    const columnSize=[1.16,.88,1.42,1.04][building.facade];
+    const floor=Math.floor(z/floorSize);
+    const column=Math.floor(local/columnSize);
     const noise=(Math.imul(column,1103515245)^Math.imul(floor,12345)^building.seed)>>>0;
-    const edge=local<.62||width-local<.62||building.height-z<.72;
-    const band=mod(Math.floor(z*1.7+building.seed%5),7)===0;
-    const window=(column+(building.seed&3))%3!==0&&(floor+((building.seed>>>3)&3))%3!==1;
+    const edge=local<.62||width-local<.62||wallTop-z<.72;
+    const bandModulo=[7,9,5,11][building.facade];
+    const band=mod(Math.floor(z*1.7+building.seed%5),bandModulo)===0;
+    const window=building.facade===2
+      ? (column&1)===0&&(floor+building.seed)%4!==0
+      : (column+(building.seed&3))%3!==0&&(floor+((building.seed>>>3)&3))%3!==1;
     let color=theme[0];
     let char=".";
 
@@ -433,7 +608,8 @@
       char="-=+"[noise%3];
       color=theme[1];
     }else if(window){
-      char="[]0#*+"[noise%6];
+      const windowSets=["[]0#*+","xXoO[]","01{}<>","@%&+#0"];
+      char=windowSets[building.facade][noise%6];
       color=(noise&7)===0?7:theme[2];
     }else{
       char=".,:;'"[noise%5];
@@ -446,17 +622,15 @@
     }else if(distance>105&&color===theme[2]&&(noise&1)){
       color=theme[1];
     }
-    return [char,color];
+    return styleCode(char,color);
   }
 
   function renderBuildings(buildings,cosYaw,sinYaw,cosPitch,sinPitch){
     const rightX=-sinYaw;
     const rightY=cosYaw;
-    const hits=[];
-    const heightSlopes=new Float32Array(rows);
-    const depthScales=new Float32Array(rows);
-    const candidates=Array.from({length:columns},()=>[]);
     const edgeAngle=Math.atan(TAN_HALF_FOV*(1+BARREL));
+
+    for(let column=0;column<columns;column++)candidateColumns[column].length=0;
 
     for(const building of buildings){
       const centerX=(building.x0+building.x1)*.5-player.x;
@@ -475,11 +649,11 @@
       const highDisplay=inverseBarrel(highIdeal);
       const first=Math.max(0,Math.floor((lowDisplay+1)*.5*columns)-1);
       const last=Math.min(columns-1,Math.ceil((highDisplay+1)*.5*columns)+1);
-      for(let column=first;column<=last;column++)candidates[column].push(building);
+      for(let column=first;column<=last;column++)candidateColumns[column].push(building);
     }
 
     for(let column=0;column<columns;column++){
-      hits.length=0;
+      let hitCount=0;
       const displayX=(column+.5)/columns*2-1;
       const warpedX=displayX*(1+BARREL*displayX*displayX);
       const side=warpedX*TAN_HALF_FOV;
@@ -495,37 +669,48 @@
         depthScales[row]=cosPitch+slope*sinPitch;
       }
 
-      for(const building of candidates[column]){
-        const hit=rayBox(player.x,player.y,rayX,rayY,building);
-        if(hit){
-          hit.building=building;
-          hits.push(hit);
+      for(const building of candidateColumns[column]){
+        const packedHit=rayBox(player.x,player.y,rayX,rayY,building);
+        if(!packedHit)continue;
+        const distance=Math.abs(packedHit);
+        let insert=Math.min(hitCount,13);
+        if(hitCount<14){
+          hitCount++;
+        }else if(distance>=hitDistances[13]){
+          continue;
         }
+        while(insert>0&&distance<hitDistances[insert-1]){
+          hitDistances[insert]=hitDistances[insert-1];
+          hitFaces[insert]=hitFaces[insert-1];
+          hitBuildings[insert]=hitBuildings[insert-1];
+          insert--;
+        }
+        hitDistances[insert]=distance;
+        hitFaces[insert]=packedHit<0?1:0;
+        hitBuildings[insert]=building;
       }
 
-      hits.sort((a,b)=>a.distance-b.distance);
-      if(hits.length>14)hits.length=14;
-
-      for(const hit of hits){
-        const building=hit.building;
-        const top=projectedRow(hit.distance,building.height,displayX,cosPitch,sinPitch);
-        const bottom=projectedRow(hit.distance,0,displayX,cosPitch,sinPitch);
+      for(let hitIndex=0;hitIndex<hitCount;hitIndex++){
+        const distance=hitDistances[hitIndex];
+        const face=hitFaces[hitIndex]?"y":"x";
+        const building=hitBuildings[hitIndex];
+        const wx=player.x+rayX*distance;
+        const wy=player.y+rayY*distance;
+        const along=face==="x"?wy:wx;
+        const wallTop=buildingTop(building,along,face);
+        const top=projectedRow(distance,wallTop,displayX,cosPitch,sinPitch);
+        const bottom=projectedRow(distance,0,displayX,cosPitch,sinPitch);
         let first=Math.max(0,Math.floor(Math.min(top,bottom)));
         let last=Math.min(rows-1,Math.ceil(Math.max(top,bottom)));
         if(first>last||last<0||first>=rows)continue;
-        const wx=player.x+rayX*hit.distance;
-        const wy=player.y+rayY*hit.distance;
-        const along=hit.face==="x"?wy:wx;
-
         for(let row=first;row<=last;row++){
-          const z=CAMERA_HEIGHT+hit.distance*heightSlopes[row];
-          if(z<0||z>building.height)continue;
-          const forward=hit.distance*depthScales[row];
+          const z=CAMERA_HEIGHT+distance*heightSlopes[row];
+          if(z<0||z>wallTop)continue;
+          const forward=distance*depthScales[row];
           if(forward<=.02)continue;
           const index=row*columns+column;
           if(forward>depths[index]+.002)continue;
-          const glyph=wallGlyph(building,z,along,hit.face,hit.distance);
-          put(column,row,glyph[0],glyph[1],forward);
+          putCode(column,row,wallGlyph(building,z,along,face,distance,wallTop),forward);
         }
       }
     }
@@ -562,22 +747,42 @@
   }
 
   function point3D(wx,wy,wz,char,color,cosYaw,sinYaw,cosPitch,sinPitch,depthBias){
-    const point=projectPoint(wx,wy,wz,cosYaw,sinYaw,cosPitch,sinPitch);
-    if(point)put(point.column,point.row,char,color,point.depth+(depthBias||0));
+    const dx=wx-player.x;
+    const dy=wy-player.y;
+    const forwardGround=dx*cosYaw+dy*sinYaw;
+    const side=-dx*sinYaw+dy*cosYaw;
+    const dz=wz-CAMERA_HEIGHT;
+    const forward=forwardGround*cosPitch+dz*sinPitch;
+    if(forward<=.08||forward>MAX_VIEW*1.15)return;
+    const up=-forwardGround*sinPitch+dz*cosPitch;
+    const idealX=side/(forward*TAN_HALF_FOV);
+    if(Math.abs(idealX)>1.48)return;
+    const displayX=inverseBarrel(idealX);
+    const displayY=-up/(forward*tanHalfVertical)+BARREL*.20*displayX*displayX;
+    if(displayY< -1.25||displayY>1.25)return;
+    put(
+      Math.round((displayX+1)*.5*columns-.5),
+      Math.round((displayY+1)*.5*rows-.5),
+      char,color,forward+(depthBias||0)
+    );
   }
 
-  function line3D(a,b,char,color,cosYaw,sinYaw,cosPitch,sinPitch,density){
-    const length=Math.hypot(b.x-a.x,b.y-a.y,b.z-a.z);
+  function lineWorld(x0,y0,z0,x1,y1,z1,char,color,cosYaw,sinYaw,cosPitch,sinPitch,density){
+    const length=Math.hypot(x1-x0,y1-y0,z1-z0);
     const steps=Math.max(2,Math.ceil(length*(density||2.2)));
     for(let i=0;i<=steps;i++){
       const t=i/steps;
       point3D(
-        a.x+(b.x-a.x)*t,
-        a.y+(b.y-a.y)*t,
-        a.z+(b.z-a.z)*t,
+        x0+(x1-x0)*t,
+        y0+(y1-y0)*t,
+        z0+(z1-z0)*t,
         char,color,cosYaw,sinYaw,cosPitch,sinPitch,-.01
       );
     }
+  }
+
+  function line3D(a,b,char,color,cosYaw,sinYaw,cosPitch,sinPitch,density){
+    lineWorld(a.x,a.y,a.z,b.x,b.y,b.z,char,color,cosYaw,sinYaw,cosPitch,sinPitch,density);
   }
 
   function renderTree(tree,cosYaw,sinYaw,cosPitch,sinPitch){
@@ -588,7 +793,7 @@
     line3D(
       {x:tree.x,y:tree.y,z:0},
       {x:tree.x,y:tree.y,z:3.7},
-      "|",35,cosYaw,sinYaw,cosPitch,sinPitch,2.8
+      "|",36,cosYaw,sinYaw,cosPitch,sinPitch,2.8
     );
     const points=distance<42?34:distance<78?24:13;
     for(let i=0;i<points;i++){
@@ -598,7 +803,7 @@
       const wx=tree.x+Math.cos(a)*radius;
       const wy=tree.y+Math.sin(a)*radius;
       const wz=4.65+zUnit*2.05+unit(hash3(tree.seed,i,304))*.35;
-      const tone=THEMES[6][i%7===0?2:i%3===0?1:0];
+      const tone=distance<70?THEMES[6][i%3===0?2:1]:THEMES[6][i%5===0?1:0];
       point3D(wx,wy,wz,"@*+x"[i%4],tone,cosYaw,sinYaw,cosPitch,sinPitch,-.03);
     }
   }
@@ -610,6 +815,35 @@
     line3D({x,y,z:0},{x,y,z:4.35},"|",5,cosYaw,sinYaw,cosPitch,sinPitch,2.2);
     point3D(x,y,4.55,"*",7,cosYaw,sinYaw,cosPitch,sinPitch,-.04);
     point3D(x+.28,y,4.38,"-",6,cosYaw,sinYaw,cosPitch,sinPitch,-.04);
+  }
+
+  function renderStreetDetails(blocks,cosYaw,sinYaw,cosPitch,sinPitch){
+    for(const block of blocks){
+      const centerDistance=Math.hypot(block.ox+18-player.x,block.oy+18-player.y);
+      if(centerDistance>102)continue;
+      const x0=block.ox;
+      const y0=block.oy;
+      lineWorld(x0+DRIVE,y0+DRIVE,.14,x0+DRIVE,y0+BLOCK,.14,"#",5,cosYaw,sinYaw,cosPitch,sinPitch,.52);
+      lineWorld(x0+DRIVE,y0+DRIVE,.14,x0+BLOCK,y0+DRIVE,.14,"#",5,cosYaw,sinYaw,cosPitch,sinPitch,.52);
+      lineWorld(x0+LOT,y0+DRIVE,.08,x0+LOT,y0+BLOCK,.08,":",3,cosYaw,sinYaw,cosPitch,sinPitch,.38);
+      lineWorld(x0+DRIVE,y0+LOT,.08,x0+BLOCK,y0+LOT,.08,":",3,cosYaw,sinYaw,cosPitch,sinPitch,.38);
+
+      if(block.kind==="park"){
+        const middleX=x0+23.5;
+        const middleY=y0+23.5;
+        lineWorld(x0+13,middleY,.1,x0+34,middleY,.1,"+",5,cosYaw,sinYaw,cosPitch,sinPitch,.55);
+        lineWorld(middleX,y0+13,.1,middleX,y0+34,.1,"+",5,cosYaw,sinYaw,cosPitch,sinPitch,.55);
+        lineWorld(x0+16.5,y0+19,.62,x0+20.5,y0+19,.62,"=",36,cosYaw,sinYaw,cosPitch,sinPitch,1.2);
+        lineWorld(x0+27,y0+28,.62,x0+31,y0+28,.62,"=",36,cosYaw,sinYaw,cosPitch,sinPitch,1.2);
+      }else if(block.kind==="plaza"){
+        const fountainX=x0+23.5;
+        const fountainY=y0+23.5;
+        lineWorld(fountainX,fountainY,.1,fountainX,fountainY,2.4,"|",16,cosYaw,sinYaw,cosPitch,sinPitch,2.2);
+        point3D(fountainX-.45,fountainY,1.7,"(",16,cosYaw,sinYaw,cosPitch,sinPitch,-.04);
+        point3D(fountainX+.45,fountainY,1.7,")",16,cosYaw,sinYaw,cosPitch,sinPitch,-.04);
+        point3D(fountainX,fountainY,2.55,"*",7,cosYaw,sinYaw,cosPitch,sinPitch,-.04);
+      }
+    }
   }
 
   function renderCar(x,y,angle,theme,cosYaw,sinYaw,cosPitch,sinPitch){
@@ -676,7 +910,7 @@
     }
   }
 
-  function renderPerson(x,y,theme,cosYaw,sinYaw,cosPitch,sinPitch){
+  function renderPerson(x,y,theme,cosYaw,sinYaw,cosPitch,sinPitch,weather){
     const distance=Math.hypot(x-player.x,y-player.y);
     if(distance>74)return;
     const palette=THEMES[theme%THEMES.length];
@@ -684,9 +918,14 @@
     point3D(x,y,1.05,"|",palette[1],cosYaw,sinYaw,cosPitch,sinPitch,-.08);
     point3D(x-.13,y,.38,"/",palette[1],cosYaw,sinYaw,cosPitch,sinPitch,-.08);
     point3D(x+.13,y,.38,"\\",palette[1],cosYaw,sinYaw,cosPitch,sinPitch,-.08);
+    if(weather===2){
+      point3D(x,y,1.94,"^",6,cosYaw,sinYaw,cosPitch,sinPitch,-.09);
+      point3D(x-.32,y,1.84,"/",5,cosYaw,sinYaw,cosPitch,sinPitch,-.09);
+      point3D(x+.32,y,1.84,"\\",5,cosYaw,sinYaw,cosPitch,sinPitch,-.09);
+    }
   }
 
-  function renderPeople(blocks,time,cosYaw,sinYaw,cosPitch,sinPitch){
+  function renderPeople(blocks,time,cosYaw,sinYaw,cosPitch,sinPitch,weather){
     for(const block of blocks){
       const distance=Math.hypot(block.ox+18-player.x,block.oy+18-player.y);
       if(distance>83)continue;
@@ -694,12 +933,22 @@
       if((seed&3)!==0){
         const direction=(seed&32)?1:-1;
         const y=block.oy+mod(time*(.55+unit(hash3(seed,6,501))*.5)*direction+unit(hash3(seed,7,502))*BLOCK,BLOCK);
-        renderPerson(block.ox+10.65,y,(seed>>>7)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch);
+        renderPerson(block.ox+10.65,y,(seed>>>7)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch,weather);
       }
       if((seed&7)===2){
         const direction=(seed&64)?1:-1;
         const x=block.ox+mod(time*(.5+unit(hash3(seed,8,503))*.55)*direction+unit(hash3(seed,9,504))*BLOCK,BLOCK);
-        renderPerson(x,block.oy+10.65,(seed>>>11)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch);
+        renderPerson(x,block.oy+10.65,(seed>>>11)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch,weather);
+      }
+      if((seed&5)!==0){
+        const direction=(seed&128)?1:-1;
+        const y=block.oy+mod(time*(.42+unit(hash3(seed,10,505))*.44)*direction+unit(hash3(seed,11,506))*BLOCK,BLOCK);
+        renderPerson(block.ox+11.35,y,(seed>>>15)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch,weather);
+      }
+      if(block.kind==="park"){
+        const orbit=time*.18+unit(hash3(seed,12,507))*TAU;
+        renderPerson(block.ox+23.5+Math.cos(orbit)*7,block.oy+23.5,(seed>>>4)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch,weather);
+        renderPerson(block.ox+23.5,block.oy+23.5+Math.sin(orbit*.83)*7,(seed>>>9)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch,weather);
       }
     }
   }
@@ -712,12 +961,13 @@
       if(Math.hypot(x-player.x,y-player.y)>MAX_VIEW)continue;
       const palette=THEMES[building.theme];
       const mast=3+unit(hash3(building.seed,12,601))*6;
+      const roofTop=buildingTop(building,y,"x");
       line3D(
-        {x,y,z:building.height},
-        {x,y,z:building.height+mast},
+        {x,y,z:roofTop},
+        {x,y,z:roofTop+mast},
         "|",palette[2],cosYaw,sinYaw,cosPitch,sinPitch,1.6
       );
-      point3D(x,y,building.height+mast,"*",7,cosYaw,sinYaw,cosPitch,sinPitch,-.04);
+      point3D(x,y,roofTop+mast,"*",7,cosYaw,sinYaw,cosPitch,sinPitch,-.04);
     }
   }
 
@@ -728,14 +978,18 @@
     const cosPitch=Math.cos(player.pitch);
     const sinPitch=Math.sin(player.pitch);
     const scene=gatherScene();
+    const weather=currentWeather(time);
 
+    renderSky(time,weather,cosPitch,sinPitch);
     renderGround(cosYaw,sinYaw,cosPitch,sinPitch);
     renderBuildings(scene.buildings,cosYaw,sinYaw,cosPitch,sinPitch);
+    renderStreetDetails(scene.blocks,cosYaw,sinYaw,cosPitch,sinPitch);
     for(const tree of scene.trees)renderTree(tree,cosYaw,sinYaw,cosPitch,sinPitch);
     for(const block of scene.blocks)renderLamp(block,cosYaw,sinYaw,cosPitch,sinPitch);
     renderTraffic(scene.blocks,time,cosYaw,sinYaw,cosPitch,sinPitch);
-    renderPeople(scene.blocks,time,cosYaw,sinYaw,cosPitch,sinPitch);
+    renderPeople(scene.blocks,time,cosYaw,sinYaw,cosPitch,sinPitch,weather);
     renderAntennas(scene.buildings,cosYaw,sinYaw,cosPitch,sinPitch);
+    renderWeather(time,weather);
     paint();
   }
 
@@ -791,47 +1045,91 @@
 
   function update(delta){
     const turn=1.65*delta;
-    if(keys.has("arrowleft"))player.yaw-=turn;
-    if(keys.has("arrowright"))player.yaw+=turn;
+    if(keys.has("arrowleft")||keys.has("q"))player.yaw-=turn;
+    if(keys.has("arrowright")||keys.has("e"))player.yaw+=turn;
     if(keys.has("arrowup"))player.pitch=Math.min(.49,player.pitch+1.08*delta);
     if(keys.has("arrowdown"))player.pitch=Math.max(-.42,player.pitch-1.08*delta);
+    if(keys.has("r"))player.pitch+=(.06-player.pitch)*Math.min(1,delta*8);
 
-    let forward=(keys.has("w")?1:0)-(keys.has("s")?1:0);
-    let strafe=(keys.has("d")?1:0)-(keys.has("a")?1:0);
-    if(!forward&&!strafe)return;
-    const length=Math.hypot(forward,strafe)||1;
-    forward/=length;
-    strafe/=length;
+    let targetForward=(keys.has("w")?1:0)-(keys.has("s")?1:0)+touchForward;
+    let targetStrafe=(keys.has("d")?1:0)-(keys.has("a")?1:0)+touchStrafe;
+    const targetLength=Math.hypot(targetForward,targetStrafe);
+    if(targetLength>1){
+      targetForward/=targetLength;
+      targetStrafe/=targetLength;
+    }
+    const response=Math.min(1,delta*10.5);
+    player.forward+=(targetForward-player.forward)*response;
+    player.strafe+=(targetStrafe-player.strafe)*response;
+    if(Math.abs(player.forward)<.006)player.forward=0;
+    if(Math.abs(player.strafe)<.006)player.strafe=0;
+    if(!player.forward&&!player.strafe)return;
     const speed=(keys.has("shift")?9.4:4.7)*delta;
     const cos=Math.cos(player.yaw);
     const sin=Math.sin(player.yaw);
-    const dx=(cos*forward-sin*strafe)*speed;
-    const dy=(sin*forward+cos*strafe)*speed;
+    const dx=(cos*player.forward-sin*player.strafe)*speed;
+    const dy=(sin*player.forward+cos*player.strafe)*speed;
     if(!blocked(player.x+dx,player.y))player.x+=dx;
     if(!blocked(player.x,player.y+dy))player.y+=dy;
   }
 
   function loop(now){
     requestAnimationFrame(loop);
+    if(document.hidden)return;
     const delta=Math.min(.05,(now-lastTick)/1000||0);
     lastTick=now;
     update(delta);
-    if(now-lastPaint<38)return;
+    if(now-lastPaint<(coarsePointer?45:38))return;
     lastPaint=now;
+    const renderStart=performance.now();
     renderWorld(now/1000);
+    const renderCost=performance.now()-renderStart;
+    if(renderCost>50){
+      slowFrames++;
+      fastFrames=0;
+    }else if(renderCost<27){
+      fastFrames++;
+      slowFrames=Math.max(0,slowFrames-1);
+    }else{
+      slowFrames=Math.max(0,slowFrames-1);
+      fastFrames=0;
+    }
+    if(now-lastQualityChange>6000&&slowFrames>9&&qualityScale>.72){
+      qualityScale=Math.max(.72,qualityScale*.86);
+      slowFrames=0;
+      fastFrames=0;
+      lastQualityChange=now;
+      resize();
+    }else if(now-lastQualityChange>9000&&fastFrames>120&&qualityScale<1){
+      qualityScale=Math.min(1,qualityScale*1.08);
+      slowFrames=0;
+      fastFrames=0;
+      lastQualityChange=now;
+      resize();
+    }
   }
 
-  addEventListener("resize",resize);
+  addEventListener("resize",()=>{
+    clearTimeout(resizeTimer);
+    resizeTimer=setTimeout(resize,140);
+  });
   addEventListener("keydown",event=>{
     const key=event.key.toLowerCase();
-    if(["w","a","s","d","shift","arrowleft","arrowright","arrowup","arrowdown"].includes(key)){
+    if(["w","a","s","d","q","e","r","shift","arrowleft","arrowright","arrowup","arrowdown"].includes(key)){
       event.preventDefault();
       keys.add(key);
       hint.classList.add("hide");
     }
   });
   addEventListener("keyup",event=>keys.delete(event.key.toLowerCase()));
-  addEventListener("blur",()=>keys.clear());
+  addEventListener("blur",()=>{
+    keys.clear();
+    touchForward=0;
+    touchStrafe=0;
+    player.forward=0;
+    player.strafe=0;
+    nub.style.transform="translate(0,0)";
+  });
 
   canvas.addEventListener("pointerdown",event=>{
     activePointer=event.pointerId;
@@ -854,6 +1152,40 @@
   };
   canvas.addEventListener("pointerup",releasePointer);
   canvas.addEventListener("pointercancel",releasePointer);
+
+  const moveStick=event=>{
+    if(stickPointer!==event.pointerId)return;
+    const rect=stick.getBoundingClientRect();
+    let dx=event.clientX-(rect.left+rect.width*.5);
+    let dy=event.clientY-(rect.top+rect.height*.5);
+    const limit=34;
+    const length=Math.hypot(dx,dy);
+    if(length>limit){
+      dx=dx/length*limit;
+      dy=dy/length*limit;
+    }
+    touchStrafe=Math.abs(dx/limit)<.08?0:dx/limit;
+    touchForward=Math.abs(dy/limit)<.08?0:-dy/limit;
+    nub.style.transform="translate("+dx+"px,"+dy+"px)";
+  };
+  const releaseStick=event=>{
+    if(stickPointer!==event.pointerId)return;
+    stickPointer=null;
+    touchForward=0;
+    touchStrafe=0;
+    nub.style.transform="translate(0,0)";
+  };
+  stick.addEventListener("pointerdown",event=>{
+    event.preventDefault();
+    stickPointer=event.pointerId;
+    stick.setPointerCapture(event.pointerId);
+    hint.classList.add("hide");
+    moveStick(event);
+  });
+  stick.addEventListener("pointermove",moveStick);
+  stick.addEventListener("pointerup",releaseStick);
+  stick.addEventListener("pointercancel",releaseStick);
+  stick.addEventListener("lostpointercapture",releaseStick);
 
   for(const button of document.querySelectorAll("[data-key]")){
     const key=button.dataset.key;
