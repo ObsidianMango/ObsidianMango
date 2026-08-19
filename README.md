@@ -39,7 +39,7 @@ If you like nostalgia, pixel art, dark humor, and weirdly useful tools, you’re
 
 | **App Name**            | **Links**                                                                 | **Description**                                         |
 |-------------------------|---------------------------------------------------------------------------|---------------------------------------------------------|
-| **SLICE CITY** | 🌃 [Enter the City](https://obsidianmango.github.io/ObsidianMango/slice-city.html) | Walkable neon ASCII city with districts, traffic, secrets, and signal shards. |
+| **ASCII CITY** | 🌃 [Explore](https://obsidianmango.github.io/ObsidianMango/slice-city.html) | Giant procedural ASCII city with streets, skyscrapers, parks, trees, traffic, and pedestrians. |
 | **Warhammer 40K History** | ⚔️ [Explore](https://obsidianmango.github.io/ObsidianMango/warhammer40k-history/) | Interactive grimdark history atlas with factions, wars, worlds, lore, and references. |
 | **Price Right** | 🎡 [Big Wheel](https://obsidianmango.github.io/ObsidianMango/price-right.html) | A 3D game-show wheel with chargeable spin power. |
 | **Rooster Rumble** | 🐓 [Rumble](https://obsidianmango.github.io/ObsidianMango/roost.html) | Retro first-person emoji shooter against roosters and ghosts. |
