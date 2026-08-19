@@ -3,39 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <meta name="theme-color" content="#020307">
+  <meta name="theme-color" content="#000000">
   <title>ASCII CITY</title>
   <style>
-    :root{--cyan:#3ef5ff;--white:#eaffff;--ink:#020307;color-scheme:dark}
     *{box-sizing:border-box}
-    html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--ink);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#000;color:#dbe3e8}
     body{touch-action:none;overscroll-behavior:none}
-    canvas{position:fixed;inset:0;width:100%;height:100%;display:block;outline:0;touch-action:none}
-    .scanlines{position:fixed;z-index:2;inset:0;pointer-events:none;background:repeating-linear-gradient(180deg,transparent 0 3px,rgba(0,0,0,.28) 4px);box-shadow:inset 0 0 150px 35px rgba(0,0,0,.82)}
-    .title{position:fixed;z-index:3;top:max(16px,env(safe-area-inset-top));left:max(18px,env(safe-area-inset-left));color:var(--white);font-size:16px;font-weight:900;letter-spacing:-.05em;text-shadow:0 0 14px var(--cyan);pointer-events:none}
-    .title small{display:block;margin-bottom:4px;color:var(--cyan);font-size:7px;letter-spacing:.2em}
-    .coords{position:fixed;z-index:3;top:max(17px,env(safe-area-inset-top));right:max(18px,env(safe-area-inset-right));color:rgba(234,255,255,.58);font-size:8px;letter-spacing:.14em;pointer-events:none}
-    .help{position:fixed;z-index:3;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);color:rgba(234,255,255,.44);font-size:7px;letter-spacing:.13em;white-space:nowrap;pointer-events:none}
-    .touch{display:none;position:fixed;z-index:4;left:16px;right:16px;bottom:max(16px,env(safe-area-inset-bottom));justify-content:space-between;align-items:flex-end;pointer-events:none}
-    .pad{display:grid;grid-template:44px 44px/44px 44px 44px;grid-template-areas:". up ." "left down right";gap:5px}
+    canvas{position:fixed;inset:0;width:100%;height:100%;display:block;background:#000;outline:0;touch-action:none}
+    .hint{position:fixed;z-index:2;left:50%;bottom:max(13px,env(safe-area-inset-bottom));translate:-50% 0;padding:6px 9px;border:1px solid #35404a;background:#000b;color:#aeb8c0;font:700 9px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.08em;white-space:nowrap;pointer-events:none;transition:opacity 1.2s}
+    .hint.hide{opacity:0}
+    .touch{display:none;position:fixed;z-index:3;left:14px;right:14px;bottom:max(14px,env(safe-area-inset-bottom));justify-content:space-between;align-items:flex-end;pointer-events:none}
+    .pad{display:grid;grid-template:42px 42px/42px 42px 42px;grid-template-areas:". up ." "left down right";gap:5px}
     .pad button:nth-child(1){grid-area:up}.pad button:nth-child(2){grid-area:left}.pad button:nth-child(3){grid-area:down}.pad button:nth-child(4){grid-area:right}
-    .touch button{border:1px solid rgba(62,245,255,.28);color:rgba(234,255,255,.75);background:rgba(2,6,12,.5);font:700 15px/1 ui-monospace,monospace;backdrop-filter:blur(7px);pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent}
-    .touch button:active{color:#fff;border-color:var(--cyan);background:rgba(62,245,255,.13)}
-    .run{width:62px;height:62px;border-radius:50%;font-size:8px!important;letter-spacing:.12em}
+    .touch button{border:1px solid #65727d;color:#dbe3e8;background:#000a;font:700 15px/1 ui-monospace,monospace;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent}
+    .touch button:active{background:#dbe3e8;color:#000}
+    .run{width:58px;height:58px;border-radius:50%;font-size:8px!important;letter-spacing:.1em}
     @media(max-width:760px){
       .touch{display:flex}
-      .help{bottom:max(163px,calc(env(safe-area-inset-bottom) + 150px));font-size:6px}
-      .title{font-size:14px}.coords{font-size:7px}
+      .hint{bottom:max(145px,calc(env(safe-area-inset-bottom) + 132px));font-size:7px}
     }
-    @media(prefers-reduced-motion:reduce){.scanlines{background:none}}
   </style>
 </head>
 <body>
-  <canvas id="city" tabindex="0" aria-label="Infinite ASCII city explorer"></canvas>
-  <div class="scanlines" aria-hidden="true"></div>
-  <div class="title"><small>PROCEDURAL WORLD</small>ASCII CITY</div>
-  <div class="coords" id="coords">X 00000&nbsp;&nbsp;Y 00000</div>
-  <div class="help">WASD MOVE · ARROWS TURN · DRAG TO LOOK · SHIFT RUN</div>
+  <canvas id="city" tabindex="0" aria-label="Explore an infinite ASCII city"></canvas>
+  <div class="hint" id="hint">WASD MOVE · ARROWS LOOK · DRAG LOOK · SHIFT RUN</div>
   <div class="touch" aria-label="Touch controls">
     <div class="pad">
       <button type="button" data-key="w" aria-label="Move forward">▲</button>
@@ -49,480 +40,843 @@
   "use strict";
 
   const TAU=Math.PI*2;
-  const FOV=Math.PI/3;
-  const BLOCK=18;
-  const ROAD=4;
-  const MAX_VIEW=58;
-  const BUILDING_COLORS=[
-    ["#2ee8ff","#15566b"],
-    ["#ff45c8","#6b205a"],
-    ["#ffc94c","#705b22"],
-    ["#ff6948","#713126"],
-    ["#8dff62","#356528"],
-    ["#ac76ff","#4a3572"]
+  const BLOCK=36;
+  const DRIVE=9;
+  const LOT=12;
+  const MAX_VIEW=188;
+  const CAMERA_HEIGHT=1.72;
+  const BARREL=.16;
+  const TAN_HALF_FOV=Math.tan(71*Math.PI/360);
+
+  const COLORS=[
+    "#000000",
+    "#10151a","#1b2229","#2a333d","#404c58","#66737d","#aeb8c0","#e5ecef",
+    "#55420d","#b98a15","#ffe04a",
+    "#23450d","#64aa24","#b8ff43",
+    "#0b3f48","#148d9e","#45edff",
+    "#142958","#2856a5","#4d8dff",
+    "#5b2a11","#bd5420","#ff9635",
+    "#55191b","#ad3536","#ff5855",
+    "#133d23","#29864a","#56e47a",
+    "#511a47","#a7358b","#ff65d1",
+    "#321c56","#6c37ad","#b26fff",
+    "#49331f","#94673b","#d5a161"
+  ];
+
+  const THEMES=[
+    [8,9,10],[11,12,13],[14,15,16],[17,18,19],
+    [20,21,22],[23,24,25],[26,27,28],[29,30,31],[32,33,34],[35,36,37]
   ];
 
   const canvas=document.getElementById("city");
   const context=canvas.getContext("2d",{alpha:false});
-  const coords=document.getElementById("coords");
+  const hint=document.getElementById("hint");
   const keys=new Set();
   const blockCache=new Map();
-  const player={x:2.2,y:9.2,angle:Math.PI/2};
 
-  let width=1;
-  let height=1;
+  const player={
+    x:4.5,
+    y:4.5,
+    yaw:Math.PI/2+.055,
+    pitch:.035
+  };
+
+  let screenWidth=1;
+  let screenHeight=1;
   let dpr=1;
-  let lastFrame=0;
-  let lookPointer=null;
-  let lastPointerX=0;
-  let lastPointerY=0;
+  let columns=180;
+  let rows=90;
+  let cellWidth=1;
+  let cellHeight=1;
+  let tanHalfVertical=.45;
+  let chars=[];
+  let colors=new Uint8Array(1);
+  let depths=new Float32Array(1);
+  let usedColors=new Set();
+  let lastTick=0;
+  let lastPaint=0;
+  let activePointer=null;
+  let pointerX=0;
+  let pointerY=0;
 
   function mod(value,divisor){
-    return((value%divisor)+divisor)%divisor;
+    return ((value%divisor)+divisor)%divisor;
   }
 
-  function hash2(x,y,salt){
-    let value=Math.imul(x,374761393)+Math.imul(y,668265263)+Math.imul(salt||0,1442695041);
-    value=Math.imul(value^(value>>>13),1274126177);
-    return(value^(value>>>16))>>>0;
+  function hash3(x,y,z){
+    let h=Math.imul(x|0,374761393)^Math.imul(y|0,668265263)^Math.imul(z|0,1442695041);
+    h=Math.imul(h^(h>>>13),1274126177);
+    return (h^(h>>>16))>>>0;
   }
 
-  function blockInfo(blockX,blockY){
-    const key=blockX+","+blockY;
-    const saved=blockCache.get(key);
-    if(saved)return saved;
-    if(blockCache.size>4096)blockCache.clear();
-    const hash=hash2(blockX,blockY,31);
-    const centerX=mod(blockX,40)-20;
-    const centerY=mod(blockY,40)-20;
-    const downtown=Math.max(0,1-Math.hypot(centerX,centerY)/17);
-    const random=((hash>>>8)&1023)/1023;
-    const info={
-      key:key,
-      hash:hash,
-      type:hash%BUILDING_COLORS.length,
-      height:.72+random*1.45+downtown*3.25,
-      park:hash%11===0,
-      plaza:hash%29===0,
-      variant:(hash>>>5)%5
+  function unit(seed){
+    return (seed>>>0)/4294967295;
+  }
+
+  function makeBuilding(ox,oy,x0,y0,x1,y1,height,theme,seed){
+    const top=Math.max(11,height);
+    return {
+      x0:ox+x0,
+      y0:oy+y0,
+      x1:ox+x1,
+      y1:oy+y1,
+      height:top,
+      theme:mod(theme,THEMES.length),
+      seed:seed>>>0,
+      sign:(seed&7)===2,
+      signZ:4+unit(hash3(seed,9,3))*Math.min(16,top*.38)
     };
-    blockCache.set(key,info);
-    return info;
   }
 
-  function buildingAt(cellX,cellY){
-    const localX=mod(cellX,BLOCK);
-    const localY=mod(cellY,BLOCK);
-    if(localX<6||localY<6||localX>15||localY>15)return null;
-    const blockX=Math.floor(cellX/BLOCK);
-    const blockY=Math.floor(cellY/BLOCK);
-    const info=blockInfo(blockX,blockY);
-    if(info.park||info.plaza)return null;
-    if(info.variant===1&&(localX===10||localX===11))return null;
-    if(info.variant===2&&(localY===10||localY===11))return null;
-    if(info.variant===3&&localX>=9&&localX<=12&&localY>=9&&localY<=12)return null;
-    if(info.variant===4&&((localX===7&&localY>10)||(localY===14&&localX<11)))return null;
-    return info;
-  }
+  function getBlock(bx,by){
+    const key=bx+","+by;
+    const cached=blockCache.get(key);
+    if(cached)return cached;
 
-  function canWalk(x,y){
-    const radius=.23;
-    return!buildingAt(Math.floor(x-radius),Math.floor(y-radius))&&
-      !buildingAt(Math.floor(x+radius),Math.floor(y-radius))&&
-      !buildingAt(Math.floor(x-radius),Math.floor(y+radius))&&
-      !buildingAt(Math.floor(x+radius),Math.floor(y+radius));
-  }
+    const seed=hash3(bx,by,71);
+    const ox=bx*BLOCK;
+    const oy=by*BLOCK;
+    const structures=[];
+    const trees=[];
+    const rare=seed%29;
+    const kind=rare===0||rare===7?"park":rare===13||rare===19?"plaza":"city";
+    const coreX=Math.abs(mod(bx+7,14)-7);
+    const coreY=Math.abs(mod(by+7,14)-7);
+    const core=Math.max(0,1-Math.hypot(coreX,coreY)/8.5);
+    const base=18+core*65+unit(hash3(bx,by,92))*15;
+    const theme=seed%THEMES.length;
+    const variant=(seed>>>5)%6;
 
-  function surfaceAt(worldX,worldY){
-    const localX=mod(worldX,BLOCK);
-    const localY=mod(worldY,BLOCK);
-    const vertical=localX<ROAD;
-    const horizontal=localY<ROAD;
-    if(vertical||horizontal){
-      let glyph=".";
-      if(vertical&&horizontal)glyph="+";
-      else if(vertical&&Math.abs(localX-2)<.17&&Math.floor(worldY*.42)%2===0)glyph="|";
-      else if(horizontal&&Math.abs(localY-2)<.17&&Math.floor(worldX*.42)%2===0)glyph="-";
-      else if((vertical&&Math.abs(localX-.35)<.1)||(horizontal&&Math.abs(localY-.35)<.1))glyph=":";
-      return{glyph:glyph,color:glyph==="."?"117,139,146":"206,238,242",alpha:glyph==="."?.17:.42};
+    const add=(x0,y0,x1,y1,height,tone,extra)=>{
+      structures.push(makeBuilding(ox,oy,x0,y0,x1,y1,height,theme+tone,hash3(bx,by,extra)));
+    };
+
+    if(kind==="city"){
+      if(variant===0){
+        add(13,13,34,34,base+8,0,101);
+      }else if(variant===1){
+        add(13,13,22.4,34,base*.82,0,102);
+        add(24.2,13,34,34,base*1.12,1,103);
+      }else if(variant===2){
+        add(13,13,34,22.4,base*1.08,0,104);
+        add(13,24.2,34,34,base*.76,-1,105);
+      }else if(variant===3){
+        add(13,13,21.7,25.5,base*.72,-1,106);
+        add(23.3,13,34,34,base*1.18,0,107);
+        add(13,27.1,21.7,34,base*.48,1,108);
+      }else if(variant===4){
+        add(13,13,34,20.8,base*.65,0,109);
+        add(13,22.5,22.4,34,base*1.05,1,110);
+        add(24.1,22.5,34,34,base*.82,-1,111);
+      }else{
+        add(13,13,22.5,22.5,base*1.15,0,112);
+        add(24.2,13,34,26.2,base*.78,1,113);
+        add(13,24.2,22.5,34,base*.57,-1,114);
+        add(24.2,27.9,34,34,base*.46,2,115);
+      }
+
+      if((seed&3)!==0){
+        const side=(seed&16)?10.45:25.5;
+        trees.push({x:ox+10.45,y:oy+side,seed:hash3(bx,by,201)});
+      }
+      if((seed&15)===3){
+        trees.push({x:ox+sideValue(seed),y:oy+10.45,seed:hash3(bx,by,202)});
+      }
+    }else if(kind==="park"){
+      for(let gy=0;gy<3;gy++){
+        for(let gx=0;gx<3;gx++){
+          const treeSeed=hash3(bx*7+gx,by*7+gy,203);
+          trees.push({
+            x:ox+16+gx*7.2+(unit(treeSeed)-.5)*1.8,
+            y:oy+16+gy*7.2+(unit(hash3(treeSeed,4,8))-.5)*1.8,
+            seed:treeSeed
+          });
+        }
+      }
+    }else{
+      const plazaSpots=[[16,16],[30,16],[16,30],[30,30]];
+      for(let i=0;i<plazaSpots.length;i++){
+        if((seed>>i&1)!==0){
+          trees.push({
+            x:ox+plazaSpots[i][0],
+            y:oy+plazaSpots[i][1],
+            seed:hash3(bx,by,220+i)
+          });
+        }
+      }
     }
-    const info=blockInfo(Math.floor(worldX/BLOCK),Math.floor(worldY/BLOCK));
-    if(info.park)return{glyph:hash2(Math.floor(worldX*3),Math.floor(worldY*3),4)%4?",":";",color:"75,151,67",alpha:.28};
-    if(info.plaza)return{glyph:hash2(Math.floor(worldX*2),Math.floor(worldY*2),7)%5?".":"+",color:"113,130,137",alpha:.24};
-    if(localX<6||localY<6||localX>15||localY>15)return{glyph:hash2(Math.floor(worldX*2),Math.floor(worldY*2),2)%5?":":"·",color:"151,175,180",alpha:.21};
-    return{glyph:".",color:"57,68,74",alpha:.1};
+
+    const block={bx,by,ox,oy,seed,kind,theme,structures,trees};
+    blockCache.set(key,block);
+    return block;
+  }
+
+  function sideValue(seed){
+    return 16+unit(hash3(seed,13,5))*15;
   }
 
   function resize(){
-    const box=canvas.getBoundingClientRect();
-    dpr=Math.min(window.devicePixelRatio||1,1.55);
-    width=Math.max(1,box.width);
-    height=Math.max(1,box.height);
-    canvas.width=Math.floor(width*dpr);
-    canvas.height=Math.floor(height*dpr);
-    context.setTransform(dpr,0,0,dpr,0,0);
+    screenWidth=Math.max(1,innerWidth);
+    screenHeight=Math.max(1,innerHeight);
+    dpr=Math.min(devicePixelRatio||1,1.75);
+    canvas.width=Math.round(screenWidth*dpr);
+    canvas.height=Math.round(screenHeight*dpr);
+    canvas.style.width=screenWidth+"px";
+    canvas.style.height=screenHeight+"px";
+    columns=screenWidth<600
+      ? Math.max(86,Math.min(108,Math.floor(screenWidth/3.8)))
+      : Math.max(150,Math.min(240,Math.floor(screenWidth/6.8)));
+    cellWidth=screenWidth/columns;
+    cellHeight=cellWidth/.61;
+    rows=Math.max(62,Math.min(142,Math.floor(screenHeight/cellHeight)));
+    cellHeight=screenHeight/rows;
+    tanHalfVertical=TAN_HALF_FOV*(screenHeight/screenWidth);
+    chars=new Array(columns*rows).fill(" ");
+    colors=new Uint8Array(columns*rows);
+    depths=new Float32Array(columns*rows);
     context.imageSmoothingEnabled=false;
   }
 
-  function angleDelta(value){
-    let angle=value;
-    while(angle>Math.PI)angle-=TAU;
-    while(angle<-Math.PI)angle+=TAU;
-    return angle;
+  function clearBuffers(){
+    chars.fill(" ");
+    colors.fill(0);
+    depths.fill(Infinity);
+    usedColors.clear();
   }
 
-  function rgba(hex,alpha){
-    const value=parseInt(hex.slice(1),16);
-    return"rgba("+(value>>16)+","+((value>>8)&255)+","+(value&255)+","+alpha+")";
+  function put(column,row,char,color,depth){
+    column=column|0;
+    row=row|0;
+    if(column<0||column>=columns||row<0||row>=rows||depth<=0)return;
+    const index=row*columns+column;
+    if(depth<=depths[index]+.002){
+      chars[index]=char;
+      colors[index]=color;
+      depths[index]=depth;
+      usedColors.add(color);
+    }
   }
 
-  function addTree(list,x,y,size){
-    list.push({x:x,y:y,art:["  /\\  "," /##\\ ","/####\\","  ||  "],color:"#62d85a",scale:size||.82,lift:0});
+  function fadeGroundColor(color,distance){
+    if(distance<62)return color;
+    if(color>=8&&color<=37)return THEMES[((color-8)/3)|0][distance>132?0:1];
+    if(distance>138)return Math.min(color,2);
+    return Math.min(color,4);
   }
 
-  function nearbyActors(time){
-    const actors=[];
-    const baseX=Math.floor(player.x/BLOCK);
-    const baseY=Math.floor(player.y/BLOCK);
-    for(let blockY=baseY-3;blockY<=baseY+3;blockY+=1){
-      for(let blockX=baseX-3;blockX<=baseX+3;blockX+=1){
-        const info=blockInfo(blockX,blockY);
-        const originX=blockX*BLOCK;
-        const originY=blockY*BLOCK;
+  function groundGlyph(wx,wy,distance){
+    const bx=Math.floor(wx/BLOCK);
+    const by=Math.floor(wy/BLOCK);
+    const lx=mod(wx,BLOCK);
+    const ly=mod(wy,BLOCK);
+    const grain=hash3(Math.floor(wx*1.7),Math.floor(wy*1.7),17);
+    const charsRoad=".,:;+-=";
+    const charsWalk=".:;,+";
+    const vertical=lx<DRIVE;
+    const horizontal=ly<DRIVE;
 
-        if(info.park){
-          for(let index=0;index<7;index+=1){
-            const treeHash=hash2(blockX,blockY,index+80);
-            const treeX=originX+6.2+(treeHash%860)/100;
-            const treeY=originY+6.2+((treeHash>>>10)%860)/100;
-            addTree(actors,treeX,treeY,.72+((treeHash>>>20)%25)/100);
+    if(vertical||horizontal){
+      if(vertical&&horizontal){
+        const cross=(Math.floor(lx*1.45)+Math.floor(ly*1.45))%3===0;
+        return [cross?"=":charsRoad[grain%charsRoad.length],fadeGroundColor(cross?5:2,distance)];
+      }
+      if(vertical&&Math.abs(lx-DRIVE*.5)<.34&&mod(Math.floor(wy),8)<4){
+        return ["|",fadeGroundColor(5,distance)];
+      }
+      if(horizontal&&Math.abs(ly-DRIVE*.5)<.34&&mod(Math.floor(wx),8)<4){
+        return ["-",fadeGroundColor(5,distance)];
+      }
+      const curb=(vertical&&lx>DRIVE-.42)||(horizontal&&ly>DRIVE-.42);
+      return [curb?"#":charsRoad[grain%charsRoad.length],fadeGroundColor(curb?4:2,distance)];
+    }
+
+    if(lx<LOT||ly<LOT){
+      const seam=Math.abs(mod(wx,2)-1)>.91||Math.abs(mod(wy,2)-1)>.91;
+      return [seam?"+":charsWalk[grain%charsWalk.length],fadeGroundColor(seam?4:3,distance)];
+    }
+
+    const seed=hash3(bx,by,71);
+    const rare=seed%29;
+    const kind=rare===0||rare===7?"park":rare===13||rare===19?"plaza":"city";
+
+    if(kind==="park"){
+      const theme=THEMES[6];
+      const pick=".,;*+x"[grain%6];
+      return [pick,fadeGroundColor(theme[grain%7===0?2:grain%3===0?1:0],distance)];
+    }
+
+    if(kind==="plaza"){
+      const tile=(Math.floor(wx)+Math.floor(wy))&3;
+      return [tile===0?"+":tile===1?".":":",fadeGroundColor(tile===0?5:3,distance)];
+    }
+
+    return [grain%9===0?"+":grain%3===0?",":".",fadeGroundColor(2,distance)];
+  }
+
+  function renderGround(cosYaw,sinYaw,cosPitch,sinPitch){
+    const rightX=-sinYaw;
+    const rightY=cosYaw;
+
+    for(let row=0;row<rows;row++){
+      for(let column=0;column<columns;column++){
+        const displayX=(column+.5)/columns*2-1;
+        const warpedX=displayX*(1+BARREL*displayX*displayX);
+        const curve=BARREL*.20*displayX*displayX;
+        const displayY=(row+.5)/rows*2-1-curve;
+        const cameraUp=-displayY*tanHalfVertical;
+        const rayZ=sinPitch+cameraUp*cosPitch;
+        if(rayZ>=-.0005)continue;
+        const distance=-CAMERA_HEIGHT/rayZ;
+        if(distance>MAX_VIEW*1.08)continue;
+        const forwardScale=cosPitch-cameraUp*sinPitch;
+        const sideScale=warpedX*TAN_HALF_FOV;
+        const wx=player.x+distance*(cosYaw*forwardScale+rightX*sideScale);
+        const wy=player.y+distance*(sinYaw*forwardScale+rightY*sideScale);
+        const style=groundGlyph(wx,wy,distance);
+        put(column,row,style[0],style[1],distance);
+      }
+    }
+  }
+
+  function gatherScene(){
+    const range=Math.ceil(MAX_VIEW/BLOCK)+2;
+    const centerX=Math.floor(player.x/BLOCK);
+    const centerY=Math.floor(player.y/BLOCK);
+    const blocks=[];
+    const buildings=[];
+    const trees=[];
+    for(let by=centerY-range;by<=centerY+range;by++){
+      for(let bx=centerX-range;bx<=centerX+range;bx++){
+        const cx=bx*BLOCK+BLOCK*.5-player.x;
+        const cy=by*BLOCK+BLOCK*.5-player.y;
+        if(Math.hypot(cx,cy)>MAX_VIEW+BLOCK)continue;
+        const block=getBlock(bx,by);
+        blocks.push(block);
+        for(const building of block.structures)buildings.push(building);
+        for(const tree of block.trees)trees.push(tree);
+      }
+    }
+    return {blocks,buildings,trees};
+  }
+
+  function rayBox(px,py,dx,dy,box){
+    let nearX=-Infinity;
+    let farX=Infinity;
+    let nearY=-Infinity;
+    let farY=Infinity;
+
+    if(Math.abs(dx)<1e-8){
+      if(px<=box.x0||px>=box.x1)return null;
+    }else{
+      const ax=(box.x0-px)/dx;
+      const bx=(box.x1-px)/dx;
+      nearX=Math.min(ax,bx);
+      farX=Math.max(ax,bx);
+    }
+
+    if(Math.abs(dy)<1e-8){
+      if(py<=box.y0||py>=box.y1)return null;
+    }else{
+      const ay=(box.y0-py)/dy;
+      const by=(box.y1-py)/dy;
+      nearY=Math.min(ay,by);
+      farY=Math.max(ay,by);
+    }
+
+    const enter=Math.max(nearX,nearY);
+    const leave=Math.min(farX,farY);
+    if(leave<=Math.max(enter,.02)||enter<=.02||enter>MAX_VIEW)return null;
+    return {distance:enter,face:nearX>nearY?"x":"y"};
+  }
+
+  function projectedRow(distance,z,displayX,cosPitch,sinPitch){
+    const dz=z-CAMERA_HEIGHT;
+    const forward=distance*cosPitch+dz*sinPitch;
+    if(forward<=.02)return z>CAMERA_HEIGHT?-100000:100000;
+    const up=-distance*sinPitch+dz*cosPitch;
+    const normalized=-up/(forward*tanHalfVertical)+BARREL*.20*displayX*displayX;
+    return (normalized+1)*.5*rows;
+  }
+
+  function heightAtRow(distance,row,displayX,cosPitch,sinPitch){
+    const curve=BARREL*.20*displayX*displayX;
+    const normalized=(row+.5)/rows*2-1-curve;
+    const q=-normalized*tanHalfVertical;
+    const denominator=cosPitch-q*sinPitch;
+    if(Math.abs(denominator)<.0001)return -9999;
+    return CAMERA_HEIGHT+distance*(sinPitch+q*cosPitch)/denominator;
+  }
+
+  function wallGlyph(building,z,along,face,distance){
+    const theme=THEMES[building.theme];
+    const start=face==="x"?building.y0:building.x0;
+    const finish=face==="x"?building.y1:building.x1;
+    const local=along-start;
+    const width=finish-start;
+    const floor=Math.floor(z/2.15);
+    const column=Math.floor(local/1.16);
+    const noise=(Math.imul(column,1103515245)^Math.imul(floor,12345)^building.seed)>>>0;
+    const edge=local<.62||width-local<.62||building.height-z<.72;
+    const band=mod(Math.floor(z*1.7+building.seed%5),7)===0;
+    const window=(column+(building.seed&3))%3!==0&&(floor+((building.seed>>>3)&3))%3!==1;
+    let color=theme[0];
+    let char=".";
+
+    if(edge){
+      char=face==="x"?"|":"#";
+      color=theme[2];
+    }else if(building.sign&&z>building.signZ&&z<building.signZ+2.15){
+      const signChars="ASCII01CITY<>[]";
+      char=signChars[mod(column+floor,signChars.length)];
+      color=theme[2];
+    }else if(band){
+      char="-=+"[noise%3];
+      color=theme[1];
+    }else if(window){
+      char="[]0#*+"[noise%6];
+      color=(noise&7)===0?7:theme[2];
+    }else{
+      char=".,:;'"[noise%5];
+      color=(face==="x"?(building.seed&1):!(building.seed&1))?theme[0]:theme[1];
+    }
+
+    if(distance>150){
+      color=theme[0];
+      if(!edge&&noise%3===0)char=".";
+    }else if(distance>105&&color===theme[2]&&(noise&1)){
+      color=theme[1];
+    }
+    return [char,color];
+  }
+
+  function renderBuildings(buildings,cosYaw,sinYaw,cosPitch,sinPitch){
+    const rightX=-sinYaw;
+    const rightY=cosYaw;
+    const hits=[];
+    const heightSlopes=new Float32Array(rows);
+    const depthScales=new Float32Array(rows);
+    const candidates=Array.from({length:columns},()=>[]);
+    const edgeAngle=Math.atan(TAN_HALF_FOV*(1+BARREL));
+
+    for(const building of buildings){
+      const centerX=(building.x0+building.x1)*.5-player.x;
+      const centerY=(building.y0+building.y1)*.5-player.y;
+      const distance=Math.hypot(centerX,centerY);
+      const radius=Math.hypot(building.x1-building.x0,building.y1-building.y0)*.5+.2;
+      let angle=Math.atan2(centerY,centerX)-player.yaw;
+      angle=Math.atan2(Math.sin(angle),Math.cos(angle));
+      const half=distance>radius?Math.asin(Math.min(.999,radius/distance)):Math.PI*.5;
+      if(angle+half< -edgeAngle||angle-half>edgeAngle)continue;
+      const low=Math.max(-edgeAngle,angle-half);
+      const high=Math.min(edgeAngle,angle+half);
+      const lowIdeal=Math.tan(low)/TAN_HALF_FOV;
+      const highIdeal=Math.tan(high)/TAN_HALF_FOV;
+      const lowDisplay=inverseBarrel(lowIdeal);
+      const highDisplay=inverseBarrel(highIdeal);
+      const first=Math.max(0,Math.floor((lowDisplay+1)*.5*columns)-1);
+      const last=Math.min(columns-1,Math.ceil((highDisplay+1)*.5*columns)+1);
+      for(let column=first;column<=last;column++)candidates[column].push(building);
+    }
+
+    for(let column=0;column<columns;column++){
+      hits.length=0;
+      const displayX=(column+.5)/columns*2-1;
+      const warpedX=displayX*(1+BARREL*displayX*displayX);
+      const side=warpedX*TAN_HALF_FOV;
+      const rayX=cosYaw+rightX*side;
+      const rayY=sinYaw+rightY*side;
+      const curve=BARREL*.20*displayX*displayX;
+
+      for(let row=0;row<rows;row++){
+        const normalized=(row+.5)/rows*2-1-curve;
+        const q=-normalized*tanHalfVertical;
+        const slope=(sinPitch+q*cosPitch)/(cosPitch-q*sinPitch);
+        heightSlopes[row]=slope;
+        depthScales[row]=cosPitch+slope*sinPitch;
+      }
+
+      for(const building of candidates[column]){
+        const hit=rayBox(player.x,player.y,rayX,rayY,building);
+        if(hit){
+          hit.building=building;
+          hits.push(hit);
+        }
+      }
+
+      hits.sort((a,b)=>a.distance-b.distance);
+      if(hits.length>14)hits.length=14;
+
+      for(const hit of hits){
+        const building=hit.building;
+        const top=projectedRow(hit.distance,building.height,displayX,cosPitch,sinPitch);
+        const bottom=projectedRow(hit.distance,0,displayX,cosPitch,sinPitch);
+        let first=Math.max(0,Math.floor(Math.min(top,bottom)));
+        let last=Math.min(rows-1,Math.ceil(Math.max(top,bottom)));
+        if(first>last||last<0||first>=rows)continue;
+        const wx=player.x+rayX*hit.distance;
+        const wy=player.y+rayY*hit.distance;
+        const along=hit.face==="x"?wy:wx;
+
+        for(let row=first;row<=last;row++){
+          const z=CAMERA_HEIGHT+hit.distance*heightSlopes[row];
+          if(z<0||z>building.height)continue;
+          const forward=hit.distance*depthScales[row];
+          if(forward<=.02)continue;
+          const index=row*columns+column;
+          if(forward>depths[index]+.002)continue;
+          const glyph=wallGlyph(building,z,along,hit.face,hit.distance);
+          put(column,row,glyph[0],glyph[1],forward);
+        }
+      }
+    }
+  }
+
+  function inverseBarrel(value){
+    let result=value/(1+BARREL*value*value);
+    for(let i=0;i<2;i++){
+      result-=(result+BARREL*result*result*result-value)/(1+3*BARREL*result*result);
+    }
+    return result;
+  }
+
+  function projectPoint(wx,wy,wz,cosYaw,sinYaw,cosPitch,sinPitch){
+    const dx=wx-player.x;
+    const dy=wy-player.y;
+    const forwardGround=dx*cosYaw+dy*sinYaw;
+    const side=-dx*sinYaw+dy*cosYaw;
+    const dz=wz-CAMERA_HEIGHT;
+    const forward=forwardGround*cosPitch+dz*sinPitch;
+    if(forward<=.08||forward>MAX_VIEW*1.15)return null;
+    const up=-forwardGround*sinPitch+dz*cosPitch;
+    const idealX=side/(forward*TAN_HALF_FOV);
+    if(Math.abs(idealX)>1.48)return null;
+    const displayX=inverseBarrel(idealX);
+    const displayY=-up/(forward*tanHalfVertical)+BARREL*.20*displayX*displayX;
+    if(displayY< -1.25||displayY>1.25)return null;
+    return {
+      column:Math.round((displayX+1)*.5*columns-.5),
+      row:Math.round((displayY+1)*.5*rows-.5),
+      depth:forward,
+      distance:forwardGround
+    };
+  }
+
+  function point3D(wx,wy,wz,char,color,cosYaw,sinYaw,cosPitch,sinPitch,depthBias){
+    const point=projectPoint(wx,wy,wz,cosYaw,sinYaw,cosPitch,sinPitch);
+    if(point)put(point.column,point.row,char,color,point.depth+(depthBias||0));
+  }
+
+  function line3D(a,b,char,color,cosYaw,sinYaw,cosPitch,sinPitch,density){
+    const length=Math.hypot(b.x-a.x,b.y-a.y,b.z-a.z);
+    const steps=Math.max(2,Math.ceil(length*(density||2.2)));
+    for(let i=0;i<=steps;i++){
+      const t=i/steps;
+      point3D(
+        a.x+(b.x-a.x)*t,
+        a.y+(b.y-a.y)*t,
+        a.z+(b.z-a.z)*t,
+        char,color,cosYaw,sinYaw,cosPitch,sinPitch,-.01
+      );
+    }
+  }
+
+  function renderTree(tree,cosYaw,sinYaw,cosPitch,sinPitch){
+    const dx=tree.x-player.x;
+    const dy=tree.y-player.y;
+    const distance=Math.hypot(dx,dy);
+    if(distance>118)return;
+    line3D(
+      {x:tree.x,y:tree.y,z:0},
+      {x:tree.x,y:tree.y,z:3.7},
+      "|",35,cosYaw,sinYaw,cosPitch,sinPitch,2.8
+    );
+    const points=distance<42?34:distance<78?24:13;
+    for(let i=0;i<points;i++){
+      const a=unit(hash3(tree.seed,i,301))*TAU;
+      const zUnit=unit(hash3(tree.seed,i,302))*2-1;
+      const radius=(1.2+unit(hash3(tree.seed,i,303))*1.35)*Math.sqrt(Math.max(0,1-zUnit*zUnit));
+      const wx=tree.x+Math.cos(a)*radius;
+      const wy=tree.y+Math.sin(a)*radius;
+      const wz=4.65+zUnit*2.05+unit(hash3(tree.seed,i,304))*.35;
+      const tone=THEMES[6][i%7===0?2:i%3===0?1:0];
+      point3D(wx,wy,wz,"@*+x"[i%4],tone,cosYaw,sinYaw,cosPitch,sinPitch,-.03);
+    }
+  }
+
+  function renderLamp(block,cosYaw,sinYaw,cosPitch,sinPitch){
+    const x=block.ox+10.35;
+    const y=block.oy+10.35;
+    if(Math.hypot(x-player.x,y-player.y)>91)return;
+    line3D({x,y,z:0},{x,y,z:4.35},"|",5,cosYaw,sinYaw,cosPitch,sinPitch,2.2);
+    point3D(x,y,4.55,"*",7,cosYaw,sinYaw,cosPitch,sinPitch,-.04);
+    point3D(x+.28,y,4.38,"-",6,cosYaw,sinYaw,cosPitch,sinPitch,-.04);
+  }
+
+  function renderCar(x,y,angle,theme,cosYaw,sinYaw,cosPitch,sinPitch){
+    const distance=Math.hypot(x-player.x,y-player.y);
+    if(distance>112)return;
+    const forwardX=Math.cos(angle);
+    const forwardY=Math.sin(angle);
+    const rightX=-forwardY;
+    const rightY=forwardX;
+    const palette=THEMES[theme%THEMES.length];
+    if(distance>72){
+      point3D(x,y,.48,"#",palette[2],cosYaw,sinYaw,cosPitch,sinPitch,-.05);
+      return;
+    }
+    const longitudinal=[-1.35,-.72,0,.72,1.35];
+    const lateral=[-.53,0,.53];
+    for(let li=0;li<longitudinal.length;li++){
+      for(let wi=0;wi<lateral.length;wi++){
+        const l=longitudinal[li];
+        const w=lateral[wi];
+        point3D(
+          x+forwardX*l+rightX*w,
+          y+forwardY*l+rightY*w,
+          .43,
+          li===0||li===longitudinal.length-1?"#":"=",
+          palette[li===0?2:1],
+          cosYaw,sinYaw,cosPitch,sinPitch,-.06
+        );
+      }
+    }
+    for(const l of [-.48,.48]){
+      for(const w of [-.38,.38]){
+        point3D(
+          x+forwardX*l+rightX*w,
+          y+forwardY*l+rightY*w,
+          .92,
+          "0",palette[2],cosYaw,sinYaw,cosPitch,sinPitch,-.06
+        );
+      }
+    }
+    point3D(x+forwardX*1.48+rightX*.4,y+forwardY*1.48+rightY*.4,.48,"*",7,cosYaw,sinYaw,cosPitch,sinPitch,-.08);
+    point3D(x+forwardX*1.48-rightX*.4,y+forwardY*1.48-rightY*.4,.48,"*",7,cosYaw,sinYaw,cosPitch,sinPitch,-.08);
+  }
+
+  function renderTraffic(blocks,time,cosYaw,sinYaw,cosPitch,sinPitch){
+    for(const block of blocks){
+      const distance=Math.hypot(block.ox+18-player.x,block.oy+18-player.y);
+      if(distance>126)continue;
+      const seed=block.seed;
+      if(seed%3!==0){
+        const direction=(seed&1)?1:-1;
+        const speed=3.1+unit(hash3(seed,2,401))*3.6;
+        const lane=direction>0?2.55:6.45;
+        const y=block.oy+mod(time*speed*direction+unit(hash3(seed,3,402))*BLOCK,BLOCK);
+        renderCar(block.ox+lane,y,direction>0?Math.PI/2:-Math.PI/2,(seed>>>8)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch);
+      }
+      if((seed>>>2)%3!==0){
+        const direction=(seed&8)?1:-1;
+        const speed=2.8+unit(hash3(seed,4,403))*3.8;
+        const lane=direction>0?6.45:2.55;
+        const x=block.ox+mod(time*speed*direction+unit(hash3(seed,5,404))*BLOCK,BLOCK);
+        renderCar(x,block.oy+lane,direction>0?0:Math.PI,(seed>>>12)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch);
+      }
+    }
+  }
+
+  function renderPerson(x,y,theme,cosYaw,sinYaw,cosPitch,sinPitch){
+    const distance=Math.hypot(x-player.x,y-player.y);
+    if(distance>74)return;
+    const palette=THEMES[theme%THEMES.length];
+    point3D(x,y,1.68,"o",palette[2],cosYaw,sinYaw,cosPitch,sinPitch,-.08);
+    point3D(x,y,1.05,"|",palette[1],cosYaw,sinYaw,cosPitch,sinPitch,-.08);
+    point3D(x-.13,y,.38,"/",palette[1],cosYaw,sinYaw,cosPitch,sinPitch,-.08);
+    point3D(x+.13,y,.38,"\\",palette[1],cosYaw,sinYaw,cosPitch,sinPitch,-.08);
+  }
+
+  function renderPeople(blocks,time,cosYaw,sinYaw,cosPitch,sinPitch){
+    for(const block of blocks){
+      const distance=Math.hypot(block.ox+18-player.x,block.oy+18-player.y);
+      if(distance>83)continue;
+      const seed=block.seed;
+      if((seed&3)!==0){
+        const direction=(seed&32)?1:-1;
+        const y=block.oy+mod(time*(.55+unit(hash3(seed,6,501))*.5)*direction+unit(hash3(seed,7,502))*BLOCK,BLOCK);
+        renderPerson(block.ox+10.65,y,(seed>>>7)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch);
+      }
+      if((seed&7)===2){
+        const direction=(seed&64)?1:-1;
+        const x=block.ox+mod(time*(.5+unit(hash3(seed,8,503))*.55)*direction+unit(hash3(seed,9,504))*BLOCK,BLOCK);
+        renderPerson(x,block.oy+10.65,(seed>>>11)%THEMES.length,cosYaw,sinYaw,cosPitch,sinPitch);
+      }
+    }
+  }
+
+  function renderAntennas(buildings,cosYaw,sinYaw,cosPitch,sinPitch){
+    for(const building of buildings){
+      if(building.height<58||(building.seed&3)!==0)continue;
+      const x=(building.x0+building.x1)*.5;
+      const y=(building.y0+building.y1)*.5;
+      if(Math.hypot(x-player.x,y-player.y)>MAX_VIEW)continue;
+      const palette=THEMES[building.theme];
+      const mast=3+unit(hash3(building.seed,12,601))*6;
+      line3D(
+        {x,y,z:building.height},
+        {x,y,z:building.height+mast},
+        "|",palette[2],cosYaw,sinYaw,cosPitch,sinPitch,1.6
+      );
+      point3D(x,y,building.height+mast,"*",7,cosYaw,sinYaw,cosPitch,sinPitch,-.04);
+    }
+  }
+
+  function renderWorld(time){
+    clearBuffers();
+    const cosYaw=Math.cos(player.yaw);
+    const sinYaw=Math.sin(player.yaw);
+    const cosPitch=Math.cos(player.pitch);
+    const sinPitch=Math.sin(player.pitch);
+    const scene=gatherScene();
+
+    renderGround(cosYaw,sinYaw,cosPitch,sinPitch);
+    renderBuildings(scene.buildings,cosYaw,sinYaw,cosPitch,sinPitch);
+    for(const tree of scene.trees)renderTree(tree,cosYaw,sinYaw,cosPitch,sinPitch);
+    for(const block of scene.blocks)renderLamp(block,cosYaw,sinYaw,cosPitch,sinPitch);
+    renderTraffic(scene.blocks,time,cosYaw,sinYaw,cosPitch,sinPitch);
+    renderPeople(scene.blocks,time,cosYaw,sinYaw,cosPitch,sinPitch);
+    renderAntennas(scene.buildings,cosYaw,sinYaw,cosPitch,sinPitch);
+    paint();
+  }
+
+  function paint(){
+    context.setTransform(dpr,0,0,dpr,0,0);
+    context.fillStyle="#000";
+    context.fillRect(0,0,screenWidth,screenHeight);
+    const fontSize=cellHeight*.99;
+    context.font=fontSize+"px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    context.textBaseline="top";
+    context.textAlign="left";
+    const measured=Math.max(.1,context.measureText("M").width);
+    const scaleX=cellWidth/measured;
+    context.save();
+    context.scale(scaleX,1);
+
+    for(let row=0;row<rows;row++){
+      const rowStart=row*columns;
+      let column=0;
+      while(column<columns){
+        while(column<columns&&colors[rowStart+column]===0)column++;
+        if(column>=columns)break;
+        const color=colors[rowStart+column];
+        const start=column;
+        let run="";
+        while(column<columns&&colors[rowStart+column]===color){
+          run+=chars[rowStart+column];
+          column++;
+        }
+        context.fillStyle=COLORS[color];
+        context.fillText(run,start*cellWidth/scaleX,row*cellHeight);
+      }
+    }
+    context.restore();
+  }
+
+  function blocked(x,y){
+    const radius=.62;
+    const bx=Math.floor(x/BLOCK);
+    const by=Math.floor(y/BLOCK);
+    for(let oy=-1;oy<=1;oy++){
+      for(let ox=-1;ox<=1;ox++){
+        const block=getBlock(bx+ox,by+oy);
+        for(const building of block.structures){
+          if(x>building.x0-radius&&x<building.x1+radius&&y>building.y0-radius&&y<building.y1+radius){
+            return true;
           }
-        }else if(!info.plaza&&info.hash%3===0){
-          addTree(actors,originX+5.15,originY+7.4+(info.hash%650)/100,.68);
-          if(info.hash%2===0)addTree(actors,originX+7.3+((info.hash>>>9)%650)/100,originY+5.15,.65);
-        }
-
-        if(info.plaza){
-          for(let index=0;index<4;index+=1){
-            const plazaHash=hash2(blockX,blockY,index+150);
-            addTree(actors,originX+6.5+(plazaHash%800)/100,originY+6.5+((plazaHash>>>9)%800)/100,.7);
-          }
-        }
-
-        if(info.hash%3===0){
-          const direction=info.hash%2===0?1:-1;
-          const phase=mod(time*.0042*direction+(info.hash%1800)/100,BLOCK);
-          actors.push({
-            x:originX+phase,
-            y:originY+(direction>0?1.15:2.85),
-            art:[" ____ ","[____]","o----o"],
-            color:["#2ef3ff","#ff45c8","#ffc94c","#8dff62"][info.hash%4],
-            scale:.34,
-            lift:0
-          });
-        }
-
-        if((info.hash>>>3)%4===0){
-          const direction=(info.hash>>>4)%2===0?1:-1;
-          const phase=mod(time*.0035*direction+((info.hash>>>5)%1800)/100,BLOCK);
-          actors.push({
-            x:originX+(direction>0?2.85:1.15),
-            y:originY+phase,
-            art:[" ___ ","[___]","o---o"],
-            color:["#ff6948","#ac76ff","#eaffff"][info.hash%3],
-            scale:.32,
-            lift:0
-          });
-        }
-
-        if(info.hash%2===0){
-          const walking=mod(time*.0011+((info.hash>>>7)%900)/100,9);
-          actors.push({
-            x:originX+4.85,
-            y:originY+6.2+walking,
-            art:[" o ","-|-","/ \\"],
-            color:"#d9fbff",
-            scale:.32,
-            lift:0
-          });
-        }
-
-        if((info.hash>>>6)%3===0){
-          const walking=mod(time*.00085+((info.hash>>>12)%900)/100,9);
-          actors.push({
-            x:originX+6.2+walking,
-            y:originY+4.85,
-            art:[" o ","/|\\","/ \\"],
-            color:"#ffd6ef",
-            scale:.31,
-            lift:0
-          });
         }
       }
     }
-    return actors;
+    return false;
   }
 
-  function drawActors(time,depthBuffer,columns,cellWidth){
-    const actors=nearbyActors(time).map(function(actor){
-      const deltaX=actor.x-player.x;
-      const deltaY=actor.y-player.y;
-      return{
-        actor:actor,
-        distance:Math.hypot(deltaX,deltaY),
-        angle:angleDelta(Math.atan2(deltaY,deltaX)-player.angle)
-      };
-    }).filter(function(item){
-      return item.distance>.3&&item.distance<34&&Math.abs(item.angle)<FOV*.7;
-    }).sort(function(a,b){
-      return b.distance-a.distance;
-    });
+  function update(delta){
+    const turn=1.65*delta;
+    if(keys.has("arrowleft"))player.yaw-=turn;
+    if(keys.has("arrowright"))player.yaw+=turn;
+    if(keys.has("arrowup"))player.pitch=Math.min(.49,player.pitch+1.08*delta);
+    if(keys.has("arrowdown"))player.pitch=Math.max(-.42,player.pitch-1.08*delta);
 
-    for(const item of actors){
-      const screenX=width*(.5+item.angle/FOV);
-      const column=Math.max(0,Math.min(columns-1,Math.floor(screenX/cellWidth)));
-      if(item.distance>depthBuffer[column]+.3)continue;
-      const spriteHeight=Math.min(height*.8,height/item.distance*item.actor.scale);
-      const lineHeight=spriteHeight/item.actor.art.length;
-      const floorY=height*.5+height*.45/item.distance;
-      const top=floorY-spriteHeight;
-      const opacity=Math.max(.14,Math.min(1,1.25-item.distance/33));
-      context.save();
-      context.textAlign="center";
-      context.textBaseline="middle";
-      context.font="900 "+Math.max(6,lineHeight*.9)+"px ui-monospace,SFMono-Regular,Menlo,monospace";
-      context.fillStyle=rgba(item.actor.color,opacity);
-      context.shadowColor=item.actor.color;
-      context.shadowBlur=Math.max(1,12-item.distance*.35);
-      item.actor.art.forEach(function(line,index){
-        context.fillText(line,screenX,top+(index+.5)*lineHeight);
-      });
-      context.restore();
-    }
+    let forward=(keys.has("w")?1:0)-(keys.has("s")?1:0);
+    let strafe=(keys.has("d")?1:0)-(keys.has("a")?1:0);
+    if(!forward&&!strafe)return;
+    const length=Math.hypot(forward,strafe)||1;
+    forward/=length;
+    strafe/=length;
+    const speed=(keys.has("shift")?9.4:4.7)*delta;
+    const cos=Math.cos(player.yaw);
+    const sin=Math.sin(player.yaw);
+    const dx=(cos*forward-sin*strafe)*speed;
+    const dy=(sin*forward+cos*strafe)*speed;
+    if(!blocked(player.x+dx,player.y))player.x+=dx;
+    if(!blocked(player.x,player.y+dy))player.y+=dy;
   }
 
-  function updatePlayer(deltaTime){
-    const forward=(keys.has("w")||keys.has("arrowup")?1:0)-(keys.has("s")||keys.has("arrowdown")?1:0);
-    const strafe=(keys.has("d")?1:0)-(keys.has("a")?1:0);
-    const turn=(keys.has("arrowright")?1:0)-(keys.has("arrowleft")?1:0);
-    const run=keys.has("shift")?1.85:1;
-    player.angle=mod(player.angle+turn*deltaTime*2.05,TAU);
-    let moveX=Math.cos(player.angle)*forward+Math.cos(player.angle+Math.PI/2)*strafe;
-    let moveY=Math.sin(player.angle)*forward+Math.sin(player.angle+Math.PI/2)*strafe;
-    const length=Math.hypot(moveX,moveY);
-    if(length>0){
-      moveX/=length;
-      moveY/=length;
-      const speed=3.35*run;
-      const nextX=player.x+moveX*deltaTime*speed;
-      const nextY=player.y+moveY*deltaTime*speed;
-      if(canWalk(nextX,player.y))player.x=nextX;
-      if(canWalk(player.x,nextY))player.y=nextY;
-    }
-    const xText=(player.x<0?"-":"")+String(Math.abs(Math.floor(player.x))).padStart(5,"0");
-    const yText=(player.y<0?"-":"")+String(Math.abs(Math.floor(player.y))).padStart(5,"0");
-    const coordinateText="X "+xText+"\u00a0\u00a0Y "+yText;
-    if(coords.textContent!==coordinateText)coords.textContent=coordinateText;
+  function loop(now){
+    requestAnimationFrame(loop);
+    const delta=Math.min(.05,(now-lastTick)/1000||0);
+    lastTick=now;
+    update(delta);
+    if(now-lastPaint<38)return;
+    lastPaint=now;
+    renderWorld(now/1000);
   }
 
-  function render(time){
-    window.requestAnimationFrame(render);
-    if(time-lastFrame<30)return;
-    const deltaTime=Math.min((time-lastFrame)/1000||0,.05);
-    lastFrame=time;
-    updatePlayer(deltaTime);
-
-    const mobile=width<760;
-    const columns=mobile?64:Math.min(108,Math.floor(width/11));
-    const rows=mobile?38:Math.min(56,Math.floor(height/13));
-    const cellWidth=width/columns;
-    const cellHeight=height/rows;
-    const horizon=Math.floor(rows*.48);
-    const depthBuffer=new Float32Array(columns);
-    depthBuffer.fill(MAX_VIEW);
-
-    context.fillStyle="#020307";
-    context.fillRect(0,0,width,height);
-    context.textAlign="center";
-    context.textBaseline="middle";
-    context.font="700 "+Math.ceil(cellHeight*1.04)+"px ui-monospace,SFMono-Regular,Menlo,monospace";
-
-    for(let row=0;row<horizon;row+=1){
-      for(let column=0;column<columns;column+=1){
-        const noise=hash2(column,row+Math.floor(time/1400),9)%251;
-        if(noise>244){
-          context.fillStyle=noise%2?"rgba(68,223,255,.3)":"rgba(255,79,201,.23)";
-          context.fillText(noise%3?".":"+",(column+.5)*cellWidth,(row+.5)*cellHeight);
-        }
-      }
-    }
-
-    for(let row=horizon;row<rows;row+=1){
-      const rowDistance=(rows*.56)/(row-horizon+.55);
-      const fog=Math.max(.05,Math.min(1,1-rowDistance/MAX_VIEW));
-      for(let column=0;column<columns;column+=1){
-        const cameraX=2*(column+.5)/columns-1;
-        const rayAngle=player.angle+Math.atan(cameraX*Math.tan(FOV/2));
-        const worldX=player.x+Math.cos(rayAngle)*rowDistance;
-        const worldY=player.y+Math.sin(rayAngle)*rowDistance;
-        const surface=surfaceAt(worldX,worldY);
-        context.fillStyle="rgba("+surface.color+","+(surface.alpha*fog)+")";
-        context.fillText(surface.glyph,(column+.5)*cellWidth,(row+.5)*cellHeight);
-      }
-    }
-
-    for(let column=0;column<columns;column+=1){
-      const cameraX=2*column/columns-1;
-      const rayAngle=player.angle+Math.atan(cameraX*Math.tan(FOV/2));
-      const rayX=Math.cos(rayAngle);
-      const rayY=Math.sin(rayAngle);
-      let mapX=Math.floor(player.x);
-      let mapY=Math.floor(player.y);
-      const deltaX=Math.abs(1/(rayX||.000001));
-      const deltaY=Math.abs(1/(rayY||.000001));
-      const stepX=rayX<0?-1:1;
-      const stepY=rayY<0?-1:1;
-      let sideX=rayX<0?(player.x-mapX)*deltaX:(mapX+1-player.x)*deltaX;
-      let sideY=rayY<0?(player.y-mapY)*deltaY:(mapY+1-player.y)*deltaY;
-      let activeBuilding="";
-      const hits=[];
-
-      for(let guard=0;guard<128;guard+=1){
-        let side=0;
-        if(sideX<sideY){
-          sideX+=deltaX;
-          mapX+=stepX;
-          side=0;
-        }else{
-          sideY+=deltaY;
-          mapY+=stepY;
-          side=1;
-        }
-        const rawDistance=side===0?sideX-deltaX:sideY-deltaY;
-        if(rawDistance>MAX_VIEW)break;
-        const building=buildingAt(mapX,mapY);
-        if(building){
-          if(building.key!==activeBuilding){
-            let wallX=side===0?player.y+rawDistance*rayY:player.x+rawDistance*rayX;
-            wallX-=Math.floor(wallX);
-            hits.push({
-              distance:Math.max(.05,rawDistance*Math.cos(rayAngle-player.angle)),
-              side:side,
-              wallX:wallX,
-              type:building.type,
-              height:building.height,
-              hash:building.hash
-            });
-            activeBuilding=building.key;
-            if(hits.length>=9)break;
-          }
-        }else{
-          activeBuilding="";
-        }
-      }
-
-      if(hits.length)depthBuffer[column]=hits[0].distance;
-
-      for(let hitIndex=hits.length-1;hitIndex>=0;hitIndex-=1){
-        const hit=hits[hitIndex];
-        const bottom=horizon+rows*.5/hit.distance;
-        const top=horizon-rows*(hit.height-.5)/hit.distance;
-        const start=Math.max(0,Math.floor(top));
-        const end=Math.min(rows-1,Math.floor(bottom));
-        const textureX=Math.floor(hit.wallX*12);
-        const colors=BUILDING_COLORS[hit.type];
-        const fog=Math.max(.08,Math.min(1,1.18-hit.distance/MAX_VIEW));
-        for(let row=start;row<=end;row+=1){
-          const normalized=(row-top)/Math.max(1,bottom-top);
-          const textureY=Math.floor(normalized*hit.height*16);
-          const edge=row===start||row===end;
-          const windowBand=textureY%5<2;
-          const windowColumn=(textureX+(hit.hash%3))%4<2;
-          const lit=windowBand&&windowColumn&&!edge;
-          let glyph="#";
-          if(edge)glyph="_";
-          else if(lit)glyph=(hit.hash+textureX+textureY)%5===0?"O":"[]#HMX"[hit.type];
-          else if((textureX+textureY)%7===0)glyph="|";
-          const alpha=fog*(hit.side===1?.7:1);
-          context.fillStyle=rgba(lit?colors[0]:colors[1],alpha);
-          context.fillText(glyph,(column+.5)*cellWidth,(row+.5)*cellHeight);
-        }
-      }
-    }
-
-    drawActors(time,depthBuffer,columns,cellWidth);
-
-    context.font="700 "+Math.ceil(cellHeight)+"px ui-monospace,monospace";
-    for(let index=0;index<Math.floor(columns/3.5);index+=1){
-      const seed=index*977;
-      const rainX=((seed%997)/997)*width;
-      const rainY=(time*(.03+(index%9)*.003)+seed)%(height+80)-40;
-      context.fillStyle=index%5===0?"rgba(255,67,199,.18)":"rgba(80,226,255,.23)";
-      context.fillText(index%3?"/":"|",rainX,rainY);
-    }
-
-    const haze=context.createRadialGradient(width/2,height*.48,0,width/2,height*.48,width*.46);
-    haze.addColorStop(0,"rgba(44,219,255,.075)");
-    haze.addColorStop(.45,"rgba(255,61,198,.018)");
-    haze.addColorStop(1,"rgba(0,0,0,0)");
-    context.fillStyle=haze;
-    context.fillRect(0,0,width,height);
-  }
-
-  window.addEventListener("resize",resize);
-  window.addEventListener("keydown",function(event){
+  addEventListener("resize",resize);
+  addEventListener("keydown",event=>{
     const key=event.key.toLowerCase();
-    if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(key))event.preventDefault();
-    keys.add(key);
-  },{passive:false});
-  window.addEventListener("keyup",function(event){
-    keys.delete(event.key.toLowerCase());
+    if(["w","a","s","d","shift","arrowleft","arrowright","arrowup","arrowdown"].includes(key)){
+      event.preventDefault();
+      keys.add(key);
+      hint.classList.add("hide");
+    }
   });
-  window.addEventListener("blur",function(){
-    keys.clear();
-  });
+  addEventListener("keyup",event=>keys.delete(event.key.toLowerCase()));
+  addEventListener("blur",()=>keys.clear());
 
-  canvas.addEventListener("pointerdown",function(event){
-    lookPointer=event.pointerId;
-    lastPointerX=event.clientX;
-    lastPointerY=event.clientY;
+  canvas.addEventListener("pointerdown",event=>{
+    activePointer=event.pointerId;
+    pointerX=event.clientX;
+    pointerY=event.clientY;
     canvas.setPointerCapture(event.pointerId);
-    canvas.focus();
+    hint.classList.add("hide");
   });
-  canvas.addEventListener("pointermove",function(event){
-    if(event.pointerId!==lookPointer)return;
-    const deltaX=event.clientX-lastPointerX;
-    const deltaY=event.clientY-lastPointerY;
-    player.angle=mod(player.angle+deltaX*.0065+deltaY*.0012,TAU);
-    lastPointerX=event.clientX;
-    lastPointerY=event.clientY;
+  canvas.addEventListener("pointermove",event=>{
+    if(activePointer!==event.pointerId)return;
+    const dx=event.clientX-pointerX;
+    const dy=event.clientY-pointerY;
+    pointerX=event.clientX;
+    pointerY=event.clientY;
+    player.yaw+=dx*.0042;
+    player.pitch=Math.max(-.42,Math.min(.49,player.pitch-dy*.0036));
   });
-  function endLook(event){
-    if(event.pointerId!==lookPointer)return;
-    if(canvas.hasPointerCapture(event.pointerId))canvas.releasePointerCapture(event.pointerId);
-    lookPointer=null;
-  }
-  canvas.addEventListener("pointerup",endLook);
-  canvas.addEventListener("pointercancel",endLook);
+  const releasePointer=event=>{
+    if(activePointer===event.pointerId)activePointer=null;
+  };
+  canvas.addEventListener("pointerup",releasePointer);
+  canvas.addEventListener("pointercancel",releasePointer);
 
-  document.querySelectorAll("[data-key]").forEach(function(button){
-    const key=button.getAttribute("data-key");
-    button.addEventListener("pointerdown",function(event){
+  for(const button of document.querySelectorAll("[data-key]")){
+    const key=button.dataset.key;
+    const down=event=>{
       event.preventDefault();
       button.setPointerCapture(event.pointerId);
       keys.add(key);
-    });
-    function release(){
+      hint.classList.add("hide");
+    };
+    const up=event=>{
+      event.preventDefault();
       keys.delete(key);
-    }
-    button.addEventListener("pointerup",release);
-    button.addEventListener("pointercancel",release);
-    button.addEventListener("lostpointercapture",release);
-  });
+    };
+    button.addEventListener("pointerdown",down);
+    button.addEventListener("pointerup",up);
+    button.addEventListener("pointercancel",up);
+    button.addEventListener("lostpointercapture",up);
+  }
 
   resize();
-  canvas.focus();
-  window.requestAnimationFrame(render);
+  renderWorld(0);
+  requestAnimationFrame(loop);
+  setTimeout(()=>hint.classList.add("hide"),6500);
   </script>
 </body>
 </html>
