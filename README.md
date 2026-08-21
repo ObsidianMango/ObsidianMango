@@ -39,6 +39,7 @@ If you like nostalgia, pixel art, dark humor, and weirdly useful tools, you’re
 
 | **App Name**            | **Links**                                                                 | **Description**                                         |
 |-------------------------|---------------------------------------------------------------------------|---------------------------------------------------------|
+| **STEVE: THE GAME** | ☺ [Live a Life](https://obsidianmango.github.io/ObsidianMango/steve-the-game.html) | Open-world ASCII life RPG with jobs, trading, deliveries, skating, social encounters, housing, gear, and an endless money grind. |
 | **Red Bank: ASCII Courier** | 🛹 [Ride](https://obsidianmango.github.io/ObsidianMango/red-bank.html) | Explore Red Bank in ASCII, run courier jobs, shop, eat, drink, and work the fictional after-dark G-bag circuit. |
 | **ASCII CITY** | 🌃 [Explore](https://obsidianmango.github.io/ObsidianMango/slice-city.html) | Giant procedural ASCII city with streets, skyscrapers, parks, trees, traffic, and pedestrians. |
 | **Warhammer 40K History** | ⚔️ [Explore](https://obsidianmango.github.io/ObsidianMango/warhammer40k-history/) | Interactive grimdark history atlas with factions, wars, worlds, lore, and references. |
