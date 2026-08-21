@@ -39,6 +39,7 @@ If you like nostalgia, pixel art, dark humor, and weirdly useful tools, you’re
 
 | **App Name**            | **Links**                                                                 | **Description**                                         |
 |-------------------------|---------------------------------------------------------------------------|---------------------------------------------------------|
+| **Red Bank: ASCII Courier** | 🛹 [Ride](https://obsidianmango.github.io/ObsidianMango/red-bank.html) | Explore Red Bank in ASCII, run courier jobs, shop, eat, drink, and work the fictional after-dark G-bag circuit. |
 | **ASCII CITY** | 🌃 [Explore](https://obsidianmango.github.io/ObsidianMango/slice-city.html) | Giant procedural ASCII city with streets, skyscrapers, parks, trees, traffic, and pedestrians. |
 | **Warhammer 40K History** | ⚔️ [Explore](https://obsidianmango.github.io/ObsidianMango/warhammer40k-history/) | Interactive grimdark history atlas with factions, wars, worlds, lore, and references. |
 | **Price Right** | 🎡 [Big Wheel](https://obsidianmango.github.io/ObsidianMango/price-right.html) | A 3D game-show wheel with chargeable spin power. |
