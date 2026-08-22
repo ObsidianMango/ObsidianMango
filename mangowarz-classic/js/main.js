@@ -6,7 +6,7 @@ import { activeWeapon, attemptEscape, beginCombatChoice, enemyAttack, finalizeCo
 import { acceptOffer, clearResolvedEncounter, declineOffer, resolveStreetIncident } from './encounters.js';
 import { buyTreatment, deposit, purchaseExtendedAsset, repayDebt, sellExtendedAsset, treatmentQuote, withdraw } from './finance.js';
 import { Haptics } from './haptics.js';
-import { ModalManager } from './modal-manager.js';
+import { ModalManager } from './modal-manager.js?v=5';
 import { loadGame, loadSettings, recordBestScore, resetSave, saveGame, saveSettings } from './persistence.js';
 import { createSeed, SeededRng } from './rng.js';
 import { Renderer, escapeHtml, icon } from './renderer.js';
