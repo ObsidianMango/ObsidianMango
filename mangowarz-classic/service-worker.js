@@ -1,8 +1,8 @@
-const CACHE_NAME='mangowarz-classic-v5';
+const CACHE_NAME='mangowarz-classic-v6';
 const SHELL=[
   './','./index.html','./manifest.webmanifest','./assets/asset-manifest.json',
-  './css/reset.css','./css/tokens.css','./css/layout.css','./css/components.css','./css/polish.css?v=4','./css/animations.css','./css/accessibility.css','./css/crowd.css',
-  './js/main.js?v=5','./js/config.js','./js/state.js','./js/rng.js','./js/utils.js','./js/market.js','./js/trading.js','./js/travel.js','./js/encounters.js','./js/combat.js','./js/finance.js','./js/scoring.js','./js/persistence.js','./js/audio.js','./js/haptics.js','./js/renderer.js','./js/modal-manager.js?v=5','./js/asset-loader.js','./js/accessibility.js'
+  './css/reset.css','./css/tokens.css','./css/layout.css','./css/components.css','./css/polish.css?v=5','./css/animations.css','./css/accessibility.css','./css/crowd.css',
+  './js/main.js?v=6','./js/config.js','./js/state.js','./js/rng.js','./js/utils.js','./js/market.js','./js/trading.js','./js/travel.js','./js/encounters.js','./js/combat.js','./js/finance.js','./js/scoring.js','./js/persistence.js','./js/audio.js','./js/haptics.js','./js/renderer.js','./js/modal-manager.js?v=5','./js/asset-loader.js','./js/accessibility.js'
 ];
 
 self.addEventListener('install',event=>{

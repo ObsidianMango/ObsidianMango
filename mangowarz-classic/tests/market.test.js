@@ -19,6 +19,18 @@ test('special count distribution tracks 30/42/26.6/1.4 percentages',()=>{
   const expected=[.30,.42,.266,.014];counts.forEach((count,index)=>assert.ok(Math.abs(count/n-expected[index])<.006,`${index}: ${count/n}`));
 });
 
+test('generated markets realize the rolled number of special events',()=>{
+  const counts=[0,0,0,0];const n=50000;
+  for(let i=0;i<n;i++){
+    const state=createInitialState({seed:`actual-shocks-${i}`});state.location='manhattan';
+    const market=generateMarket(state,new SeededRng(state.seed));
+    assert.equal(market.events.length,market.requestedEvents);
+    counts[market.events.length]++;
+  }
+  const expected=[.30,.42,.266,.014];
+  counts.forEach((count,index)=>assert.ok(Math.abs(count/n-expected[index])<.012,`${index}: ${count/n}`));
+});
+
 test('cheap and expensive shocks affect one eligible product each with exact multipliers',()=>{
   for(let i=0;i<2000;i++){
     const state=createInitialState({seed:`shock-${i}`});state.location=Object.keys(LOCATION_BY_ID)[i%6];const market=generateMarket(state,new SeededRng(state.seed));const seen=new Set();

@@ -11,6 +11,18 @@ test('corrupt saves are quarantined and rejected safely',()=>{
   const storage=new MemoryStorage();storage.setItem(storageKeys.saveKey('classic'),'{broken');const loaded=loadGame('classic',storage);assert.equal(loaded.ok,false);assert.equal(loaded.state,null);assert.equal(storage.getItem(storageKeys.saveKey('classic')),null);assert.ok([...storage.map.keys()].some(key=>key.includes(':corrupt:')));
 });
 
+test('structurally corrupt Extended holdings are rejected',()=>{
+  const storage=new MemoryStorage();const state=game('bad-assets');state.mode='extended';state.ownedAssets.car=-1;
+  storage.setItem(storageKeys.saveKey('extended'),JSON.stringify(state));
+  const loaded=loadGame('extended',storage);assert.equal(loaded.ok,false);assert.equal(loaded.state,null);
+});
+
+test('tampered market prices are quarantined instead of loaded',()=>{
+  const storage=new MemoryStorage();const state=game('bad-market');const row=Object.values(state.market.rows).find(item=>item.available);row.price+=1;
+  storage.setItem(storageKeys.saveKey('classic'),JSON.stringify(state));
+  const loaded=loadGame('classic',storage);assert.equal(loaded.ok,false);assert.equal(loaded.state,null);assert.ok([...storage.map.keys()].some(key=>key.includes(':corrupt:')));
+});
+
 test('Classic and Extended saves never cross-load',()=>{
   const storage=new MemoryStorage();const state=game('modes');assert.equal(saveGame(state,storage).ok,true);assert.equal(loadGame('extended',storage).state,null);assert.equal(loadGame('classic',storage).state.mode,'classic');assert.equal(resetSave('classic',storage),true);
 });

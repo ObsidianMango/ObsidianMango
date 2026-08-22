@@ -84,6 +84,7 @@ export function purchaseExtendedAsset(state, assetId) {
 
 export function sellExtendedAsset(state, assetId) {
   if (state.mode !== 'extended') return reject('Extended assets are not part of Classic Mode.');
+  if (state.ended) return reject('This run is over.');
   const asset = EXTENDED_BY_ID[assetId];
   if (!asset || (state.ownedAssets?.[assetId] ?? 0) <= 0) return reject('You do not own that asset.');
   if ((asset.capacityBonus ?? 0) > 0 && usedCapacity(state) > totalCapacity(state) - asset.capacityBonus) return reject(`Selling this would overfill your coat by ${usedCapacity(state) - (totalCapacity(state)-asset.capacityBonus)} spaces.`);

@@ -1,9 +1,12 @@
-import { LOCATION_BY_ID, POLICE_UNITS, WEAPONS, enabledProducts } from './config.js';
+import { LOCATION_BY_ID, MONEY_CAP, POLICE_UNITS, WEAPONS, enabledProducts } from './config.js';
 import { freeCapacity, totalCapacity } from './state.js';
 import { addEvent, clamp, formatMoney, safeAdd, safePercentFloor } from './utils.js';
 
 export function netWorth(state) {
-  return state.cash + state.bank - state.debt;
+  const worth = BigInt(state.cash) + BigInt(state.bank) - BigInt(state.debt);
+  if (worth > BigInt(MONEY_CAP)) return MONEY_CAP;
+  if (worth < -BigInt(MONEY_CAP)) return -MONEY_CAP;
+  return Number(worth);
 }
 
 export function encounterChance(value) {

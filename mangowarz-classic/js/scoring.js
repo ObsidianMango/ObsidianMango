@@ -45,8 +45,8 @@ export function evaluateAchievements(state) {
 
 export function finishRun(state,{forced=false}={}) {
   if (state.finished) return {ok:false,reason:'Run already finished.'};
-  if (!forced && !state.ended && state.day < state.maxDay) return {ok:false,reason:'Reach Day 30 before finishing.'};
-  if (!forced && state.pendingEncounter && !state.pendingEncounter.resolved) return {ok:false,reason:'Resolve the current encounter first.'};
+  if (!state.ended && state.day < state.maxDay) return {ok:false,reason:'Reach Day 30 before finishing.'};
+  if (state.pendingEncounter && !state.pendingEncounter.resolved) return {ok:false,reason:'Resolve the current encounter first.'};
   const score = finalScore(state);
   state.finished = true;
   state.ended = true;

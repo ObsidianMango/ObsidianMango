@@ -32,14 +32,17 @@ export function generateMarket(state, rng) {
   const maxExclusive = Math.min(location.maxListedExclusive, products.length + 1);
   const min = Math.min(location.minListed, products.length);
   const listedCount = maxExclusive > min ? rng.int(min,maxExclusive) : min;
-  const selected = new Set(rng.shuffle(products.map(product => product.id)).slice(0,listedCount));
+  const requestedEvents = sampleSpecialEventCount(rng);
+  const eligible = products.filter(product => CHEAP_IDS.includes(product.id) || EXPENSIVE_IDS.includes(product.id));
+  const guaranteedEventIds = rng.shuffle(eligible).slice(0,Math.min(requestedEvents,listedCount));
+  const remainingIds = rng.shuffle(products.map(product => product.id).filter(id => !guaranteedEventIds.some(product => product.id === id)));
+  const selected = new Set([...guaranteedEventIds.map(product => product.id),...remainingIds.slice(0,listedCount-guaranteedEventIds.length)]);
   const rows = Object.fromEntries(products.map(product => {
     const listed = selected.has(product.id);
     const price = listed ? ordinaryPrice(product,rng) : null;
     return [product.id,{ productId:product.id, available:listed, ordinaryPrice:price, price, event:'ordinary', announcement:null }];
   }));
 
-  const requestedEvents = sampleSpecialEventCount(rng);
   const candidates = rng.shuffle(products.filter(product => selected.has(product.id) && (CHEAP_IDS.includes(product.id) || EXPENSIVE_IDS.includes(product.id))));
   const events = [];
   for (const product of candidates.slice(0,requestedEvents)) {

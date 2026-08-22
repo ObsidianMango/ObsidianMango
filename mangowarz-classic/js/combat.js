@@ -44,6 +44,7 @@ export function enemyAttack(state,rng) {
   const damage = hit ? raw : 0;
   state.health = Math.max(0,state.health-damage);
   combat.log.unshift(hit ? `${combat.unitName} hits you for ${damage}.` : `${combat.unitName} fires wide.`);
+  if (hit) addEvent(state,`${combat.unitName} dealt ${damage} damage. Health: ${state.health}/100.`,'health');
   state.rngState = rng.state;
   if (state.health === 0) {
     combat.status = 'defeat';

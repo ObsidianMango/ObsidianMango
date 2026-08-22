@@ -2,7 +2,7 @@ import { EXTENDED_ASSETS, LOCATION_BY_ID, LOCATIONS, PRODUCT_BY_ID, WEAPON_BY_ID
 import { applyMotionPreference, announce } from './accessibility.js';
 import { AssetLoader } from './asset-loader.js';
 import { GameAudio } from './audio.js';
-import { activeWeapon, attemptEscape, beginCombatChoice, enemyAttack, finalizeCombat, playerAttack, surrenderGoods } from './combat.js';
+import { activeWeapon, attemptEscape, beginCombatChoice, enemyAttack, escapeProbability, finalizeCombat, playerAttack, surrenderGoods } from './combat.js';
 import { acceptOffer, clearResolvedEncounter, declineOffer, resolveStreetIncident } from './encounters.js';
 import { buyTreatment, deposit, purchaseExtendedAsset, repayDebt, sellExtendedAsset, treatmentQuote, withdraw } from './finance.js';
 import { Haptics } from './haptics.js';
@@ -25,6 +25,7 @@ const audio=new GameAudio(storedSettings.audio!==false);
 const haptics=new Haptics(storedSettings.haptics!==false);
 let state=null;
 let busy=false;
+let lastTradeSubmission={key:'',at:-Infinity};
 let installPrompt=null;
 let titleNotice='';
 
@@ -85,7 +86,7 @@ function resumeMode(mode) {
   state=loaded.state; audio.setEnabled(state.settings.audio); haptics.setEnabled(state.settings.haptics); applyMotionPreference(state.settings.reducedMotion);
   if(state.finished){const best=recordBestScore(state);state._isBest=best.isBest;renderGame({save:false});resetPageScroll();return;}
   renderGame({save:false}); resetPageScroll();
-  if(state.pendingEncounter&&!state.pendingEncounter.resolved) queueMicrotask(openEncounter);
+  if(state.pendingEncounter) queueMicrotask(openEncounter);
 }
 
 function quantityFor(productId) {
@@ -102,7 +103,9 @@ function setQuantity(productId,value) {
 }
 
 function mutateTrade(kind,productId) {
-  if(busy)return;busy=true;
+  const now=performance.now();const key=`${kind}:${productId}`;
+  if(busy||(lastTradeSubmission.key===key&&now-lastTradeSubmission.at<300)){toast('That transaction is already being submitted.','error');return;}
+  lastTradeSubmission={key,at:now};busy=true;
   try{
     const quantity=quantityFor(productId); const result=kind==='buy'?buyProduct(state,productId,quantity):sellProduct(state,productId,quantity);
     if(feedback(result,kind==='buy'?'purchase':'sale')){saveGame(state);renderGame({save:false});}
@@ -173,12 +176,18 @@ function openEncounter() {
 function openCombat() {
   const encounter=state.pendingEncounter,combat=state.combat,weapon=activeWeapon(state);if(!combat)return;
   const goods=Object.values(state.inventory).reduce((sum,q)=>sum+q,0); const enemyPct=Math.round(combat.enemyHealth/combat.enemyMaxHealth*100); const playerPct=state.health;
-  const content=`${encounterMarkup(encounter)}<div class="combat-stats"><div class="panel-card"><span class="eyebrow">Player</span><h3>${state.health}/100 health</h3><div class="combat-meter" style="--meter:${playerPct}%"><i></i></div><small>${weapon?`${escapeHtml(weapon.name)} • ${weapon.damage} damage`:'Unarmed'} • ${goods} carried units</small></div><div class="panel-card"><span class="eyebrow">${combat.activeEnemies} active / ${combat.enemyCount}</span><h3>${combat.enemyHealth}/${combat.enemyMaxHealth} enemy health</h3><div class="combat-meter" style="--meter:${enemyPct}%"><i></i></div><small>Round ${combat.round} • state: ${combat.status}</small></div></div><div class="combat-log" aria-label="Combat log">${combat.log.map(line=>`<div>${escapeHtml(line)}</div>`).join('')}</div>`;
+  const goodsSummary=Object.entries(state.inventory).filter(([,quantity])=>quantity>0).map(([id,quantity])=>`${PRODUCT_BY_ID[id].name} ×${quantity}`).join(', ')||'No carried products';
+  const playerState=combat.status==='defeat'?'defeated':combat.status==='victory'?'victorious':combat.status==='player-attack'?'firing':state.health<=25?'critical':state.health<70?'injured':'neutral';
+  const opponentState=combat.status==='victory'?'defeated':combat.status==='player-attack'?'hit':combat.status==='escape-attempt'?'pursuing':'idle';
+  const supportCandidates=[{id:'patrol-officer',file:'patrol-officer.webp'},{id:'deputy',file:'deputy.svg'},{id:'police-dog',file:'police-dog.svg'}].filter(item=>item.id!==combat.unitId);
+  const support=supportCandidates.slice(0,Math.max(0,combat.enemyCount-1)).map((item,index)=>`<img src="assets/cops/${item.file}" alt="" class="support-${index+1}">`).join('');
+  const runChance=Math.round(escapeProbability(state)*100), dropChance=Math.round(escapeProbability(state,{abandonGoods:true})*100);
+  const content=`<p>${escapeHtml(encounter.text)}</p><div class="combat-stage"><figure class="combat-character player-${playerState}"><img src="assets/characters/player-${playerState}.${playerState==='neutral'?'webp':'svg'}" alt="Player ${playerState}"><figcaption>You</figcaption></figure><div class="combat-versus" aria-hidden="true">VS</div><figure class="combat-character opponent-${opponentState}"><div class="opponent-group"><img src="${combat.portrait}" alt="${escapeHtml(combat.unitName)} portrait">${support}</div><figcaption>${escapeHtml(combat.unitName)} • ${combat.enemyCount} unit${combat.enemyCount===1?'':'s'}</figcaption></figure></div><div class="combat-stats"><div class="panel-card"><span class="eyebrow">Player</span><h3>${state.health}/100 health</h3><div class="combat-meter" style="--meter:${playerPct}%"><i></i></div><small>${weapon?`${escapeHtml(weapon.name)} • ${weapon.damage} damage`:'Unarmed'} • ${goods} carried units</small><small class="combat-goods">${escapeHtml(goodsSummary)}</small></div><div class="panel-card"><span class="eyebrow">${combat.activeEnemies} active / ${combat.enemyCount}</span><h3>${combat.enemyHealth}/${combat.enemyMaxHealth} enemy health</h3><div class="combat-meter" style="--meter:${enemyPct}%"><i></i></div><small>Round ${combat.round} • state: ${combat.status}</small></div></div><div class="combat-log" aria-label="Combat log">${combat.log.map(line=>`<div>${escapeHtml(line)}</div>`).join('')}</div>`;
   const actions=[];
   if(combat.status==='player-choice'&&!combat.resolving){
-    actions.push({label:'Run',className:'button sell',onClick:()=>runCombat(false)});
+    actions.push({label:`Run (${runChance}%)`,className:'button sell',onClick:()=>runCombat(false)});
     if(weapon) actions.push({label:`Fight (${weapon.damage})`,className:'button danger',onClick:fightCombat});
-    if(goods>0) actions.push({label:'Drop goods & run',className:'button ghost',onClick:()=>runCombat(true)});
+    if(goods>0) actions.push({label:`Drop goods & run (${dropChance}%)`,className:'button ghost',onClick:()=>runCombat(true)});
     actions.push({label:'Surrender goods',className:'button ghost',onClick:()=>{surrenderGoods(state);saveGame(state);renderGame({save:false});openEncounter();}});
   } else if(['victory','defeat'].includes(combat.status)) actions.push({label:combat.status==='defeat'?'Accept defeat':'Resolve encounter',className:'button primary',onClick:()=>{finalizeCombat(state);saveGame(state);openEncounter();}});
   else actions.push({label:'Resolving…',className:'button',disabled:true,onClick:()=>{}});
@@ -242,7 +251,8 @@ document.addEventListener('click',event=>{
   if(action==='resume')return resumeMode(button.dataset.mode);
   if(action==='qty-minus')return setQuantity(button.dataset.product,quantityFor(button.dataset.product)-1);
   if(action==='qty-plus')return setQuantity(button.dataset.product,quantityFor(button.dataset.product)+1);
-  if(action==='qty-max')return setQuantity(button.dataset.product,Math.max(1,maxBuyable(state,button.dataset.product),maxSellable(state,button.dataset.product)));
+  if(action==='qty-buy-max')return setQuantity(button.dataset.product,Math.max(1,maxBuyable(state,button.dataset.product)));
+  if(action==='qty-sell-max')return setQuantity(button.dataset.product,Math.max(1,maxSellable(state,button.dataset.product)));
   if(action==='buy'||action==='sell')return mutateTrade(action,button.dataset.product);
   if(action==='travel')return openTravel();if(action==='travel-destination')return doTravel(button.dataset.destination);
   if(action==='services')return openServices();if(action==='inventory')return openInventory();if(action==='history')return openHistory();if(action==='settings')return openSettings();

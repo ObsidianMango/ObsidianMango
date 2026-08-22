@@ -16,6 +16,8 @@ Open `http://localhost:8000/mangowarz-classic/`. ES modules and the service work
 
 No build step, API key, backend, CDN, runtime fetch, analytics, or tracking is required. Node is used only for tests and the reproducible asset pipeline.
 
+For live-reload development and layout QA, run `npm install` followed by `npm run dev`. Vite is development-only; the published game remains plain static HTML, CSS, JavaScript, and assets.
+
 ## Rules
 
 - Begin on Day 1 in the Bronx with $2,000 cash, $5,500 debt, 100 health, and 100 coat spaces.
@@ -63,6 +65,8 @@ Asset QA uses Sharp:
 npm install
 npm run qa:assets
 ```
+
+For exact responsive checks during local development, open `tools/viewport-qa.html?w=390&h=844`; add `&text=2` for the 200% text reflow fixture.
 
 ## Folder structure
 

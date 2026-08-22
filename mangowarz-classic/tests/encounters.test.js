@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { acceptOffer, encounterChance, encounterGroup, generateArrivalEncounter, resolveStreetIncident } from '../js/encounters.js';
+import { acceptOffer, encounterChance, encounterGroup, generateArrivalEncounter, netWorth, resolveStreetIncident } from '../js/encounters.js';
 import { SeededRng } from '../js/rng.js';
 import { freeCapacity, validateState } from '../js/state.js';
 import { game } from './helpers.js';
@@ -8,6 +8,13 @@ import { game } from './helpers.js';
 test('encounter wealth thresholds and local groups match specification',()=>{
   assert.equal(encounterChance(1_000_000),.24);assert.equal(encounterChance(1_000_001),.339);assert.equal(encounterChance(3_000_000),.339);assert.equal(encounterChance(3_000_001),.415);
   assert.equal(encounterGroup(32),'offer');assert.equal(encounterGroup(33),'street');assert.equal(encounterGroup(49),'street');assert.equal(encounterGroup(50),'police');
+});
+
+test('net worth uses the deliberate safe-integer cap policy',()=>{
+  const state=game('worth-cap');state.cash=Number.MAX_SAFE_INTEGER;state.bank=Number.MAX_SAFE_INTEGER;state.debt=0;
+  assert.equal(netWorth(state),Number.MAX_SAFE_INTEGER);
+  state.cash=0;state.bank=0;state.debt=Number.MAX_SAFE_INTEGER;
+  assert.equal(netWorth(state),-Number.MAX_SAFE_INTEGER);
 });
 
 test('generated incidents never create negative inventory or capacity',()=>{
