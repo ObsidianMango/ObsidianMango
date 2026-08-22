@@ -2,9 +2,10 @@ import { trapDialogFocus } from './accessibility.js';
 
 export class ModalManager {
   constructor(root) { this.root=root; this.current=null; this.returnFocus=null; this.untrap=null; }
-  open({title,content,actions=[],dismissible=true,className=''}) {
+  open({title,content,actions=[],dismissible=true,className='',returnFocus=null}) {
     this.close(false);
-    this.returnFocus=document.activeElement;
+    const active=document.activeElement;
+    this.returnFocus=returnFocus || (active instanceof HTMLElement && active!==document.body ? active : null);
     const backdrop=document.createElement('div'); backdrop.className='modal-backdrop';
     const dialog=document.createElement('section'); dialog.className=`modal-card ${className}`; dialog.setAttribute('role','dialog'); dialog.setAttribute('aria-modal','true');
     const headingId=`dialog-${Date.now()}`; dialog.setAttribute('aria-labelledby',headingId);
@@ -27,6 +28,7 @@ export class ModalManager {
   close(restore=true) {
     if(!this.current)return;
     this.untrap?.(); this.current.backdrop.remove(); this.current=null;
-    if(restore&&this.returnFocus?.isConnected)this.returnFocus.focus();
+    const target=this.returnFocus; this.returnFocus=null;
+    if(restore&&target?.isConnected)target.focus({preventScroll:true});
   }
 }

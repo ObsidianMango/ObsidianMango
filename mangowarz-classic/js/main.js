@@ -31,11 +31,13 @@ let titleNotice='';
 applyMotionPreference(storedSettings.reducedMotion ?? null);
 assets.load().then(()=>assets.guardAll());
 
+function resetPageScroll() { requestAnimationFrame(()=>window.scrollTo(0,0)); }
+
 function showTitle(notice=titleNotice) {
   state=null; modal.close();
   const classic=loadGame('classic'); const extended=loadGame('extended');
   renderer.renderTitle({classicSave:classic.state,extendedSave:extended.state,settings:loadSettings(),notice:notice || (!classic.ok?classic.reason:!extended.ok?extended.reason:'')});
-  assets.guardAll(main); syncInstallButton();
+  assets.guardAll(main); syncInstallButton(); resetPageScroll();
 }
 
 function renderGame({save=true}={}) {
@@ -68,7 +70,7 @@ function beginNewGame(values) {
     const settings={audio:values.audio,haptics:values.haptics,reducedMotion:storedSettings.reducedMotion??false};
     saveSettings(settings); audio.setEnabled(values.audio);haptics.setEnabled(values.haptics);
     state=createInitialState({mode,seed:values.seed||createSeed(),sixProductVariant:values.sixProductVariant,...settings});
-    initializeMarket(state); saveGame(state); audio.play('travel'); renderGame();
+    initializeMarket(state); saveGame(state); audio.play('travel'); renderGame(); resetPageScroll();
   };
   if(existing&&!existing.finished) confirmAction({title:'Replace saved run?',text:`This will replace the saved ${mode==='classic'?'Classic':'Extended'} run on Day ${existing.day}. The other mode is untouched.`,confirmLabel:'Replace run',danger:true,onConfirm:create}); else create();
 }
@@ -77,8 +79,8 @@ function resumeMode(mode) {
   const loaded=loadGame(mode);
   if(!loaded.ok||!loaded.state){showTitle(loaded.reason||'No save found.');return;}
   state=loaded.state; audio.setEnabled(state.settings.audio); haptics.setEnabled(state.settings.haptics); applyMotionPreference(state.settings.reducedMotion);
-  if(state.finished){const best=recordBestScore(state);state._isBest=best.isBest;renderGame({save:false});return;}
-  renderGame({save:false});
+  if(state.finished){const best=recordBestScore(state);state._isBest=best.isBest;renderGame({save:false});resetPageScroll();return;}
+  renderGame({save:false}); resetPageScroll();
   if(state.pendingEncounter&&!state.pendingEncounter.resolved) queueMicrotask(openEncounter);
 }
 
@@ -105,7 +107,7 @@ function mutateTrade(kind,productId) {
 
 function openTravel() {
   const cards=LOCATIONS.map(location=>`<button class="destination-card ${location.id===state.location?'current':''}" data-action="travel-destination" data-destination="${location.id}" ${location.id===state.location?'disabled':''}><img src="assets/locations/${location.id}-map.svg" alt="Map thumbnail for ${escapeHtml(location.name)}"><span><strong>${escapeHtml(location.name)}</strong><small>Listings ${location.minListed}–${location.maxListedExclusive-1}</small></span><span aria-label="Police rating ${location.police}" class="danger-dots">${'•'.repeat(Math.max(1,Math.ceil(location.police/20)))}</span></button>`).join('');
-  modal.open({title:`Travel • Day ${state.day}`,content:`<p style="margin-bottom:10px">A successful trip advances the day and applies 10% debt interest plus 5% bank interest.</p><div class="sheet-grid">${cards}</div>${state.day===29?'<div class="change-preview"><b>Next stop is Day 30.</b> You will still get the full final market and services before choosing Finish Run.</div>':''}`,dismissible:true});
+  modal.open({title:`Travel • Day ${state.day}`,content:`<p style="margin-bottom:10px">A successful trip advances the day and applies 10% debt interest plus 5% bank interest.</p><div class="sheet-grid">${cards}</div>${state.day===29?'<div class="change-preview"><b>Next stop is Day 30.</b> You will still get the full final market and services before choosing Finish Run.</div>':''}`,dismissible:true,returnFocus:document.querySelector('[data-action="travel"]')});
   assets.guardAll(modal.current.dialog);
 }
 
@@ -128,7 +130,7 @@ function serviceContent() {
   return `<div class="sheet-grid">${loan}${bank}${!loan&&!bank?'<div class="panel-card"><p>No bank or loan shark in this neighborhood.</p></div>':''}${clinic}${extended}</div>`;
 }
 
-function openServices() { modal.open({title:`Services • ${LOCATION_BY_ID[state.location].name}`,content:serviceContent(),dismissible:true});assets.guardAll(modal.current.dialog); }
+function openServices() { modal.open({title:`Services • ${LOCATION_BY_ID[state.location].name}`,content:serviceContent(),dismissible:true,returnFocus:document.querySelector('[data-action="services"]')});assets.guardAll(modal.current.dialog); }
 
 function serviceMutation(result,sound='purchase') { if(feedback(result,sound)){saveGame(state);renderGame({save:false});openServices();} }
 
@@ -136,16 +138,16 @@ function openInventory() {
   const products=Object.entries(state.inventory).filter(([,q])=>q>0).map(([id,q])=>`<div class="log-card"><img src="assets/products/${id}.svg" alt="${escapeHtml(PRODUCT_BY_ID[id].name)}"><span><strong>${escapeHtml(PRODUCT_BY_ID[id].name)}</strong><small>${q} units</small></span><b>${q}</b></div>`).join('')||'<div class="panel-card"><p>Your coat is empty.</p></div>';
   const weapons=state.weapons.map(id=>`<div class="log-card"><img src="assets/weapons/${id}.svg" alt="${escapeHtml(WEAPON_BY_ID[id].name)}"><span><strong>${escapeHtml(WEAPON_BY_ID[id].name)}</strong><small>Damage ${WEAPON_BY_ID[id].damage} • ${WEAPON_BY_ID[id].spaces} spaces</small></span></div>`).join('')||'<p class="small">No weapons.</p>';
   const assetsOwned=state.mode==='extended'?Object.entries(state.ownedAssets).filter(([,q])=>q>0).map(([id,q])=>`<div class="log-card"><img src="assets/extended-mode/${id}.svg" alt=""><span><strong>${escapeHtml(EXTENDED_ASSETS.find(x=>x.id===id)?.name)}</strong><small>Owned ${q}</small></span></div>`).join(''):'';
-  modal.open({title:'Inventory',content:`<div class="panel-card"><span class="eyebrow">Capacity</span><h2>${freeCapacity(state)} free / ${totalCapacity(state)}</h2><p>${usedCapacity(state)} occupied, including weapon space.</p></div><div class="sheet-grid" style="margin-top:10px">${products}<h3>Weapons</h3>${weapons}${assetsOwned?`<h3>Extended assets</h3>${assetsOwned}`:''}</div>`});assets.guardAll(modal.current.dialog);
+  modal.open({title:'Inventory',content:`<div class="panel-card"><span class="eyebrow">Capacity</span><h2>${freeCapacity(state)} free / ${totalCapacity(state)}</h2><p>${usedCapacity(state)} occupied, including weapon space.</p></div><div class="sheet-grid" style="margin-top:10px">${products}<h3>Weapons</h3>${weapons}${assetsOwned?`<h3>Extended assets</h3>${assetsOwned}`:''}</div>`,returnFocus:document.querySelector('[data-action="inventory"]')});assets.guardAll(modal.current.dialog);
 }
 
 function openHistory() {
   const logs=state.eventHistory.map(event=>`<article class="log-card"><img src="assets/ui/ticker.svg" alt=""><span><strong>Day ${event.day} • ${escapeHtml(LOCATION_BY_ID[event.location]?.name??event.location)}</strong><small>${escapeHtml(event.message)}</small></span><span class="tag">${escapeHtml(event.type)}</span></article>`).join('');
-  modal.open({title:'Recent Event History',content:`<div class="sheet-grid">${logs||'<p>No events yet.</p>'}</div>`});
+  modal.open({title:'Recent Event History',content:`<div class="sheet-grid">${logs||'<p>No events yet.</p>'}</div>`,returnFocus:document.querySelector('[data-action="history"]')});
 }
 
 function openSettings() {
-  modal.open({title:'Settings & Run Data',content:`<div class="form-stack"><label class="check-row"><input type="checkbox" data-setting="audio" ${state.settings.audio?'checked':''}><span><b>Sound effects</b><small>Original synthesized audio after interaction only.</small></span></label><label class="check-row"><input type="checkbox" data-setting="haptics" ${state.settings.haptics?'checked':''}><span><b>Haptics</b><small>Supported devices only.</small></span></label><label class="check-row"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion?'checked':''}><span><b>Reduced motion</b><small>Replaces significant movement with instant changes.</small></span></label><div class="panel-card"><span class="eyebrow">Reproducible run</span><p>Mode: <b>${state.mode}</b></p><p>Seed: <code>${escapeHtml(state.seed)}</code></p><p>Product set: ${state.settings.sixProductVariant?'six-product variant':'default 12 products'}</p><button class="button ghost" data-action="copy-seed">Copy seed</button></div><button class="button ghost" data-action="return-title">Save & return to title</button><button class="button danger" data-action="reset-run">Reset this ${state.mode} save</button><p class="small">Gameplay note: “Baretta” preserves the requested compatibility spelling; the real-world brand is commonly spelled differently.</p></div>`});
+  modal.open({title:'Settings & Run Data',content:`<div class="form-stack"><label class="check-row"><input type="checkbox" data-setting="audio" ${state.settings.audio?'checked':''}><span><b>Sound effects</b><small>Original synthesized audio after interaction only.</small></span></label><label class="check-row"><input type="checkbox" data-setting="haptics" ${state.settings.haptics?'checked':''}><span><b>Haptics</b><small>Supported devices only.</small></span></label><label class="check-row"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion?'checked':''}><span><b>Reduced motion</b><small>Replaces significant movement with instant changes.</small></span></label><div class="panel-card"><span class="eyebrow">Reproducible run</span><p>Mode: <b>${state.mode}</b></p><p>Seed: <code>${escapeHtml(state.seed)}</code></p><p>Product set: ${state.settings.sixProductVariant?'six-product variant':'default 12 products'}</p><button class="button ghost" data-action="copy-seed">Copy seed</button></div><button class="button ghost" data-action="return-title">Save & return to title</button><button class="button danger" data-action="reset-run">Reset this ${state.mode} save</button><p class="small">Gameplay note: “Baretta” preserves the requested compatibility spelling; the real-world brand is commonly spelled differently.</p></div>`,returnFocus:document.querySelector('[data-action="settings"]')});
 }
 
 function encounterMarkup(encounter) {
@@ -208,7 +210,7 @@ function completeEncounter(){
 
 function finishCurrentRun(forced=false){
   const result=finishRun(state,{forced});if(!result.ok){toast(result.reason,'error');return;}
-  const best=recordBestScore(state);state._isBest=best.isBest;saveGame(state);resetSave(state.mode);modal.close(false);audio.play(state.health===0?'defeat':'victory');renderGame({save:false});
+  const best=recordBestScore(state);state._isBest=best.isBest;saveGame(state);resetSave(state.mode);modal.close(false);audio.play(state.health===0?'defeat':'victory');renderGame({save:false});resetPageScroll();
 }
 
 async function copyText(text,success='Copied.') {
