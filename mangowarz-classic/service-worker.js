@@ -1,4 +1,4 @@
-const CACHE_NAME='mangowarz-classic-v2';
+const CACHE_NAME='mangowarz-classic-v3';
 const SHELL=[
   './','./index.html','./manifest.webmanifest','./assets/asset-manifest.json',
   './css/reset.css','./css/tokens.css','./css/layout.css','./css/components.css','./css/polish.css','./css/animations.css','./css/accessibility.css','./css/crowd.css',
