@@ -39,8 +39,7 @@ If you like nostalgia, pixel art, dark humor, and weirdly useful tools, you’re
 
 | **App Name**            | **Links**                                                                 | **Description**                                         |
 |-------------------------|---------------------------------------------------------------------------|---------------------------------------------------------|
-| **STEVE: THE GAME** | ☺ [Live a Life](https://obsidianmango.github.io/ObsidianMango/steve-the-game.html) | Open-world ASCII life RPG with jobs, trading, deliveries, skating, social encounters, housing, gear, and an endless money grind. |
-| **Red Bank: ASCII Courier** | 🛹 [Ride](https://obsidianmango.github.io/ObsidianMango/red-bank.html) | Explore Red Bank in ASCII, run courier jobs, shop, eat, drink, and work the fictional after-dark G-bag circuit. |
+| **MangoWarz** | 🥭 [Play](https://obsidianmango.github.io/ObsidianMango/mangowarz.html) | Mobile-first retro street-trading game with cities, price swings, inventory, and a scrolling news ticker. |
 | **ASCII CITY** | 🌃 [Explore](https://obsidianmango.github.io/ObsidianMango/slice-city.html) | Giant procedural ASCII city with streets, skyscrapers, parks, trees, traffic, and pedestrians. |
 | **Warhammer 40K History** | ⚔️ [Explore](https://obsidianmango.github.io/ObsidianMango/warhammer40k-history/) | Interactive grimdark history atlas with factions, wars, worlds, lore, and references. |
 | **Price Right** | 🎡 [Big Wheel](https://obsidianmango.github.io/ObsidianMango/price-right.html) | A 3D game-show wheel with chargeable spin power. |
@@ -91,7 +90,6 @@ If you like nostalgia, pixel art, dark humor, and weirdly useful tools, you’re
 | **TASKMEISTER5000**     | ☑️ [TM5K](https://obsidianmango.github.io/ObsidianMango/tm5k.html)        | Simple, beautiful gamified to-do list.                   |
 | **Excuse Generator**    | 😲 [exGen](https://obsidianmango.github.io/ObsidianMango/xcuse.html)      | Generate excuses for any situation—use wisely.           |
 | **D20 Roller**          | 🎲 [Roll It](https://obsidianmango.github.io/ObsidianMango/d20.html)      | Simple virtual D20 roller.                               |
-| **DWars Knockoff**      | 🥭 [MangoWarz](https://obsidianmango.github.io/ObsidianMango/mangowarz.html)| Not Dope Wars, but dope anyway.                          |
 | **Clicking Game**       | 🖱 [Carptunnel](https://obsidianmango.github.io/ObsidianMango/clickgame.html)| Tap-tap-tap for glory and/or carpal tunnel.              |
 | **Crappy Windows Demo** | 🖥 [Win95pu](https://obsidianmango.github.io/ObsidianMango/windex.html)   | Windows 95 parody—why not?                               |
 | **Orderer**             | 📋 [JobDoer](https://obsidianmango.github.io/ObsidianMango/orderer.html)  | Makes tallying and texting orders fast and easy.          |
