@@ -28,10 +28,14 @@ let busy=false;
 let installPrompt=null;
 let titleNotice='';
 
+if('scrollRestoration' in history) history.scrollRestoration='manual';
 applyMotionPreference(storedSettings.reducedMotion ?? null);
 assets.load().then(()=>assets.guardAll());
 
-function resetPageScroll() { requestAnimationFrame(()=>window.scrollTo(0,0)); }
+function resetPageScroll() {
+  const settle=()=>{main.focus({preventScroll:true});window.scrollTo({top:0,left:0,behavior:'instant'});};
+  settle(); requestAnimationFrame(settle); setTimeout(settle,80);
+}
 
 function showTitle(notice=titleNotice) {
   state=null; modal.close();
