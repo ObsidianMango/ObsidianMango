@@ -9,7 +9,7 @@ import { Haptics } from './haptics.js';
 import { ModalManager } from './modal-manager.js?v=5';
 import { loadGame, loadSettings, recordBestScore, resetSave, saveGame, saveSettings } from './persistence.js';
 import { createSeed, SeededRng } from './rng.js';
-import { Renderer, escapeHtml, icon } from './renderer.js?v=8';
+import { Renderer, escapeHtml, icon } from './renderer.js?v=9';
 import { finishRun, shareSummary } from './scoring.js';
 import { createInitialState, freeCapacity, totalCapacity, usedCapacity } from './state.js';
 import { buyProduct, maxBuyable, maxSellable, sellProduct } from './trading.js';

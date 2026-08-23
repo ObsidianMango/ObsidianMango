@@ -1,8 +1,8 @@
-const CACHE_NAME='mangowarz-classic-v9';
+const CACHE_NAME='mangowarz-classic-v10';
 const SHELL=[
   './','./index.html','./manifest.webmanifest','./assets/asset-manifest.json?v=2',
-  './css/reset.css','./css/tokens.css','./css/layout.css','./css/components.css','./css/polish.css?v=7','./css/animations.css','./css/accessibility.css','./css/crowd.css',
-  './js/main.js?v=8','./js/config.js?v=8','./js/state.js','./js/rng.js','./js/utils.js','./js/market.js','./js/trading.js','./js/travel.js','./js/encounters.js','./js/combat.js','./js/finance.js','./js/scoring.js','./js/persistence.js','./js/audio.js','./js/haptics.js','./js/renderer.js?v=8','./js/modal-manager.js?v=5','./js/asset-loader.js?v=2','./js/accessibility.js'
+  './css/reset.css','./css/tokens.css','./css/layout.css','./css/components.css','./css/polish.css?v=8','./css/animations.css','./css/accessibility.css','./css/crowd.css',
+  './js/main.js?v=9','./js/config.js?v=8','./js/state.js','./js/rng.js','./js/utils.js','./js/market.js','./js/trading.js','./js/travel.js','./js/encounters.js','./js/combat.js','./js/finance.js','./js/scoring.js','./js/persistence.js','./js/audio.js','./js/haptics.js','./js/renderer.js?v=9','./js/modal-manager.js?v=5','./js/asset-loader.js?v=2','./js/accessibility.js'
 ];
 
 self.addEventListener('install',event=>{
