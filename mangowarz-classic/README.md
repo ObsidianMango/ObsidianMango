@@ -1,6 +1,6 @@
 # MangoWarz Classic
 
-MangoWarz Classic is a mobile-first, static browser strategy game built around the original 30-day travel, trading, finance, street-event, and police-encounter loop. Its public interface deliberately follows the compact blue character-mode presentation of the 1980s game: monospaced status readouts, a plain market list, short prompts, and text-first dialogs.
+MangoWarz Classic is a mobile-first, static browser strategy game built around the original 30-day travel, trading, finance, street-event, and police-encounter loop. Its public interface follows a focused 1985 computer-game presentation: black arcade panels, warm-gold rules, a limited cyan/green/red palette, crisp pixel scenes, compact status cells, and one task per screen.
 
 Public path: `https://obsidianmango.github.io/ObsidianMango/mangowarz-classic/`
 
@@ -37,7 +37,8 @@ The public title screen starts Classic Mode only, keeping the experience focused
 ## Controls
 
 - Touch/mouse: all controls use labeled targets at least about 44 CSS pixels tall.
-- Keyboard: tab through every control; `J` opens Jet/Travel, `V` Visit/Services, `I` Inventory, `L` Event Log, and `O` Options when no dialog is open. The earlier `T`, `S`, and `H` aliases still work.
+- Keyboard: tab through every control. On the hub, `M` opens Market, `J`/`T` opens Travel, `I` opens Stats/Inventory, `L`/`H` opens Event Log, and `O` opens Options. In the market, `B` buys, `S` sells, and `X` sets the maximum quantity for the selected item.
+- `Escape` returns from the Market or Subway screen to the neighborhood hub.
 - `Escape` closes dismissible sheets. Mandatory encounters intentionally remain open until resolved.
 - Dialog focus is trapped while open and returned to the trigger on close.
 
@@ -71,15 +72,16 @@ For exact responsive checks during local development, open `tools/viewport-qa.ht
 ## Folder structure
 
 - `index.html` — semantic app shell and PWA metadata
-- `css/` — reset, engine-era styles, and the final `classic.css` character-mode presentation layer
+- `css/` — reset, engine styles, and the final `classic.css` 1985 pixel-interface layer
 - `js/` — modular deterministic game engine, rendering, persistence, audio, and accessibility
-- `assets/` — branding, characters, police, civilians, products, items, services, locations, encounters, effects, Extended art, and the manifest
+- `assets/classic-ui/` — the single public pixel-art set: title skyline, six neighborhood scenes, subway map, 12 product glyphs, eight hub icons, and its own provenance manifest
+- `assets/` — preserved branding, character, police, civilian, encounter, Extended, and compatibility artwork that is not mixed into the playable Classic shell
 - `tests/` — focused deterministic tests and the 10,000-run simulation
 - `tools/` — reproducible SVG generation, compatibility export, and asset QA
 
 ## Asset pipeline and provenance
 
-`tools/generate-assets.mjs` writes the preserved deterministic SVG pack and `assets/asset-manifest.json`. The playable Classic interface no longer places illustrations throughout the market, travel, services, encounters, or combat screens; it uses text like the character-mode original. The original project artwork remains available for PWA branding, metadata, compatibility, and possible private experiments. `tools/render-raster.mjs` creates only four PNG compatibility exports directly from SVG masters.
+`tools/generate-reference-ui.mjs` writes the complete public `assets/classic-ui/` set from shared palette and grid rules. The hub, market, products, title, locations, and subway therefore use one authored visual language with no external images. `tools/generate-assets.mjs` still writes the preserved compatibility SVG library and `assets/asset-manifest.json`; those older illustrations remain available for metadata and private experiments but are not mixed into the playable Classic shell. `tools/render-raster.mjs` creates four PNG compatibility exports directly from SVG masters.
 
 Every manifest record includes a stable ID, category, path, format, dimensions, alt text, states, frame information, anchor, provenance, mode, fallback, and preload priority. Optional image failures fall back to `assets/ui/image-fallback.svg` without blocking play.
 
@@ -91,7 +93,7 @@ The interface uses semantic regions, logical headings, visible focus, text label
 
 ## Intentional differences and limitations
 
-- The layout, palette, and interaction rhythm intentionally evoke the character-mode original, while writing, code, branding, and distributable assets remain independently created.
+- The layout, palette, compact panels, and task flow intentionally evoke mid-1980s computer trading games, while every distributable image, line of code, label, and MangoWarz brand element is independently created.
 - Market tips are clearly labeled as rumors, not guaranteed future prices.
 - The clinic is available in every neighborhood for usability.
 - Combat abstracts ammunition; weapons occupy capacity and deal the configured damage but do not model realistic ballistics.

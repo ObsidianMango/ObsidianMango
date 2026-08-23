@@ -9,7 +9,7 @@ import { Haptics } from './haptics.js';
 import { ModalManager } from './modal-manager.js?v=5';
 import { loadGame, loadSettings, recordBestScore, resetSave, saveGame, saveSettings } from './persistence.js';
 import { createSeed, SeededRng } from './rng.js';
-import { Renderer, escapeHtml } from './renderer.js?v=10';
+import { Renderer, escapeHtml } from './renderer.js?v=11';
 import { finishRun, shareSummary } from './scoring.js';
 import { createInitialState, freeCapacity, totalCapacity, usedCapacity } from './state.js';
 import { buyProduct, maxBuyable, maxSellable, sellProduct } from './trading.js';
@@ -28,6 +28,10 @@ let busy=false;
 let lastTradeSubmission={key:'',at:-Infinity};
 let installPrompt=null;
 let titleNotice='';
+let activeView='home';
+let selectedProductId=null;
+let selectedDestination=null;
+let activeService='all';
 
 if('scrollRestoration' in history) history.scrollRestoration='manual';
 applyMotionPreference(storedSettings.reducedMotion ?? null);
@@ -39,7 +43,7 @@ function resetPageScroll() {
 }
 
 function showTitle(notice=titleNotice) {
-  state=null; modal.close();
+  state=null; activeView='home'; selectedProductId=null; selectedDestination=null; modal.close();
   const classic=loadGame('classic'); const extended=loadGame('extended');
   renderer.renderTitle({classicSave:classic.state,extendedSave:extended.state,settings:loadSettings(),notice:notice || (!classic.ok?classic.reason:!extended.ok?extended.reason:'')});
   assets.guardAll(main); syncInstallButton(); resetPageScroll();
@@ -49,7 +53,7 @@ function renderGame({save=true}={}) {
   if(!state)return;
   if(save) saveGame(state);
   if(state.finished){renderer.renderFinal(state,state._isBest);assets.guardAll(main);return;}
-  renderer.renderGame(state); assets.guardAll(document.getElementById('app'));
+  renderer.renderGame(state,{view:activeView,selectedProductId,selectedDestination}); assets.guardAll(document.getElementById('app'));
 }
 
 function toast(message,type='info') {
@@ -75,6 +79,7 @@ function beginNewGame(values) {
     const settings={audio:values.audio,haptics:values.haptics,reducedMotion:storedSettings.reducedMotion??false};
     saveSettings(settings); audio.setEnabled(values.audio);haptics.setEnabled(values.haptics);
     state=createInitialState({mode,seed:values.seed||createSeed(),sixProductVariant:values.sixProductVariant,...settings});
+    activeView='home'; selectedProductId=null; selectedDestination=null;
     initializeMarket(state); saveGame(state); audio.play('travel'); renderGame(); resetPageScroll();
   };
   if(existing&&!existing.finished) confirmAction({title:'Replace saved run?',text:`This will replace the saved ${mode==='classic'?'Classic':'Extended'} run on Day ${existing.day}. The other mode is untouched.`,confirmLabel:'Replace run',danger:true,onConfirm:create}); else create();
@@ -84,6 +89,7 @@ function resumeMode(mode) {
   const loaded=loadGame(mode);
   if(!loaded.ok||!loaded.state){showTitle(loaded.reason||'No save found.');return;}
   state=loaded.state; audio.setEnabled(state.settings.audio); haptics.setEnabled(state.settings.haptics); applyMotionPreference(state.settings.reducedMotion);
+  activeView='home'; selectedProductId=null; selectedDestination=null;
   if(state.finished){const best=recordBestScore(state);state._isBest=best.isBest;renderGame({save:false});resetPageScroll();return;}
   renderGame({save:false}); resetPageScroll();
   if(state.pendingEncounter) queueMicrotask(openEncounter);
@@ -134,22 +140,23 @@ function doTravel(destination) {
   const result=travelTo(state,destination);
   busy=false;
   if(!result.ok){toast(result.reason,'error');return;}
+  activeView='home'; selectedProductId=null; selectedDestination=null;
   audio.play(result.encounter?.type==='police'?'police':'travel');haptics.pulse(25);saveGame(state);renderGame({save:false});
   if(result.encounter) setTimeout(openEncounter,state.settings.reducedMotion?0:220);
 }
 
-function serviceContent() {
+function serviceContent(kind='all') {
   const quote=treatmentQuote(state);
-  const loan=state.location==='bronx'?`<section class="panel-card form-stack"><h3>LOAN SHARK</h3><p>DEBT: <b>${formatMoney(state.debt)}</b></p><div class="field"><label for="loan-amount">AMOUNT TO REPAY</label><input id="loan-amount" inputmode="numeric" placeholder="WHOLE DOLLARS"><button class="button ghost" data-action="service-max" data-target="loan-amount" data-value="${Math.min(state.cash,state.debt)}">MAX ${formatMoney(Math.min(state.cash,state.debt))}</button></div><button class="button primary" data-action="repay-debt">PAY DEBT</button></section>`:'';
-  const bank=state.location==='manhattan'?`<section class="panel-card form-stack"><h3>MANHATTAN BANK</h3><p>BALANCE: <b>${formatMoney(state.bank)}</b></p><div class="two-col"><div class="field"><label for="deposit-amount">DEPOSIT</label><input id="deposit-amount" inputmode="numeric"><button class="button ghost" data-action="service-max" data-target="deposit-amount" data-value="${state.cash}">MAX</button><button class="button buy" data-action="bank-deposit">DEPOSIT</button></div><div class="field"><label for="withdraw-amount">WITHDRAW</label><input id="withdraw-amount" inputmode="numeric"><button class="button ghost" data-action="service-max" data-target="withdraw-amount" data-value="${state.bank}">MAX</button><button class="button sell" data-action="bank-withdraw">WITHDRAW</button></div></div></section>`:'';
-  const clinic=`<section class="panel-card form-stack"><h3>DOCTOR</h3><p>RESTORE ${quote.healing} HEALTH FOR ${formatMoney(quote.cost)}.</p><button class="button buy" data-action="buy-treatment" ${quote.healing===0||state.cash<quote.cost?'disabled':''}>GET TREATMENT</button></section>`;
+  const loan=(kind==='all'||kind==='loan')&&state.location==='bronx'?`<section class="panel-card form-stack"><h3>LOAN SHARK</h3><p>DEBT: <b>${formatMoney(state.debt)}</b></p><div class="field"><label for="loan-amount">AMOUNT TO REPAY</label><input id="loan-amount" inputmode="numeric" placeholder="WHOLE DOLLARS"><button class="button ghost" data-action="service-max" data-target="loan-amount" data-value="${Math.min(state.cash,state.debt)}">MAX ${formatMoney(Math.min(state.cash,state.debt))}</button></div><button class="button primary" data-action="repay-debt">PAY DEBT</button></section>`:'';
+  const bank=(kind==='all'||kind==='bank')&&state.location==='manhattan'?`<section class="panel-card form-stack"><h3>MANHATTAN BANK</h3><p>BALANCE: <b>${formatMoney(state.bank)}</b></p><div class="two-col"><div class="field"><label for="deposit-amount">DEPOSIT</label><input id="deposit-amount" inputmode="numeric"><button class="button ghost" data-action="service-max" data-target="deposit-amount" data-value="${state.cash}">MAX</button><button class="button buy" data-action="bank-deposit">DEPOSIT</button></div><div class="field"><label for="withdraw-amount">WITHDRAW</label><input id="withdraw-amount" inputmode="numeric"><button class="button ghost" data-action="service-max" data-target="withdraw-amount" data-value="${state.bank}">MAX</button><button class="button sell" data-action="bank-withdraw">WITHDRAW</button></div></div></section>`:'';
+  const clinic=kind==='all'||kind==='clinic'?`<section class="panel-card form-stack"><h3>HOSPITAL</h3><p>RESTORE ${quote.healing} HEALTH FOR ${formatMoney(quote.cost)}.</p><button class="button buy" data-action="buy-treatment" ${quote.healing===0||state.cash<quote.cost?'disabled':''}>GET TREATMENT</button></section>`:'';
   const extended=state.mode==='extended'?`<section><img class="service-scene" src="assets/extended-mode/property-portfolio.svg" alt="Mango Extended property portfolio skyline"><span class="eyebrow">Extended asset exchange</span><p>Resale factors and risks are disclosed on every card.</p><div class="sheet-grid" style="margin-top:10px">${EXTENDED_ASSETS.map(asset=>`<article class="asset-card"><img src="assets/extended-mode/${asset.id}.svg" alt="${escapeHtml(asset.name)} illustration"><span><strong>${escapeHtml(asset.name)} • ${formatMoney(asset.price)}</strong><small>${escapeHtml(asset.description)}</small><small>Owned: ${state.ownedAssets[asset.id]??0}</small></span><span><button class="button buy" data-action="asset-buy" data-asset="${asset.id}" ${state.cash<asset.price?'disabled':''}>Buy</button>${state.ownedAssets[asset.id]>0?`<button class="button sell" data-action="asset-sell" data-asset="${asset.id}">Sell</button>`:''}</span></article>`).join('')}</div></section>`:'';
-  return `<div class="sheet-grid">${loan}${bank}${!loan&&!bank?'<div class="panel-card"><p>No bank or loan shark in this neighborhood.</p></div>':''}${clinic}${extended}</div>`;
+  return `<div class="sheet-grid">${loan}${bank}${clinic}${extended}</div>`;
 }
 
-function openServices() { modal.open({title:`VISIT — ${LOCATION_BY_ID[state.location].name.toUpperCase()}`,className:'dos-dialog',content:serviceContent(),dismissible:true,returnFocus:document.querySelector('[data-action="services"]')}); }
+function openServices(kind='all') { activeService=kind; const label=kind==='bank'?'BANK':kind==='loan'?'LOAN SHARK':kind==='clinic'?'HOSPITAL':'VISIT'; modal.open({title:`${label} — ${LOCATION_BY_ID[state.location].name.toUpperCase()}`,className:'dos-dialog',content:serviceContent(kind),dismissible:true,returnFocus:document.querySelector(`[data-action="service-${kind}"]`)??document.querySelector('[data-action="services"]')}); }
 
-function serviceMutation(result,sound='purchase') { if(feedback(result,sound)){saveGame(state);renderGame({save:false});openServices();} }
+function serviceMutation(result,sound='purchase') { if(feedback(result,sound)){saveGame(state);renderGame({save:false});openServices(activeService);} }
 
 function openInventory() {
   const products=Object.entries(state.inventory).filter(([,q])=>q>0).map(([id,q])=>`<div class="log-card"><strong>${escapeHtml(PRODUCT_BY_ID[id].name).toUpperCase()}</strong><b>${q}</b></div>`).join('')||'<div class="panel-card"><p>YOUR COAT IS EMPTY.</p></div>';
@@ -165,6 +172,10 @@ function openHistory() {
 
 function openSettings() {
   modal.open({title:'Settings & Run Data',content:`<div class="form-stack"><label class="check-row"><input type="checkbox" data-setting="audio" ${state.settings.audio?'checked':''}><span><b>Sound effects</b><small>Original synthesized audio after interaction only.</small></span></label><label class="check-row"><input type="checkbox" data-setting="haptics" ${state.settings.haptics?'checked':''}><span><b>Haptics</b><small>Supported devices only.</small></span></label><label class="check-row"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion?'checked':''}><span><b>Reduced motion</b><small>Replaces significant movement with instant changes.</small></span></label><div class="panel-card"><span class="eyebrow">Reproducible run</span><p>Mode: <b>${state.mode}</b></p><p>Seed: <code>${escapeHtml(state.seed)}</code></p><p>Product set: ${state.settings.sixProductVariant?'six-product variant':'default 12 products'}</p><button class="button ghost" data-action="copy-seed">Copy seed</button></div><button class="button ghost" data-action="return-title">Save & return to title</button><button class="button danger" data-action="reset-run">Reset this ${state.mode} save</button><p class="small">Gameplay note: “Baretta” preserves the requested compatibility spelling; the real-world brand is commonly spelled differently.</p></div>`,returnFocus:document.querySelector('[data-action="settings"]')});
+}
+
+function openHowToPlay() {
+  modal.open({title:'HOW TO PLAY',className:'dos-dialog',content:`<div class="how-to"><p><b>1.</b> Open the market. Buy goods when prices are low.</p><p><b>2.</b> Take the subway to a different neighborhood. Each trip advances one day and changes prices.</p><p><b>3.</b> Sell for a profit, keep space in your coat, and pay the loan shark in the Bronx.</p><p><b>4.</b> Use the bank in Manhattan. Interest is applied after every trip.</p><p><b>5.</b> Survive police and street encounters. Day 30 stays open until you choose Finish Run.</p><p class="arcade-notice">FINAL SCORE = CASH + BANK − DEBT</p></div>`,returnFocus:document.querySelector('[data-action="how-to-play"]')});
 }
 
 function encounterMarkup(encounter) {
@@ -254,14 +265,30 @@ document.addEventListener('change',event=>{
 
 document.addEventListener('click',event=>{
   const button=event.target.closest('[data-action]');if(!button||button.disabled)return;audio.unlock();const action=button.dataset.action;
+  if(action==='how-to-play')return openHowToPlay();
   if(action==='resume')return resumeMode(button.dataset.mode);
-  if(action==='trade-product')return openTrade(button.dataset.product);
+  if(action==='open-market'){
+    activeView='market';
+    selectedProductId=Object.values(PRODUCT_BY_ID).find(product=>state.market?.rows?.[product.id]?.available)?.id??null;
+    renderGame({save:false});resetPageScroll();return;
+  }
+  if(action==='trade-product'){selectedProductId=button.dataset.product;renderGame({save:false});requestAnimationFrame(()=>document.querySelector(`[data-action="trade-product"][data-product="${selectedProductId}"]`)?.focus());return;}
   if(action==='qty-minus')return setQuantity(button.dataset.product,quantityFor(button.dataset.product)-1);
   if(action==='qty-plus')return setQuantity(button.dataset.product,quantityFor(button.dataset.product)+1);
   if(action==='qty-buy-max')return setQuantity(button.dataset.product,Math.max(1,maxBuyable(state,button.dataset.product)));
   if(action==='qty-sell-max')return setQuantity(button.dataset.product,Math.max(1,maxSellable(state,button.dataset.product)));
+  if(action==='qty-auto-max')return setQuantity(button.dataset.product,Math.max(1,Number(button.dataset.buyMax)||Number(button.dataset.sellMax)||1));
   if(action==='buy'||action==='sell')return mutateTrade(action,button.dataset.product);
+  if(action==='open-travel'){
+    activeView='travel';
+    selectedDestination=LOCATIONS.find(location=>location.id!==state.location)?.id??null;
+    renderGame({save:false});resetPageScroll();return;
+  }
+  if(action==='select-destination'){selectedDestination=button.dataset.destination;renderGame({save:false});requestAnimationFrame(()=>document.querySelector(`[data-action="select-destination"][data-destination="${selectedDestination}"]`)?.focus());return;}
+  if(action==='travel-confirm')return doTravel(button.dataset.destination);
+  if(action==='screen-back'){activeView='home';selectedProductId=null;selectedDestination=null;renderGame({save:false});resetPageScroll();return;}
   if(action==='travel')return openTravel();if(action==='travel-destination')return doTravel(button.dataset.destination);
+  if(action==='service-bank')return openServices('bank');if(action==='service-loan')return openServices('loan');if(action==='service-clinic')return openServices('clinic');
   if(action==='services')return openServices();if(action==='inventory')return openInventory();if(action==='history')return openHistory();if(action==='settings')return openSettings();
   if(action==='service-max'){const input=document.getElementById(button.dataset.target);if(input)input.value=button.dataset.value;return;}
   if(action==='repay-debt')return serviceMutation(repayDebt(state,Number(document.getElementById('loan-amount')?.value)),'sale');
@@ -283,11 +310,19 @@ document.getElementById('brand-home').addEventListener('click',()=>{if(state){sa
 document.addEventListener('keydown',event=>{
   if(!state||modal.current||event.metaKey||event.ctrlKey||event.altKey||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName))return;
   const key=event.key.toLowerCase();
-  if((key==='j'||key==='t')&&state.day<state.maxDay)openTravel();
-  if(key==='v'||key==='s')openServices();
-  if(key==='i')openInventory();
-  if(key==='l'||key==='h')openHistory();
-  if(key==='o')openSettings();
+  if(key==='escape'&&activeView!=='home'){activeView='home';selectedProductId=null;selectedDestination=null;renderGame({save:false});return;}
+  if(activeView==='home'){
+    if(key==='m'){activeView='market';selectedProductId=Object.values(PRODUCT_BY_ID).find(product=>state.market?.rows?.[product.id]?.available)?.id??null;renderGame({save:false});}
+    if((key==='j'||key==='t')&&state.day<state.maxDay){activeView='travel';selectedDestination=LOCATIONS.find(location=>location.id!==state.location)?.id??null;renderGame({save:false});}
+    if(key==='i')openInventory();
+    if(key==='l'||key==='h')openHistory();
+    if(key==='o')openSettings();
+  }
+  if(activeView==='market'&&selectedProductId){
+    if(key==='b')mutateTrade('buy',selectedProductId);
+    if(key==='s')mutateTrade('sell',selectedProductId);
+    if(key==='x')setQuantity(selectedProductId,Math.max(1,maxBuyable(state,selectedProductId)||maxSellable(state,selectedProductId)));
+  }
 });
 
 function syncInstallButton(){const button=document.getElementById('install-button');if(button)button.hidden=!installPrompt;}
