@@ -1,4 +1,4 @@
-import { EXTENDED_BY_ID, MONEY_CAP } from './config.js';
+import { EXTENDED_BY_ID, MONEY_CAP } from './config.js?v=8';
 import { addEvent } from './utils.js';
 
 function boundedBigInt(value) {

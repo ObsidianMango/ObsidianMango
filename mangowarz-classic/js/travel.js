@@ -1,4 +1,4 @@
-import { EXTENDED_BY_ID, LOCATION_BY_ID, MAX_DAY } from './config.js';
+import { EXTENDED_BY_ID, LOCATION_BY_ID, MAX_DAY } from './config.js?v=8';
 import { generateArrivalEncounter } from './encounters.js';
 import { applyTripInterest } from './finance.js';
 import { generateMarket } from './market.js';

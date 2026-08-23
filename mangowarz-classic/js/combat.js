@@ -1,4 +1,4 @@
-import { EXTENDED_BY_ID, LOCATION_BY_ID, WEAPON_BY_ID } from './config.js';
+import { EXTENDED_BY_ID, LOCATION_BY_ID, WEAPON_BY_ID } from './config.js?v=8';
 import { addEvent, clamp, formatMoney, safeAdd, safePercentFloor } from './utils.js';
 
 function result(ok, extra = {}) { return {ok,...extra}; }

@@ -1,4 +1,4 @@
-import { CHEAP_IDS, EXPENSIVE_IDS, LOCATION_BY_ID, enabledProducts } from './config.js';
+import { CHEAP_IDS, EXPENSIVE_IDS, LOCATION_BY_ID, enabledProducts } from './config.js?v=8';
 
 export function sampleSpecialEventCount(rng) {
   const roll = rng.next();

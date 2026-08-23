@@ -1,6 +1,6 @@
-import { EXTENDED_ASSETS, LOCATION_BY_ID, LOCATIONS, PRODUCT_BY_ID, WEAPON_BY_ID } from './config.js';
+import { EXTENDED_ASSETS, LOCATION_BY_ID, LOCATIONS, PRODUCT_BY_ID, WEAPON_BY_ID } from './config.js?v=8';
 import { applyMotionPreference, announce } from './accessibility.js';
-import { AssetLoader } from './asset-loader.js';
+import { AssetLoader } from './asset-loader.js?v=2';
 import { GameAudio } from './audio.js';
 import { activeWeapon, attemptEscape, beginCombatChoice, enemyAttack, escapeProbability, finalizeCombat, playerAttack, surrenderGoods } from './combat.js';
 import { acceptOffer, clearResolvedEncounter, declineOffer, resolveStreetIncident } from './encounters.js';
@@ -9,7 +9,7 @@ import { Haptics } from './haptics.js';
 import { ModalManager } from './modal-manager.js?v=5';
 import { loadGame, loadSettings, recordBestScore, resetSave, saveGame, saveSettings } from './persistence.js';
 import { createSeed, SeededRng } from './rng.js';
-import { Renderer, escapeHtml, icon } from './renderer.js';
+import { Renderer, escapeHtml, icon } from './renderer.js?v=8';
 import { finishRun, shareSummary } from './scoring.js';
 import { createInitialState, freeCapacity, totalCapacity, usedCapacity } from './state.js';
 import { buyProduct, maxBuyable, maxSellable, sellProduct } from './trading.js';

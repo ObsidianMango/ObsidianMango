@@ -1,4 +1,4 @@
-import { PRODUCT_BY_ID } from './config.js';
+import { PRODUCT_BY_ID } from './config.js?v=8';
 import { freeCapacity } from './state.js';
 import { addEvent, formatMoney, isWholePositive, safeAdd, safeMultiply } from './utils.js';
 

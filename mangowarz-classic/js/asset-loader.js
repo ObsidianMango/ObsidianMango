@@ -4,7 +4,7 @@ export class AssetLoader {
   constructor() { this.manifest = null; this.byId = new Map(); this.missing = new Set(); }
   async load() {
     try {
-      const response = await fetch('assets/asset-manifest.json');
+      const response = await fetch('assets/asset-manifest.json?v=2');
       if (!response.ok) throw new Error(`Manifest ${response.status}`);
       this.manifest = await response.json();
       this.byId = new Map(this.manifest.assets.map(asset => [asset.id,asset]));

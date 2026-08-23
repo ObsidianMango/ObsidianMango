@@ -1,4 +1,4 @@
-import { SAVE_VERSION } from './config.js';
+import { SAVE_VERSION } from './config.js?v=8';
 import { migrateState, validateState } from './state.js';
 
 const PREFIX = 'mangowarz-classic';

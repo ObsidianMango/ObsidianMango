@@ -1,4 +1,4 @@
-import { LOCATION_BY_ID, MONEY_CAP, POLICE_UNITS, WEAPONS, enabledProducts } from './config.js';
+import { LOCATION_BY_ID, MONEY_CAP, POLICE_UNITS, WEAPONS, enabledProducts } from './config.js?v=8';
 import { freeCapacity, totalCapacity } from './state.js';
 import { addEvent, clamp, formatMoney, safeAdd, safePercentFloor } from './utils.js';
 

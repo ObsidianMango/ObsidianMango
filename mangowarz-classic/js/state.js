@@ -1,4 +1,4 @@
-import { CHEAP_IDS, CLASSIC_PRODUCTS, EXPENSIVE_IDS, EXTENDED_ASSETS, LOCATION_BY_ID, MAX_DAY, MONEY_CAP, SAVE_VERSION, WEAPON_BY_ID, enabledProducts } from './config.js';
+import { CHEAP_IDS, CLASSIC_PRODUCTS, EXPENSIVE_IDS, EXTENDED_ASSETS, LOCATION_BY_ID, MAX_DAY, MONEY_CAP, SAVE_VERSION, WEAPON_BY_ID, enabledProducts } from './config.js?v=8';
 import { safeMoney } from './utils.js';
 
 export function inventoryUnits(state) {

@@ -1,4 +1,4 @@
-import { MONEY_CAP } from './config.js';
+import { MONEY_CAP } from './config.js?v=8';
 
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 export const isWholePositive = value => Number.isSafeInteger(value) && value > 0;

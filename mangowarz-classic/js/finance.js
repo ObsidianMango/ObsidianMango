@@ -1,4 +1,4 @@
-import { EXTENDED_BY_ID } from './config.js';
+import { EXTENDED_BY_ID } from './config.js?v=8';
 import { freeCapacity, totalCapacity, usedCapacity } from './state.js';
 import { addEvent, formatMoney, isWholePositive, safeAdd, safeMultiply, safePercentFloor } from './utils.js';
 

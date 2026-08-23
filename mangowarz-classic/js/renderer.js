@@ -1,4 +1,4 @@
-import { CLASSIC_PRODUCTS, EXTENDED_ASSETS, LOCATION_BY_ID, LOCATIONS, PRODUCT_BY_ID, WEAPON_BY_ID, enabledProducts } from './config.js';
+import { CLASSIC_PRODUCTS, EXTENDED_ASSETS, LOCATION_BY_ID, LOCATIONS, PRODUCT_BY_ID, WEAPON_BY_ID, enabledProducts } from './config.js?v=8';
 import { netWorth } from './encounters.js';
 import { freeCapacity, totalCapacity, usedCapacity } from './state.js';
 import { finalScore } from './scoring.js';
