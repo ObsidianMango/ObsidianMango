@@ -30,3 +30,9 @@ test('reference-style public asset set is complete, local, and internally consis
   for(const id of ['bronx','ghetto','central-park','manhattan','coney-island','brooklyn'])assert.equal(ids.has(`location-${id}`),true);
   for(const id of ['market','travel','bank','loan','clinic','stats','log','options'])assert.equal(ids.has(`icon-${id}`),true);
 });
+
+test('the complete public pixel set is included in the offline shell',()=>{
+  const worker=fs.readFileSync(path.join(root,'service-worker.js'),'utf8');
+  assert.match(worker,/mangowarz-classic-v12/);
+  for(const asset of manifest.assets)assert.match(worker,new RegExp(`\\./${asset.path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}`),`not cached: ${asset.path}`);
+});
