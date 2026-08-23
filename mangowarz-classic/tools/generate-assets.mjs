@@ -26,9 +26,11 @@ function svgFrame(title, body, width = 256, height = 256, extra = '') {
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${palette.indigo}"/><stop offset="1" stop-color="${palette.ink}"/></linearGradient>
     <linearGradient id="neon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${palette.orange}"/><stop offset="1" stop-color="${palette.orange2}"/></linearGradient>
     <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="scan" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 7.5h8" stroke="#f4edda" stroke-width="1" opacity=".08"/></pattern>
+    <radialGradient id="vignette" cx="50%" cy="42%" r="72%"><stop offset="52%" stop-color="#090b18" stop-opacity="0"/><stop offset="100%" stop-color="#090b18" stop-opacity=".72"/></radialGradient>
     ${extra}
   </defs>
-  ${body}
+  ${body}<rect width="${width}" height="${height}" fill="url(#scan)" pointer-events="none"/><rect width="${width}" height="${height}" fill="url(#vignette)" pointer-events="none"/><path d="M1 1h${width-2}v${height-2}H1z" fill="none" stroke="#f4edda" stroke-opacity=".11" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none"/>
 </svg>`;
 }
 
@@ -58,25 +60,24 @@ function addSvg(category, id, displayName, body, opts = {}) {
   });
 }
 
-function addRaster(category, id, displayName, filename, width, height, opts = {}) {
+function addExport(category, id, displayName, filename, width, height, opts = {}) {
   manifest.push({
     id: `${category}.${id}`, displayName, category, path: `assets/${category}/${filename}`,
     format: filename.split('.').pop(), nativeDimensions: { width, height }, alt: opts.alt ?? displayName,
     animationStates: opts.states ?? ['idle'], frameCount: 1, frameTimingMs: 0,
     anchorPoint: opts.anchor ?? { x: 0.5, y: 0.5 },
-    provenance: 'Original OpenAI image-generation output created exclusively for MangoWarz Classic; no external source art.',
+    provenance: `Compatibility export rendered from the original coded SVG master ${opts.master ?? 'in this project'}; no separate raster art direction.`,
     mode: opts.mode ?? 'both', fallbackAsset: opts.fallback ?? 'assets/ui/image-fallback.svg', preloadPriority: opts.priority ?? 'lazy'
   });
 }
 
-function pixelBackdrop(accent, secondary, police = false) {
-  return `<rect width="256" height="256" rx="22" fill="url(#bg)"/>
-  <path d="M0 188h256v68H0z" fill="#101323"/><path d="M0 208h256" stroke="${palette.smoke}" stroke-width="3" stroke-dasharray="16 11" opacity=".45"/>
-  <path d="M14 178V72h42v106M66 178V39h55v139M132 178V87h35v91M177 178V55h64v123" fill="${palette.asphalt}" stroke="#050711" stroke-width="6"/>
-  <g fill="${accent}" opacity=".86"><path d="M24 88h10v10H24zM39 88h10v10H39zM78 56h12v12H78zM99 56h12v12H99zM190 72h12v12h-12zM214 72h12v12h-12z"/></g>
-  <g fill="${secondary}" opacity=".72"><path d="M78 82h12v12H78zM99 82h12v12H99zM141 104h12v12h-12zM190 98h12v12h-12zM214 98h12v12h-12z"/></g>
-  <path d="M0 183h256" stroke="${accent}" stroke-width="3" opacity=".65"/>
-  ${police ? `<path d="M0 0h128v16H0z" fill="${palette.red}" opacity=".45"/><path d="M128 0h128v16H128z" fill="${palette.blue}" opacity=".45"/><path d="M40 222h176" stroke="${palette.red}" stroke-width="8" opacity=".18" filter="url(#glow)"/>` : ''}`;
+function squareScene(id, danger = false) {
+  const [a,b] = colorsFor(id);
+  const n = hash(id);
+  const horizon = 102 + (n % 46);
+  const moonX = 38 + ((n >>> 5) % 180);
+  const moonY = 31 + ((n >>> 9) % 48);
+  return `<rect width="256" height="256" fill="#0d1021"/><circle cx="${moonX}" cy="${moonY}" r="${18+(n%11)}" fill="${b}" opacity=".32"/><path d="M0 ${horizon}h${34+(n%35)}V${64+(n%49)}h${35+((n>>>4)%35)}v${horizon-(64+(n%49))}h${39+((n>>>8)%28)}V${45+((n>>>12)%55)}h${48+((n>>>16)%30)}v${horizon-(45+((n>>>12)%55))}h100v${256-horizon}H0z" fill="#1b203d"/><g fill="${a}" opacity=".7"><path d="M18 ${horizon-30}h8v12h-8zm20-18h8v12h-8zm55 7h9v13h-9zm25-28h9v13h-9zm51 22h9v13h-9zm24-35h9v13h-9zm27 26h9v13h-9z"/></g><path d="M0 184h256v72H0z" fill="${danger?'#241322':'#111522'}"/><path d="M0 213h256" stroke="${danger?palette.red:b}" stroke-width="5" stroke-dasharray="24 18" opacity=".5"/><ellipse cx="128" cy="220" rx="89" ry="23" fill="${a}" opacity=".12"/>`;
 }
 
 function personArt(id, role = 'civilian', state = 'neutral') {
@@ -150,7 +151,7 @@ function personArt(id, role = 'civilian', state = 'neutral') {
     injured: `<path d="M70 164l94 0" stroke="${palette.red}" stroke-width="9" stroke-dasharray="10 8"/>`, critical: `<circle cx="128" cy="128" r="108" fill="none" stroke="${palette.red}" stroke-width="10" opacity=".72"/>`,
     victorious: `<path d="M133 72l37-48 14 13-34 54z"/>`, defeated: `<path d="M48 205h156" stroke="${palette.smoke}" stroke-width="20"/><path d="M92 160l-31 45m70-39 44 39"/>`
   }[state] ?? '';
-  return `<rect width="256" height="256" rx="22" fill="url(#bg)"/><circle cx="128" cy="88" r="38" fill="${skin}" stroke="#050711" stroke-width="8"/>
+  return `${squareScene(id,police)}<path d="M47 205h162" stroke="${a}" stroke-width="9" opacity=".3"/><circle cx="128" cy="88" r="38" fill="${skin}" stroke="#050711" stroke-width="8"/>
   ${police ? policeHeadgear : hair}
   <path d="M${torsoInset} 126q${128-torsoInset} -34 ${256-torsoInset*2} 0l17 73H${torsoInset-17}z" fill="${police ? '#1b2850' : a}" stroke="#050711" stroke-width="9"/>
   <path d="M105 124h46v90h-46z" fill="${police ? b : palette.indigo}" opacity=".62"/>
@@ -177,24 +178,23 @@ const productMotifs = {
 };
 
 for (const [id, motif] of Object.entries(productMotifs)) {
-  addSvg('products', id, id[0].toUpperCase() + id.slice(1), `<rect width="256" height="256" rx="32" fill="url(#bg)"/><circle cx="128" cy="128" r="101" fill="none" stroke="${colorsFor(id)[0]}" stroke-width="7" opacity=".25"/>${motif}`, {
+  addSvg('products', id, id[0].toUpperCase() + id.slice(1), `${squareScene(`product-${id}`)}<path d="M31 50h194v166H31z" fill="#14182d" fill-opacity=".76" stroke="${colorsFor(id)[0]}" stroke-width="5"/><path d="M45 202h166" stroke="${colorsFor(id)[1]}" stroke-width="8" opacity=".5"/>${motif}`, {
     states: ['ordinary','cheap','expensive','selected','owned','unavailable','confiscated','dropped','found'], mode: 'classic', priority: 'high'
   });
 }
 
-const playerStates = ['trading','traveling','running','aiming','firing','hit','injured','critical','victorious','defeated'];
+const playerStates = ['neutral','trading','traveling','running','aiming','firing','hit','injured','critical','victorious','defeated'];
 for (const state of playerStates) addSvg('characters', `player-${state}`, `Player ${state}`, personArt(`player-${state}`, 'civilian', state), { states: [state], mode: 'both' });
-addRaster('characters','player-neutral','Player neutral','player-neutral.webp',512,512,{states:['neutral'],priority:'high'});
 
 const namedCops = ['officer-hardass','officer-bob','agent-smith'];
 const genericCops = ['veteran-officer','plainclothes-officer','heavy-response-officer','k9-officer','deputy','police-dog'];
 for (const id of [...namedCops, ...genericCops]) {
   const isDog = id === 'police-dog';
   const [a,b] = colorsFor(id);
-  const body = isDog ? `<rect width="256" height="256" rx="22" fill="url(#bg)"/><path d="M51 149q10-67 83-65l40-28 25 13-15 45q25 25 13 65l-32 31H69z" fill="#4d382e" stroke="#090b18" stroke-width="10"/><path d="M113 92l-21-42 43 29m42-6 27-30 4 48" fill="#4d382e" stroke="#090b18" stroke-width="10"/><circle cx="171" cy="116" r="7" fill="${a}"/><path d="M158 141h31" stroke="#090b18" stroke-width="8"/><path d="M58 165h132" stroke="${b}" stroke-width="13"/>` : personArt(id,'police','neutral');
+  const body = isDog ? `${squareScene(id,true)}<path d="M51 149q10-67 83-65l40-28 25 13-15 45q25 25 13 65l-32 31H69z" fill="#4d382e" stroke="#090b18" stroke-width="10"/><path d="M113 92l-21-42 43 29m42-6 27-30 4 48" fill="#4d382e" stroke="#090b18" stroke-width="10"/><circle cx="171" cy="116" r="7" fill="${a}"/><path d="M158 141h31" stroke="#090b18" stroke-width="8"/><path d="M58 165h132" stroke="${b}" stroke-width="13"/>` : personArt(id,'police','neutral');
   addSvg('cops', id, id.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' '), body, { states:['idle','entering','pursuing','aiming','attacking','hit','injured','defeated','player-escaped'], mode:'classic' });
 }
-addRaster('cops','patrol-officer','Patrol officer','patrol-officer.webp',512,512,{states:['idle','entering','pursuing','aiming','attacking','hit','injured','defeated','player-escaped'],mode:'classic',priority:'high'});
+addSvg('cops','patrol-officer','Patrol officer',personArt('patrol-officer','police','neutral'),{states:['idle','entering','pursuing','aiming','attacking','hit','injured','defeated','player-escaped'],mode:'classic',priority:'high'});
 
 const civilians = ['loan-shark','banker','weapon-seller','doctor','bartender','street-dealer','friend','mugger','subway-passenger','strange-woman','informant','market-buyer','market-seller','found-goods-owner','found-cash-owner','abandoned-property-witness', ...Array.from({length:8},(_,i)=>`pedestrian-${i+1}`)];
 for (const id of civilians) addSvg('civilians', id, id.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' '), personArt(id,'civilian','neutral'), { mode:'classic' });
@@ -207,7 +207,7 @@ const weaponMotifs = {
   'saturday-night-special': `<path d="M58 95h131v43h-51l-10 67H87l14-67H58z" fill="#a879ff" stroke="#090b18" stroke-width="11"/><path d="M75 108h89v13H75zm43 45h26l-6 36h-27z" fill="#ff9d21"/><path d="M189 105h22v22h-22z" fill="#69708a"/>`
 };
 for (const id of weaponDefs) {
-  addSvg('weapons', slug(id), id.replaceAll('-',' ').replace(/^./,c=>c.toUpperCase()), `<rect width="256" height="256" rx="22" fill="url(#bg)"/>${weaponMotifs[id]}`, { states:['store','street','owned','selected','empty'], mode:'classic' });
+  addSvg('weapons', slug(id), id.replaceAll('-',' ').replace(/^./,c=>c.toUpperCase()), `${squareScene(`weapon-${id}`,true)}<path d="M21 62h214v163H21z" fill="#111426" fill-opacity=".8" stroke="${colorsFor(id)[0]}" stroke-width="5"/>${weaponMotifs[id]}`, { states:['store','street','owned','selected','empty'], mode:'classic' });
 }
 
 const combatItems = ['ammunition','empty-weapon','muzzle-flash','bullet-impact','hit-effect','miss-effect','police-badge','handcuffs','radio','flashlight','medical-kit','bandage','protective-vest','evidence-bag'];
@@ -228,7 +228,7 @@ const combatMotifs = {
   'evidence-bag': `<path d="M61 63h134l12 155H49z" fill="#f4edda" fill-opacity=".77" stroke="#090b18" stroke-width="10"/><path d="M70 83h116" stroke="#ff465f" stroke-width="10"/><path d="M96 116h64v55H96z" fill="#ffd166" stroke="#090b18" stroke-width="7"/><path d="M109 187h38" stroke="#202657" stroke-width="7"/>`
 };
 for (const id of combatItems) {
-  addSvg('weapons', id, id.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' '), `<rect width="256" height="256" rx="22" fill="url(#bg)"/>${combatMotifs[id]}`, { mode:'classic' });
+  addSvg('weapons', id, id.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' '), `${squareScene(`combat-${id}`,/hit|flash|impact|badge|cuff/.test(id))}<path d="M21 39h214v187H21z" fill="#111426" fill-opacity=".7" stroke="${colorsFor(id)[0]}" stroke-width="4"/>${combatMotifs[id]}`, { mode:'classic' });
 }
 
 const equipment = ['standard-coat','upgraded-coat','damaged-coat','full-capacity-coat','empty-capacity-coat','wallet-cash','bank-deposit','debt-document','travel-ticket','map','event-log-phone','medical-supplies','information-tip','locked-item','sold-item','purchased-item'];
@@ -251,7 +251,7 @@ const equipmentMotifs = {
   'purchased-item': `<path d="M64 67h128v139H64z" fill="#ff9d21" stroke="#090b18" stroke-width="10"/><path d="M91 67q0-39 37-39t37 39" fill="none" stroke="#46f29a" stroke-width="11"/><path d="M87 137l28 28 57-68" fill="none" stroke="#f4edda" stroke-width="16"/>`
 };
 for (const id of equipment) {
-  addSvg('items', id, id.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' '), `<rect width="256" height="256" rx="22" fill="url(#bg)"/>${equipmentMotifs[id]}`, { mode:'classic' });
+  addSvg('items', id, id.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' '), `${squareScene(`item-${id}`)}<path d="M21 33h214v196H21z" fill="#111426" fill-opacity=".72" stroke="${colorsFor(id)[1]}" stroke-width="4"/>${equipmentMotifs[id]}`, { mode:'classic' });
 }
 
 const locations = [
@@ -275,13 +275,11 @@ function locationScene(id, variant, a, b) {
 }
 for (const [id,a,b] of locations) {
   for (const variant of ['day','travel','market','alert','map']) {
-    if (id === 'bronx' && variant === 'day') continue;
     addSvg('locations', `${id}-${variant}`, `${id.replaceAll('-',' ')} ${variant}`, locationScene(id,variant,a,b), {
       width:768,height:432,mode:'classic',states:[variant],priority:variant==='day'?'high':'lazy'
     });
   }
 }
-addRaster('locations','bronx-day','Bronx establishing scene','bronx-night.webp',960,540,{states:['day'],mode:'classic',priority:'high'});
 
 const services = ['bronx-loan-shark-room','manhattan-bank','street-weapon-offer','clinic','bar-information-venue','subway-platform'];
 const serviceScenes = {
@@ -417,7 +415,7 @@ const extendedMotifs = {
   wife: `<circle cx="128" cy="71" r="34" fill="#b97855" stroke="#090b18" stroke-width="8"/><path d="M63 219q9-103 65-103t65 103z" fill="#42c8ff" stroke="#090b18" stroke-width="10"/><path d="M91 66q10-48 37-48t41 48q-12 29-13 56l-20-26-18 25-22-29z" fill="#39243c" stroke="#090b18" stroke-width="8"/><path d="M172 138l16-15 16 15-16 35z" fill="#ffd166" stroke="#090b18" stroke-width="5"/>`
 };
 for (const [id] of extended) {
-  addSvg('extended-mode', id, id.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' '), `<rect width="256" height="256" rx="22" fill="url(#bg)"/><circle cx="128" cy="128" r="105" fill="none" stroke="${colorsFor(id)[0]}" stroke-width="6" opacity=".25"/>${extendedMotifs[id]}`, { mode:'extended',states:['purchase','owned','selected','sold','unavailable'] });
+  addSvg('extended-mode', id, id.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' '), `${squareScene(`extended-${id}`)}<path d="M22 32h212v198H22z" fill="#111426" fill-opacity=".62" stroke="${colorsFor(id)[0]}" stroke-width="5"/>${extendedMotifs[id]}`, { mode:'extended',states:['purchase','owned','selected','sold','unavailable'] });
 }
 const extendedScenes = {
   'divorce-event': `<rect width="768" height="432" fill="url(#bg)"/><path d="M104 60h242v308H104z" fill="#f4edda" stroke="#090b18" stroke-width="14"/><path d="M225 60l35 50-45 43 43 49-50 46 39 120" fill="none" stroke="#ff465f" stroke-width="16"/><path d="M474 131q42-65 85 0 42-65 85 0 0 62-85 124-85-62-85-124z" fill="#ff465f" stroke="#090b18" stroke-width="12"/><path d="M548 116l33 49-48 34 35 58" fill="none" stroke="#f4edda" stroke-width="12"/><circle cx="591" cy="315" r="47" fill="none" stroke="#ffd166" stroke-width="14"/><circle cx="626" cy="279" r="12" fill="#42c8ff"/>`,
@@ -431,27 +429,43 @@ for (const id of Object.keys(extendedScenes)) {
   addSvg('extended-mode',id,id.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' '),extendedScenes[id],{width:768,height:432,mode:'extended'});
 }
 
-function brandingScene(id, title, mood = 'normal') {
-  const victory = mood === 'victory';
-  const defeat = mood === 'defeat';
-  const a = victory ? palette.green : defeat ? palette.red : palette.orange;
-  return `${pixelBackdrop(a,palette.blue,defeat)}<circle cx="128" cy="126" r="62" fill="${a}" stroke="#090b18" stroke-width="10"/><path d="M128 73q54 41 0 105Q74 137 128 73z" fill="${palette.orange}"/><path d="M128 82q-5-35 35-44" fill="none" stroke="${palette.green}" stroke-width="12"/>`;
+function mangoMark() {
+  return `<path d="M128 42q75 42 62 116-11 61-62 70-51-9-62-70-13-74 62-116z" fill="#ff9d21" stroke="#090b18" stroke-width="11"/><path d="M128 51q-9-45 48-49-5 45-48 49z" fill="#46f29a" stroke="#090b18" stroke-width="9"/><path d="M87 119h24l17 25 17-25h24v69h-22v-35l-19 28-19-28v35H87z" fill="#141633"/>`;
 }
-addSvg('branding','compact-logo','MangoWarz compact logo',brandingScene('compact-logo','MangoWarz'),{width:256,height:256,priority:'high'});
-addSvg('branding','app-icon','MangoWarz app icon',`<g transform="scale(2)">${brandingScene('app-icon','MangoWarz')}</g>`,{width:512,height:512,priority:'high'});
-addSvg('branding','maskable-icon','MangoWarz maskable app icon',`<rect width="512" height="512" fill="${palette.indigo}"/><g transform="translate(64 64) scale(1.5)">${brandingScene('maskable','MangoWarz')}</g>`,{width:512,height:512,priority:'high'});
-addSvg('branding','favicon','MangoWarz favicon',`<g transform="scale(.25)">${brandingScene('favicon','MangoWarz')}</g>`,{width:64,height:64,priority:'high'});
-addSvg('branding','logo','MangoWarz Classic logo',`${pixelBackdrop(palette.orange,palette.blue,false)}<path d="M52 79h152v98H52z" fill="${palette.indigo}" stroke="${palette.orange}" stroke-width="8"/><text x="128" y="120" text-anchor="middle" fill="${palette.paper}" font-family="ui-monospace,monospace" font-size="25" font-weight="900">MANGOWARZ</text><text x="128" y="151" text-anchor="middle" fill="${palette.orange}" font-family="ui-monospace,monospace" font-size="24" font-weight="900">CLASSIC</text>`,{width:256,height:256,priority:'high'});
-for (const [id,mood] of [['splash','normal'],['social-preview','normal'],['loading-screen','normal'],['title-skyline','normal'],['game-over','defeat'],['victory','victory']]) addSvg('branding',id,id.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' '),brandingScene(id,id,mood),{width:256,height:256,priority:'high'});
 
-addRaster('branding','style-anchor','MangoWarz visual style anchor','style-anchor.png',512,512,{priority:'lazy'});
-addRaster('products','street-vial','Fictional street vial concept','street-vial.webp',256,256,{mode:'classic'});
-addRaster('branding','icon-192','MangoWarz 192 pixel app icon','icon-192.png',192,192,{priority:'high'});
-addRaster('branding','icon-512','MangoWarz 512 pixel app icon','icon-512.png',512,512,{priority:'high'});
-addRaster('branding','maskable-512','MangoWarz maskable PWA icon','maskable-512.png',512,512,{priority:'high'});
-addRaster('branding','social-preview-raster','MangoWarz social preview','social-preview.webp',1200,630,{priority:'high'});
-addRaster('branding','splash-raster','MangoWarz splash image','splash.webp',1280,720,{priority:'high'});
+function wideNoirCity(width, height, accent = palette.orange, police = false) {
+  const ground = Math.round(height*.72);
+  return `<rect width="${width}" height="${height}" fill="#0b0e20"/><circle cx="${Math.round(width*.78)}" cy="${Math.round(height*.19)}" r="${Math.round(height*.12)}" fill="${accent}" opacity=".3"/><path d="M0 ${ground}V${Math.round(height*.44)}h${Math.round(width*.09)}v${Math.round(height*.28)}h${Math.round(width*.04)}V${Math.round(height*.28)}h${Math.round(width*.11)}v${Math.round(height*.44)}h${Math.round(width*.05)}V${Math.round(height*.36)}h${Math.round(width*.13)}v${Math.round(height*.36)}h${Math.round(width*.04)}V${Math.round(height*.18)}h${Math.round(width*.11)}v${Math.round(height*.54)}h${Math.round(width*.05)}V${Math.round(height*.32)}h${Math.round(width*.12)}v${Math.round(height*.4)}h${Math.round(width*.05)}V${Math.round(height*.24)}h${Math.round(width*.1)}v${Math.round(height*.48)}z" fill="#1e2444"/><g fill="${accent}" opacity=".75"><path d="M38 ${Math.round(height*.52)}h22v23H38zm51-44h22v23H89zm100 19h25v27h-25zm65-73h25v27h-25zm123 49h27v28h-27zm79-91h29v30h-29zm154 84h26v28h-26zm77-103h27v29h-27zm146 73h25v27h-25zm87-58h26v29h-26zm111 75h27v29h-27z"/></g><path d="M0 ${ground}h${width}v${height-ground}H0z" fill="#101323"/><path d="M0 ${Math.round(height*.88)}h${width}" stroke="#69708a" stroke-width="8" stroke-dasharray="58 34" opacity=".5"/>${police?`<path d="M0 0h${width/2}v34H0z" fill="#ff465f" opacity=".55"/><path d="M${width/2} 0h${width/2}v34H${width/2}z" fill="#42c8ff" opacity=".55"/>`:''}`;
+}
+
+const splashScene = `${wideNoirCity(1280,720)}<path d="M0 497h1280" stroke="#ff9d21" stroke-width="9"/><g transform="translate(512 205) scale(1.65)">${personArt('player-neutral','civilian','neutral').replace(squareScene('player-neutral',false),'')}</g><path d="M90 525h270v138H90z" fill="#202657" stroke="#090b18" stroke-width="14"/><path d="M71 525l55-91h198l55 91z" fill="#46f29a" stroke="#090b18" stroke-width="13"/><g fill="#ff9d21" stroke="#090b18" stroke-width="8"><rect x="111" y="553" width="66" height="62"/><rect x="191" y="553" width="66" height="62"/><rect x="271" y="553" width="66" height="62"/></g><path d="M941 559h232l39 62H902z" fill="#f4edda" stroke="#090b18" stroke-width="14"/><path d="M1005 523h100l48 39H957z" fill="#202657"/><path d="M1024 507h41v22h-41z" fill="#ff465f"/><path d="M1072 507h41v22h-41z" fill="#42c8ff"/><circle cx="950" cy="634" r="32" fill="#090b18"/><circle cx="1161" cy="634" r="32" fill="#090b18"/>`;
+
+const socialScene = `${wideNoirCity(1200,630,palette.blue)}<path d="M82 451h146V223h88v228m570 0V223h88v228" fill="#5d5362" stroke="#090b18" stroke-width="14"/><path d="M0 407h1200" stroke="#ffd166" stroke-width="18"/><path d="M228 244Q472 423 930 244" fill="none" stroke="#a879ff" stroke-width="10"/><circle cx="378" cy="362" r="102" fill="none" stroke="#ff465f" stroke-width="14"/><g transform="translate(472 132) scale(1.65)">${mangoMark()}</g><path d="M0 504h1200v126H0z" fill="#101323"/><path d="M66 560h1068" stroke="#46f29a" stroke-width="10" stroke-dasharray="57 32"/>`;
+
+const loadingScene = `<rect width="1280" height="720" fill="#101323"/><path d="M0 516h1280v204H0z" fill="#292d3d"/><path d="M0 482h1280" stroke="#ffd166" stroke-width="26"/><path d="M78 132h1124v298H78z" fill="#39405a" stroke="#090b18" stroke-width="18"/><g fill="#42c8ff" stroke="#090b18" stroke-width="10"><rect x="122" y="176" width="174" height="128"/><rect x="326" y="176" width="174" height="128"/><rect x="780" y="176" width="174" height="128"/><rect x="984" y="176" width="174" height="128"/></g><path d="M574 151h132v279H574z" fill="#202657" stroke="#090b18" stroke-width="14"/><path d="M149 594h982" stroke="#42c8ff" stroke-width="16"/><path d="M149 594h632" stroke="#ff9d21" stroke-width="16"/><g transform="translate(546 436) scale(.73)">${mangoMark()}</g>`;
+
+const titleSkyline = `${wideNoirCity(1280,720,palette.purple)}<path d="M0 505q155-92 310 0t310 0 310 0 350 0v215H0z" fill="#16384d"/><path d="M149 515q74-164 157-164t158 164" fill="#8a6b4a" stroke="#090b18" stroke-width="16"/><circle cx="925" cy="343" r="142" fill="none" stroke="#ff465f" stroke-width="15"/><path d="M925 201v284M783 343h284M825 243l200 200m0-200-200 200" stroke="#ff465f" stroke-width="8"/>`;
+
+const gameOverScene = `${wideNoirCity(768,512,palette.red,true)}<path d="M196 164l188-71 188 71 88 135-95 58-45-63v164H248V294l-45 63-95-58z" fill="#3b2d3a" stroke="#090b18" stroke-width="15"/><path d="M384 110v331" stroke="#69708a" stroke-width="13"/><path d="M287 197l73 54-53 65 91 46-55 88" fill="none" stroke="#ff465f" stroke-width="19"/><path d="M82 428h604" stroke="#090b18" stroke-width="22"/>`;
+const victoryScene = `${wideNoirCity(768,512,palette.green)}<circle cx="384" cy="128" r="92" fill="#ffd166" opacity=".85"/><path d="M0 399h768v113H0z" fill="#111522"/><g transform="translate(255 87)">${personArt('player-victorious','civilian','victorious').replace(squareScene('player-victorious',false),'')}</g><path d="M93 412h582" stroke="#46f29a" stroke-width="14"/><path d="M72 373h159v39H72zm465 0h159v39H537z" fill="#ff9d21" stroke="#090b18" stroke-width="10"/>`;
+
+addSvg('branding','compact-logo','MangoWarz compact logo',`${squareScene('compact-logo')}${mangoMark()}`,{width:256,height:256,priority:'high'});
+addSvg('branding','app-icon','MangoWarz app icon',`<g transform="scale(2)">${squareScene('app-icon')}${mangoMark()}</g>`,{width:512,height:512,priority:'high'});
+addSvg('branding','maskable-icon','MangoWarz maskable app icon',`<rect width="512" height="512" fill="#141633"/><g transform="translate(64 64) scale(1.5)">${squareScene('maskable-icon')}${mangoMark()}</g>`,{width:512,height:512,priority:'high'});
+addSvg('branding','favicon','MangoWarz favicon',`<g transform="scale(.25)">${squareScene('favicon')}${mangoMark()}</g>`,{width:64,height:64,priority:'high'});
+addSvg('branding','logo','MangoWarz Classic logo',`${wideNoirCity(1200,400,palette.orange)}<path d="M54 59h1092v282H54z" fill="#101323" fill-opacity=".84" stroke="#ff9d21" stroke-width="11"/><g transform="translate(72 73) scale(.98)">${mangoMark()}</g><text x="334" y="193" fill="#f4edda" font-family="ui-monospace,monospace" font-size="104" font-weight="900" letter-spacing="5">MANGOWARZ</text><text x="342" y="282" fill="#46f29a" font-family="ui-monospace,monospace" font-size="74" font-weight="900" letter-spacing="18">CLASSIC</text>`,{width:1200,height:400,priority:'high'});
+addSvg('branding','splash','MangoWarz title street scene',splashScene,{width:1280,height:720,priority:'high'});
+addSvg('branding','social-preview','MangoWarz city atlas preview',socialScene,{width:1200,height:630,priority:'high'});
+addSvg('branding','loading-screen','MangoWarz subway loading scene',loadingScene,{width:1280,height:720,priority:'high'});
+addSvg('branding','title-skyline','MangoWarz title skyline',titleSkyline,{width:1280,height:720,priority:'high'});
+addSvg('branding','game-over','MangoWarz final defeat',gameOverScene,{width:768,height:512,priority:'high'});
+addSvg('branding','victory','MangoWarz final victory',victoryScene,{width:768,height:512,priority:'high'});
+
+addExport('branding','icon-192','MangoWarz 192 pixel app icon','icon-192.png',192,192,{priority:'high',master:'assets/branding/app-icon.svg'});
+addExport('branding','icon-512','MangoWarz 512 pixel app icon','icon-512.png',512,512,{priority:'high',master:'assets/branding/app-icon.svg'});
+addExport('branding','maskable-512','MangoWarz maskable PWA icon','maskable-512.png',512,512,{priority:'high',master:'assets/branding/maskable-icon.svg'});
+addExport('branding','social-preview-export','MangoWarz social preview export','social-preview.png',1200,630,{priority:'high',master:'assets/branding/social-preview.svg'});
 
 manifest.sort((a,b)=>a.id.localeCompare(b.id));
-fs.writeFileSync(path.join(ASSETS,'asset-manifest.json'), JSON.stringify({version:1,generatedAt:'2026-08-22',style:{name:'Mango Noir 32',palette,notes:'Original crisp neo-retro pixel-inspired illustration. Raster style anchor plus deterministic SVG production assets.'},assets:manifest},null,2)+'\n');
+fs.writeFileSync(path.join(ASSETS,'asset-manifest.json'), JSON.stringify({version:2,generatedAt:'2026-08-23',style:{name:'Mango Noir Vector',palette,notes:'One unified coded SVG art direction: full-bleed neo-retro city scenes, crisp silhouettes, scanline texture, and shared atmospheric lighting. PNGs are compatibility exports from these SVG masters only.'},assets:manifest},null,2)+'\n');
 console.log(`Generated ${manifest.length} manifest entries.`);

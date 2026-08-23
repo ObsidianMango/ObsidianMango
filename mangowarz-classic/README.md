@@ -75,11 +75,11 @@ For exact responsive checks during local development, open `tools/viewport-qa.ht
 - `js/` — modular deterministic game engine, rendering, persistence, audio, and accessibility
 - `assets/` — branding, characters, police, civilians, products, items, services, locations, encounters, effects, Extended art, and the manifest
 - `tests/` — focused deterministic tests and the 10,000-run simulation
-- `tools/` — reproducible SVG generation, raster export, and asset QA
+- `tools/` — reproducible SVG generation, compatibility export, and asset QA
 
 ## Asset pipeline and provenance
 
-`tools/generate-assets.mjs` writes the deterministic original SVG pack and `assets/asset-manifest.json`. `tools/render-raster.mjs` exports optimized PWA PNG/WebP derivatives. The raster style anchor was generated specifically for this project with OpenAI image generation, then inspected and cropped into the representative player, patrol officer, product, and Bronx scene. The rest of the coordinated pack is original deterministic SVG work following that palette and silhouette guide.
+`tools/generate-assets.mjs` writes the deterministic original SVG pack and `assets/asset-manifest.json`. Every visible illustration uses the single **Mango Noir Vector** direction: full-bleed city staging, hard pixel-inspired silhouettes, mango-orange and electric-blue lighting, scanline texture, and shared atmospheric depth. There are no separate generated-raster masters in the game. `tools/render-raster.mjs` creates only the four PNG compatibility exports required for broad PWA icon and social-preview support, directly from the same SVG masters.
 
 Every manifest record includes a stable ID, category, path, format, dimensions, alt text, states, frame information, anchor, provenance, mode, fallback, and preload priority. Optional image failures fall back to `assets/ui/image-fallback.svg` without blocking play.
 

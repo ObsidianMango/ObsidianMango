@@ -42,7 +42,7 @@ export const POLICE_UNITS = Object.freeze([
   { id:'officer-hardass', name:'Officer Hardass', baseHealth:28, damage:[5,11], portrait:'assets/cops/officer-hardass.svg' },
   { id:'officer-bob', name:'Officer Bob', baseHealth:21, damage:[3,8], portrait:'assets/cops/officer-bob.svg' },
   { id:'agent-smith', name:'Agent Smith', baseHealth:32, damage:[6,12], portrait:'assets/cops/agent-smith.svg' },
-  { id:'patrol-officer', name:'Patrol Officer', baseHealth:20, damage:[3,8], portrait:'assets/cops/patrol-officer.webp' },
+  { id:'patrol-officer', name:'Patrol Officer', baseHealth:20, damage:[3,8], portrait:'assets/cops/patrol-officer.svg' },
   { id:'veteran-officer', name:'Veteran Officer', baseHealth:27, damage:[5,10], portrait:'assets/cops/veteran-officer.svg' },
   { id:'plainclothes-officer', name:'Plainclothes Officer', baseHealth:23, damage:[4,9], portrait:'assets/cops/plainclothes-officer.svg' },
   { id:'heavy-response-officer', name:'Heavy-Response Officer', baseHealth:38, damage:[7,13], portrait:'assets/cops/heavy-response-officer.svg' },

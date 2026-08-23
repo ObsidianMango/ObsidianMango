@@ -8,6 +8,7 @@ const sharp=require('sharp');
 const root=path.resolve(import.meta.dirname,'..');
 const manifest=JSON.parse(fs.readFileSync(path.join(root,'assets','asset-manifest.json'),'utf8'));
 const errors=[];const ids=new Set();const paths=new Set();const hashes=new Map();
+if(manifest.version<2||manifest.style?.name!=='Mango Noir Vector')errors.push('Unified Mango Noir Vector manifest metadata is missing.');
 const metadataFields=['id','displayName','category','path','format','nativeDimensions','alt','animationStates','frameCount','frameTimingMs','anchorPoint','provenance','mode','fallbackAsset','preloadPriority'];
 for(const asset of manifest.assets){
   for(const field of metadataFields)if(!(field in asset))errors.push(`Missing ${field}: ${asset.id ?? '(unknown asset)'}`);
@@ -22,7 +23,15 @@ for(const asset of manifest.assets){
     if(!source.startsWith('<svg')&&!source.includes('<svg '))errors.push(`Invalid SVG start: ${asset.id}`);
     if(!source.includes('</svg>'))errors.push(`Invalid SVG end: ${asset.id}`);
     if(/<text\b/.test(source)&&asset.id!=='branding.logo')errors.push(`Unexpected visible text: ${asset.id}`);
+    if(!source.includes('id="scan"')||!source.includes('id="vignette"'))errors.push(`Unified SVG atmosphere missing: ${asset.id}`);
   }
+  else if(asset.format!=='png'||!asset.provenance.includes('Compatibility export rendered from the original coded SVG master'))errors.push(`Mixed art pipeline asset: ${asset.id}`);
+}
+
+for(const category of fs.readdirSync(path.join(root,'assets'))){
+  const directory=path.join(root,'assets',category);
+  if(!fs.statSync(directory).isDirectory())continue;
+  for(const filename of fs.readdirSync(directory))if(/\.(webp|jpe?g|gif)$/i.test(filename))errors.push(`Legacy mixed-style raster remains: assets/${category}/${filename}`);
 }
 
 const required=[
