@@ -20,10 +20,10 @@ For live-reload development and layout QA, run `npm install` followed by `npm ru
 
 ## Rules
 
-- Begin on Day 1 in the Bronx with $2,000 cash, $5,500 debt, 100 health, and 100 coat spaces.
+- Begin on Day 1 in Uptown with $2,000 cash, $5,500 debt, 100 health, and 100 coat spaces.
 - Buy available products, travel to a different neighborhood, and sell when the price is favorable.
 - Every completed trip advances one day, adds 10% debt interest, and adds 5% bank interest using floored integer arithmetic.
-- The Bronx loan shark accepts repayments but issues no new standard Classic loans. Manhattan provides bank deposits and withdrawals.
+- The Uptown loan shark accepts repayments but issues no new standard Classic loans. Chinatown provides bank deposits and withdrawals.
 - Random events use the run’s seeded PRNG. A refresh resumes the exact market, RNG position, and pending encounter.
 - Day 30 remains fully playable. The player explicitly finishes after final trading and services.
 - Classic score is exactly `cash + bank - debt`. Inventory is not automatically liquidated.

@@ -6,6 +6,14 @@ import { formatMoney } from './utils.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const pixelAsset=(path,label='',className='')=>`<img class="${className}" src="assets/classic-ui/${path}.svg" alt="${escapeHtml(label)}">`;
+const MAP_STATIONS=Object.freeze({
+  bronx:{x:193,y:147},
+  ghetto:{x:154,y:226},
+  'central-park':{x:329,y:196},
+  manhattan:{x:431,y:109},
+  'coney-island':{x:582,y:268},
+  brooklyn:{x:438,y:305}
+});
 
 export class Renderer {
   constructor({main,header,status,actions}){
@@ -37,9 +45,9 @@ export class Renderer {
         <button class="arcade-button primary" type="submit">NEW GAME</button>
         ${resume}
         <button class="arcade-button" type="button" data-action="how-to-play">HOW TO PLAY</button>
-        <details class="setup-panel"><summary>SETUP &amp; DEBUG</summary><div class="form-stack">
+        <details class="setup-panel"><summary>OPTIONS</summary><div class="form-stack">
           <label class="check-row"><input type="checkbox" name="sixProductVariant"><span><b>SIX-PRODUCT VARIANT</b><small>Use the compact historical market.</small></span></label>
-          <label class="field" for="seed-input"><span>KNOWN SEED</span><input id="seed-input" name="seed" autocomplete="off" spellcheck="false" placeholder="RANDOM"></label>
+          <label class="field" for="seed-input"><span>SEED (OPTIONAL)</span><input id="seed-input" name="seed" autocomplete="off" spellcheck="false" placeholder="RANDOM"></label>
           <div class="two-col"><label class="check-row"><input type="checkbox" name="audio" ${settings.audio!==false?'checked':''}><span><b>SOUND</b></span></label><label class="check-row"><input type="checkbox" name="haptics" ${settings.haptics!==false?'checked':''}><span><b>HAPTICS</b></span></label></div>
         </div></details>
       </form>
@@ -76,10 +84,10 @@ export class Renderer {
     this.main.innerHTML=`<section class="hub-screen arcade-screen" aria-label="${escapeHtml(location.name)} street hub">
       <figure class="location-scene">${pixelAsset(`locations/${state.location}`,`Pixel-art ${location.name} street scene`)}</figure>
       <div class="hub-menu" aria-label="Neighborhood actions">
-        ${this.hubAction('open-market','icons/market','MARKET','Browse local prices','green')}
-        ${this.hubAction('open-travel','icons/travel','TRAVEL','Choose a neighborhood','blue',state.day>=state.maxDay||state.ended)}
-        ${this.hubAction('service-bank','icons/bank','BANK',bankAvailable?`BAL ${formatMoney(state.bank)}`:'MANHATTAN ONLY','cyan',!bankAvailable)}
-        ${this.hubAction('service-loan','icons/loan','LOAN SHARK',loanAvailable?`OWED ${formatMoney(state.debt)}`:'BRONX ONLY','red',!loanAvailable)}
+        ${this.hubAction('open-market','icons/market','MARKET','','green')}
+        ${this.hubAction('open-travel','icons/travel','TRAVEL','','blue',state.day>=state.maxDay||state.ended)}
+        ${this.hubAction('service-bank','icons/bank','BANK',bankAvailable?`BAL ${formatMoney(state.bank)}`:'CHINATOWN ONLY','cyan',!bankAvailable)}
+        ${this.hubAction('service-loan','icons/loan','LOAN SHARK',loanAvailable?`OWED ${formatMoney(state.debt)}`:'UPTOWN ONLY','red',!loanAvailable)}
         ${this.hubAction('service-clinic','icons/clinic','HOSPITAL',state.health<100?`${state.health}/100 HEALTH`:'HEALTH FULL','red')}
         ${this.hubAction('inventory','icons/stats','STATS',`${state.stats.unitsBought} BOUGHT · ${state.stats.unitsSold} SOLD`,'gold')}
       </div>
@@ -90,7 +98,7 @@ export class Renderer {
   }
 
   hubAction(action,asset,label,meta,tone,disabled=false){
-    return `<button class="hub-action ${tone}" data-action="${action}" ${disabled?'disabled':''}>${pixelAsset(asset,'')}<span><b>${label}</b><small>${meta}</small></span></button>`;
+    return `<button class="hub-action ${tone}" data-action="${action}" ${disabled?'disabled':''}>${pixelAsset(asset,'')}<span><b>${label}</b>${meta?`<small>${meta}</small>`:''}</span></button>`;
   }
 
   renderMarket(state,selectedProductId){
@@ -145,11 +153,20 @@ export class Renderer {
     const candidates=Object.values(LOCATION_BY_ID);
     const fallback=candidates.find(location=>location.id!==state.location)?.id??null;
     const active=candidates.some(location=>location.id===selectedDestination&&location.id!==state.location)?selectedDestination:fallback;
+    const activeLocation=LOCATION_BY_ID[active];
+    const station=MAP_STATIONS[active]??MAP_STATIONS['central-park'];
     const rows=candidates.map(location=>`<button class="subway-stop ${location.id===active?'selected':''} ${location.id===state.location?'current':''}" data-action="select-destination" data-destination="${location.id}" ${location.id===state.location?'disabled':''} aria-pressed="${location.id===active}"><span>${escapeHtml(location.name).toUpperCase()}</span>${location.id===state.location?'<small>YOU ARE HERE</small>':''}</button>`).join('');
     this.main.innerHTML=`<section class="travel-screen arcade-screen" aria-label="Subway map">
       <header class="screen-title"><h1>SUBWAY MAP</h1></header>
       <div class="screen-readout"><span>DAY ${String(state.day).padStart(2,'0')}/${state.maxDay}</span><strong>FARE $0</strong></div>
-      <figure class="subway-map">${pixelAsset('subway-map','Abstract pixel-art subway map')}</figure>
+      <figure class="subway-map" data-map-location="${active??''}" data-map-x="${station.x}" data-map-y="${station.y}">
+        ${pixelAsset('subway-map','Abstract pixel-art subway map')}
+        <svg class="subway-map-highlight" viewBox="0 0 640 420" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <rect class="map-marker-frame" x="${station.x-18}" y="${station.y-18}" width="36" height="36"/>
+          <rect class="map-marker-core" x="${station.x-7}" y="${station.y-7}" width="14" height="14"/>
+        </svg>
+        <figcaption class="sr-only">Highlighted station: ${escapeHtml(activeLocation?.name??'')}</figcaption>
+      </figure>
       <div class="subway-list">${rows}</div>
       <div class="travel-actions"><button class="arcade-button buy" data-action="travel-confirm" data-destination="${active??''}" ${active?'':'disabled'}>TRAVEL</button><button class="arcade-button danger" data-action="screen-back">CANCEL</button></div>
       <footer class="screen-footer">TRAVEL ENDS THE DAY</footer>

@@ -76,6 +76,16 @@ test('subway view uses the six Classic destinations and a confirm step',()=>{
   renderer.renderGame(state,{view:'travel',selectedDestination:'brooklyn'});
   assert.match(main.innerHTML,/assets\/classic-ui\/subway-map\.svg/);
   assert.equal((main.innerHTML.match(/data-action="select-destination"/g)??[]).length,6);
+  assert.match(main.innerHTML,/UPTOWN/);
+  assert.match(main.innerHTML,/CHINATOWN/);
+  assert.match(main.innerHTML,/DOWNTOWN/);
+  assert.doesNotMatch(main.innerHTML,/>BRONX</);
+  assert.doesNotMatch(main.innerHTML,/>MANHATTAN</);
+  assert.match(main.innerHTML,/data-map-location="brooklyn" data-map-x="438" data-map-y="305"/);
   assert.match(main.innerHTML,/data-action="travel-confirm" data-destination="brooklyn"/);
   assert.match(main.innerHTML,/TRAVEL ENDS THE DAY/);
+
+  renderer.renderGame(state,{view:'travel',selectedDestination:'manhattan'});
+  assert.match(main.innerHTML,/data-map-location="manhattan" data-map-x="431" data-map-y="109"/);
+  assert.match(main.innerHTML,/Highlighted station: Chinatown/);
 });

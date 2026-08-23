@@ -93,7 +93,6 @@ const map=svg(640,420,'Original abstract New York subway pixel map',`
   <path d="M72 76L193 147 277 97 329 196 431 109 558 72M50 291l104-65 98 57 94-64 92 86 144-37M121 32l48 105-18 109 62 129M277 49l-10 120 62 27 17 154M508 61l-77 48 7 196 65 80" fill="none" stroke="${C.frame}" stroke-width="7"/>
   <path d="M72 76L193 147 277 97" fill="none" stroke="${C.red}" stroke-width="5"/><path d="M329 196L431 109 558 72" fill="none" stroke="${C.green}" stroke-width="5"/><path d="M50 291l104-65 98 57" fill="none" stroke="${C.cyan}" stroke-width="5"/><path d="M346 219l92 86 144-37" fill="none" stroke="${C.orange}" stroke-width="5"/><path d="M121 32l48 105-18 109 62 129" fill="none" stroke="${C.purple}" stroke-width="5"/><path d="M277 49l-10 120 62 27 17 154" fill="none" stroke="${C.blue}" stroke-width="5"/>
   <g fill="${C.black}" stroke="${C.cream}" stroke-width="5">${[[72,76],[193,147],[277,97],[329,196],[431,109],[558,72],[50,291],[154,226],[252,283],[346,219],[438,305],[582,268],[121,32],[169,137],[151,246],[213,375],[277,49],[267,169],[346,350],[508,61],[438,305],[503,385]].map(([x,y])=>`<rect x="${x-8}" y="${y-8}" width="16" height="16"/>`).join('')}</g>
-  <rect x="313" y="180" width="32" height="32" fill="${C.gold}" stroke="${C.cream}" stroke-width="5"/>
 `);
 save('subway-map.svg',map);
 

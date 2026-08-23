@@ -33,6 +33,6 @@ test('reference-style public asset set is complete, local, and internally consis
 
 test('the complete public pixel set is included in the offline shell',()=>{
   const worker=fs.readFileSync(path.join(root,'service-worker.js'),'utf8');
-  assert.match(worker,/mangowarz-classic-v12/);
+  assert.match(worker,/mangowarz-classic-v13/);
   for(const asset of manifest.assets)assert.match(worker,new RegExp(`\\./${asset.path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}`),`not cached: ${asset.path}`);
 });

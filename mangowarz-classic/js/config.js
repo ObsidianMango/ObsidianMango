@@ -23,12 +23,12 @@ export const CHEAP_IDS = Object.freeze(['acid','hashish','ludes','weed']);
 export const EXPENSIVE_IDS = Object.freeze(['cocaine','heroin','opium','speed']);
 
 export const LOCATIONS = Object.freeze([
-  { id:'bronx', name:'Bronx', police:10, minListed:7, maxListedExclusive:12 },
+  { id:'bronx', name:'Uptown', police:10, minListed:7, maxListedExclusive:12 },
   { id:'ghetto', name:'Ghetto', police:5, minListed:8, maxListedExclusive:12 },
   { id:'central-park', name:'Central Park', police:15, minListed:6, maxListedExclusive:12 },
-  { id:'manhattan', name:'Manhattan', police:90, minListed:4, maxListedExclusive:10 },
+  { id:'manhattan', name:'Chinatown', police:90, minListed:4, maxListedExclusive:10 },
   { id:'coney-island', name:'Coney Island', police:20, minListed:6, maxListedExclusive:12 },
-  { id:'brooklyn', name:'Brooklyn', police:70, minListed:4, maxListedExclusive:11 }
+  { id:'brooklyn', name:'Downtown', police:70, minListed:4, maxListedExclusive:11 }
 ]);
 
 export const WEAPONS = Object.freeze([

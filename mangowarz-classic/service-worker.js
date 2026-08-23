@@ -1,8 +1,8 @@
-const CACHE_NAME='mangowarz-classic-v12';
+const CACHE_NAME='mangowarz-classic-v13';
 const SHELL=[
   './','./index.html','./manifest.webmanifest','./assets/asset-manifest.json?v=2',
-  './css/reset.css','./css/tokens.css','./css/layout.css','./css/components.css','./css/polish.css?v=8','./css/animations.css','./css/accessibility.css','./css/crowd.css','./css/classic.css?v=2',
-  './js/main.js?v=11','./js/config.js?v=8','./js/state.js','./js/rng.js','./js/utils.js','./js/market.js','./js/trading.js','./js/travel.js','./js/encounters.js','./js/combat.js','./js/finance.js','./js/scoring.js','./js/persistence.js','./js/audio.js','./js/haptics.js','./js/renderer.js?v=11','./js/modal-manager.js?v=5','./js/asset-loader.js?v=2','./js/accessibility.js',
+  './css/reset.css','./css/tokens.css','./css/layout.css','./css/components.css','./css/polish.css?v=8','./css/animations.css','./css/accessibility.css','./css/crowd.css','./css/classic.css?v=3',
+  './js/main.js?v=12','./js/config.js?v=8','./js/state.js','./js/rng.js','./js/utils.js','./js/market.js','./js/trading.js','./js/travel.js','./js/encounters.js','./js/combat.js','./js/finance.js','./js/scoring.js','./js/persistence.js','./js/audio.js','./js/haptics.js','./js/renderer.js?v=12','./js/modal-manager.js?v=5','./js/asset-loader.js?v=2','./js/accessibility.js',
   './assets/classic-ui/asset-manifest.json','./assets/classic-ui/title-city.svg','./assets/classic-ui/subway-map.svg',
   './assets/classic-ui/locations/bronx.svg','./assets/classic-ui/locations/ghetto.svg','./assets/classic-ui/locations/central-park.svg','./assets/classic-ui/locations/manhattan.svg','./assets/classic-ui/locations/coney-island.svg','./assets/classic-ui/locations/brooklyn.svg',
   './assets/classic-ui/products/acid.svg','./assets/classic-ui/products/cocaine.svg','./assets/classic-ui/products/hashish.svg','./assets/classic-ui/products/heroin.svg','./assets/classic-ui/products/ludes.svg','./assets/classic-ui/products/mda.svg','./assets/classic-ui/products/opium.svg','./assets/classic-ui/products/pcp.svg','./assets/classic-ui/products/peyote.svg','./assets/classic-ui/products/shrooms.svg','./assets/classic-ui/products/speed.svg','./assets/classic-ui/products/weed.svg',
