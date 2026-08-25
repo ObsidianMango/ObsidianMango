@@ -58,6 +58,19 @@
         .edit-btn:hover { color: #ffd700; transform: scale(1.3); }
         .delete-btn { color: #ff5555; }
         .delete-btn:hover { color: #ff0000; transform: scale(1.3); }
+        .quick-add {
+            margin-top: 10px;
+        }
+        .quick-add input {
+            width: 100%; padding: 8px; background: #2c2c2c; border: 1px solid #00ffaa; border-radius: 5px; color: #fff;
+            font-family: 'Press Start 2P', cursive; font-size:16px; outline: none;
+        }
+        .quick-add input:focus {
+            border-color: #00e1ff;
+        }
+        .quick-add input::placeholder {
+            color: #00ffaa; opacity: 1;
+        }
         .add-task-btn {
             background: #00ffaa; color: #1e1e1e; border: none; padding: 8px; border-radius: 5px; cursor: pointer; font-size:14px; margin-top: 10px;
             transition: background 0.3s;
@@ -76,7 +89,7 @@
         .modal-header h2 { font-size: 16px; color: #00ffaa; text-align: center; }
         .modal-body input {
             width: 100%; padding: 8px; margin: 5px 0; background: #2c2c2c; border: 1px solid #00ffaa; border-radius: 4px; color: #fff;
-            font-family: 'Press Start 2P', cursive; font-size:16px; /* Increased font-size to prevent iOS zoom */
+            font-family: 'Press Start 2P', cursive; font-size:16px;
         }
         .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
         .modal-footer button {
@@ -121,14 +134,16 @@
     <div class="board">
         <div class="column" data-status="To Do">
             <div class="task-list" id="todo-list"></div>
-            <button class="add-task-btn" onclick="openModal()">+ Add Task</button>
+            <div class="quick-add">
+                <input type="text" id="quickTaskTitle" placeholder="+ Add Task" enterkeyhint="done" autocomplete="off" aria-label="Add task">
+            </div>
             <br><br><br>
         </div>
     </div>
     <div id="taskModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modalTitle">Add Task</h2>
+                <h2 id="modalTitle">Edit Task</h2>
             </div>
             <div class="modal-body">
                 <input type="text" id="taskTitle" placeholder="Task Title" autofocus>
@@ -158,6 +173,7 @@
         const taskModal = document.getElementById('taskModal');
         const completedModal = document.getElementById('completedModal');
         const taskTitleInput = document.getElementById('taskTitle');
+        const quickTaskInput = document.getElementById('quickTaskTitle');
         const pointsDisplay = document.getElementById('points');
         let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
         let points = parseInt(localStorage.getItem('points')) || 0;
@@ -235,29 +251,37 @@
         }
 
         function openModal() {
-    taskModal.style.display = 'block';
-    document.getElementById('modalTitle').innerText = isEditing ? 'Edit Task' : 'Add Task';
-    
-    if (isEditing && editingTaskId) {
-        const t = tasks.find(t => t.id === editingTaskId);
-        taskTitleInput.value = t ? t.title : '';
-    } else {
-        taskTitleInput.value = '';
-    }
+            taskModal.style.display = 'block';
+            document.getElementById('modalTitle').innerText = 'Edit Task';
 
-    // Ensure focus immediately after opening
-    requestAnimationFrame(() => {
-        taskTitleInput.focus();
-        taskTitleInput.setSelectionRange(taskTitleInput.value.length, taskTitleInput.value.length); // Place cursor at end
-    });
+            if (isEditing && editingTaskId) {
+                const t = tasks.find(t => t.id === editingTaskId);
+                taskTitleInput.value = t ? t.title : '';
+            }
 
-    // For mobile browsers, click event to trigger keyboard
-    taskTitleInput.addEventListener('touchstart', () => taskTitleInput.focus(), { once: true });
-}
+            requestAnimationFrame(() => {
+                taskTitleInput.focus();
+                taskTitleInput.setSelectionRange(taskTitleInput.value.length, taskTitleInput.value.length);
+            });
+
+            taskTitleInput.addEventListener('touchstart', () => taskTitleInput.focus(), { once: true });
+        }
 
         function closeModal() {
             taskModal.style.display = 'none';
             isEditing = false; editingTaskId = null;
+        }
+
+        function addQuickTask() {
+            const title = quickTaskInput.value.trim();
+            if (!title) return;
+
+            tasks.push({ id: Date.now().toString(), title, status: 'To Do' });
+            quickTaskInput.value = '';
+            saveToLocal();
+            renderTasks();
+
+            requestAnimationFrame(() => quickTaskInput.focus());
         }
 
         function saveTask() {
@@ -266,8 +290,6 @@
             if (isEditing && editingTaskId) {
                 const idx = tasks.findIndex(t => t.id === editingTaskId);
                 if (idx !== -1) tasks[idx].title = title;
-            } else {
-                tasks.push({ id: Date.now().toString(), title, status: 'To Do' });
             }
             saveToLocal(); renderTasks(); closeModal();
         }
@@ -324,7 +346,12 @@
         }
 
         function handleEnterKey(e) { if (e.key === 'Enter') { e.preventDefault(); saveTask(); } }
-        document.addEventListener('DOMContentLoaded', () => { taskTitleInput.addEventListener('keydown', handleEnterKey); });
+        function handleQuickEnterKey(e) { if (e.key === 'Enter') { e.preventDefault(); addQuickTask(); } }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            taskTitleInput.addEventListener('keydown', handleEnterKey);
+            quickTaskInput.addEventListener('keydown', handleQuickEnterKey);
+        });
         renderTasks();
 
         window.onclick = e => {
