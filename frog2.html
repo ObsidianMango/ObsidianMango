@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#112417" />
+<title>Froggy Nom Nom 2</title>
+<style>
+  :root{
+    --ink:#f6ffd9;
+    --dim:#bfd5ad;
+    --panel:rgba(8,20,14,.78);
+    --panel2:rgba(16,39,25,.9);
+    --line:rgba(222,255,196,.22);
+    --lime:#b9ff66;
+    --gold:#ffd85e;
+    --danger:#ff6b69;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#102118;color:var(--ink);font-family:"Courier New",monospace;touch-action:manipulation;user-select:none}
+  body{position:relative}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  button{font:700 12px/1.1 "Courier New",monospace;letter-spacing:.04em;color:var(--ink)}
+
+  #hud{position:absolute;z-index:5;left:0;right:0;top:0;padding:calc(8px + env(safe-area-inset-top)) 10px 0;pointer-events:none}
+  .hudTop{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}
+  .chapterCard{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px;backdrop-filter:blur(5px)}
+  #chapterLine{font-weight:900;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:white}
+  #objectiveLine{margin-top:3px;font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stats{display:flex;gap:5px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:7px 8px;white-space:nowrap;font-size:11px;font-weight:900}
+  #progressTrack{height:10px;margin-top:7px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.18);border-radius:999px;overflow:hidden;position:relative}
+  #progressFill{height:100%;width:0;background:linear-gradient(90deg,#86d34c,#d8ff6e);transition:width .18s ease}
+  #progressText{position:absolute;inset:0;display:grid;place-items:center;font-size:8px;font-weight:900;color:#08120a;text-shadow:0 1px 0 rgba(255,255,255,.3)}
+
+  #roadmap{margin-top:6px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+  .roadNode{min-width:0;background:rgba(8,20,14,.72);border:1px solid var(--line);border-radius:9px;padding:5px 4px;text-align:center;backdrop-filter:blur(4px)}
+  .roadNode.current{border-color:var(--lime);box-shadow:inset 0 0 0 1px rgba(185,255,102,.25)}
+  .roadNode.done{opacity:.58}
+  .roadIcon{font-size:15px;line-height:1}
+  .roadLabel{font-size:7px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+  .roadNode.current .roadLabel{color:var(--lime)}
+
+  #nextTease{position:absolute;z-index:5;top:calc(111px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:calc(100% - 24px);background:rgba(7,17,12,.72);border:1px solid rgba(255,216,94,.38);border-radius:999px;padding:5px 10px;font-size:9px;font-weight:900;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;transition:opacity .2s}
+
+  #controls{position:absolute;z-index:6;left:0;right:0;bottom:0;padding:8px 10px calc(10px + env(safe-area-inset-bottom));display:flex;justify-content:space-between;align-items:end;pointer-events:none}
+  .powerGroup{display:flex;gap:8px;align-items:end}
+  .power{width:68px;height:68px;border-radius:50%;border:2px solid rgba(255,255,255,.72);background:rgba(17,43,25,.88);box-shadow:0 6px 14px rgba(0,0,0,.25);pointer-events:auto;display:grid;place-items:center;text-align:center;padding:5px}
+  .power:active{transform:translateY(1px) scale(.98)}
+  .power:disabled{opacity:.35;filter:grayscale(1)}
+  .powerEmoji{display:block;font-size:24px;line-height:1}
+  .powerText{display:block;margin-top:2px;font-size:8px}
+  #bloomBtn{background:rgba(83,39,74,.88)}
+  #boomBtn{background:rgba(81,48,20,.9)}
+  #shieldBadge{align-self:center;background:rgba(8,20,14,.72);border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:9px;font-weight:900;min-width:70px;text-align:center;pointer-events:none}
+
+  #toast{position:absolute;z-index:8;left:50%;top:47%;transform:translate(-50%,-50%) scale(.96);padding:10px 14px;border-radius:12px;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:900;text-align:center;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;max-width:80%}
+  #toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+  .overlay{position:absolute;z-index:20;inset:0;display:flex;align-items:center;justify-content:center;padding:18px;background:linear-gradient(rgba(4,12,8,.9),rgba(3,8,6,.95));text-align:center}
+  .overlay.hidden{display:none}
+  .panel{width:min(520px,100%);max-height:92%;overflow:auto;background:rgba(16,39,25,.96);border:1px solid rgba(226,255,204,.28);border-radius:18px;padding:18px;box-shadow:0 18px 55px rgba(0,0,0,.42)}
+  .logo{font-size:clamp(29px,9vw,52px);font-weight:1000;line-height:.9;letter-spacing:-.08em;color:#d9ff77;text-shadow:0 3px 0 #235b2e,0 7px 18px rgba(0,0,0,.35)}
+  .logo small{display:block;margin-top:9px;font-size:11px;letter-spacing:.18em;color:#fff}
+  .tag{margin:15px auto 11px;max-width:380px;font-size:12px;color:var(--dim);line-height:1.45}
+  .previewStrip{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:13px 0}
+  .preview{background:rgba(0,0,0,.23);border:1px solid var(--line);border-radius:10px;padding:8px 3px;font-size:10px}
+  .preview span{display:block;font-size:21px;margin-bottom:4px}
+  .primary{width:100%;min-height:48px;border:0;border-radius:12px;background:var(--lime);color:#0d1b0d;font-size:14px;font-weight:1000;cursor:pointer;margin-top:8px}
+  .secondary{width:100%;min-height:44px;border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.25);cursor:pointer;margin-top:8px}
+  #levelBadge{font-size:44px;margin-bottom:7px}
+  #levelTitle{font-size:22px;font-weight:1000;color:#fff}
+  #levelDesc{margin:10px auto 13px;max-width:390px;color:var(--dim);font-size:12px;line-height:1.5}
+  .unlockBox{background:rgba(0,0,0,.22);border:1px solid rgba(255,216,94,.34);border-radius:12px;padding:11px;color:var(--gold);font-weight:900;font-size:11px}
+  .tiny{margin-top:9px;color:#8faf8c;font-size:9px;line-height:1.4}
+
+  #hurtFlash{position:absolute;z-index:11;inset:0;background:rgba(255,38,38,.24);opacity:0;pointer-events:none;transition:opacity .12s}
+  #hurtFlash.show{opacity:1}
+
+  @media (max-width:380px){
+    #nextTease{top:calc(108px + env(safe-area-inset-top));font-size:8px}
+    .stats{font-size:10px;padding:7px 6px}
+    .power{width:61px;height:61px}
+    .roadLabel{font-size:6.5px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="hudTop">
+    <div class="chapterCard">
+      <div id="chapterLine">LEVEL 1 · LILY PAD LUNCH</div>
+      <div id="objectiveLine">Eat 8 flies</div>
+      <div id="progressTrack"><div id="progressFill"></div><div id="progressText">0 / 8</div></div>
+    </div>
+    <div class="stats"><span id="heartText">♥♥♥</span><span>·</span><span id="scoreText">0</span></div>
+  </div>
+  <div id="roadmap"></div>
+</div>
+<div id="nextTease">NEXT: 🐝 bees arrive</div>
+
+<div id="controls">
+  <div class="powerGroup">
+    <button id="bloomBtn" class="power" type="button" aria-label="Plant lure flower">
+      <span><span class="powerEmoji">🌸</span><span class="powerText">BLOOM <b id="bloomAmmo">0</b></span></span>
+    </button>
+    <button id="boomBtn" class="power" type="button" aria-label="Detonate planted flowers" disabled>
+      <span><span class="powerEmoji">💥</span><span class="powerText">BOOM</span></span>
+    </button>
+  </div>
+  <div id="shieldBadge">SHIELD · 0</div>
+</div>
+<div id="toast" aria-live="polite"></div>
+<div id="hurtFlash"></div>
+
+<div id="startOverlay" class="overlay">
+  <div class="panel">
+    <div class="logo">FROGGY<br>NOM NOM 2<small>THE BIGGER POND</small></div>
+    <div class="tag">Tap bugs. Dodge stingers. Every level changes the pond — and the roadmap always shows what is coming next.</div>
+    <div class="previewStrip">
+      <div class="preview"><span>🪰</span>FEAST</div>
+      <div class="preview"><span>🐝</span>DANGER</div>
+      <div class="preview"><span>🪲</span>ARMOR</div>
+      <div class="preview"><span>👑</span>BOSSES</div>
+    </div>
+    <button id="startBtn" class="primary" type="button">START THE POND</button>
+    <button id="continueBtn" class="secondary" type="button" hidden>CONTINUE</button>
+    <div class="tiny">Tongue: tap a bug. Every 7 safe noms earns a 🌸 lure. Plant flowers, then 💥 them to clear nearby hazards.</div>
+  </div>
+</div>
+
+<div id="levelOverlay" class="overlay hidden">
+  <div class="panel">
+    <div id="levelBadge">🌿</div>
+    <div id="levelTitle">LEVEL CLEAR</div>
+    <div id="levelDesc"></div>
+    <div id="unlockBox" class="unlockBox"></div>
+    <button id="nextLevelBtn" class="primary" type="button">ENTER NEXT LEVEL</button>
+  </div>
+</div>
+
+<div id="gameOverOverlay" class="overlay hidden">
+  <div class="panel">
+    <div class="logo" style="font-size:34px">OUCH.</div>
+    <div id="gameOverText" class="tag">The pond bit back.</div>
+    <button id="retryBtn" class="primary" type="button">RETRY LEVEL</button>
+    <button id="restartBtn" class="secondary" type="button">START FROM LEVEL 1</button>
+  </div>
+</div>
+
+<div id="victoryOverlay" class="overlay hidden">
+  <div class="panel">
+    <div class="logo" style="font-size:40px">POND<br>LEGEND</div>
+    <div class="tag">You cleared all 12 levels, survived the swarm, and claimed the Moon Crown.</div>
+    <div style="font-size:58px;margin:9px">🐸👑</div>
+    <button id="victoryRestartBtn" class="primary" type="button">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const chapterLine = document.getElementById('chapterLine');
+  const objectiveLine = document.getElementById('objectiveLine');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  const scoreText = document.getElementById('scoreText');
+  const heartText = document.getElementById('heartText');
+  const roadmap = document.getElementById('roadmap');
+  const nextTease = document.getElementById('nextTease');
+  const bloomBtn = document.getElementById('bloomBtn');
+  const boomBtn = document.getElementById('boomBtn');
+  const bloomAmmoEl = document.getElementById('bloomAmmo');
+  const shieldBadge = document.getElementById('shieldBadge');
+  const toast = document.getElementById('toast');
+  const hurtFlash = document.getElementById('hurtFlash');
+  const startOverlay = document.getElementById('startOverlay');
+  const levelOverlay = document.getElementById('levelOverlay');
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  const victoryOverlay = document.getElementById('victoryOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const continueBtn = document.getElementById('continueBtn');
+  const nextLevelBtn = document.getElementById('nextLevelBtn');
+  const retryBtn = document.getElementById('retryBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const victoryRestartBtn = document.getElementById('victoryRestartBtn');
+  const levelBadge = document.getElementById('levelBadge');
+  const levelTitle = document.getElementById('levelTitle');
+  const levelDesc = document.getElementById('levelDesc');
+  const unlockBox = document.getElementById('unlockBox');
+  const gameOverText = document.getElementById('gameOverText');
+
+  const LEVELS = [
+    {name:'LILY PAD LUNCH', icon:'🌿', biome:'day', goal:8, max:5, rate:950, pool:[['fly',1]], objective:'Eat 8 flies', next:'🐝 Bees arrive — do NOT nom them.'},
+    {name:'BUZZING BANKS', icon:'🐝', biome:'sunset', goal:10, max:6, rate:860, pool:[['fly',.76],['bee',.24]], objective:'Eat 10 safe bugs', next:'🦟 Mosquitoes zigzag into the pond.'},
+    {name:'MOSQUITO MOON', icon:'🦟', biome:'dusk', goal:12, max:7, rate:780, pool:[['fly',.50],['mosquito',.30],['bee',.20]], objective:'Earn 12 nom points', next:'🪲 Armored beetles take TWO tongue hits.'},
+    {name:'SHELL SHOCK', icon:'🪲', biome:'reeds', goal:14, max:7, rate:730, pool:[['fly',.38],['mosquito',.24],['beetle',.22],['bee',.16]], objective:'Crack shells & earn 14 points', next:'👑 LEVEL 5: THE GOLDEN FLY boss.'},
+    {name:'THE GOLDEN FLY', icon:'👑', biome:'gold', goal:10, max:7, rate:700, pool:[['fly',.42],['mosquito',.25],['beetle',.18],['bee',.15]], objective:'Eat 10 points, then face the boss', boss:{type:'kingFly',hp:7}, next:'🛡️ Shields begin dropping in Hornet Hollow.'},
+    {name:'HORNET HOLLOW', icon:'🛡️', biome:'hollow', goal:15, max:8, rate:650, pool:[['fly',.33],['mosquito',.25],['beetle',.16],['bee',.12],['hornet',.14]], objective:'Survive hornets · earn 15 points', next:'✨ Fireflies blink in and out of sight.'},
+    {name:'FIREFLY FEN', icon:'✨', biome:'night', goal:16, max:8, rate:610, pool:[['fly',.25],['mosquito',.20],['firefly',.28],['bee',.10],['hornet',.10],['beetle',.07]], objective:'Catch blinkers · earn 16 points', next:'🐲 Dragonflies slice across the screen.'},
+    {name:'STORM POND', icon:'⛈️', biome:'storm', goal:18, max:9, rate:570, pool:[['fly',.18],['mosquito',.20],['firefly',.16],['dragonfly',.24],['bee',.08],['hornet',.14]], objective:'Ride the storm · earn 18 points', next:'🕷️ Spiders descend from the reeds.'},
+    {name:'SPIDER REEDS', icon:'🕷️', biome:'marsh', goal:19, max:9, rate:535, pool:[['fly',.18],['mosquito',.17],['firefly',.14],['dragonfly',.20],['spider',.13],['hornet',.10],['beetle',.08]], objective:'Avoid spiders · earn 19 points', next:'🪲 LEVEL 10: Goliath Beetle boss.'},
+    {name:'GOLIATH BEETLE', icon:'🪲', biome:'ember', goal:20, max:9, rate:510, pool:[['fly',.15],['mosquito',.17],['firefly',.12],['dragonfly',.20],['spider',.11],['hornet',.12],['beetle',.13]], objective:'Earn 20 points, crack the giant shell', boss:{type:'goliath',hp:10}, next:'☠️ Toxic bugs poison one heart on contact.'},
+    {name:'TOXIC MARSH', icon:'☠️', biome:'toxic', goal:22, max:10, rate:485, pool:[['fly',.14],['mosquito',.15],['firefly',.12],['dragonfly',.17],['beetle',.11],['spider',.10],['hornet',.10],['toxic',.11]], objective:'Navigate poison · earn 22 points', next:'🌙 FINAL: every enemy returns + Moon Crown.'},
+    {name:'MOON CROWN', icon:'🌙', biome:'moon', goal:25, max:11, rate:450, pool:[['fly',.12],['mosquito',.14],['firefly',.14],['dragonfly',.17],['beetle',.12],['bee',.06],['hornet',.09],['spider',.08],['toxic',.08]], objective:'Final swarm · earn 25 points', boss:{type:'moonMoth',hp:12}, next:'🐸👑 The crown is yours.'}
+  ];
+
+  const TYPES = {
+    fly:{emoji:'🪰',good:true,points:1,r:26,speed:50},
+    mosquito:{emoji:'🦟',good:true,points:2,r:25,speed:77,zig:true},
+    beetle:{emoji:'🪲',good:true,points:2,r:28,speed:46,hp:2},
+    firefly:{emoji:'✨',good:true,points:2,r:25,speed:62,blink:true},
+    dragonfly:{emoji:'🐲',good:true,points:3,r:29,speed:112,dash:true},
+    bee:{emoji:'🐝',good:false,r:27,speed:68},
+    hornet:{emoji:'🐝',good:false,r:29,speed:104,hornet:true},
+    spider:{emoji:'🕷️',good:false,r:29,speed:58,spider:true},
+    toxic:{emoji:'☠️',good:false,r:28,speed:64,toxic:true},
+    kingFly:{emoji:'👑',good:true,points:7,r:55,speed:70,boss:true},
+    goliath:{emoji:'🪲',good:true,points:10,r:58,speed:54,boss:true},
+    moonMoth:{emoji:'🦋',good:true,points:12,r:60,speed:88,boss:true,zig:true}
+  };
+
+  let W=0,H=0,dpr=1;
+  let running=false, paused=true;
+  let levelIndex=0, levelProgress=0, score=0, hearts=3, safeNoms=0, bloomAmmo=0, shields=0;
+  let enemies=[], flowers=[], particles=[];
+  let last=performance.now(), spawnClock=0, elapsed=0;
+  let bossSpawned=false, bossDefeated=false;
+  let tongue={active:false,x:0,y:0,t:0};
+  let toastTimer=0;
+  let lastSavedLevel=0;
+
+  function loadSave(){
+    try{ lastSavedLevel=Math.max(0,Math.min(LEVELS.length-1,Number(localStorage.getItem('frognom2Level')||0))); }catch(e){ lastSavedLevel=0; }
+    if(lastSavedLevel>0){
+      continueBtn.hidden=false;
+      continueBtn.textContent=`CONTINUE · LEVEL ${lastSavedLevel+1}`;
+    }
+  }
+  function saveReached(index=levelIndex){
+    const reached=Math.max(lastSavedLevel,Math.max(0,Math.min(LEVELS.length-1,index)));
+    try{ localStorage.setItem('frognom2Level',String(reached)); }catch(e){}
+    lastSavedLevel=reached;
+  }
+
+  function resize(){
+    dpr=Math.min(2,window.devicePixelRatio||1);
+    W=Math.max(320,window.innerWidth); H=Math.max(480,window.innerHeight);
+    canvas.width=Math.round(W*dpr); canvas.height=Math.round(H*dpr);
+    canvas.style.width=W+'px'; canvas.style.height=H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize',resize,{passive:true}); resize();
+
+  function rand(a,b){return a+Math.random()*(b-a)}
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+  function weighted(pool){let r=Math.random(),sum=0;for(const [name,w] of pool){sum+=w;if(r<=sum)return name}return pool[pool.length-1][0]}
+
+  function spawnEnemy(typeName, bossHp=null){
+    const t=TYPES[typeName];
+    const margin=t.boss?80:42;
+    let x=rand(margin,W-margin), y=rand(155,Math.max(190,H*.58));
+    if(t.spider){y=145;x=rand(35,W-35)}
+    let a=rand(0,Math.PI*2);
+    let speed=t.speed*rand(.82,1.18)*(1+levelIndex*.015);
+    enemies.push({type:typeName,x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:t.r,hp:bossHp||t.hp||1,maxHp:bossHp||t.hp||1,phase:rand(0,10),age:0,stunned:0,flash:0});
+  }
+
+  function spawnBoss(){
+    const cfg=LEVELS[levelIndex]; if(!cfg.boss||bossSpawned)return;
+    bossSpawned=true; enemies=[]; flowers=[];
+    spawnEnemy(cfg.boss.type,cfg.boss.hp);
+    showToast('BOSS TIME!');
+    navigatorVibe([30,30,70]);
+  }
+
+  function resetLevel(index, keepScore=true){
+    levelIndex=clamp(index,0,LEVELS.length-1); levelProgress=0; hearts=3; safeNoms=0; bloomAmmo=0; shields=levelIndex>=5?1:0;
+    enemies=[];flowers=[];particles=[];spawnClock=0;elapsed=0;bossSpawned=false;bossDefeated=false;tongue.active=false;
+    if(!keepScore)score=0;
+    for(let i=0;i<Math.min(4,LEVELS[levelIndex].max);i++)spawnEnemy(weighted(LEVELS[levelIndex].pool));
+    updateHUD(); saveReached(levelIndex);
+  }
+
+  function updateHUD(){
+    const lv=LEVELS[levelIndex];
+    chapterLine.textContent=`LEVEL ${levelIndex+1} · ${lv.name}`;
+    objectiveLine.textContent=bossSpawned&&!bossDefeated?'BOSS FIGHT · keep tapping!':lv.objective;
+    const pct=bossSpawned&&!bossDefeated?100:Math.min(100,(levelProgress/lv.goal)*100);
+    progressFill.style.width=pct+'%';
+    if(bossSpawned&&!bossDefeated){
+      const boss=enemies.find(e=>TYPES[e.type].boss);
+      progressText.textContent=boss?`BOSS HP ${boss.hp} / ${boss.maxHp}`:'BOSS';
+    }else progressText.textContent=`${Math.min(levelProgress,lv.goal)} / ${lv.goal}`;
+    scoreText.textContent=score;
+    heartText.textContent='♥'.repeat(Math.max(0,hearts))+'♡'.repeat(Math.max(0,3-hearts));
+    heartText.style.color=hearts===1?'var(--danger)':'#ff9a8e';
+    bloomAmmoEl.textContent=bloomAmmo;
+    bloomBtn.disabled=bloomAmmo<=0;
+    boomBtn.disabled=flowers.length<=0;
+    shieldBadge.textContent=`SHIELD · ${shields}`;
+    nextTease.textContent=`NEXT: ${lv.next}`;
+    roadmap.innerHTML='';
+    let start=Math.max(0,Math.min(levelIndex-1,LEVELS.length-4));
+    for(let i=start;i<Math.min(start+4,LEVELS.length);i++){
+      const n=document.createElement('div');
+      n.className='roadNode'+(i===levelIndex?' current':'')+(i<levelIndex?' done':'');
+      n.innerHTML=`<div class="roadIcon">${i<levelIndex?'✓':LEVELS[i].icon}</div><div class="roadLabel">${i+1}. ${LEVELS[i].name}</div>`;
+      roadmap.appendChild(n);
+    }
+  }
+
+  function showToast(text){
+    toast.textContent=text; toast.classList.add('show'); clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>toast.classList.remove('show'),850);
+  }
+  function navigatorVibe(pattern){try{if(navigator.vibrate)navigator.vibrate(pattern)}catch(e){}}
+
+  function hurt(reason){
+    if(paused)return;
+    if(shields>0){shields--;showToast('SHIELD BLOCK!');burst(W/2,H-120,'🛡️',8);navigatorVibe(30);updateHUD();return;}
+    hearts--; safeNoms=0; hurtFlash.classList.add('show');setTimeout(()=>hurtFlash.classList.remove('show'),100);
+    showToast(reason||'OUCH!');navigatorVibe([30,25,30]);updateHUD();
+    if(hearts<=0){
+      paused=true; gameOverText.textContent=`Level ${levelIndex+1}: ${LEVELS[levelIndex].name}. You reached ${levelProgress}/${LEVELS[levelIndex].goal} progress.`;
+      setTimeout(()=>gameOverOverlay.classList.remove('hidden'),220);
+    }
+  }
+
+  function addProgress(points){
+    levelProgress+=points; score+=points; safeNoms++;
+    if(safeNoms%7===0){bloomAmmo++;showToast('+1 BLOOM 🌸')}
+    if(levelIndex>=5 && Math.random()<.055 && shields<2){shields++;showToast('SHIELD +1 🛡️')}
+    const lv=LEVELS[levelIndex];
+    if(levelProgress>=lv.goal){
+      levelProgress=lv.goal;
+      if(lv.boss){ if(!bossSpawned)spawnBoss(); }
+      else completeLevel();
+    }
+    updateHUD();
+  }
+
+  function completeLevel(){
+    if(paused)return; paused=true; enemies=[]; flowers=[]; saveReached(Math.min(LEVELS.length-1,levelIndex+1));
+    if(levelIndex===LEVELS.length-1){
+      lastSavedLevel=0; try{localStorage.setItem('frognom2Level','0')}catch(e){}
+      setTimeout(()=>victoryOverlay.classList.remove('hidden'),350);return;
+    }
+    const next=LEVELS[levelIndex+1];
+    levelBadge.textContent=next.icon;
+    levelTitle.textContent=`LEVEL ${levelIndex+1} CLEAR`;
+    levelDesc.textContent=`You survived ${LEVELS[levelIndex].name}. The pond is changing again.`;
+    unlockBox.textContent=`UNLOCKED NEXT → ${next.icon} ${next.name} · ${LEVELS[levelIndex].next}`;
+    nextLevelBtn.textContent=`ENTER LEVEL ${levelIndex+2}`;
+    setTimeout(()=>levelOverlay.classList.remove('hidden'),260);
+  }
+
+  function burst(x,y,emoji,count=7){
+    for(let i=0;i<count;i++)particles.push({x,y,vx:rand(-100,100),vy:rand(-150,-35),life:rand(.45,.9),emoji,rot:rand(-1,1)});
+  }
+
+  function hitEnemy(e){
+    const t=TYPES[e.type];
+    if(!t.good){
+      if(e.type==='toxic')hurt('TOXIC!'); else if(e.type==='spider')hurt('SPIDER!'); else hurt('STINGER!');
+      e.flash=.2; return;
+    }
+    e.hp--;
+    if(e.hp>0){
+      e.flash=.18; e.stunned=.22; burst(e.x,e.y,'✦',3);
+      showToast(t.boss?`BOSS HP ${e.hp}`:'CRACK! ONE MORE HIT'); navigatorVibe(18); updateHUD(); return;
+    }
+    const idx=enemies.indexOf(e);if(idx>=0)enemies.splice(idx,1);
+    burst(e.x,e.y,t.boss?'⭐':'✦',t.boss?16:5);navigatorVibe(t.boss?[40,20,60]:12);
+    if(t.boss){ bossDefeated=true; score+=t.points||5; updateHUD(); setTimeout(completeLevel,450); }
+    else addProgress(t.points||1);
+  }
+
+  function shoot(x,y){
+    if(!running||paused)return;
+    if(y<125)return;
+    tongue.active=true;tongue.x=x;tongue.y=y;tongue.t=.16;
+    let target=null,best=Infinity;
+    for(const e of enemies){
+      const t=TYPES[e.type];
+      if(t.blink && Math.sin(e.age*7+e.phase)<-.35)continue;
+      const d=Math.hypot(e.x-x,e.y-y);
+      if(d<e.r+24 && d<best){best=d;target=e}
+    }
+    if(target)hitEnemy(target); else safeNoms=0;
+  }
+
+  function plantBloom(){
+    if(paused||bloomAmmo<=0)return;
+    bloomAmmo--;
+    const side=flowers.length%2===0?0:1;
+    flowers.push({x:side?W-65:65,y:Math.min(H-165,H*.62),age:0});
+    showToast('LURE PLANTED'); updateHUD();
+  }
+  function detonate(){
+    if(paused||flowers.length===0)return;
+    for(const f of flowers){
+      burst(f.x,f.y,'💥',10);
+      for(let i=enemies.length-1;i>=0;i--){
+        const e=enemies[i],t=TYPES[e.type];
+        if(!t.good && Math.hypot(e.x-f.x,e.y-f.y)<185){score+=1;enemies.splice(i,1)}
+      }
+    }
+    flowers=[];showToast('HAZARDS CLEARED +1 EACH');navigatorVibe([25,15,25]);updateHUD();
+  }
+
+  bloomBtn.addEventListener('click',e=>{e.stopPropagation();plantBloom()});
+  boomBtn.addEventListener('click',e=>{e.stopPropagation();detonate()});
+
+  canvas.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    const r=canvas.getBoundingClientRect(); shoot(e.clientX-r.left,e.clientY-r.top);
+  },{passive:false});
+
+  startBtn.addEventListener('click',()=>{startOverlay.classList.add('hidden');score=0;resetLevel(0,false);running=true;paused=false;last=performance.now()});
+  continueBtn.addEventListener('click',()=>{startOverlay.classList.add('hidden');score=0;resetLevel(lastSavedLevel,false);running=true;paused=false;last=performance.now()});
+  nextLevelBtn.addEventListener('click',()=>{levelOverlay.classList.add('hidden');resetLevel(levelIndex+1,true);paused=false;last=performance.now()});
+  retryBtn.addEventListener('click',()=>{gameOverOverlay.classList.add('hidden');resetLevel(levelIndex,true);paused=false;last=performance.now()});
+  restartBtn.addEventListener('click',()=>{gameOverOverlay.classList.add('hidden');score=0;resetLevel(0,false);paused=false;last=performance.now()});
+  victoryRestartBtn.addEventListener('click',()=>{victoryOverlay.classList.add('hidden');score=0;resetLevel(0,false);paused=false;last=performance.now()});
+
+  function biome(){return LEVELS[levelIndex].biome}
+  function drawBackground(){
+    const b=biome();
+    const palette={
+      day:['#69b9d2','#b7dc6b','#335d31'],sunset:['#ef9c62','#d8865b','#415f31'],dusk:['#796aa8','#d88b67','#263d37'],reeds:['#75a56f','#99bb67','#263d2b'],gold:['#e9bb58','#d9894f','#4b5326'],hollow:['#526f56','#7d8d55','#202c25'],night:['#182849','#3b4968','#172b28'],storm:['#506170','#7d8790','#1e3331'],marsh:['#5f775d','#889664','#273329'],ember:['#9b5c45','#c5844f','#382e26'],toxic:['#627b3b','#a4a849','#26331d'],moon:['#19203a','#37466c','#152429']
+    };
+    const p=palette[b]||palette.day;
+    const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,p[0]);g.addColorStop(.63,p[1]);g.addColorStop(1,p[2]);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+    if(['night','moon','dusk','storm'].includes(b)){
+      ctx.fillStyle='rgba(255,255,220,.75)';
+      for(let i=0;i<28;i++){const x=(i*97+31)%W,y=(i*53+19)%Math.max(120,H*.42);ctx.fillRect(x,y,1.6,1.6)}
+      if(b==='moon'){ctx.beginPath();ctx.arc(W-55,165,27,0,Math.PI*2);ctx.fillStyle='rgba(245,247,210,.85)';ctx.fill()}
+    }
+    if(b==='storm'){
+      ctx.strokeStyle='rgba(220,235,255,.2)';ctx.lineWidth=1;
+      for(let i=0;i<22;i++){let x=(i*61+elapsed*130)%W;ctx.beginPath();ctx.moveTo(x,120);ctx.lineTo(x-42,H*.72);ctx.stroke()}
+    }
+    if(b==='toxic'){
+      ctx.fillStyle='rgba(174,255,70,.08)';for(let i=0;i<8;i++){ctx.beginPath();ctx.arc((i*83+elapsed*12)%W,H*.55+Math.sin(elapsed+i)*25,30+i*2,0,Math.PI*2);ctx.fill()}
+    }
+    ctx.fillStyle='rgba(24,82,66,.28)';ctx.fillRect(0,H*.66,W,H*.34);
+    ctx.strokeStyle='rgba(228,255,220,.18)';ctx.lineWidth=1;
+    for(let y=H*.69;y<H;y+=27){ctx.beginPath();ctx.moveTo(0,y);for(let x=0;x<=W;x+=35)ctx.lineTo(x,y+Math.sin(x*.035+elapsed*1.4+y)*3);ctx.stroke()}
+    for(let i=0;i<7;i++){
+      const x=((i*113+47)%Math.max(1,W-40))+20;const y=H*.72+(i%3)*45;
+      ctx.save();ctx.translate(x,y);ctx.scale(1,.44);ctx.beginPath();ctx.arc(0,0,26+(i%2)*7,0,Math.PI*2);ctx.fillStyle='rgba(43,103,46,.63)';ctx.fill();ctx.restore();
+    }
+    ctx.strokeStyle='rgba(37,74,39,.78)';ctx.lineWidth=4;
+    for(let i=0;i<10;i++){const x=(i*71+18)%W;ctx.beginPath();ctx.moveTo(x,H*.70);ctx.quadraticCurveTo(x+Math.sin(elapsed+i)*8,H*.55,x+((i%2)?7:-7),H*.47-(i%3)*18);ctx.stroke()}
+  }
+
+  function updateEnemy(e,dt){
+    const t=TYPES[e.type];e.age+=dt;e.phase+=dt;e.flash=Math.max(0,e.flash-dt);e.stunned=Math.max(0,e.stunned-dt);
+    if(e.stunned>0)return;
+    if(t.spider){
+      e.vx=Math.sin(e.age*2.2+e.phase)*35;e.vy=35+Math.sin(e.age*3)*24;
+    }else if(t.hornet){
+      const fx=W/2,fy=H-105;const dx=fx-e.x,dy=fy-e.y,d=Math.max(1,Math.hypot(dx,dy));
+      e.vx+=(dx/d)*18*dt;e.vy+=(dy/d)*18*dt;
+    }else if(t.zig){
+      const a=Math.atan2(e.vy,e.vx)+Math.sin(e.age*5+e.phase)*.018;e.vx=Math.cos(a)*Math.hypot(e.vx,e.vy);e.vy=Math.sin(a)*Math.hypot(e.vx,e.vy);
+    }else if(t.dash){
+      const mag=t.speed*(1+.35*Math.max(0,Math.sin(e.age*2.4+e.phase)));const a=Math.atan2(e.vy,e.vx);e.vx=Math.cos(a)*mag;e.vy=Math.sin(a)*mag;
+    }
+    for(const f of flowers){
+      if(t.good)continue;
+      const dx=f.x-e.x,dy=f.y-e.y,d=Math.max(1,Math.hypot(dx,dy));
+      if(d<330){e.vx+=(dx/d)*120*dt;e.vy+=(dy/d)*120*dt}
+    }
+    const max=t.speed*(t.hornet?1.4:1.25)*(1+levelIndex*.02);const mag=Math.hypot(e.vx,e.vy)||1;if(mag>max){e.vx=e.vx/mag*max;e.vy=e.vy/mag*max}
+    e.x+=e.vx*dt;e.y+=e.vy*dt;
+    const top=142,bottom=H-155;
+    if(e.x<e.r){e.x=e.r;e.vx=Math.abs(e.vx)} if(e.x>W-e.r){e.x=W-e.r;e.vx=-Math.abs(e.vx)}
+    if(e.y<top){e.y=top;e.vy=Math.abs(e.vy)} if(e.y>bottom){e.y=bottom;e.vy=-Math.abs(e.vy)}
+  }
+
+  function drawEnemy(e){
+    const t=TYPES[e.type];
+    if(t.blink && Math.sin(e.age*7+e.phase)<-.35){ctx.globalAlpha=.18}else ctx.globalAlpha=1;
+    if(e.flash>0){ctx.save();ctx.shadowColor='#fff';ctx.shadowBlur=18}
+    const size=t.boss?78:(e.type==='dragonfly'?44:39);
+    ctx.font=`${size}px Apple Color Emoji, Segoe UI Emoji, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    if(e.type==='hornet'){ctx.save();ctx.scale(1.08,1.08);ctx.fillText('🐝',e.x/1.08,e.y/1.08);ctx.restore();ctx.font='bold 10px Courier New';ctx.fillStyle='#ff6b69';ctx.fillText('!',e.x+18,e.y-19)}
+    else if(e.type==='dragonfly'){
+      ctx.save();ctx.translate(e.x,e.y);const a=Math.atan2(e.vy,e.vx);ctx.rotate(a);
+      ctx.fillStyle='rgba(225,245,255,.68)';ctx.beginPath();ctx.ellipse(-3,-9,16,6,-.3,0,Math.PI*2);ctx.ellipse(-3,9,16,6,.3,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#173c45';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-14,0);ctx.lineTo(17,0);ctx.stroke();ctx.fillStyle='#79d9e8';ctx.beginPath();ctx.arc(18,0,5,0,Math.PI*2);ctx.fill();ctx.restore();
+    } else if(e.type==='kingFly'){
+      ctx.font='62px Apple Color Emoji, Segoe UI Emoji, sans-serif';ctx.fillText('🪰',e.x,e.y+7);ctx.font='35px Apple Color Emoji, Segoe UI Emoji, sans-serif';ctx.fillText('👑',e.x,e.y-38);
+    } else ctx.fillText(t.emoji,e.x,e.y);
+    if(e.flash>0)ctx.restore();
+    ctx.globalAlpha=1;
+    if(e.maxHp>1){
+      const w=t.boss?96:42;const ratio=e.hp/e.maxHp;ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(e.x-w/2,e.y+(t.boss?48:28),w,6);ctx.fillStyle=t.boss?'#ffd85e':'#b9ff66';ctx.fillRect(e.x-w/2,e.y+(t.boss?48:28),w*ratio,6);
+    }
+  }
+
+  function drawFrog(){
+    const x=W/2,y=H-96;
+    ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='66px Apple Color Emoji, Segoe UI Emoji, sans-serif';ctx.fillText('🐸',x,y);
+    if(shields>0){ctx.strokeStyle='rgba(160,220,255,.75)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,47+Math.sin(elapsed*3)*2,0,Math.PI*2);ctx.stroke()}
+    ctx.restore();
+    if(tongue.active){
+      const p=1-Math.max(0,tongue.t)/.16;const ease=p<.5?p*2:(1-p)*2;
+      ctx.strokeStyle='#ff6684';ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x,y-20);ctx.lineTo(x+(tongue.x-x)*ease,y-20+(tongue.y-(y-20))*ease);ctx.stroke();
+    }
+  }
+
+  function drawFlowers(){
+    for(const f of flowers){f.age+=.016;ctx.font='48px Apple Color Emoji, Segoe UI Emoji, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('🌸',f.x,f.y+Math.sin(f.age*4)*3);ctx.strokeStyle='rgba(255,160,210,.28)';ctx.beginPath();ctx.arc(f.x,f.y,65+Math.sin(f.age*3)*8,0,Math.PI*2);ctx.stroke()}
+  }
+
+  function drawParticles(dt){
+    for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=220*dt;if(p.life<=0){particles.splice(i,1);continue}ctx.globalAlpha=Math.min(1,p.life*2);ctx.font='16px Apple Color Emoji, Segoe UI Emoji, sans-serif';ctx.fillText(p.emoji,p.x,p.y)}ctx.globalAlpha=1;
+  }
+
+  function frame(now){
+    const dt=Math.min(.034,(now-last)/1000||.016);last=now;elapsed+=dt;
+    drawBackground();
+    if(running&&!paused){
+      spawnClock+=dt*1000;
+      const lv=LEVELS[levelIndex];
+      if(!bossSpawned && spawnClock>=lv.rate && enemies.length<lv.max){spawnClock=0;spawnEnemy(weighted(lv.pool))}
+      for(const e of enemies)updateEnemy(e,dt);
+      tongue.t-=dt;if(tongue.t<=0)tongue.active=false;
+    }
+    drawFlowers();
+    for(const e of enemies)drawEnemy(e);
+    drawFrog();drawParticles(dt);
+    requestAnimationFrame(frame);
+  }
+
+  loadSave();updateHUD();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
