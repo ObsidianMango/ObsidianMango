@@ -39,7 +39,7 @@ If you like nostalgia, pixel art, dark humor, and weirdly useful tools, you’re
 
 | **App Name**            | **Links**                                                                 | **Description**                                         |
 |-------------------------|---------------------------------------------------------------------------|---------------------------------------------------------|
-| **Magic Aquarium Life** | 🐠 [Open the life counter](https://obsidianmango.github.io/ObsidianMango/aquarium-health/) | Large Commander life total with −1/+1 controls inside a responsive animated aquarium. |
+| **Magic Aquarium Life** | 🐠 [Open the life counter](https://obsidianmango.github.io/ObsidianMango/aquarium-health/) | Commander life aquarium with feeding, growing fish and squid, a pearl shop, hunting piranhas, and shark attacks after heavy damage. |
 | **MangoWarz Classic** | 🥭 [Play the complete game](https://obsidianmango.github.io/ObsidianMango/mangowarz-classic/) | Full 30-day strategy edition with seeded markets, travel, finance, encounters, police combat, saves, original art, and offline PWA support. |
 | **MangoWarz** | 🥭 [Play](https://obsidianmango.github.io/ObsidianMango/mangowarz.html) | Mobile-first retro street-trading game with cities, price swings, inventory, and a scrolling news ticker. |
 | **ASCII CITY** | 🌃 [Explore](https://obsidianmango.github.io/ObsidianMango/slice-city.html) | Giant procedural ASCII city with streets, skyscrapers, parks, trees, traffic, and pedestrians. |
