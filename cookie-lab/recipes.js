@@ -1,0 +1,61 @@
+export const DOUGHS = {
+  butter: { color: '#e6b86d', edge: '#ad6934', crumb: '#f2d99b' },
+  chocolate: { color: '#503023', edge: '#251511', crumb: '#75503b' },
+  redvelvet: { color: '#a42f36', edge: '#65212a', crumb: '#ca6261' },
+  matcha: { color: '#8a9a43', edge: '#61652e', crumb: '#bcc476' },
+  peanut: { color: '#c9914b', edge: '#8b552a', crumb: '#dfb579' },
+  oat: { color: '#b98c54', edge: '#7b502e', crumb: '#debc87' },
+  ginger: { color: '#a76836', edge: '#71401f', crumb: '#ce9960' },
+};
+export const ICINGS = { vanilla:'#fff0d3', pink:'#f49cae', chocolate:'#4b2117', lemon:'#f9df74', mint:'#a5d7b1', whiteblack:'#fff5e1', caramel:'#b96928' };
+export const TOPPING_COLORS = {
+  pearls:['#ef3a62','#fff6d8','#ffd12c','#078985','#f28a24','#384e91','#27a345','#f57cba'],
+  jimmies:['#ff5392','#ffcf3b','#6fbfe3','#fff4ce','#9d5bc6','#58b57d'],
+  chips:['#342015','#402316','#563326','#2a1b17'],
+  whitechips:['#fff1ca','#f9e3b1','#e7cca0'],
+  candy:['#d92839','#2b86cb','#ecb31d','#49a643','#de6830','#774b94'],
+  nuts:['#ddac72','#b78148','#e0c090'],
+  pistachio:['#899947','#b3b779','#b8a077'],
+  oats:['#e3c48b','#d5ac70','#efdaad'],
+  raisins:['#382527','#432828','#51382c'],
+  coconut:['#fff4dd','#eee2ca','#f8e7bb'],
+  sugar:['#fff7e5','#fffdf6','#efdec1'],
+  cinnamon:['#b4793d','#a56c37','#e6bd82'],
+  marshmallow:['#fff4dd','#f3e4d0'],
+};
+const base={shape:'round',dough:'butter',thickness:.44,bake:48,icing:'none',topping:'none',density:100};
+const r=(id,name,short,category,description,opts={})=>({...base,id,name,short,category,description,...opts});
+export const RECIPES = [
+  r('nonpareil','Rainbow nonpareil','Sugar pearls · butter cookie','bakery','Buttery, golden, and absolutely covered in tiny, crunchy sugar pearls.',{topping:'pearls',amount:1850,featured:true}),
+  r('choc-chip','Chocolate chip','Chocolate chunks · golden dough','classic','Golden edges, a soft middle, and generous chunks of dark chocolate.',{topping:'chips',amount:90}),
+  r('double-choc','Double chocolate','Cocoa dough · chocolate chunks','chocolate','A little dark. A little fudgy. A lot of chocolate.',{dough:'chocolate',topping:'chips',amount:110,thickness:.49}),
+  r('pink-funfetti','Pink funfetti','Strawberry frosting · jimmies','bakery','A thick sugar cookie wearing strawberry frosting and party sprinkles.',{icing:'pink',topping:'jimmies',amount:490,thickness:.52}),
+  r('oat-raisin','Oatmeal raisin','Rolled oats · plump raisins','classic','A hearty, craggy cookie full of toasted oats and chewy raisins.',{dough:'oat',topping:'oats',amount:330,extra:{type:'raisins',amount:70},rough:true}),
+  r('peanut-butter','Peanut butter','Roasted peanuts · fork marks','classic','Roasted peanut dough with the classic fork-pressed crosshatch.',{dough:'peanut',pattern:'crosshatch',topping:'sugar',amount:160}),
+  r('sugar','Sugar cookie','Scalloped edge · sparkling sugar','classic','Vanilla, butter, and a delicate little coat of sparkling sugar.',{shape:'scalloped',topping:'sugar',amount:820,thickness:.30,bake:35}),
+  r('snickerdoodle','Snickerdoodle','Cinnamon sugar · soft center','classic','A pillowy butter cookie rolled in warm cinnamon sugar.',{topping:'cinnamon',amount:1200,thickness:.53,bake:38}),
+  r('red-velvet','Red velvet','Red cocoa · white chocolate','chocolate','Deep red cocoa dough with sweet little pockets of white chocolate.',{dough:'redvelvet',topping:'whitechips',amount:88,thickness:.48}),
+  r('matcha','Matcha & white choc','Green tea · white chocolate','bakery','Earthy green tea and creamy white chocolate, baked together.',{dough:'matcha',topping:'whitechips',amount:75,bake:34}),
+  r('black-white','Black & white','Vanilla glaze · chocolate glaze','bakery','One soft vanilla cookie. Two very good sides to the story.',{icing:'whiteblack',thickness:.50,bake:30}),
+  r('lemon','Lemon sunshine','Lemon icing · sugar crystals','bakery','A bright lemon-glazed cookie with a crisp, sugary finish.',{icing:'lemon',topping:'sugar',amount:240,thickness:.37,bake:30}),
+  r('jam','Jam thumbprint','Raspberry center · butter dough','bakery','A buttery cookie with a glossy pool of raspberry jam in the middle.',{jam:true,pattern:'thumbprint',topping:'sugar',amount:290}),
+  r('choc-sandwich','Chocolate sandwich','Dark biscuits · vanilla filling','chocolate','Two dark, crisp cookies hugging a thick layer of vanilla cream.',{dough:'chocolate',sandwich:'vanilla',shape:'scalloped',thickness:.68,pattern:'emboss',bake:70}),
+  r('vanilla-sandwich','Vanilla sandwich','Golden biscuits · vanilla filling','classic','A double helping of vanilla, with a generous cream-filled center.',{sandwich:'vanilla',shape:'scalloped',thickness:.71,pattern:'emboss',bake:55}),
+  r('shortbread','Scottish shortbread','Butter biscuit · classic dimples','classic','Simple, crumbly shortbread. Butter is doing the heavy lifting.',{shape:'square',pattern:'dimples',thickness:.36,bake:30}),
+  r('butter-ring','Rainbow butter ring','Butter ring · rainbow pearls','bakery','A crisp butter-cookie ring with a shower of rainbow sugar pearls.',{shape:'ring',topping:'pearls',amount:1250,thickness:.35}),
+  r('macadamia','White choc macadamia','White chocolate · chopped nuts','classic','Creamy white chocolate and chunky macadamias in golden dough.',{topping:'whitechips',amount:62,extra:{type:'nuts',amount:90},thickness:.49}),
+  r('candy','Candy crunch','Colorful candy · butter dough','classic','Bright candy shells with chocolate centers, baked right into the dough.',{topping:'candy',amount:85}),
+  r('caramel','Salted caramel','Caramel ribbons · flaky salt','bakery','Golden dough, glossy caramel ribbons, and a little sparkle of salt.',{drizzle:'caramel',topping:'sugar',amount:130,extra:{type:'chips',amount:36}}),
+  r('ginger','Ginger snap','Ginger spice · crackled sugar','classic','Toasty ginger-spice dough with a crisp, sugar-dusted crust.',{dough:'ginger',topping:'cinnamon',amount:420,pattern:'crinkle',thickness:.32,bake:70}),
+  r('coconut','Coconut macaroon','Shredded coconut · golden dome','bakery','A toasted coconut mountain with a soft and chewy center.',{topping:'coconut',amount:1150,thickness:.9,dome:true,bake:25}),
+  r('pistachio','Pistachio crunch','Pistachio pieces · buttery dough','bakery','Buttery dough coated in little green and gold pistachio pieces.',{topping:'pistachio',amount:360,thickness:.40,bake:40}),
+  r('crinkle','Chocolate crinkle','Fudgy cocoa · powdered sugar','chocolate','Dark chocolate peeking through a snowy, crackled sugar crust.',{dough:'chocolate',topping:'sugar',amount:1700,pattern:'crinkle',powder:true,thickness:.56}),
+  r('mint','Mint chocolate','Mint frosting · chocolate chips','chocolate','A dark chocolate cookie topped with mint frosting and chocolate.',{dough:'chocolate',icing:'mint',topping:'chips',amount:75,thickness:.35}),
+  r('birthday','Birthday sandwich','Pink filling · party sprinkles','bakery','Two birthday cookies with strawberry cream and rainbow jimmies.',{sandwich:'pink',icing:'vanilla',topping:'jimmies',amount:560,thickness:.77,bake:32}),
+  r('biscotti','Almond biscotti','Toasted almonds · crisp biscuit','classic','A long, crunchy almond biscuit. Imaginary espresso sold separately.',{shape:'square',aspect:2.15,topping:'nuts',amount:125,thickness:.52,bake:66,rough:true}),
+  r('linzer','Raspberry linzer','Jam filling · little star window','bakery','Two tender biscuits with raspberry jam peeking through a star.',{sandwich:'jam',window:true,shape:'scalloped',topping:'sugar',amount:700,thickness:.68,bake:35}),
+  r('smores','Campfire s’mores','Marshmallow · dark chocolate','chocolate','Graham-style dough with pillowy marshmallows and dark chocolate chunks.',{shape:'square',dough:'ginger',topping:'marshmallow',amount:28,extra:{type:'chips',amount:40},drizzle:'chocolate',thickness:.38}),
+  r('espresso','Espresso fudge','Dark cocoa · chocolate drizzle','chocolate','A deep, dark cookie finished with glossy chocolate and crunchy sugar.',{dough:'chocolate',topping:'chips',amount:55,extra:{type:'sugar',amount:150},drizzle:'chocolate',bake:75,thickness:.5}),
+];
+export const TOPPING_AMOUNTS={pearls:1850,jimmies:550,chips:100,whitechips:95,candy:90,nuts:170,pistachio:300,oats:370,raisins:105,coconut:1050,sugar:1000,cinnamon:1000,marshmallow:32,none:0};
+export function customRecipe(values){return {...base,...values,id:'custom',name:'Your signature cookie',short:'Freshly invented · by you',category:'bakery',description:'Exactly your kind of cookie. Go ahead, make a little mess.',amount:Math.round((TOPPING_AMOUNTS[values.topping]||0)*values.density/100)};}
