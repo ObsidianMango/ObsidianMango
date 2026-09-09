@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<meta name="theme-color" content="#000000" />
+<title>Classic Screensaver</title>
+<style>
+  *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:Tahoma,Verdana,Arial,sans-serif;touch-action:none}
+  canvas{display:block;width:100%;height:100%;background:#000;image-rendering:pixelated}
+  #ui{position:fixed;inset:0;pointer-events:none}
+  #bar{position:absolute;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:8px;align-items:center;padding:8px;border:2px outset #d7d7d7;background:#c0c0c0;color:#000;box-shadow:0 4px 18px #0008;pointer-events:auto;opacity:.96;transition:.25s}
+  #bar.hidden{opacity:0;transform:translate(-50%,18px);pointer-events:none}
+  button,select{font:700 12px Tahoma,Verdana,sans-serif;color:#000;background:#c0c0c0;border:2px outset #eee;padding:7px 9px;min-height:34px}
+  button:active{border-style:inset}
+  #hint{position:absolute;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#aaa;background:#0009;padding:6px 9px;border:1px solid #333;opacity:.72;transition:.3s;white-space:nowrap}
+  #badge{position:absolute;top:max(10px,env(safe-area-inset-top));left:12px;font:700 11px "Courier New",monospace;color:#0f0;text-shadow:0 0 6px #0f0;opacity:.7}
+  @media(max-width:600px){#bar{width:calc(100% - 20px);justify-content:center;flex-wrap:wrap}#bar select{flex:1;min-width:130px}#hint{top:auto;bottom:94px;font-size:9px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div id="badge">SCREEN SAVER 95</div>
+  <div id="hint">Tap/click canvas to hide controls • F = fullscreen • M = change mode</div>
+  <div id="bar">
+    <select id="mode" aria-label="Screensaver mode">
+      <option value="maze">3D Maze</option>
+      <option value="pipes">3D Pipes</option>
+      <option value="mystify">Mystify</option>
+      <option value="starfield">Starfield</option>
+      <option value="toasters">Flying Toasters</option>
+    </select>
+    <button id="regen">New Pattern</button>
+    <button id="full">Fullscreen</button>
+  </div>
+</div>
+<script>
+(()=>{
+'use strict';
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d',{alpha:false});
+const modeSel=document.getElementById('mode'),bar=document.getElementById('bar'),hint=document.getElementById('hint');
+let W=1,H=1,DPR=1,last=performance.now(),mode='maze',uiTimer=0;
+function resize(){DPR=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;canvas.width=Math.max(1,Math.floor(W*DPR));canvas.height=Math.max(1,Math.floor(H*DPR));ctx.setTransform(DPR,0,0,DPR,0,0);reset();}
+function rnd(a=1,b=0){return b+Math.random()*(a-b)}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function showUI(){bar.classList.remove('hidden');hint.style.opacity=.72;clearTimeout(uiTimer);uiTimer=setTimeout(()=>{bar.classList.add('hidden');hint.style.opacity=0},4200)}
+const maze={grid:[],n:21,x:1.5,y:1.5,a:0,t:0,goal:null};
+function makeMaze(){let n=Math.max(15,Math.min(31,Math.floor(Math.min(W,H)/28)|1));if(!(n&1))n++;maze.n=n;let g=Array.from({length:n},()=>Array(n).fill(1));const stack=[[1,1]];g[1][1]=0;while(stack.length){const [cx,cy]=stack[stack.length-1];let dirs=[[2,0],[-2,0],[0,2],[0,-2]].filter(([dx,dy])=>{let x=cx+dx,y=cy+dy;return x>0&&y>0&&x<n-1&&y<n-1&&g[y][x]===1});if(!dirs.length){stack.pop();continue}let [dx,dy]=dirs[(Math.random()*dirs.length)|0],nx=cx+dx,ny=cy+dy;g[cy+dy/2][cx+dx/2]=0;g[ny][nx]=0;stack.push([nx,ny])}maze.grid=g;maze.x=1.5;maze.y=1.5;maze.a=0;maze.t=0;maze.goal={x:n-2.5,y:n-2.5};}
+function wallAt(x,y){let ix=Math.floor(x),iy=Math.floor(y);return iy<0||ix<0||iy>=maze.n||ix>=maze.n||maze.grid[iy][ix]}
+function drawMaze(dt){maze.t+=dt;const speed=.72;let lookAhead=0.52,fx=Math.cos(maze.a),fy=Math.sin(maze.a);let front=wallAt(maze.x+fx*lookAhead,maze.y+fy*lookAhead);let left=wallAt(maze.x+Math.cos(maze.a-1.2)*.6,maze.y+Math.sin(maze.a-1.2)*.6);let right=wallAt(maze.x+Math.cos(maze.a+1.2)*.6,maze.y+Math.sin(maze.a+1.2)*.6);if(front){maze.a+=(left&&!right?1:right&&!left?-1:(Math.random()<.5?-1:1))*dt*2.25}else{maze.a+=(Math.sin(maze.t*.7)*.05)*dt}fx=Math.cos(maze.a);fy=Math.sin(maze.a);let nx=maze.x+fx*speed*dt,ny=maze.y+fy*speed*dt;if(!wallAt(nx,maze.y))maze.x=nx;if(!wallAt(maze.x,ny))maze.y=ny;if(Math.hypot(maze.x-maze.goal.x,maze.y-maze.goal.y)<1.2)makeMaze();let grd=ctx.createLinearGradient(0,0,0,H/2);grd.addColorStop(0,'#05050a');grd.addColorStop(1,'#202030');ctx.fillStyle=grd;ctx.fillRect(0,0,W,H/2);ctx.fillStyle='#151515';ctx.fillRect(0,H/2,W,H/2);const fov=Math.PI/2.8,cols=Math.min(480,Math.max(180,(W/2)|0)),cw=W/cols;for(let i=0;i<cols;i++){const rayA=maze.a-fov/2+(i/cols)*fov,rx=Math.cos(rayA),ry=Math.sin(rayA);let d=.02,hit=false,side=0;let px=maze.x,py=maze.y;while(d<18&&!hit){d+=.025;px=maze.x+rx*d;py=maze.y+ry*d;if(wallAt(px,py)){hit=true;let fxp=px-Math.floor(px),fyp=py-Math.floor(py);side=(Math.min(fxp,1-fxp)<Math.min(fyp,1-fyp))?0:1}}const corrected=d*Math.cos(rayA-maze.a),hh=Math.min(H*1.5,H/(corrected*.72)),y=(H-hh)/2;let shade=clamp(1-corrected/17,.15,1)*(side?.82:1);let stripe=(((Math.floor(px*4)+Math.floor(py*4))&1)?.82:1);let r=(118*shade*stripe)|0,g=(67*shade*stripe)|0,b=(44*shade*stripe)|0;ctx.fillStyle=`rgb(${r},${g},${b})`;ctx.fillRect(i*cw,y,cw+1,hh);if(corrected<8){ctx.fillStyle=`rgba(255,200,140,${.12*shade})`;ctx.fillRect(i*cw,y,cw+1,Math.max(1,hh*.02))}}if((maze.t%7)<.22){ctx.fillStyle='#fff';ctx.fillRect(W/2-1,H/2-9,2,18);ctx.fillRect(W/2-9,H/2-1,18,2)}}
+const pipes={items:[],timer:0};
+function resetPipes(){pipes.items=[];pipes.timer=0;for(let i=0;i<8;i++)spawnPipe();}
+const pipeColors=['#ff2020','#20ff20','#20a0ff','#ffee00','#ff20ff','#20ffff','#ff8c20'];
+function spawnPipe(){const p={pts:[],x:rnd(-8,8),y:rnd(-5,5),z:rnd(4,16),axis:(Math.random()*3)|0,dir:Math.random()<.5?-1:1,c:pipeColors[(Math.random()*pipeColors.length)|0],life:0,max:rnd(30,75),next:0};p.pts.push({x:p.x,y:p.y,z:p.z});pipes.items.push(p)}
+function project3(x,y,z){const f=Math.min(W,H)*.72/(z+10);return{x:W/2+x*f,y:H/2-y*f,s:f}}
+function drawSegment(a,b,color){let A=project3(a.x,a.y,a.z),B=project3(b.x,b.y,b.z),w=clamp((A.s+B.s)*.7,2,22);ctx.lineCap='round';ctx.strokeStyle='#000';ctx.lineWidth=w+4;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();let g=ctx.createLinearGradient(A.x-w,A.y-w,B.x+w,B.y+w);g.addColorStop(0,'#fff');g.addColorStop(.18,color);g.addColorStop(.75,color);g.addColorStop(1,'#111');ctx.strokeStyle=g;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(A.x,A.y);ctx.lineTo(B.x,B.y);ctx.stroke();ctx.fillStyle='#e8e8e8';ctx.beginPath();ctx.arc(B.x,B.y,w*.52,0,Math.PI*2);ctx.fill();ctx.fillStyle=color;ctx.beginPath();ctx.arc(B.x,B.y,w*.4,0,Math.PI*2);ctx.fill();}
+function stepPipe(p){if(p.life>p.max)return;let last=p.pts[p.pts.length-1],q={...last};if(p.axis===0)q.x+=p.dir*.9;if(p.axis===1)q.y+=p.dir*.9;if(p.axis===2)q.z+=p.dir*.9;p.pts.push(q);p.life++;if(Math.random()<.28){let opts=[0,1,2].filter(a=>a!==p.axis);p.axis=opts[(Math.random()*2)|0];p.dir=Math.random()<.5?-1:1}if(Math.abs(q.x)>10||Math.abs(q.y)>7||q.z<-4||q.z>20){p.life=p.max+1}}
+function drawPipes(dt){ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);pipes.timer+=dt;for(const p of pipes.items){p.next-=dt;if(p.next<=0){stepPipe(p);p.next=.08}for(let i=1;i<p.pts.length;i++)drawSegment(p.pts[i-1],p.pts[i],p.c)}pipes.items=pipes.items.filter(p=>p.life<=p.max+20);if(pipes.items.length<7)spawnPipe();if(pipes.timer>24){resetPipes()}}
+const myst={polys:[]};
+function resetMyst(){myst.polys=Array.from({length:3},(_,k)=>({pts:Array.from({length:4},()=>({x:rnd(W),y:rnd(H),vx:rnd(170,-170),vy:rnd(170,-170)})),h:k*120}))}
+function drawMyst(dt){ctx.fillStyle='rgba(0,0,0,.08)';ctx.fillRect(0,0,W,H);for(const p of myst.polys){for(const q of p.pts){q.x+=q.vx*dt;q.y+=q.vy*dt;if(q.x<0||q.x>W){q.vx*=-1;q.x=clamp(q.x,0,W)}if(q.y<0||q.y>H){q.vy*=-1;q.y=clamp(q.y,0,H)}}p.h=(p.h+20*dt)%360;ctx.strokeStyle=`hsl(${p.h} 100% 60%)`;ctx.lineWidth=2;ctx.beginPath();p.pts.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();ctx.stroke()}}
+const stars={s:[]};
+function resetStars(){stars.s=Array.from({length:Math.min(900,Math.floor(W*H/900))},()=>({x:rnd(-W,W),y:rnd(-H,H),z:rnd(W,1),pz:W}))}
+function drawStars(dt){ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);const cx=W/2,cy=H/2;for(const s of stars.s){s.pz=s.z;s.z-=260*dt;if(s.z<1){s.x=rnd(-W,W);s.y=rnd(-H,H);s.z=W;s.pz=s.z}let x=cx+s.x/s.z*W,y=cy+s.y/s.z*W,px=cx+s.x/s.pz*W,py=cy+s.y/s.pz*W;if(x<0||x>W||y<0||y>H)continue;let b=clamp(1-s.z/W,.2,1);ctx.strokeStyle=`rgba(255,255,255,${b})`;ctx.lineWidth=clamp(1+(1-s.z/W)*3,1,4);ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(x,y);ctx.stroke()}}
+const toast={items:[]};
+function resetToast(){toast.items=Array.from({length:18},()=>newToast(true))}
+function newToast(any=false){return{x:any?rnd(W):-90,y:rnd(H+100,-100),s:rnd(1.25,.55),vx:rnd(-95,-170),vy:rnd(80,25),flap:rnd(Math.PI*2),kind:Math.random()<.72?'toast':'clock'}}
+function drawToaster(t,dt){t.x+=t.vx*dt*t.s;t.y+=t.vy*dt*t.s;t.flap+=dt*9;if(t.x<-120||t.y>H+120)Object.assign(t,newToast(false));ctx.save();ctx.translate(t.x,t.y);ctx.scale(t.s,t.s);if(t.kind==='clock'){ctx.fillStyle='#d8d8d8';ctx.strokeStyle='#555';ctx.lineWidth=4;ctx.fillRect(-26,-18,52,36);ctx.strokeRect(-26,-18,52,36);ctx.fillStyle='#111';ctx.font='700 18px monospace';ctx.textAlign='center';ctx.fillText('12:00',0,7)}else{ctx.fillStyle='#d7d7d7';ctx.strokeStyle='#555';ctx.lineWidth=4;ctx.beginPath();ctx.roundRect(-28,-20,56,42,12);ctx.fill();ctx.stroke();ctx.fillStyle='#222';ctx.fillRect(-17,-17,34,5);ctx.fillStyle='#b36f2f';ctx.beginPath();ctx.roundRect(-15,-25,30,25,6);ctx.fill();ctx.strokeStyle='#f2f2f2';ctx.lineWidth=5;let f=Math.sin(t.flap)*10;ctx.beginPath();ctx.moveTo(-22,-5);ctx.quadraticCurveTo(-48,-25+f,-60,-4);ctx.stroke();ctx.beginPath();ctx.moveTo(22,-5);ctx.quadraticCurveTo(48,-25-f,60,-4);ctx.stroke()}ctx.restore()}
+function drawToast(dt){ctx.fillStyle='#10106a';ctx.fillRect(0,0,W,H);for(const t of toast.items)drawToaster(t,dt)}
+function reset(){if(mode==='maze')makeMaze();if(mode==='pipes')resetPipes();if(mode==='mystify'){ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);resetMyst()}if(mode==='starfield')resetStars();if(mode==='toasters')resetToast()}
+function setMode(m){mode=m;modeSel.value=m;reset();showUI();location.hash=m}
+function nextMode(){const opts=[...modeSel.options].map(o=>o.value),i=opts.indexOf(mode);setMode(opts[(i+1)%opts.length])}
+function tick(now){let dt=Math.min(.05,(now-last)/1000||.016);last=now;if(mode==='maze')drawMaze(dt);else if(mode==='pipes')drawPipes(dt);else if(mode==='mystify')drawMyst(dt);else if(mode==='starfield')drawStars(dt);else drawToast(dt);requestAnimationFrame(tick)}
+modeSel.addEventListener('change',()=>setMode(modeSel.value));document.getElementById('regen').onclick=reset;document.getElementById('full').onclick=()=>{if(!document.fullscreenElement)document.documentElement.requestFullscreen?.();else document.exitFullscreen?.()};
+canvas.addEventListener('pointerdown',()=>{bar.classList.toggle('hidden');hint.style.opacity=0});
+addEventListener('keydown',e=>{if(e.key.toLowerCase()==='f'){document.getElementById('full').click()}if(e.key.toLowerCase()==='m')nextMode();if(e.key==='Escape')showUI()});
+addEventListener('pointermove',showUI,{passive:true});addEventListener('resize',resize);
+const h=location.hash.slice(1);if([...modeSel.options].some(o=>o.value===h))mode=h;modeSel.value=mode;resize();showUI();requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
