@@ -1,0 +1,1053 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090806">
+  <meta name="description" content="Cast physical 3D bones and read the numbers from the way they fall.">
+  <title>Roll the Bones — 3D Bone Oracle</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090806;
+      --panel: #12100c;
+      --panel-2: #1a1610;
+      --ink: #f1e6cf;
+      --bone: #e6d2a8;
+      --muted: #938776;
+      --ember: #ff9b42;
+      --ember-rgb: 255,155,66;
+      --blood: #9d2c2c;
+      --line: rgba(230,210,168,.13);
+      --shadow: 0 30px 90px rgba(0,0,0,.58);
+    }
+
+    * { box-sizing: border-box; }
+    html { min-height: 100%; background: var(--bg); }
+    body {
+      min-height: 100%;
+      margin: 0;
+      overflow-x: hidden;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 50% -12%, rgba(116,54,22,.28), transparent 34rem),
+        radial-gradient(circle at 8% 60%, rgba(72,19,17,.2), transparent 30rem),
+        linear-gradient(180deg,#0d0b08,var(--bg));
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button { font: inherit; }
+    button:focus-visible { outline: 3px solid rgba(var(--ember-rgb),.48); outline-offset: 3px; }
+
+    .app {
+      width: min(1120px,100%);
+      margin: 0 auto;
+      padding:
+        max(14px,env(safe-area-inset-top))
+        max(14px,env(safe-area-inset-right))
+        max(28px,env(safe-area-inset-bottom))
+        max(14px,env(safe-area-inset-left));
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 62px;
+      margin-bottom: 11px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+    .brand-mark {
+      position: relative;
+      width: 48px;
+      height: 48px;
+      flex: 0 0 auto;
+      transform: rotate(-8deg);
+    }
+
+    .brand-mark::before,
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      top: 17px;
+      left: 3px;
+      width: 42px;
+      height: 13px;
+      border: 1px solid rgba(230,210,168,.6);
+      border-radius: 999px;
+      background: linear-gradient(180deg,#ead9b6,#9d8867);
+      box-shadow: 0 0 22px rgba(var(--ember-rgb),.08);
+    }
+
+    .brand-mark::after { transform: rotate(90deg); }
+    .eyebrow { color: var(--ember); font-size: 9px; font-weight: 950; letter-spacing: .23em; text-transform: uppercase; }
+    h1 { margin: 2px 0 0; font-family: Georgia,"Times New Roman",serif; font-size: clamp(20px,3.3vw,31px); font-weight: 800; letter-spacing: -.025em; line-height: 1; }
+    h1 span { color: var(--bone); }
+
+    .top-actions { display: flex; gap: 7px; }
+    .icon-button {
+      min-width: 46px;
+      height: 46px;
+      padding: 0 13px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--muted);
+      background: rgba(18,15,11,.82);
+      box-shadow: inset 0 1px rgba(255,255,255,.035);
+      cursor: pointer;
+      transition: color .18s,border-color .18s,background .18s,transform .12s;
+    }
+
+    .icon-button:hover { color: var(--bone); border-color: rgba(var(--ember-rgb),.4); }
+    .icon-button:active { transform: scale(.95); }
+    .icon-button.active { color: var(--ember); border-color: rgba(var(--ember-rgb),.5); background: rgba(var(--ember-rgb),.08); }
+    .icon-button span:last-child { margin-left: 6px; font-size: 9px; font-weight: 950; letter-spacing: .1em; }
+
+    .stage {
+      position: relative;
+      height: clamp(430px,58vw,650px);
+      overflow: hidden;
+      border: 1px solid rgba(230,210,168,.15);
+      border-radius: clamp(24px,4vw,38px);
+      background:
+        radial-gradient(circle at 50% 44%,rgba(88,46,22,.18),transparent 44%),
+        linear-gradient(180deg,#0d0c09,#050504);
+      box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.05);
+      isolation: isolate;
+      touch-action: none;
+    }
+
+    #world { position: absolute; inset: 0; z-index: 1; }
+    #world canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+    #world canvas:active { cursor: grabbing; }
+
+    .vignette {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      border-radius: inherit;
+      background:
+        radial-gradient(circle at 50% 46%,transparent 38%,rgba(0,0,0,.58) 100%),
+        linear-gradient(180deg,rgba(255,193,104,.025),transparent 18%,transparent 76%,rgba(0,0,0,.38));
+      box-shadow: inset 0 0 0 6px rgba(0,0,0,.18),inset 0 0 0 7px rgba(230,210,168,.035);
+      pointer-events: none;
+    }
+
+    .stage-head {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 6;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .pills { display: flex; gap: 7px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 0 11px;
+      border: 1px solid rgba(230,210,168,.11);
+      border-radius: 999px;
+      color: #9c907e;
+      background: rgba(8,7,5,.66);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      font-size: 9px;
+      font-weight: 950;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .pill.live::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      margin-right: 7px;
+      border-radius: 50%;
+      background: var(--ember);
+      box-shadow: 0 0 13px var(--ember);
+    }
+
+    .drag-hint { color: #685e52; font-size: 9px; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+
+    .engine-message {
+      position: absolute;
+      z-index: 5;
+      left: 50%;
+      top: 43%;
+      width: min(330px,76%);
+      transform: translate(-50%,-50%);
+      color: #9c907e;
+      font-size: 12px;
+      line-height: 1.55;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .engine-message strong { display: block; margin-bottom: 4px; color: var(--bone); font-family: Georgia,"Times New Roman",serif; font-size: 19px; }
+
+    .result-card {
+      position: absolute;
+      z-index: 7;
+      left: 50%;
+      bottom: 16px;
+      width: min(530px,calc(100% - 30px));
+      min-height: 105px;
+      padding: 13px 20px 15px;
+      transform: translateX(-50%);
+      border: 1px solid rgba(230,210,168,.2);
+      border-radius: 24px;
+      background: linear-gradient(180deg,rgba(22,18,13,.8),rgba(7,6,5,.92));
+      box-shadow: 0 20px 50px rgba(0,0,0,.52),inset 0 1px rgba(255,255,255,.055);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      text-align: center;
+      pointer-events: none;
+      transition: border-color .25s,box-shadow .25s;
+    }
+
+    .result-card.casting { border-color: rgba(var(--ember-rgb),.68); box-shadow: 0 0 40px rgba(var(--ember-rgb),.12),0 20px 50px rgba(0,0,0,.52); }
+    .result-card.revealed { border-color: rgba(var(--ember-rgb),.42); }
+    .result-label { color: var(--muted); font-size: 9px; font-weight: 950; letter-spacing: .21em; text-transform: uppercase; }
+    .result-number { margin-top: 2px; color: var(--bone); font-family: Georgia,"Times New Roman",serif; font-size: clamp(44px,9vw,72px); font-weight: 800; letter-spacing: -.06em; line-height: .91; text-shadow: 0 0 25px rgba(var(--ember-rgb),.12); }
+    .reading-row { display: flex; min-height: 21px; align-items: center; justify-content: center; gap: 5px; margin-top: 8px; }
+    .reading {
+      display: inline-grid;
+      min-width: 27px;
+      height: 24px;
+      place-items: center;
+      border: 1px solid rgba(var(--ember-rgb),.26);
+      border-radius: 8px;
+      color: var(--ember);
+      background: rgba(var(--ember-rgb),.06);
+      font-size: 11px;
+      font-weight: 950;
+    }
+
+    .reading-note { color: #7d7264; font-size: 10px; font-weight: 700; }
+
+    .control-deck {
+      margin-top: 11px;
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: linear-gradient(180deg,rgba(25,21,15,.95),rgba(12,10,8,.97));
+      box-shadow: 0 20px 55px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.04);
+    }
+
+    .control-row { display: grid; grid-template-columns: 1fr 2.25fr; gap: 10px; }
+    .control-box { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 17px; background: rgba(0,0,0,.14); }
+    .section-label { margin: 0 0 8px 2px; color: var(--muted); font-size: 9px; font-weight: 950; letter-spacing: .17em; text-transform: uppercase; }
+    .count-options { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
+    .count-button {
+      min-height: 43px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: #b6aa97;
+      background: rgba(255,255,255,.025);
+      font-weight: 950;
+      cursor: pointer;
+      transition: transform .12s,border-color .18s,color .18s,background .18s;
+    }
+
+    .count-button:hover { color: var(--bone); border-color: rgba(var(--ember-rgb),.35); }
+    .count-button:active { transform: scale(.96); }
+    .count-button.active { color: var(--ember); border-color: rgba(var(--ember-rgb),.58); background: rgba(var(--ember-rgb),.085); }
+
+    .legend { display: flex; min-height: 43px; align-items: center; justify-content: space-between; gap: 12px; }
+    .legend p { margin: 0; color: #7d7264; font-size: 11px; line-height: 1.4; }
+    .face-values { display: flex; gap: 5px; flex: 0 0 auto; }
+    .face-values b { display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid rgba(230,210,168,.16); border-radius: 50%; color: var(--bone); font-family: Georgia,"Times New Roman",serif; font-size: 14px; }
+
+    .cast-button {
+      position: relative;
+      width: 100%;
+      min-height: 69px;
+      margin-top: 10px;
+      overflow: hidden;
+      border: 0;
+      border-radius: 19px;
+      color: #1a0d05;
+      background: linear-gradient(102deg,#f2c982,var(--ember) 55%,#d96c2f);
+      box-shadow: 0 15px 34px rgba(var(--ember-rgb),.16),inset 0 1px rgba(255,255,255,.42),inset 0 -2px rgba(55,19,3,.26);
+      cursor: pointer;
+      transition: transform .12s,filter .18s,opacity .18s;
+    }
+
+    .cast-button::after {
+      content: "";
+      position: absolute;
+      top: -120%;
+      left: -30%;
+      width: 25%;
+      height: 340%;
+      background: rgba(255,255,255,.2);
+      transform: rotate(24deg);
+      transition: left .48s ease;
+    }
+
+    .cast-button:hover::after { left: 110%; }
+    .cast-button:active { transform: translateY(2px) scale(.992); }
+    .cast-button:disabled { opacity: .56; cursor: wait; }
+    .cast-main { display: block; font-size: 18px; font-weight: 1000; letter-spacing: .16em; }
+    .cast-sub { display: block; margin-top: 2px; font-size: 9px; font-weight: 950; letter-spacing: .11em; opacity: .66; }
+
+    .history { margin-top: 13px; }
+    .history-head { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 8px; }
+    .history-title { color: #a99d89; font-size: 10px; font-weight: 950; letter-spacing: .15em; text-transform: uppercase; }
+    .clear-button { border: 0; color: #6f6559; background: transparent; font-size: 10px; font-weight: 900; cursor: pointer; }
+    .clear-button:hover { color: var(--ember); }
+    .history-list { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+    .history-item {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto;
+      align-items: center;
+      min-height: 58px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: rgba(18,15,11,.76);
+    }
+
+    .history-item small { display: block; color: var(--ember); font-size: 9px; font-weight: 950; letter-spacing: .08em; }
+    .history-item span { display: block; overflow: hidden; margin-top: 3px; color: #756b5f; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .history-item strong { margin-left: 8px; color: var(--bone); font-family: Georgia,"Times New Roman",serif; font-size: 25px; }
+    .history-empty { grid-column: 1/-1; padding: 18px; border: 1px dashed var(--line); border-radius: 15px; color: #73695c; font-size: 11px; text-align: center; }
+    .footer-note { margin: 15px 0 0; color: #544c43; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-align: center; text-transform: uppercase; }
+
+    @media (max-width:720px) {
+      .stage { height: 470px; }
+      .control-row { grid-template-columns: 1fr; }
+      .history-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    }
+
+    @media (max-width:440px) {
+      .app { padding-left: 10px; padding-right: 10px; }
+      .topbar { min-height: 54px; margin-bottom: 8px; }
+      .brand-mark { width: 40px; height: 40px; }
+      .brand-mark::before,.brand-mark::after { top: 14px; left: 2px; width: 36px; height: 11px; }
+      .eyebrow { font-size: 8px; }
+      .icon-button { min-width: 41px; height: 41px; padding: 0 10px; }
+      .icon-button span:last-child { display: none; }
+      .stage { height: 420px; border-radius: 25px; }
+      .stage-head { top: 12px; left: 12px; right: 12px; }
+      .pills .pill:last-child { display: none; }
+      .drag-hint { display: none; }
+      .result-card { bottom: 11px; min-height: 98px; padding: 12px 14px 13px; }
+      .control-deck { margin-top: 9px; padding: 11px; border-radius: 22px; }
+      .legend { align-items: flex-start; flex-direction: column; }
+      .cast-button { min-height: 64px; }
+    }
+
+    @media (max-height:560px) and (orientation:landscape) {
+      .stage { height: 330px; }
+      .topbar { min-height: 48px; }
+    }
+
+    @media (prefers-reduced-motion:reduce) {
+      *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <div class="eyebrow">An osteomantic number oracle</div>
+          <h1>ROLL <span>THE BONES</span></h1>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="icon-button active" id="soundButton" type="button" aria-label="Turn sound off" aria-pressed="true"><span aria-hidden="true">♪</span><span>SOUND</span></button>
+        <button class="icon-button" id="resetView" type="button" aria-label="Reset camera view"><span aria-hidden="true">◎</span><span>VIEW</span></button>
+      </div>
+    </header>
+
+    <section class="stage" id="stage" aria-label="Three-dimensional bone casting table">
+      <div id="world"></div>
+      <div class="vignette"></div>
+      <div class="stage-head">
+        <div class="pills">
+          <div class="pill live" id="statusPill">AWAKENING</div>
+          <div class="pill">THE CAST DECIDES</div>
+        </div>
+        <div class="drag-hint">Drag to circle the table</div>
+      </div>
+      <div class="engine-message" id="engineMessage"><strong>Waking the old bones…</strong>Loading the Three.js casting table.</div>
+      <div class="result-card" id="resultCard" aria-live="polite" aria-atomic="true">
+        <div class="result-label" id="resultLabel">The bones are quiet</div>
+        <div class="result-number" id="resultNumber">—</div>
+        <div class="reading-row" id="readingRow"><span class="reading-note">Throw them and read the upward faces</span></div>
+      </div>
+    </section>
+
+    <section class="control-deck" aria-label="Bone casting controls">
+      <div class="control-row">
+        <div class="control-box">
+          <p class="section-label">Bones in the cast</p>
+          <div class="count-options">
+            <button class="count-button" type="button" data-count="3">3</button>
+            <button class="count-button active" type="button" data-count="5">5</button>
+            <button class="count-button" type="button" data-count="7">7</button>
+          </div>
+        </div>
+        <div class="control-box">
+          <p class="section-label">How the reading works</p>
+          <div class="legend">
+            <p>Every bone has four stable numbered faces. The upward face becomes its reading; all readings are added together.</p>
+            <div class="face-values" aria-label="Possible values"><b>1</b><b>3</b><b>4</b><b>6</b></div>
+          </div>
+        </div>
+      </div>
+      <button class="cast-button" id="castButton" type="button">
+        <span class="cast-main" id="castMain">THROW THE BONES</span>
+        <span class="cast-sub" id="castSub">5 BONES · PHYSICS-READ CAST</span>
+      </button>
+    </section>
+
+    <section class="history" aria-label="Previous casts">
+      <div class="history-head">
+        <div class="history-title">Previous casts</div>
+        <button class="clear-button" id="clearHistory" type="button">CLEAR</button>
+      </div>
+      <div class="history-list" id="historyList"></div>
+    </section>
+
+    <p class="footer-note">The 3D physics determines the reading · for curiosity and play, not serious decisions</p>
+  </main>
+
+  <script type="module">
+    const $ = selector => document.querySelector(selector);
+    const $$ = selector => [...document.querySelectorAll(selector)];
+    const clamp = (value,min,max) => Math.max(min,Math.min(max,value));
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const possibleValues = [1,3,4,6];
+
+    const stage = $("#stage");
+    const worldElement = $("#world");
+    const engineMessage = $("#engineMessage");
+    const statusPill = $("#statusPill");
+    const resultCard = $("#resultCard");
+    const resultLabel = $("#resultLabel");
+    const resultNumber = $("#resultNumber");
+    const readingRow = $("#readingRow");
+    const castButton = $("#castButton");
+    const castMain = $("#castMain");
+    const castSub = $("#castSub");
+
+    let boneCount = 5;
+    let soundOn = true;
+    let history = [];
+    let engineReady = false;
+    let casting = false;
+    let THREE = null;
+    let CANNON = null;
+    let scene,camera,renderer,world,clock;
+    let bones = [];
+    let numberSprites = [];
+    let tableMaterial,bonePhysicsMaterial;
+    let settleAfter = 0;
+    let forceFinishAt = 0;
+    let lastImpact = 0;
+    let audioContext = null;
+    let cameraYaw = 0;
+    let cameraPitch = .61;
+    let cameraDistance = 14.4;
+    let targetYaw = 0;
+    let targetPitch = .61;
+    let dragState = null;
+    let ignoreClick = false;
+
+    try {
+      const saved = JSON.parse(localStorage.getItem("boneOracleSettings") || "{}");
+      boneCount = [3,5,7].includes(saved.boneCount) ? saved.boneCount : 5;
+      soundOn = saved.soundOn !== false;
+      history = JSON.parse(localStorage.getItem("boneOracleHistory") || "[]").slice(0,12);
+    } catch {
+      history = [];
+    }
+
+    function secureRandom() {
+      if (window.crypto?.getRandomValues) {
+        const data = new Uint32Array(1);
+        window.crypto.getRandomValues(data);
+        return data[0] / 4294967296;
+      }
+      return Math.random();
+    }
+
+    function randomBetween(min,max) { return min + (max-min)*secureRandom(); }
+
+    function saveSettings() {
+      try { localStorage.setItem("boneOracleSettings",JSON.stringify({boneCount,soundOn})); } catch {}
+    }
+
+    function syncUI() {
+      $$(".count-button").forEach(button => button.classList.toggle("active",Number(button.dataset.count)===boneCount));
+      $("#soundButton").classList.toggle("active",soundOn);
+      $("#soundButton").setAttribute("aria-pressed",String(soundOn));
+      $("#soundButton").setAttribute("aria-label",soundOn?"Turn sound off":"Turn sound on");
+      castSub.textContent = `${boneCount} BONES · PHYSICS-READ CAST`;
+      saveSettings();
+    }
+
+    function renderHistory() {
+      const list = $("#historyList");
+      if (!history.length) {
+        list.innerHTML = '<div class="history-empty">Nothing has been asked yet. The bones remain professionally mysterious.</div>';
+        return;
+      }
+      list.innerHTML = history.slice(0,8).map(item => `<div class="history-item"><div><small>${item.values.length} BONES</small><span>${item.values.join(" · ")}</span></div><strong>${item.total}</strong></div>`).join("");
+    }
+
+    function addHistory(values,total) {
+      history.unshift({values,total,time:Date.now()});
+      history = history.slice(0,12);
+      try { localStorage.setItem("boneOracleHistory",JSON.stringify(history)); } catch {}
+      renderHistory();
+    }
+
+    function tone(frequency,duration=.05,volume=.03,type="triangle",delay=0) {
+      if (!soundOn) return;
+      try {
+        audioContext = audioContext || new (window.AudioContext||window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        const start = audioContext.currentTime+delay;
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency,start);
+        oscillator.frequency.exponentialRampToValueAtTime(Math.max(40,frequency*.72),start+duration);
+        gain.gain.setValueAtTime(volume,start);
+        gain.gain.exponentialRampToValueAtTime(.0001,start+duration);
+        oscillator.connect(gain).connect(audioContext.destination);
+        oscillator.start(start);
+        oscillator.stop(start+duration);
+      } catch {}
+    }
+
+    function clack(strength=2) {
+      const now = performance.now();
+      if (now-lastImpact<45) return;
+      lastImpact = now;
+      tone(95+Math.min(strength,10)*13,.035+Math.min(strength,8)*.004,.012+Math.min(strength,10)*.0025,"triangle");
+    }
+
+    function castSound() {
+      tone(82,.08,.045,"sawtooth");
+      tone(126,.055,.026,"triangle",.07);
+      tone(96,.05,.022,"triangle",.14);
+    }
+
+    function revealSound() {
+      tone(196,.13,.035,"sine");
+      tone(294,.16,.03,"sine",.09);
+      tone(392,.22,.025,"sine",.18);
+    }
+
+    function vibrate(pattern) {
+      try { navigator.vibrate?.(pattern); } catch {}
+    }
+
+    function makeTableTexture() {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1024;
+      const ctx = canvas.getContext("2d");
+      const center = 512;
+      ctx.fillStyle="#2a1c12";
+      ctx.fillRect(0,0,1024,1024);
+      const glow = ctx.createRadialGradient(center,center,40,center,center,500);
+      glow.addColorStop(0,"rgba(92,49,27,.2)");
+      glow.addColorStop(1,"rgba(0,0,0,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0,0,1024,1024);
+      ctx.strokeStyle = "rgba(209,151,86,.27)";
+      ctx.lineWidth = 3;
+      for (const radius of [170,300,430]) {
+        ctx.beginPath();
+        ctx.arc(center,center,radius,0,Math.PI*2);
+        ctx.stroke();
+      }
+      for (let i=0;i<12;i++) {
+        const angle=i*Math.PI/6;
+        ctx.beginPath();
+        ctx.moveTo(center+Math.cos(angle)*172,center+Math.sin(angle)*172);
+        ctx.lineTo(center+Math.cos(angle)*430,center+Math.sin(angle)*430);
+        ctx.stroke();
+        ctx.save();
+        ctx.translate(center+Math.cos(angle)*370,center+Math.sin(angle)*370);
+        ctx.rotate(angle+Math.PI/2);
+        ctx.fillStyle="rgba(230,210,168,.48)";
+        ctx.font="700 30px Georgia";
+        ctx.textAlign="center";
+        ctx.fillText(["I","III","IV","VI"][i%4],0,10);
+        ctx.restore();
+      }
+      ctx.strokeStyle="rgba(157,44,44,.28)";
+      ctx.lineWidth=4;
+      ctx.beginPath();
+      for (let i=0;i<5;i++) {
+        const angle=-Math.PI/2+i*Math.PI*4/5;
+        const x=center+Math.cos(angle)*160;
+        const y=center+Math.sin(angle)*160;
+        if (!i) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(),8);
+      return texture;
+    }
+
+    function makeDust() {
+      const count = 500;
+      const positions = new Float32Array(count*3);
+      const colors = new Float32Array(count*3);
+      for (let i=0;i<count;i++) {
+        const radius=randomBetween(5,22);
+        const angle=randomBetween(0,Math.PI*2);
+        positions[i*3]=Math.cos(angle)*radius;
+        positions[i*3+1]=randomBetween(.2,10);
+        positions[i*3+2]=Math.sin(angle)*radius;
+        colors[i*3]=1;
+        colors[i*3+1]=randomBetween(.38,.7);
+        colors[i*3+2]=.18;
+      }
+      const geometry=new THREE.BufferGeometry();
+      geometry.setAttribute("position",new THREE.BufferAttribute(positions,3));
+      geometry.setAttribute("color",new THREE.BufferAttribute(colors,3));
+      const material=new THREE.PointsMaterial({size:.035,vertexColors:true,transparent:true,opacity:.42,depthWrite:false});
+      const dust=new THREE.Points(geometry,material);
+      dust.userData.dust=true;
+      scene.add(dust);
+      return dust;
+    }
+
+    function makeBoneMesh(index) {
+      const group = new THREE.Group();
+      const boneColor = new THREE.Color().setHSL(.115,randomBetween(.28,.42),randomBetween(.67,.78));
+      const material = new THREE.MeshStandardMaterial({color:boneColor,roughness:.72,metalness:.015,emissive:0x000000,emissiveIntensity:0});
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.18,.23,1.55,16,3),material);
+      shaft.castShadow=shaft.receiveShadow=true;
+      group.add(shaft);
+      for (const sign of [-1,1]) {
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(.29,18,12),material);
+        cap.position.y=sign*.76;
+        cap.scale.set(.9,.82,.88);
+        cap.castShadow=cap.receiveShadow=true;
+        group.add(cap);
+        for (const x of [-1,1]) {
+          const knob = new THREE.Mesh(new THREE.SphereGeometry(.25,16,10),material);
+          knob.position.set(x*.18,sign*.94,0);
+          knob.scale.set(.92,.78,.82);
+          knob.castShadow=knob.receiveShadow=true;
+          group.add(knob);
+        }
+      }
+      const scarMaterial = new THREE.MeshBasicMaterial({color:0x4b2c1e,transparent:true,opacity:.72});
+      const scars = 1+index%3;
+      for (let i=0;i<scars;i++) {
+        const scar=new THREE.Mesh(new THREE.TorusGeometry(.218,.015,5,18,Math.PI*1.35),scarMaterial);
+        scar.rotation.x=Math.PI/2;
+        scar.rotation.z=randomBetween(-.5,.5);
+        scar.position.y=(i-(scars-1)/2)*.28+randomBetween(-.06,.06);
+        group.add(scar);
+      }
+      group.userData.boneMaterial=material;
+      group.userData.phase=randomBetween(0,Math.PI*2);
+      const scale=randomBetween(.88,1.08);
+      group.scale.setScalar(scale);
+      group.userData.visualScale=scale;
+      return group;
+    }
+
+    function makeBoneBody(index) {
+      const body=new CANNON.Body({mass:1.05,material:bonePhysicsMaterial});
+      body.addShape(new CANNON.Box(new CANNON.Vec3(.23,.77,.23)));
+      const bulb=new CANNON.Sphere(.3);
+      body.addShape(bulb,new CANNON.Vec3(.15,.91,0));
+      body.addShape(bulb,new CANNON.Vec3(-.15,.91,0));
+      body.addShape(bulb,new CANNON.Vec3(.15,-.91,0));
+      body.addShape(bulb,new CANNON.Vec3(-.15,-.91,0));
+      body.allowSleep=true;
+      body.sleepSpeedLimit=.16;
+      body.sleepTimeLimit=.55;
+      body.linearDamping=.1;
+      body.angularDamping=.08;
+      body.addEventListener("collide",event=>{
+        let impact=0;
+        try { impact=Math.abs(event.contact.getImpactVelocityAlongNormal()); } catch {}
+        if (impact>1.1) clack(impact);
+      });
+      return body;
+    }
+
+    function clearBones() {
+      for (const bone of bones) {
+        scene.remove(bone.mesh);
+        if (bone.body) world.removeBody(bone.body);
+        bone.mesh.traverse(object=>{
+          object.geometry?.dispose?.();
+          if (object.material && object.material!==bone.mesh.userData.boneMaterial) object.material.dispose?.();
+        });
+        bone.mesh.userData.boneMaterial?.dispose?.();
+      }
+      bones=[];
+      for (const sprite of numberSprites) {
+        scene.remove(sprite);
+        sprite.material.map?.dispose?.();
+        sprite.material.dispose?.();
+      }
+      numberSprites=[];
+    }
+
+    function createPreviewBones() {
+      if (!engineReady||casting) return;
+      clearBones();
+      const radius=boneCount===3?2.4:boneCount===5?3.0:3.45;
+      for (let i=0;i<boneCount;i++) {
+        const mesh=makeBoneMesh(i);
+        const angle=i*Math.PI*2/boneCount-Math.PI/2;
+        mesh.position.set(Math.cos(angle)*radius,.48,Math.sin(angle)*radius);
+        mesh.rotation.set(randomBetween(-.2,.2),-angle,Math.PI/2+randomBetween(-.22,.22));
+        scene.add(mesh);
+        bones.push({mesh,body:null,preview:true,index:i});
+      }
+      statusPill.textContent=`${boneCount} BONES READY`;
+    }
+
+    function makeNumberSprite(value) {
+      const canvas=document.createElement("canvas");
+      canvas.width=canvas.height=256;
+      const ctx=canvas.getContext("2d");
+      ctx.beginPath();
+      ctx.arc(128,128,92,0,Math.PI*2);
+      ctx.fillStyle="rgba(16,11,7,.9)";
+      ctx.fill();
+      ctx.lineWidth=7;
+      ctx.strokeStyle="rgba(255,155,66,.84)";
+      ctx.stroke();
+      ctx.fillStyle="#f1e6cf";
+      ctx.font="800 118px Georgia";
+      ctx.textAlign="center";
+      ctx.textBaseline="middle";
+      ctx.fillText(String(value),128,137);
+      const texture=new THREE.CanvasTexture(canvas);
+      texture.colorSpace=THREE.SRGBColorSpace;
+      const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false}));
+      sprite.scale.set(.78,.78,.78);
+      sprite.userData.baseY=0;
+      sprite.userData.phase=randomBetween(0,Math.PI*2);
+      return sprite;
+    }
+
+    function updateCamera() {
+      cameraYaw += (targetYaw-cameraYaw)*.09;
+      cameraPitch += (targetPitch-cameraPitch)*.09;
+      const horizontal=Math.cos(cameraPitch)*cameraDistance;
+      camera.position.set(Math.sin(cameraYaw)*horizontal,Math.sin(cameraPitch)*cameraDistance,Math.cos(cameraYaw)*horizontal);
+      camera.lookAt(0,.25,0);
+    }
+
+    function init3D() {
+      scene=new THREE.Scene();
+      scene.background=new THREE.Color(0x080705);
+      scene.fog=new THREE.FogExp2(0x080705,.026);
+      camera=new THREE.PerspectiveCamera(42,1,.1,60);
+      renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
+      renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.8));
+      renderer.outputColorSpace=THREE.SRGBColorSpace;
+      renderer.toneMapping=THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure=1.04;
+      renderer.shadowMap.enabled=true;
+      renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+      worldElement.appendChild(renderer.domElement);
+
+      scene.add(new THREE.HemisphereLight(0xd9c49f,0x100805,.72));
+      const key=new THREE.DirectionalLight(0xffe2b3,2.2);
+      key.position.set(-4,10,6);
+      key.castShadow=true;
+      key.shadow.mapSize.set(1536,1536);
+      key.shadow.camera.left=-9;
+      key.shadow.camera.right=9;
+      key.shadow.camera.top=9;
+      key.shadow.camera.bottom=-9;
+      scene.add(key);
+      for (const [x,z,intensity] of [[-6,-4,26],[6,-4,20],[-6,5,18],[6,5,24]]) {
+        const light=new THREE.PointLight(0xff6a22,intensity,13,2.1);
+        light.position.set(x,1.5,z);
+        scene.add(light);
+      }
+
+      const base=new THREE.Mesh(new THREE.CylinderGeometry(6.85,7.12,.48,96),new THREE.MeshStandardMaterial({color:0x15110d,roughness:.83,metalness:.08}));
+      base.position.y=-.12;
+      base.receiveShadow=true;
+      scene.add(base);
+      const top=new THREE.Mesh(new THREE.CircleGeometry(6.72,96),new THREE.MeshStandardMaterial({color:0xffffff,map:makeTableTexture(),roughness:.9,metalness:.02}));
+      top.rotation.x=-Math.PI/2;
+      top.position.y=.135;
+      top.receiveShadow=true;
+      scene.add(top);
+      const rim=new THREE.Mesh(new THREE.TorusGeometry(6.77,.16,14,128),new THREE.MeshStandardMaterial({color:0x3b2819,roughness:.6,metalness:.28}));
+      rim.rotation.x=Math.PI/2;
+      rim.position.y=.25;
+      rim.castShadow=rim.receiveShadow=true;
+      scene.add(rim);
+      const underfloor=new THREE.Mesh(new THREE.CircleGeometry(25,96),new THREE.MeshStandardMaterial({color:0x070605,roughness:1}));
+      underfloor.rotation.x=-Math.PI/2;
+      underfloor.position.y=-.39;
+      underfloor.receiveShadow=true;
+      scene.add(underfloor);
+      makeDust();
+
+      world=new CANNON.World({gravity:new CANNON.Vec3(0,-21,0)});
+      world.allowSleep=true;
+      world.broadphase=new CANNON.SAPBroadphase(world);
+      tableMaterial=new CANNON.Material("stone");
+      bonePhysicsMaterial=new CANNON.Material("bone");
+      world.addContactMaterial(new CANNON.ContactMaterial(tableMaterial,bonePhysicsMaterial,{friction:.44,restitution:.31}));
+      const floorBody=new CANNON.Body({mass:0,material:tableMaterial,shape:new CANNON.Plane()});
+      floorBody.position.y=.16;
+      floorBody.quaternion.setFromEuler(-Math.PI/2,0,0);
+      world.addBody(floorBody);
+      const segments=14;
+      for (let i=0;i<segments;i++) {
+        const angle=i*Math.PI*2/segments;
+        const wall=new CANNON.Body({mass:0,material:tableMaterial,shape:new CANNON.Box(new CANNON.Vec3(1.52,.72,.16))});
+        wall.position.set(Math.cos(angle)*6.58,.78,Math.sin(angle)*6.58);
+        wall.quaternion.setFromEuler(0,-angle,0);
+        world.addBody(wall);
+      }
+
+      clock=new THREE.Clock();
+      updateCamera();
+      resize();
+      new ResizeObserver(resize).observe(stage);
+      renderer.domElement.addEventListener("pointerdown",startDrag);
+      renderer.domElement.addEventListener("pointermove",moveDrag);
+      renderer.domElement.addEventListener("pointerup",endDrag);
+      renderer.domElement.addEventListener("pointercancel",endDrag);
+      requestAnimationFrame(loop);
+    }
+
+    function resize() {
+      if (!renderer) return;
+      const rect=stage.getBoundingClientRect();
+      renderer.setSize(Math.max(1,rect.width),Math.max(1,rect.height),false);
+      camera.aspect=rect.width/rect.height;
+      camera.updateProjectionMatrix();
+    }
+
+    function startDrag(event) {
+      dragState={x:event.clientX,y:event.clientY,yaw:targetYaw,pitch:targetPitch,moved:false,id:event.pointerId};
+      renderer.domElement.setPointerCapture?.(event.pointerId);
+    }
+
+    function moveDrag(event) {
+      if (!dragState||dragState.id!==event.pointerId) return;
+      const dx=event.clientX-dragState.x;
+      const dy=event.clientY-dragState.y;
+      if (Math.hypot(dx,dy)>5) dragState.moved=true;
+      targetYaw=dragState.yaw-dx*.006;
+      targetPitch=clamp(dragState.pitch+dy*.004,.38,1.02);
+    }
+
+    function endDrag(event) {
+      if (!dragState||dragState.id!==event.pointerId) return;
+      ignoreClick=dragState.moved;
+      renderer.domElement.releasePointerCapture?.(event.pointerId);
+      dragState=null;
+      if (ignoreClick) setTimeout(()=>ignoreClick=false,80);
+    }
+
+    function loop() {
+      requestAnimationFrame(loop);
+      const dt=Math.min(clock.getDelta(),.05);
+      updateCamera();
+      if (casting) {
+        world.step(1/60,dt,4);
+        let settled=performance.now()>settleAfter;
+        for (const bone of bones) {
+          bone.mesh.position.copy(bone.body.position);
+          bone.mesh.quaternion.copy(bone.body.quaternion);
+          const slow=bone.body.sleepState===CANNON.Body.SLEEPING || (bone.body.velocity.lengthSquared()<.025&&bone.body.angularVelocity.lengthSquared()<.035);
+          settled=settled&&slow;
+        }
+        if (settled||performance.now()>forceFinishAt) finishCast();
+      } else if (!reducedMotion) {
+        const time=performance.now()*.001;
+        for (const bone of bones) {
+          if (!bone.preview) continue;
+          bone.mesh.position.y=.48+Math.sin(time*.8+bone.mesh.userData.phase)*.015;
+        }
+      }
+      const time=performance.now()*.001;
+      for (const sprite of numberSprites) sprite.position.y=sprite.userData.baseY+Math.sin(time*1.8+sprite.userData.phase)*.06;
+      const dust=scene.children.find(object=>object.userData.dust);
+      if (dust&&!reducedMotion) dust.rotation.y+=dt*.012;
+      renderer.render(scene,camera);
+    }
+
+    function readBone(bone) {
+      const quaternion=new THREE.Quaternion(bone.body.quaternion.x,bone.body.quaternion.y,bone.body.quaternion.z,bone.body.quaternion.w);
+      const up=new THREE.Vector3(0,1,0);
+      const faces=[
+        {direction:new THREE.Vector3(1,0,0),value:1},
+        {direction:new THREE.Vector3(0,0,1),value:3},
+        {direction:new THREE.Vector3(0,0,-1),value:4},
+        {direction:new THREE.Vector3(-1,0,0),value:6}
+      ];
+      let best=faces[0];
+      let bestScore=-Infinity;
+      for (const face of faces) {
+        const score=face.direction.clone().applyQuaternion(quaternion).dot(up);
+        if (score>bestScore) { best=face; bestScore=score; }
+      }
+      return best.value;
+    }
+
+    function cast() {
+      if (casting) return;
+      if (!engineReady) {
+        fallbackCast();
+        return;
+      }
+      clearBones();
+      casting=true;
+      resultCard.className="result-card casting";
+      resultLabel.textContent="The bones are moving";
+      resultNumber.textContent="…";
+      readingRow.innerHTML='<span class="reading-note">Listen for the answer</span>';
+      castButton.disabled=true;
+      castMain.textContent="CASTING";
+      statusPill.textContent="BONES IN MOTION";
+      castSound();
+      vibrate(22);
+      const columns=Math.ceil(Math.sqrt(boneCount));
+      for (let i=0;i<boneCount;i++) {
+        const mesh=makeBoneMesh(i);
+        const body=makeBoneBody(i);
+        const column=i%columns;
+        const row=Math.floor(i/columns);
+        body.position.set((column-(columns-1)/2)*1.15+randomBetween(-.35,.35),randomBetween(5.8,8.2)+row*.42,randomBetween(-3.8,-1.7));
+        body.quaternion.setFromEuler(randomBetween(0,Math.PI*2),randomBetween(0,Math.PI*2),randomBetween(0,Math.PI*2));
+        body.velocity.set(randomBetween(-3.4,3.4),randomBetween(1.6,5.2),randomBetween(2.2,6.2));
+        body.angularVelocity.set(randomBetween(-12,12),randomBetween(-12,12),randomBetween(-12,12));
+        world.addBody(body);
+        scene.add(mesh);
+        bones.push({mesh,body,preview:false,index:i});
+      }
+      settleAfter=performance.now()+(reducedMotion?450:1250);
+      forceFinishAt=performance.now()+(reducedMotion?1000:6200);
+    }
+
+    function finishCast() {
+      if (!casting) return;
+      casting=false;
+      const values=bones.map(readBone);
+      const total=values.reduce((sum,value)=>sum+value,0);
+      bones.forEach((bone,index)=>{
+        bone.body.sleep();
+        const material=bone.mesh.userData.boneMaterial;
+        material.emissive.setHex(0x3a1606);
+        material.emissiveIntensity=.22;
+        const sprite=makeNumberSprite(values[index]);
+        sprite.position.set(bone.mesh.position.x,bone.mesh.position.y+1.2,bone.mesh.position.z);
+        sprite.userData.baseY=sprite.position.y;
+        scene.add(sprite);
+        numberSprites.push(sprite);
+      });
+      resultCard.className="result-card revealed";
+      resultLabel.textContent="The bones answer";
+      resultNumber.textContent=String(total);
+      readingRow.innerHTML=values.map(value=>`<span class="reading">${value}</span>`).join("");
+      castButton.disabled=false;
+      castMain.textContent="THROW AGAIN";
+      statusPill.textContent=`CAST TOTAL · ${total}`;
+      addHistory(values,total);
+      revealSound();
+      vibrate([25,45,42]);
+    }
+
+    function fallbackCast() {
+      const values=Array.from({length:boneCount},()=>possibleValues[Math.floor(secureRandom()*possibleValues.length)]);
+      const total=values.reduce((sum,value)=>sum+value,0);
+      resultCard.className="result-card revealed";
+      resultLabel.textContent="Fallback reading";
+      resultNumber.textContent=String(total);
+      readingRow.innerHTML=values.map(value=>`<span class="reading">${value}</span>`).join("");
+      addHistory(values,total);
+      revealSound();
+      vibrate(24);
+    }
+
+    $$(".count-button").forEach(button=>button.addEventListener("click",()=>{
+      if (casting) return;
+      boneCount=Number(button.dataset.count);
+      syncUI();
+      createPreviewBones();
+      resultCard.className="result-card";
+      resultLabel.textContent="The bones are quiet";
+      resultNumber.textContent="—";
+      readingRow.innerHTML='<span class="reading-note">Throw them and read the upward faces</span>';
+      castMain.textContent="THROW THE BONES";
+    }));
+
+    castButton.addEventListener("click",cast);
+    stage.addEventListener("click",event=>{
+      if (ignoreClick||event.target.closest("button")) return;
+      if (!dragState) cast();
+    });
+    addEventListener("keydown",event=>{
+      if ((event.code==="Space"||event.code==="KeyR")&&!casting&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName||"")) {
+        event.preventDefault();
+        cast();
+      }
+    });
+    $("#soundButton").addEventListener("click",()=>{
+      soundOn=!soundOn;
+      syncUI();
+      if (soundOn) tone(260,.07,.03,"sine");
+    });
+    $("#resetView").addEventListener("click",()=>{
+      targetYaw=0;
+      targetPitch=.61;
+      cameraDistance=14.4;
+    });
+    $("#clearHistory").addEventListener("click",()=>{
+      history=[];
+      try { localStorage.removeItem("boneOracleHistory"); } catch {}
+      renderHistory();
+    });
+
+    syncUI();
+    renderHistory();
+
+    try {
+      [THREE,CANNON] = await Promise.all([
+        import("https://cdn.jsdelivr.net/npm/three@0.180.0/+esm"),
+        import("https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/+esm")
+      ]);
+      init3D();
+      engineReady=true;
+      engineMessage.style.display="none";
+      createPreviewBones();
+    } catch (error) {
+      console.error("Bone oracle 3D engine failed:",error);
+      engineMessage.innerHTML="<strong>The 3D table could not awaken.</strong>You can still cast a number reading with the button below.";
+      statusPill.textContent="2D FALLBACK";
+    }
+  </script>
+</body>
+</html>
