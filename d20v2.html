@@ -216,6 +216,8 @@
         </div>
         <div class="custom-label">Dice surface</div>
         <label class="type-control texture-control">Flat illusion<select id="diceTexture" aria-label="Dice face texture"><option value="smooth">Smooth</option><option value="stone">Carved stone</option><option value="marble">Veined marble</option><option value="brushed">Brushed metal</option><option value="wood">Woodgrain</option><option value="frosted">Frosted glass</option><option value="hammered">Hammered metal</option></select></label>
+        <div class="custom-label">Raise the glass · glitter colors</div>
+        <div class="liquid-palette" id="liquidPalette" aria-label="Glass color presets"></div>
         <div class="saved-dice-head"><div class="saved-dice-title">Saved dice</div><button class="save-die-button" id="saveCurrentDie" type="button">SAVE CURRENT DIE</button></div>
         <div class="saved-dice-help">Choose a die type below, then tap a saved face to add that die without replacing the others.</div>
         <div class="saved-dice-grid" id="savedDiceGrid"></div>
@@ -288,7 +290,7 @@
       const normalizedTheme={dice:normalizeHex(theme.dice,fallback.dice),face:normalizeHex(theme.face,fallback.face),accent:normalizeHex(theme.accent,fallback.accent),violet:normalizeHex(theme.violet,fallback.violet)};
       return{id:typeof source.id==="string"?source.id:"",theme:normalizedTheme,texture:DICE_TEXTURES[source.texture]?source.texture:"smooth",font:DICE_FONTS[source.font]?source.font:"system",textScale:clamp(Number(source.textScale)||1,.8,1.4),liquid:source.liquid===true,liquidStyle:source.liquidStyle&&source.liquidStyle.shell?source.liquidStyle:liquidStyleForTheme(normalizedTheme)};
     }
-    function currentDieAppearance(){return normalizeAppearance({theme:{dice:activeTheme.dice,face:activeTheme.face,accent:activeTheme.accent,violet:activeTheme.violet},texture:diceTexture,font:diceFont,textScale:diceTextScale,liquid:liquidOn,liquidStyle:liquidStyleForTheme(activeTheme)})}
+    function currentDieAppearance(){return normalizeAppearance({theme:{dice:activeTheme.dice,face:activeTheme.face,accent:activeTheme.accent,violet:activeTheme.violet},texture:diceTexture,font:diceFont,textScale:diceTextScale,liquid:liquidOn,liquidStyle:LIQUID_STYLES[liquidStyleId]})}
     function appearanceCopy(source){return JSON.parse(JSON.stringify(normalizeAppearance(source)))}
 
     let sides=20,count=1,modifier=0,mode="normal",soundOn=true,cinemaOn=true,rolling=false,engineReady=false,historyOpen=false;
@@ -333,6 +335,15 @@
     function renderThemePresets(){
       $("#themePresets").innerHTML=Object.entries(THEMES).map(([id,theme])=>`<button class="theme-preset${themeId===id?" active":""}" type="button" data-theme="${id}"><span class="theme-swatch" aria-hidden="true"><i style="background:${theme.bg}"></i><i style="background:${theme.accent}"></i></span>${theme.label}</button>`).join("");
       $$(".theme-preset").forEach(button=>button.addEventListener("click",()=>applyTheme(button.dataset.theme,true)));
+    }
+    function renderLiquidPalette(){
+      const palette=$("#liquidPalette");if(!palette)return;
+      palette.innerHTML=Object.entries(LIQUID_STYLES).map(([id,style])=>`<button class="liquid-swatch${liquidStyleId===id?" active":""}" type="button" data-liquid-style="${id}" aria-pressed="${liquidStyleId===id}" style="--shell:${style.shell};--liquid:${style.liquid};--glitter:${style.glitter[1]}">${style.label}</button>`).join("");
+      $(".liquid-swatch").forEach(button=>button.addEventListener("click",()=>{
+        if(rolling)return;
+        liquidStyleId=button.dataset.liquidStyle;liquidOn=true;renderLiquidPalette();syncUI();setReady();refreshDiceTheme();
+        statusPill.textContent=diceLoadout.length?"GLASS COLOR READY · SAVE OR ADD NEXT DIE":`GLASS · ${LIQUID_STYLES[liquidStyleId].label.toUpperCase()}`;
+      }));
     }
     function renderSavedDice(){
       const grid=$("#savedDiceGrid");if(!grid)return;
@@ -622,7 +633,7 @@
     addEventListener("keydown",event=>{if(event.code==="Escape")setThemePanel(false)});
     $("#clearHistory").addEventListener("click",()=>{history=[];try{localStorage.removeItem("obsidianDice3DHistory")}catch{}renderHistory()});
 
-    renderThemePresets();applyTheme(themeId,false);renderSavedDice();setHistoryOpen(false);syncUI();setReady();renderHistory();
+    renderThemePresets();applyTheme(themeId,false);renderLiquidPalette();renderSavedDice();setHistoryOpen(false);syncUI();setReady();renderHistory();
     try{
       [THREE,CANNON]=await Promise.all([import("https://cdn.jsdelivr.net/npm/three@0.180.0/+esm"),import("https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/+esm")]);
       buildScene();engineReady=true;engineMessage.style.display="none";createPreview();
