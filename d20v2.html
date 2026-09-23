@@ -234,12 +234,11 @@
           <label class="workshop-check"><input type="checkbox" id="trayGrid">Show tray grid</label>
           <div class="custom-label">Dice tower</div>
           <div class="workshop-grid">
-            <label class="type-control">Tower style<select id="towerType" aria-label="Dice tower style"><option value="none">No tower · free throw</option><option value="spiral">Spiral chute</option><option value="roman">Roman · front-to-back ramps</option></select></label>
+            <label class="type-control">Tower style<select id="towerType" aria-label="Dice tower style"><option value="none">No tower</option><option value="spiral">Spiral chute</option><option value="roman">Roman</option></select></label>
             <label class="type-control">Tower material<select id="towerMaterial" aria-label="Tower material"></select></label>
           </div>
           <label class="type-control" style="margin-top:9px">Tower walls<select id="towerWalls" aria-label="Tower wall view"><option value="solid">Solid walls</option><option value="transparent">Transparent sides</option><option value="cutaway">Front cutaway</option></select></label>
           <label class="workshop-check"><input id="towerFollow" type="checkbox" checked>Follow dice from tower to tray</label>
-          <p class="workshop-help" id="towerHelp">Choose a tower to feed dice through its ramps and into the tray.</p>
           <div class="custom-label">Custom tray artwork</div>
           <input class="workshop-upload" id="trayImageInput" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Import tray image">
           <img class="workshop-thumb" id="trayImageThumb" alt="Imported tray artwork">
@@ -383,7 +382,6 @@
       for(const [id,key]of Object.entries(controls))$("#"+id).value=tabletop[key];
       $("#trayGrid").checked=tabletop.grid;$("#towerFollow").checked=tabletop.follow;
       $("#workshopFields").disabled=rolling||assetBusy>0;
-      $("#towerHelp").textContent=tabletop.tower==="none"?"Choose a tower to feed dice through its ramps and into the tray.":"Use cutaway or transparent walls to watch inside. Following respects Cinematic off, Top view, and manual camera dragging.";
       $("#clearTrayImage").disabled=!assetImages.tray;$("#clearBackgroundImage").disabled=!assetImages.background;
     }
     function updateTabletop(){
@@ -708,7 +706,7 @@
 
     function createPreview(){if(!engineReady||rolling)return;stopCinematic(true);clearDice();const specs=physicalSpecs(),layout=layoutFor(specs.length);specs.forEach((spec,index)=>{const mesh=makeDieMesh(spec.sides,spec.role,layout.scale,spec.appearance);mesh.position.set(layout.positions[index].x,TRAY.floorY+layout.scale*.97,layout.positions[index].z);mesh.rotation.set(randomBetween(-.6,.6),randomBetween(0,Math.PI*2),randomBetween(-.6,.6));scene.add(mesh);dice.push({mesh,body:null,preview:true,...spec})});fitCamera(specs.length);statusPill.textContent=diceLoadout.length?`MIXED TRAY · ${diceLoadout.length} ${diceLoadout.length===1?"DIE":"DICE"}`:`${liquidOn?"LIQUID · ":""}D${sides} · ${count} ${count===1?"DIE":"DICE"}`;if(viewMode==="cinematic")applyViewMode(false)}
 
-    function makeBody(spec,scale,index){const body=new CANNON.Body({mass:1,shape:physicsShape(spec.sides,scale),material:dicePhysicsMaterial});body.allowSleep=true;body.sleepSpeedLimit=.18;body.sleepTimeLimit=.5;body.linearDamping=.07;body.angularDamping=.06;body.addEventListener("collide",event=>{let impact=0;try{impact=Math.abs(event.contact.getImpactVelocityAlongNormal())}catch{}if(impact>1.2)clack(impact)});return body}
+    function makeBody(spec,scale,index){const body=new CANNON.Body({mass:2.4,shape:physicsShape(spec.sides,scale),material:dicePhysicsMaterial});body.allowSleep=true;body.sleepSpeedLimit=.08;body.sleepTimeLimit=.8;body.linearDamping=.035;body.angularDamping=.04;body.addEventListener("collide",event=>{let impact=0;try{impact=Math.abs(event.contact.getImpactVelocityAlongNormal())}catch{}if(impact>1.2)clack(impact)});return body}
     function fitCamera(total=dice.length){
       if(!camera||cinematicActive)return;const rect=stage.getBoundingClientRect(),aspect=Math.max(.55,rect.width/Math.max(1,rect.height)),crowd=Math.max(0,Math.sqrt(total)-1);let distance=14.2+crowd*.75;if(aspect<1.18)distance*=1.18/aspect;targetFocus={x:0,y:.35,z:0};
       if(viewMode==="top"){targetYaw=0;targetPitch=1.49;targetDistance=clamp(distance*.96,13.4,22)}
@@ -867,6 +865,13 @@
           const direction=i%2?1:-1;
           const mesh=towerBox([3.25,.17,2.05],[0,6.5-i*1.85,-direction*.65],[direction*.52,0,0],ramp);
           mesh.userData.romanRamp=i;
+          // Shallow horizontal treads over the supporting slope, with matching colliders.
+          const run=2.05*Math.cos(.52),step=run/16;
+          for(let j=0;j<16;j++){
+            const z=-direction*.65-run/2+(j+.5)*step;
+            const top=6.5-i*1.85-direction*Math.tan(.52)*(z+direction*.65)+.085/Math.cos(.52)+Math.tan(.52)*step/2;
+            const tread=towerBox([3.25,.16,step+.002],[0,top-.08,z],[0,0,0],ramp);tread.userData.romanTread=true;
+          }
         }
         for(const x of [-1.72,1.72])for(const z of [-1.72,1.72])towerBox([.24,7.8,.24],[x,4,z],[0,0,0],trim,false);
         for(let i=0;i<5;i++)for(const z of [-1.74,1.74])towerBox([.42,.42,.32],[-1.48+i*.74,8,z],[0,0,0],trim,false);
@@ -925,7 +930,8 @@
       const hemi=new THREE.HemisphereLight(activeTheme.face,activeTheme.tray,.95);hemi.userData.themeRole="hemi";scene.add(hemi);const key=new THREE.DirectionalLight(activeTheme.face,2.25);key.userData.themeRole="key";key.position.set(-4,11,7);key.castShadow=true;key.shadow.mapSize.set(1536,1536);key.shadow.camera.left=-9;key.shadow.camera.right=9;key.shadow.camera.top=9;key.shadow.camera.bottom=-9;scene.add(key);const rim=new THREE.PointLight(activeTheme.accent,26,19,2);rim.userData.themeRole="rim";rim.position.set(-5,4,-4);scene.add(rim);const fill=new THREE.PointLight(activeTheme.violet,22,18,2);fill.userData.themeRole="fill";fill.position.set(5,3,3);scene.add(fill);
       const points=360,positions=new Float32Array(points*3);for(let i=0;i<points;i++){const radius=randomBetween(7,22),angle=randomBetween(0,Math.PI*2);positions[i*3]=Math.cos(angle)*radius;positions[i*3+1]=randomBetween(.5,11);positions[i*3+2]=Math.sin(angle)*radius}const dustGeometry=new THREE.BufferGeometry();dustGeometry.setAttribute("position",new THREE.BufferAttribute(positions,3));const dust=new THREE.Points(dustGeometry,new THREE.PointsMaterial({color:activeTheme.accent,size:.025,transparent:true,opacity:.3,depthWrite:false}));dust.userData.dust=true;dust.userData.themeRole="dust";scene.add(dust);
       world=new CANNON.World({gravity:new CANNON.Vec3(0,-23,0)});world.allowSleep=true;world.broadphase=new CANNON.SAPBroadphase(world);tablePhysicsMaterial=new CANNON.Material("tray");dicePhysicsMaterial=new CANNON.Material("dice");tableContact=new CANNON.ContactMaterial(tablePhysicsMaterial,dicePhysicsMaterial,{friction:.34,restitution:.34});world.addContactMaterial(tableContact);
-      towerPhysicsMaterial=new CANNON.Material("tower");world.addContactMaterial(new CANNON.ContactMaterial(towerPhysicsMaterial,dicePhysicsMaterial,{friction:.015,restitution:.12}));rebuildTabletop();applyBackground();
+      world.solver.iterations=20;world.solver.tolerance=1e-7;
+      towerPhysicsMaterial=new CANNON.Material("tower");world.addContactMaterial(new CANNON.ContactMaterial(towerPhysicsMaterial,dicePhysicsMaterial,{friction:.008,restitution:.1}));rebuildTabletop();applyBackground();
       clock=new THREE.Clock();applySceneTheme();resize();new ResizeObserver(resize).observe(stage);renderer.domElement.addEventListener("pointerdown",startDrag);renderer.domElement.addEventListener("pointermove",moveDrag);renderer.domElement.addEventListener("pointerup",endDrag);renderer.domElement.addEventListener("pointercancel",endDrag);requestAnimationFrame(loop);
     }
 
@@ -942,6 +948,46 @@
         if(distance<radius){const penetration=radius-distance;body.position.x+=nx*penetration;body.position.z+=nz*penetration;const speed=body.velocity.x*nx+body.velocity.z*nz;if(speed<0){body.velocity.x-=nx*speed*1.45;body.velocity.z-=nz*speed*1.45}}
       }
       if(body.position.y<-1||![body.position.x,body.position.y,body.position.z].every(Number.isFinite)){body.position.set(0,3,1);body.velocity.set(0,0,0);body.angularVelocity.set(randomBetween(-4,4),randomBetween(-4,4),randomBetween(-4,4))}
+    }
+
+    function dieAtRest(die,now){
+      if(die.queued||die.inTower){die.quietSince=null;return false}
+      const body=die.body,slow=body.sleepState===CANNON.Body.SLEEPING||(body.velocity.lengthSquared()<.025&&body.angularVelocity.lengthSquared()<.035);
+      const supported=body.sleepState===CANNON.Body.SLEEPING||world.contacts.some(contact=>contact.bi===body?contact.ni.y<-.25:contact.bj===body&&contact.ni.y>.25);
+      if(!slow||!supported){die.quietSince=null;return false}
+      if(die.quietSince==null)die.quietSince=now;
+      return now-die.quietSince>=250;
+    }
+    function floorPose(die,quaternion){
+      const vertices=die.mesh.userData.model.vertices,scale=die.mesh.userData.scale;
+      const lowest=Math.min(...vertices.map(vertex=>vertex.clone().multiplyScalar(scale).applyQuaternion(quaternion).y));
+      return TRAY.floorY-lowest+.001;
+    }
+    function settleFlat(die){
+      if(!die.body||die.queued||die.inTower)return false;
+      const body=die.body,start=new THREE.Quaternion().copy(body.quaternion),startY=body.position.y;
+      // Only correct dice already at the tray floor. Stacks and tower-supported dice stay physical.
+      const clearance=startY-floorPose(die,start);
+      if(clearance>.12)return false;
+      const down=new THREE.Vector3(0,-1,0),faces=die.mesh.userData.model.faces;
+      const normal=faces.map(face=>face.normal.clone().applyQuaternion(start)).reduce((best,n)=>n.dot(down)>best.dot(down)?n:best);
+      const end=new THREE.Quaternion().setFromUnitVectors(normal,down).multiply(start).normalize();
+      const shape=body.shapes[0],position=new CANNON.Vec3(),rotation=new CANNON.Quaternion(),axis=new CANNON.Vec3();
+      const obstacles=world.bodies.filter(other=>other!==body&&other.shapes[0]?.type!==CANNON.Shape.types.PLANE);
+      // Check the whole turn and drop, including the starting pose, against actual convex shapes.
+      for(let step=0;step<=16;step++){
+        const t=step/16,q=start.clone().slerp(end,t);
+        position.set(body.position.x,floorPose(die,q)+Math.max(0,clearance)*(1-t),body.position.z);rotation.set(q.x,q.y,q.z,q.w);
+        for(const other of obstacles){
+          const obstacle=other.shapes[0],hull=obstacle.convexPolyhedronRepresentation||obstacle;
+          if(!hull.findSeparatingAxis)continue;
+          if(position.distanceTo(other.position)>shape.boundingSphereRadius+obstacle.boundingSphereRadius+.01)continue;
+          if(shape.findSeparatingAxis(hull,position,rotation,other.position,other.quaternion,axis))return false;
+        }
+      }
+      body.quaternion.copy(rotation);body.position.copy(position);body.aabbNeedsUpdate=true;
+      body.previousPosition.copy(position);body.interpolatedPosition.copy(position);body.previousQuaternion.copy(rotation);body.interpolatedQuaternion.copy(rotation);
+      die.mesh.position.copy(position);die.mesh.quaternion.copy(rotation);return true;
     }
 
     function updateLiquidDice(dt,now){
@@ -1004,8 +1050,9 @@
       requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.05),now=performance.now();updateCinematic(now);
       if(rolling){
         updateTowerDice(now);world.step(1/90,dt,6);let settled=now>settleAfter,allOut=true;
-        for(const die of dice){if(die.queued){settled=false;allOut=false;continue}containDie(die);die.mesh.position.copy(die.body.position);die.mesh.quaternion.copy(die.body.quaternion);const slow=die.body.sleepState===CANNON.Body.SLEEPING||(die.body.velocity.lengthSquared()<.025&&die.body.angularVelocity.lengthSquared()<.035);settled=settled&&slow&&!die.inTower;allOut=allOut&&!die.inTower}
-        if(settled||(allOut&&now>forceFinishAt))finishRoll();
+        for(const die of dice){if(die.queued){settled=false;allOut=false;continue}containDie(die);die.mesh.position.copy(die.body.position);die.mesh.quaternion.copy(die.body.quaternion);const resting=dieAtRest(die,now);settled=settled&&resting;allOut=allOut&&!die.inTower}
+        if(settled)finishRoll();
+        else if(allOut&&now>forceFinishAt){for(const die of dice){die.body.linearDamping=.55;die.body.angularDamping=.55}}
       }else if(!reducedMotion){const time=now*.001;for(const die of dice)if(die.preview)die.mesh.rotation.y+=dt*.25+Math.sin(time+die.mesh.position.x)*dt*.02}
       updateTowerCamera();updateCamera();updateLiquidDice(dt,now);const dust=scene.children.find(object=>object.userData.dust);if(dust&&!reducedMotion)dust.rotation.y+=dt*.01;renderer.render(scene,camera);
     }
@@ -1037,7 +1084,7 @@
 
     }
 
-    function finishRoll(){if(!rolling)return;rolling=false;dice.forEach(die=>die.body.sleep());const values=readResults();let base;if(mode==="advantage")base=Math.max(...values);else if(mode==="disadvantage")base=Math.min(...values);else base=values.reduce((sum,value)=>sum+value,0);const logicalCount=diceLoadout.length||count,singleSides=diceLoadout.length===1?diceLoadout[0].sides:sides,total=base+modifier,natural=mode==="normal"?values[0]:base,crit=singleSides===20&&logicalCount===1&&natural===20,fail=singleSides===20&&logicalCount===1&&natural===1;let label="LANDED FACES";if(crit)label="NATURAL TWENTY";else if(fail)label="NATURAL ONE";else if(mode==="advantage")label="ADVANTAGE · KEEP HIGH";else if(mode==="disadvantage")label="DISADVANTAGE · KEEP LOW";else if(logicalCount===1&&!modifier)label=`D${singleSides} FACE`;
+    function finishRoll(){if(!rolling)return;rolling=false;[...dice].sort((a,b)=>a.body.position.y-b.body.position.y).forEach(settleFlat);dice.forEach(die=>die.body.sleep());const values=readResults();let base;if(mode==="advantage")base=Math.max(...values);else if(mode==="disadvantage")base=Math.min(...values);else base=values.reduce((sum,value)=>sum+value,0);const logicalCount=diceLoadout.length||count,singleSides=diceLoadout.length===1?diceLoadout[0].sides:sides,total=base+modifier,natural=mode==="normal"?values[0]:base,crit=singleSides===20&&logicalCount===1&&natural===20,fail=singleSides===20&&logicalCount===1&&natural===1;let label="LANDED FACES";if(crit)label="NATURAL TWENTY";else if(fail)label="NATURAL ONE";else if(mode==="advantage")label="ADVANTAGE · KEEP HIGH";else if(mode==="disadvantage")label="DISADVANTAGE · KEEP LOW";else if(logicalCount===1&&!modifier)label=`D${singleSides} FACE`;
       dice.forEach(die=>{const material=die.mesh.userData.material;if(die.mesh.userData.glitter)die.mesh.userData.glitter.userData.settleStartedAt=performance.now();emphasizeLandedFace(die);if(crit){material.emissive.setHex(0x493706);material.emissiveIntensity=.35}else if(fail){material.emissive.setHex(0x410813);material.emissiveIntensity=.32}});
       const facesText=values.join(" · ");resultCard.className=`result-card${crit?" crit":fail?" fail":""}`;resultLabel.textContent=label;resultDetail.classList.toggle("many",values.length>4||facesText.length>16);resultDetail.textContent=facesText;resultTotal.textContent=total;rollButton.disabled=false;syncUI();statusPill.textContent=diceLoadout.length?`MIXED · ${logicalCount} LANDED`:`${liquidOn?"LIQUID · ":""}D${sides} · LANDED`;addHistory(values,total);resultSound(crit,fail);vibrate(crit?[24,36,46]:fail?[45,40,20]:24);scheduleCinematic();
     }
