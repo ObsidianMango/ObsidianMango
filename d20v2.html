@@ -233,10 +233,11 @@
           <label class="workshop-check"><input type="checkbox" id="trayGrid">Show tray grid</label>
           <div class="custom-label">Dice tower</div>
           <div class="workshop-grid">
-            <label class="type-control">Tower style<select id="towerType" aria-label="Dice tower style"><option value="none">No tower · free throw</option><option value="spiral">Spiral chute</option><option value="roman">Roman · three ramps</option><option value="cascade">Peg cascade</option></select></label>
+            <label class="type-control">Tower style<select id="towerType" aria-label="Dice tower style"><option value="none">No tower · free throw</option><option value="spiral">Spiral chute</option><option value="roman">Roman · front-to-back ramps</option></select></label>
             <label class="type-control">Tower material<select id="towerMaterial" aria-label="Tower material"></select></label>
           </div>
-          <label class="workshop-check"><input id="towerTransparent" type="checkbox">Transparent tower sides</label>
+          <label class="type-control" style="margin-top:9px">Tower walls<select id="towerWalls" aria-label="Tower wall view"><option value="solid">Solid walls</option><option value="transparent">Transparent sides</option><option value="cutaway">Front cutaway</option></select></label>
+          <label class="workshop-check"><input id="towerFollow" type="checkbox" checked>Follow dice from tower to tray</label>
           <p class="workshop-help" id="towerHelp">Choose a tower to feed dice through its ramps and into the tray.</p>
           <div class="custom-label">Custom tray artwork</div>
           <input class="workshop-upload" id="trayImageInput" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Import tray image">
@@ -351,30 +352,32 @@
       lunar:{label:"Moon marble",shape:"circle",surface:"marble",rim:"stone",tint:"#cad1e3",grid:false},
       forge:{label:"Bronze forge",shape:"hexagon",surface:"metal",rim:"stone",tint:"#b18642",grid:false}
     };
-    let tabletop={...TABLE_PRESETS.classic,tower:"none",towerMaterial:"stone",transparent:false,imageFit:"cover",imageRepeat:3,background:"theme"};
+    let tabletop={...TABLE_PRESETS.classic,tower:"none",towerMaterial:"stone",walls:"solid",follow:true,imageFit:"cover",imageRepeat:3,background:"theme"};
     try{
       const value=JSON.parse(localStorage.getItem("obsidianDiceTabletop")||"{}");
       for(const key of ["shape","surface","rim","tower","towerMaterial","imageFit","background"]){
-        const options={shape:["rectangle","square","circle","hexagon","octagon"],surface:Object.keys(TABLE_MATERIALS),rim:Object.keys(TABLE_MATERIALS),tower:["none","spiral","roman","cascade"],towerMaterial:Object.keys(TABLE_MATERIALS),imageFit:["cover","repeat"],background:["theme","image","panorama"]};
+        const options={shape:["rectangle","square","circle","hexagon","octagon"],surface:Object.keys(TABLE_MATERIALS),rim:Object.keys(TABLE_MATERIALS),tower:["none","spiral","roman"],towerMaterial:Object.keys(TABLE_MATERIALS),imageFit:["cover","repeat"],background:["theme","image","panorama"]};
         if(options[key].includes(value[key]))tabletop[key]=value[key];
       }
       if(/^#[0-9a-f]{6}$/i.test(value.tint||""))tabletop.tint=value.tint;
-      tabletop.grid=value.grid===undefined?true:value.grid===true;tabletop.transparent=value.transparent===true;tabletop.imageRepeat=clamp(Number(value.imageRepeat)||3,1,8);
+      if(value.tower==="cascade")tabletop.tower="roman";
+      tabletop.grid=value.grid===undefined?true:value.grid===true;tabletop.walls=["solid","transparent","cutaway"].includes(value.walls)?value.walls:value.transparent===true?"transparent":"solid";tabletop.follow=value.follow!==false;tabletop.imageRepeat=clamp(Number(value.imageRepeat)||3,1,8);
     }catch{}
     let tabletopGroup=null,towerGroup=null,tableBodies=[],trayPolygon=[],tableContact=null,towerPhysicsMaterial=null;
     let tableTextureCache=new Map(),assetImages={tray:null,background:null},assetURLs={tray:null,background:null},assetRevision={tray:0,background:0},assetBusy=0;
     let backgroundTexture=null,trayArtTexture=null,tableDBPromise=null,towerReleaseAt=0;
     const TOWER={z:-2.25,height:7.6,half:1.65};
+    function towerZ(){return tabletop.tower==="roman"?-1.85:TOWER.z}
 
     function tableNotice(message){$("#workshopNotice").textContent=message}
     function saveTabletop(){try{localStorage.setItem("obsidianDiceTabletop",JSON.stringify(tabletop))}catch{tableNotice("These settings will last for this session; device storage is full.")}}
     function setWorkshop(open){$("#workshopPanel").hidden=!open;$("#workshopButton").classList.toggle("active",open);$("#workshopButton").setAttribute("aria-expanded",String(open));if(open)setThemePanel(false)}
     function syncWorkshop(){
-      const controls={trayShape:"shape",trayMaterial:"surface",rimMaterial:"rim",trayTint:"tint",towerType:"tower",towerMaterial:"towerMaterial",trayImageFit:"imageFit",trayImageRepeat:"imageRepeat",backgroundMode:"background"};
+      const controls={trayShape:"shape",trayMaterial:"surface",rimMaterial:"rim",trayTint:"tint",towerType:"tower",towerMaterial:"towerMaterial",towerWalls:"walls",trayImageFit:"imageFit",trayImageRepeat:"imageRepeat",backgroundMode:"background"};
       for(const [id,key]of Object.entries(controls))$("#"+id).value=tabletop[key];
-      $("#trayGrid").checked=tabletop.grid;$("#towerTransparent").checked=tabletop.transparent;
+      $("#trayGrid").checked=tabletop.grid;$("#towerFollow").checked=tabletop.follow;
       $("#workshopFields").disabled=rolling||assetBusy>0;
-      $("#towerHelp").textContent=tabletop.tower==="none"?"Choose a tower to feed dice through its ramps and into the tray.":"Dice are sized to fit the tower and fed in sequence. Use angled view and transparent sides to watch the descent.";
+      $("#towerHelp").textContent=tabletop.tower==="none"?"Choose a tower to feed dice through its ramps and into the tray.":"Use cutaway or transparent walls to watch inside. Following respects Cinematic off, Top view, and manual camera dragging.";
       $("#clearTrayImage").disabled=!assetImages.tray;$("#clearBackgroundImage").disabled=!assetImages.background;
     }
     function updateTabletop(){
@@ -465,6 +468,7 @@
     let dice=[],modelCache=new Map(),shapeCache=new Map(),surfaceTextureCache=new Map(),settleAfter=0,forceFinishAt=0,lastImpact=0,audioContext=null;
     let cameraYaw=0,targetYaw=0,cameraPitch=.64,targetPitch=.64,cameraDistance=14.5,targetDistance=14.5,dragState=null,ignoreClick=false;
     let cameraFocus={x:0,y:.35,z:0},targetFocus={x:0,y:.35,z:0},cinematicActive=false,cinematicStartAt=0,cinematicActivatedAt=0,cinematicShot=-1,lastRollFinishedAt=0;
+    let towerFollow=null;
 
     try{
       const saved=JSON.parse(localStorage.getItem("obsidianDice3DSettings")||"{}");
@@ -708,7 +712,7 @@
         targetFocus={x:0,y:viewMode==="top"?.8:2.5,z:-.3};
         const direction=new THREE.Vector3(Math.sin(targetYaw)*Math.cos(targetPitch),Math.sin(targetPitch),Math.cos(targetYaw)*Math.cos(targetPitch)),right=new THREE.Vector3(Math.cos(targetYaw),0,-Math.sin(targetYaw)),up=new THREE.Vector3().crossVectors(direction,right);
         const corners=trayPolygon.map(p=>new THREE.Vector3(p[0],.8,p[1]));
-        for(const x of [-1.9,1.9])for(const z of [TOWER.z-1.8,TOWER.z+1.8])for(const y of [0,8.7])corners.push(new THREE.Vector3(x,y,z));
+        for(const x of [-1.9,1.9])for(const z of [towerZ()-1.8,towerZ()+1.8])for(const y of [0,8.7])corners.push(new THREE.Vector3(x,y,z));
         const tangent=Math.tan(camera.fov*Math.PI/360)*.78;
         targetDistance=Math.max(16,...corners.map(point=>{point.sub(new THREE.Vector3(targetFocus.x,targetFocus.y,targetFocus.z));return Math.max(Math.abs(point.dot(right))/(tangent*aspect),Math.abs(point.dot(up))/tangent)+point.dot(direction)}));
       }
@@ -723,7 +727,34 @@
     function updateCamera(){cameraYaw+=(targetYaw-cameraYaw)*.065;cameraPitch+=(targetPitch-cameraPitch)*.065;cameraDistance+=(targetDistance-cameraDistance)*.065;cameraFocus.x+=(targetFocus.x-cameraFocus.x)*.075;cameraFocus.y+=(targetFocus.y-cameraFocus.y)*.075;cameraFocus.z+=(targetFocus.z-cameraFocus.z)*.075;const horizontal=Math.cos(cameraPitch)*cameraDistance;camera.position.set(cameraFocus.x+Math.sin(cameraYaw)*horizontal,cameraFocus.y+Math.sin(cameraPitch)*cameraDistance,cameraFocus.z+Math.cos(cameraYaw)*horizontal);camera.lookAt(cameraFocus.x,cameraFocus.y,cameraFocus.z)}
 
     function focusOf(items){if(!items.length)return{x:0,y:.35,z:0};const focus=items.reduce((sum,die)=>({x:sum.x+die.mesh.position.x,y:sum.y+die.mesh.position.y,z:sum.z+die.mesh.position.z}),{x:0,y:0,z:0});return{x:focus.x/items.length,y:focus.y/items.length,z:focus.z/items.length}}
-    function stopCinematic(reset=false){cinematicActive=false;cinematicStartAt=0;cinematicActivatedAt=0;cinematicShot=-1;if(reset){targetFocus={x:0,y:.35,z:0};cameraFocus={...targetFocus}}}
+    function stopCinematic(reset=false){towerFollow=null;cinematicActive=false;cinematicStartAt=0;cinematicActivatedAt=0;cinematicShot=-1;if(reset){targetFocus={x:0,y:.35,z:0};cameraFocus={...targetFocus}}}
+    function startTowerCamera(){
+      if(!tabletop.follow||!cinemaOn||reducedMotion||viewMode==="top")return;
+      towerFollow={phase:"descent"};updateTowerCamera();
+    }
+    function followDistance(points,focus,yaw,pitch){
+      const direction=new THREE.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch)),right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw)),up=new THREE.Vector3().crossVectors(direction,right),tangent=Math.tan(camera.fov*Math.PI/360)*.76,aspect=Math.max(.4,camera.aspect);
+      return Math.max(12,...points.map(point=>{const relative=new THREE.Vector3(point.x-focus.x,point.y-focus.y,point.z-focus.z);return Math.max((Math.abs(relative.dot(right))+.7)/(tangent*aspect),(Math.abs(relative.dot(up))+.7)/tangent)+relative.dot(direction)}));
+    }
+    function updateTowerCamera(){
+      if(!towerFollow||!rolling||!camera)return;
+      if(!cinemaOn){towerFollow=null;fitCamera();return}
+      const active=dice.filter(die=>!die.queued),lead=active[0],remaining=dice.some(die=>die.queued||die.inTower);
+      if(lead&&!lead.inTower)towerFollow.phase="tray";
+      let points=[];
+      if(towerFollow.phase==="descent"){
+        const height=lead?lead.body.position.y:8;
+        targetFocus={x:lead?lead.body.position.x*.25:0,y:clamp(height*.65+1.1,1.8,5.8),z:towerZ()+.25};
+        targetYaw=tabletop.walls==="transparent"?-.95:-.38;targetPitch=.26+clamp((7-height)/7,0,1)*.17;
+        for(const x of [-1.8,1.8])for(const z of [towerZ()-1.8,towerZ()+1.8])for(const y of [1,8.7])points.push({x,y,z});
+      }else{
+        const landed=active.filter(die=>!die.inTower),focus=landed.length?landed.reduce((sum,die)=>({x:sum.x+die.body.position.x/landed.length,z:sum.z+die.body.position.z/landed.length}),{x:0,z:0}):{x:0,z:1};
+        targetFocus={x:focus.x*.3,y:remaining?1.5:.4,z:focus.z*.35};targetYaw=-.38;targetPitch=.62;
+        points=trayPolygon.map(p=>({x:p[0],y:.5,z:p[1]}));
+        if(remaining)points.push({x:-1.8,y:8.5,z:towerZ()},{x:1.8,y:8.5,z:towerZ()});
+      }
+      points.push(...active.map(die=>die.body.position));targetDistance=followDistance(points,targetFocus,targetYaw,targetPitch);
+    }
     function scheduleCinematic(){stopCinematic(false);if(viewMode==="cinematic"){cinematicActive=true;cinematicActivatedAt=performance.now();cinematicShot=-1}else if(viewMode==="normal"&&cinemaOn&&!reducedMotion&&engineReady){cinematicStartAt=performance.now()+5000;lastRollFinishedAt=performance.now()}}
     function updateCinematic(now){
       if((!cinemaOn&&viewMode!=="cinematic")||rolling||!dice.length)return;
@@ -790,12 +821,16 @@
       if(tableContact){tableContact.friction=TABLE_MATERIALS[tabletop.surface].friction;tableContact.restitution=tabletop.surface==="felt"?.2:.34}
       if(tabletop.tower!=="none")buildTower();
     }
-    function towerBox(size,pos,rot,material,collider=true){return addTableBox(towerGroup,size,[pos[0],pos[1],pos[2]+TOWER.z],rot,material,towerPhysicsMaterial,collider)}
+    function towerBox(size,pos,rot,material,collider=true){return addTableBox(towerGroup,size,[pos[0],pos[1],pos[2]+towerZ()],rot,material,towerPhysicsMaterial,collider)}
+    function towerWall(size,pos,rot,material,front=false){
+      const mesh=towerBox(size,pos,rot,material);mesh.userData.towerWall=true;mesh.userData.frontWall=front;
+      mesh.visible=!(tabletop.walls==="cutaway"&&front);return mesh;
+    }
     function buildTower(){
       towerGroup=new THREE.Group();tabletopGroup.add(towerGroup);
       const shell=tableMaterial(tabletop.towerMaterial,"tower"),ramp=tableMaterial(tabletop.towerMaterial,"tower");
       ramp.roughness=Math.min(ramp.roughness,.6);
-      if(tabletop.transparent){shell.transparent=true;shell.opacity=.13;shell.depthWrite=false;shell.side=THREE.DoubleSide}
+      if(tabletop.walls==="transparent"){shell.transparent=true;shell.opacity=.13;shell.depthWrite=false;shell.side=THREE.DoubleSide}
       const trim=new THREE.MeshStandardMaterial({color:tabletop.towerMaterial==="theme"?activeTheme.accent:mixHex(TABLE_MATERIALS[tabletop.towerMaterial].color,"#ffffff",.35),roughness:.4,metalness:.35});
       if(tabletop.tower==="spiral"){
         // The visible helical ramp is the same set of inclined boxes used by physics.
@@ -814,27 +849,23 @@
         towerBox([.44,7.6,.44],[0,3.95,0],[0,0,0],trim);
         for(let i=0;i<32;i++){
           const angle=i*Math.PI*2/32,rad=1.77,x=Math.sin(angle)*rad,z=Math.cos(angle)*rad;
-          towerBox([.38,6,.14],[x,4.8,z],[0,angle,0],shell);
-          if(Math.cos(angle)<.5)towerBox([.38,1.8,.14],[x,.9,z],[0,angle,0],shell);
+          towerWall([.38,6,.14],[x,4.8,z],[0,angle,0],shell,Math.cos(angle)>.1);
+          if(Math.cos(angle)<.5)towerWall([.38,1.8,.14],[x,.9,z],[0,angle,0],shell,Math.cos(angle)>.1);
         }
         for(const angle of [0,Math.PI/2,Math.PI,Math.PI*1.5])towerBox([.1,7.6,.1],[Math.sin(angle)*1.68,3.95,Math.cos(angle)*1.68],[0,0,0],trim,false);
       }else{
         // Front portal remains open below the final ramp.
-        towerBox([.18,7.6,2.25],[-1.74,3.95,0],[0,0,0],shell);towerBox([.18,7.6,2.25],[1.74,3.95,0],[0,0,0],shell);
-        towerBox([3.65,7.6,.18],[0,3.95,-1.2],[0,0,0],shell);towerBox([3.65,5.95,.18],[0,4.775,1.2],[0,0,0],shell);
-        if(tabletop.tower==="roman"){
-          for(let i=0;i<3;i++){const direction=i%2?-1:1;towerBox([2.05,.17,2.2],[-direction*.65,6.5-i*1.85,0],[0,0,-direction*.52],ramp)}
-          for(const x of [-1.72,1.72])for(const z of [-1.2,1.2])towerBox([.24,7.8,.24],[x,4,z],[0,0,0],trim,false);
-          for(let i=0;i<5;i++)for(const z of [-1.2,1.2])towerBox([.42,.42,.32],[-1.48+i*.74,8,z],[0,0,0],trim,false);
-        }else{
-          for(let row=0;row<5;row++)for(const x of (row%2?[-.8,.8]:[0])){
-            const mesh=new THREE.Mesh(new THREE.SphereGeometry(.23,10,8),trim);mesh.position.set(x,6.6-row*1.02,TOWER.z);towerGroup.add(mesh);
-            const body=new CANNON.Body({mass:0,material:towerPhysicsMaterial,shape:new CANNON.Sphere(.23)});body.position.copy(mesh.position);world.addBody(body);tableBodies.push(body);
-            towerBox([.12,.12,2.25],[x,6.6-row*1.02,0],[0,0,0],trim,false);
-          }
+        towerWall([.18,7.6,3.65],[-1.74,3.95,0],[0,0,0],shell);towerWall([.18,7.6,3.65],[1.74,3.95,0],[0,0,0],shell);
+        towerWall([3.65,7.6,.18],[0,3.95,-1.74],[0,0,0],shell);towerWall([3.65,5.95,.18],[0,4.775,1.74],[0,0,0],shell,true);
+        for(let i=0;i<3;i++){
+          const direction=i%2?-1:1;
+          const mesh=towerBox([3.25,.17,2.05],[0,6.5-i*1.85,-direction*.65],[direction*.52,0,0],ramp);
+          mesh.userData.romanRamp=i;
         }
-        towerBox([3.25,.18,3.25],[0,.82,.42],[.35,0,0],ramp);
-        for(const x of [-1.7,1.7])towerBox([.12,.55,3.25],[x,1.08,.42],[.35,0,0],shell);
+        for(const x of [-1.72,1.72])for(const z of [-1.72,1.72])towerBox([.24,7.8,.24],[x,4,z],[0,0,0],trim,false);
+        for(let i=0;i<5;i++)for(const z of [-1.74,1.74])towerBox([.42,.42,.32],[-1.48+i*.74,8,z],[0,0,0],trim,false);
+        towerBox([3.4,.72,4.1],[0,.65,.05],[.35,0,0],ramp);
+        for(const x of [-1.75,1.75])towerBox([.12,.55,4.1],[x,1.27,.05],[.35,0,0],shell);
       }
     }
     function applyBackground(){
@@ -870,7 +901,7 @@
     }
 
     function resize(){if(!renderer)return;const rect=stage.getBoundingClientRect();renderer.setSize(Math.max(1,rect.width),Math.max(1,rect.height),false);camera.aspect=rect.width/Math.max(1,rect.height);camera.updateProjectionMatrix();fitCamera();fitBackground()}
-    function startDrag(event){if(cinematicActive||cinematicStartAt)stopCinematic(false);if(viewMode!=="normal"){viewMode="normal";syncUI()}dragState={x:event.clientX,y:event.clientY,yaw:targetYaw,pitch:targetPitch,moved:false,id:event.pointerId};renderer.domElement.setPointerCapture?.(event.pointerId)}
+    function startDrag(event){if(towerFollow||cinematicActive||cinematicStartAt)stopCinematic(false);if(viewMode!=="normal"){viewMode="normal";syncUI()}dragState={x:event.clientX,y:event.clientY,yaw:targetYaw,pitch:targetPitch,moved:false,id:event.pointerId};renderer.domElement.setPointerCapture?.(event.pointerId)}
     function moveDrag(event){if(!dragState||dragState.id!==event.pointerId)return;const dx=event.clientX-dragState.x,dy=event.clientY-dragState.y;if(Math.hypot(dx,dy)>5)dragState.moved=true;targetYaw=dragState.yaw-dx*.006;targetPitch=clamp(dragState.pitch+dy*.004,.42,.9)}
     function endDrag(event){if(!dragState||dragState.id!==event.pointerId)return;ignoreClick=dragState.moved;renderer.domElement.releasePointerCapture?.(event.pointerId);dragState=null;if(ignoreClick)setTimeout(()=>ignoreClick=false,80)}
 
@@ -897,7 +928,7 @@
         if(die.queued||!die.inTower)continue;
         const body=die.body;
         if(tabletop.tower==="spiral"&&die.spiralProgress<Math.PI*3){
-          const angle=Math.atan2(body.position.x,body.position.z-TOWER.z),change=Math.atan2(Math.sin(angle-die.spiralAngle),Math.cos(angle-die.spiralAngle));
+          const angle=Math.atan2(body.position.x,body.position.z-towerZ()),change=Math.atan2(Math.sin(angle-die.spiralAngle),Math.cos(angle-die.spiralAngle));
           die.spiralProgress=clamp(die.spiralProgress+clamp(change,-.25,.3),0,Math.PI*3);die.spiralAngle=angle;
           const elapsed=clamp((now-(die.lastGuideAt||now))/1000,0,.05),tangentSpeed=body.velocity.x*Math.cos(angle)-body.velocity.z*Math.sin(angle),assist=Math.max(0,2.4-tangentSpeed)*Math.min(1,elapsed*5);
           body.velocity.x+=Math.cos(angle)*assist;body.velocity.z-=Math.sin(angle)*assist;die.lastGuideAt=now;
@@ -907,48 +938,47 @@
           if(die.spiralProgress>=Math.PI*3-.03){die.spiralProgress=Math.PI*3;body.velocity.z=Math.max(body.velocity.z,2)}
         }
         // Match the visible shell as a safety boundary for fast contacts at ramp joints.
-        const radius=.92*die.mesh.userData.scale,relativeZ=body.position.z-TOWER.z;
+        const radius=.92*die.mesh.userData.scale,relativeZ=body.position.z-towerZ();
         if(tabletop.tower==="spiral"&&body.position.y>1.8){
           const distance=Math.hypot(body.position.x,relativeZ),inner=.24+radius,outer=1.7-radius;
           if(distance>0&&(distance>outer||distance<inner)){
             const nx=body.position.x/distance,nz=relativeZ/distance,target=clamp(distance,inner,outer),speed=body.velocity.x*nx+body.velocity.z*nz;
-            body.position.x=nx*target;body.position.z=TOWER.z+nz*target;
+            body.position.x=nx*target;body.position.z=towerZ()+nz*target;
             if((distance>outer&&speed>0)||(distance<inner&&speed<0)){body.velocity.x-=nx*speed*1.2;body.velocity.z-=nz*speed*1.2}
           }
         }else if(tabletop.tower!=="spiral"&&body.position.y>1.8){
           body.position.x=clamp(body.position.x,-1.65+radius,1.65-radius);
-          body.position.z=clamp(body.position.z,TOWER.z-1.1+radius,TOWER.z+1.1-radius);
+          body.position.z=clamp(body.position.z,towerZ()-1.65+radius,towerZ()+1.65-radius);
         }
         if(body.position.y<2.1){
-          const spiral=tabletop.tower==="spiral",floorHeight=(spiral?1:.91)-Math.tan(.35)*(relativeZ-(spiral?.05:.42));
-          if(relativeZ<(spiral?2.1:2.05)&&relativeZ>(spiral?-1.9:-1.15)&&Math.abs(body.position.x)<1.7&&body.position.y<floorHeight+radius*.65){
+          const floorHeight=1-Math.tan(.35)*(relativeZ-.05);
+          if(relativeZ<2.1&&relativeZ>-1.9&&Math.abs(body.position.x)<1.7&&body.position.y<floorHeight+radius*.65){
             body.position.y=floorHeight+radius*.65;body.velocity.y=Math.max(body.velocity.y,0);body.velocity.z=Math.max(body.velocity.z,1.6);
           }
         }
-        if(body.position.z>TOWER.z+1.1&&body.position.y<1.8){die.inTower=false;body.allowSleep=true;body.velocity.z=Math.max(body.velocity.z,4.2*die.throwBoost);body.velocity.x+=randomBetween(-1.4,1.4);body.velocity.y=Math.max(body.velocity.y,.8);die.exitedAt=now;forceFinishAt=Math.max(forceFinishAt,now+6500);continue}
+        if(body.position.z>towerZ()+(tabletop.tower==="roman"?1.6:1.1)&&body.position.y<1.8){die.inTower=false;body.allowSleep=true;body.velocity.z=Math.max(body.velocity.z,4.2*die.throwBoost);body.velocity.x+=randomBetween(-1.4,1.4);body.velocity.y=Math.max(body.velocity.y,.8);die.exitedAt=now;forceFinishAt=Math.max(forceFinishAt,now+6500);continue}
         if(body.position.y<die.lastHeight-.18){die.lastMoved=now;die.lastHeight=body.position.y}
         if(now-die.lastMoved>850){
           // A small physical rattle frees unlucky edge balances; results are still read in the tray.
           body.wakeUp();body.velocity.y+=2;
           if(body.position.y<2){body.velocity.z+=3;body.velocity.x-=body.position.x*.4}
           else if(tabletop.tower==="roman"){
-            let nearest=0,error=Infinity;for(let i=0;i<3;i++){const direction=i%2?-1:1,height=6.5-i*1.85-direction*Math.tan(.52)*(body.position.x+direction*.65),difference=Math.abs(body.position.y-height-radius*.65);if(difference<error){error=difference;nearest=i}}
-            body.velocity.x+=(nearest%2?-1:1)*3.8;body.velocity.z+=(TOWER.z-body.position.z)*.7;
+            let nearest=0,error=Infinity;for(let i=0;i<3;i++){const direction=i%2?-1:1,height=6.5-i*1.85-direction*Math.tan(.52)*(relativeZ+direction*.65),difference=Math.abs(body.position.y-height-radius*.65);if(difference<error){error=difference;nearest=i}}
+            body.velocity.z+=(nearest%2?-1:1)*3.8;body.velocity.x-=body.position.x*.7;
           }
-          else if(tabletop.tower==="spiral"){const angle=Math.atan2(body.position.x,body.position.z-TOWER.z);body.velocity.x+=Math.cos(angle)*2.6;body.velocity.z-=Math.sin(angle)*2.6}
-          else{body.velocity.x+=randomBetween(-2,2);body.velocity.z+=randomBetween(-2,2)}
+          else if(tabletop.tower==="spiral"){const angle=Math.atan2(body.position.x,body.position.z-towerZ());body.velocity.x+=Math.cos(angle)*2.6;body.velocity.z-=Math.sin(angle)*2.6}
           body.angularVelocity.set(randomBetween(-9,9),randomBetween(-9,9),randomBetween(-9,9));die.lastMoved=now;
         }
       }
     }
     function loop(){
-      requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.05),now=performance.now();updateCinematic(now);updateCamera();
+      requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.05),now=performance.now();updateCinematic(now);
       if(rolling){
         updateTowerDice(now);world.step(1/90,dt,6);let settled=now>settleAfter,allOut=true;
         for(const die of dice){if(die.queued){settled=false;allOut=false;continue}containDie(die);die.mesh.position.copy(die.body.position);die.mesh.quaternion.copy(die.body.quaternion);const slow=die.body.sleepState===CANNON.Body.SLEEPING||(die.body.velocity.lengthSquared()<.025&&die.body.angularVelocity.lengthSquared()<.035);settled=settled&&slow&&!die.inTower;allOut=allOut&&!die.inTower}
         if(settled||(allOut&&now>forceFinishAt))finishRoll();
       }else if(!reducedMotion){const time=now*.001;for(const die of dice)if(die.preview)die.mesh.rotation.y+=dt*.25+Math.sin(time+die.mesh.position.x)*dt*.02}
-      updateLiquidDice(dt,now);const dust=scene.children.find(object=>object.userData.dust);if(dust&&!reducedMotion)dust.rotation.y+=dt*.01;renderer.render(scene,camera);
+      updateTowerCamera();updateCamera();updateLiquidDice(dt,now);const dust=scene.children.find(object=>object.userData.dust);if(dust&&!reducedMotion)dust.rotation.y+=dt*.01;renderer.render(scene,camera);
     }
 
     function topFaceIndex(die){const up=new THREE.Vector3(0,1,0),quaternion=new THREE.Quaternion(die.body.quaternion.x,die.body.quaternion.y,die.body.quaternion.z,die.body.quaternion.w),model=die.mesh.userData.model;let bestIndex=0,best=-Infinity;model.faces.forEach((face,index)=>{const score=face.normal.clone().applyQuaternion(quaternion).dot(up);if(score>best){best=score;bestIndex=index}});return bestIndex}
@@ -957,15 +987,15 @@
     function readResults(){if(mode!=="normal")return dice.map(topValue);if(diceLoadout.length)return diceLoadout.map((item,index)=>{const group=dice.filter(die=>die.group===index);if(item.sides===100){const tens=group.find(die=>die.role==="tens"),ones=group.find(die=>die.role==="ones"),value=(tens?topValue(tens):0)+(ones?topValue(ones):0);return value===0?100:value}return group[0]?topValue(group[0]):0});if(sides===100){const grouped=Array.from({length:count},()=>({tens:0,ones:0}));dice.forEach(die=>grouped[die.group][die.role]=topValue(die));return grouped.map(pair=>pair.tens+pair.ones===0?100:pair.tens+pair.ones)}return dice.map(topValue)}
 
     function roll(){
-      if(rolling||assetBusy)return;const throwBoost=pendingShakeBoost;pendingShakeBoost=1;if(!engineReady){fallbackRoll();return}stopCinematic(true);clearDice();const specs=physicalSpecs(),layout=layoutFor(specs.length);rolling=true;resultCard.className="result-card rolling";resultLabel.textContent=throwBoost>1?"Shaken into motion":"Dice in motion";resultDetail.classList.remove("many");resultDetail.textContent="…";resultTotal.textContent="—";rollButton.disabled=true;syncUI();statusPill.textContent=diceLoadout.length?`${throwBoost>1?"MIXED · SHAKE PHYSICS":"MIXED PHYSICS"}`:`${liquidOn?"LIQUID · ":""}${throwBoost>1?"SHAKE PHYSICS":"PHYSICS RUNNING"}`;throwSound();vibrate(18);fitCamera(specs.length);
+      if(rolling||assetBusy)return;const throwBoost=pendingShakeBoost;pendingShakeBoost=1;if(!engineReady){fallbackRoll();return}stopCinematic(false);clearDice();const specs=physicalSpecs(),layout=layoutFor(specs.length);rolling=true;resultCard.className="result-card rolling";resultLabel.textContent=throwBoost>1?"Shaken into motion":"Dice in motion";resultDetail.classList.remove("many");resultDetail.textContent="…";resultTotal.textContent="—";rollButton.disabled=true;syncUI();statusPill.textContent=diceLoadout.length?`${throwBoost>1?"MIXED · SHAKE PHYSICS":"MIXED PHYSICS"}`:`${liquidOn?"LIQUID · ":""}${throwBoost>1?"SHAKE PHYSICS":"PHYSICS RUNNING"}`;throwSound();vibrate(18);fitCamera(specs.length);
       const columns=Math.min(4,Math.ceil(Math.sqrt(specs.length*1.2)));
       const towerOn=tabletop.tower!=="none",started=performance.now();
       specs.forEach((spec,index)=>{
         const mesh=makeDieMesh(spec.sides,spec.role,layout.scale,spec.appearance),body=makeBody(spec,layout.scale,index),column=index%columns,row=Math.floor(index/columns);
         body.quaternion.setFromEuler(randomBetween(0,Math.PI*2),randomBetween(0,Math.PI*2),randomBetween(0,Math.PI*2));
         if(towerOn){
-          if(tabletop.tower==="spiral"){body.position.set(.94,8.15,TOWER.z);body.velocity.set(0,-.5,-.45)}
-          else{body.position.set(tabletop.tower==="roman"?-1:randomBetween(-.7,.7),8.3,TOWER.z+randomBetween(-.3,.3));body.velocity.set(.1,-.6,0)}
+          if(tabletop.tower==="spiral"){body.position.set(.94,8.15,towerZ());body.velocity.set(0,-.5,-.45)}
+          else{body.position.set(randomBetween(-.3,.3),8.3,towerZ()-1);body.velocity.set(0,-.6,.1)}
           body.angularVelocity.set(randomBetween(-3,3),randomBetween(-3,3),randomBetween(-3,3));body.allowSleep=false;mesh.visible=false;
         }else{
           body.position.set((column-(columns-1)/2)*1.2*layout.scale+randomBetween(-.28,.28),randomBetween(4.8,7.2)+row*.45,randomBetween(-2.6,-.9));
@@ -974,7 +1004,7 @@
         mesh.position.copy(body.position);mesh.quaternion.copy(body.quaternion);scene.add(mesh);dice.push({mesh,body,preview:false,...spec,queued:towerOn,inTower:towerOn,releaseAt:started+index*650,throwBoost});
       });
       settleAfter=started+(towerOn?1500:reducedMotion?450:1300);forceFinishAt=started+(towerOn?specs.length*650+14000:reducedMotion?1100:6500);
-      if(towerOn){setWorkshop(false);setThemePanel(false);statusPill.textContent="TOWER · FEEDING "+specs.length+" DICE"}
+      if(towerOn){setWorkshop(false);setThemePanel(false);statusPill.textContent="TOWER · FEEDING "+specs.length+" DICE";startTowerCamera()}
 
     }
 
@@ -1017,13 +1047,13 @@
     $$("[data-table-preset]").forEach(button=>button.addEventListener("click",()=>{
       if(rolling||assetBusy)return;Object.assign(tabletop,TABLE_PRESETS[button.dataset.tablePreset]);updateTabletop();tableNotice("Tray preset applied.");
     }));
-    const workshopControls={trayShape:"shape",trayMaterial:"surface",rimMaterial:"rim",trayTint:"tint",towerType:"tower",towerMaterial:"towerMaterial",trayImageFit:"imageFit",trayImageRepeat:"imageRepeat",backgroundMode:"background"};
+    const workshopControls={trayShape:"shape",trayMaterial:"surface",rimMaterial:"rim",trayTint:"tint",towerType:"tower",towerMaterial:"towerMaterial",towerWalls:"walls",trayImageFit:"imageFit",trayImageRepeat:"imageRepeat",backgroundMode:"background"};
     for(const [id,key]of Object.entries(workshopControls))$("#"+id).addEventListener("change",event=>{
       if(rolling||assetBusy)return;tabletop[key]=key==="imageRepeat"?Number(event.target.value):event.target.value;
       if(key==="surface")tabletop.tint=TABLE_MATERIALS[tabletop.surface].color;
       updateTabletop();tableNotice(key==="background"&&tabletop.background!=="theme"&&!assetImages.background?"Import an image below to use this background.":"Tabletop updated.");
     });
-    for(const [id,key]of [["trayGrid","grid"],["towerTransparent","transparent"]])$("#"+id).addEventListener("change",event=>{if(rolling||assetBusy)return;tabletop[key]=event.target.checked;updateTabletop()});
+    for(const [id,key]of [["trayGrid","grid"],["towerFollow","follow"]])$("#"+id).addEventListener("change",event=>{if(rolling||assetBusy)return;tabletop[key]=event.target.checked;updateTabletop()});
     for(const [id,key]of [["trayImageInput","tray"],["backgroundImageInput","background"]])$("#"+id).addEventListener("change",event=>{const file=event.target.files?.[0];event.target.value="";importArtwork(key,file)});
     $("#clearTrayImage").addEventListener("click",()=>removeArtwork("tray"));$("#clearBackgroundImage").addEventListener("click",()=>removeArtwork("background"));
 
