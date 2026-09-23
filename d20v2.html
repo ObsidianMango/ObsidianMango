@@ -130,6 +130,7 @@
     .workshop-check{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:11px;min-height:32px}
     .workshop-check input{accent-color:var(--accent);width:17px;height:17px}
     .workshop-help{color:var(--muted);font-size:10px;line-height:1.5;margin:8px 0}
+    .workshop-help a{color:var(--accent);text-underline-offset:2px}
     .workshop-upload{display:block;width:100%;font-size:11px;color:var(--muted)}
     .workshop-upload::file-selector-button{padding:8px;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:var(--panel-2);margin-right:8px;cursor:pointer}
     .workshop-note{font-size:10px;line-height:1.5;color:var(--accent);min-height:16px;margin-top:8px}
@@ -248,7 +249,9 @@
             <button type="button" class="workshop-action wide" id="clearTrayImage">Remove tray image</button>
           </div>
           <div class="custom-label">Surroundings</div>
-          <label class="type-control">Background<select id="backgroundMode" aria-label="Background mode"><option value="theme">Theme color</option><option value="image">Flat image</option><option value="panorama">360° panorama sphere</option></select></label>
+          <label class="type-control">Background<select id="backgroundMode" aria-label="Background mode"><option value="meadow">Meadow at dusk · 360°</option><option value="studio">Photo studio · 360°</option><option value="theme">Theme color</option><option value="image">Custom flat image</option><option value="panorama">Custom 360° panorama</option></select></label>
+          <p class="workshop-help">4K, 2:1 panoramas from <a href="https://polyhaven.com/a/kloppenheim_06" target="_blank" rel="noopener">Kloppenheim 06</a> and <a href="https://polyhaven.com/a/studio_small_09" target="_blank" rel="noopener">Studio Small 09</a> · <a href="https://polyhaven.com/license" target="_blank" rel="noopener">CC0 / free to use</a>.</p>
+          <div class="workshop-note" id="panoramaStatus" role="status" aria-live="polite"></div>
           <input class="workshop-upload" style="margin-top:8px" id="backgroundImageInput" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Import background image">
           <img class="workshop-thumb" id="backgroundImageThumb" alt="Imported background">
           <p class="workshop-help">PNG, JPG or WebP, up to 15 MB. For a 360° sphere, use a 2:1 equirectangular panorama. Images are resized for smooth phone performance.</p>
@@ -352,13 +355,15 @@
       lunar:{label:"Moon marble",shape:"circle",surface:"marble",rim:"stone",tint:"#cad1e3",grid:false},
       forge:{label:"Bronze forge",shape:"hexagon",surface:"metal",rim:"stone",tint:"#b18642",grid:false}
     };
-    let tabletop={...TABLE_PRESETS.classic,tower:"none",towerMaterial:"stone",walls:"solid",follow:true,imageFit:"cover",imageRepeat:3,background:"theme"};
+    const PANORAMAS={meadow:{label:"Meadow at dusk",url:"assets/dice-panoramas/kloppenheim_06.json"},studio:{label:"Photo studio",url:"assets/dice-panoramas/studio_small_09.json"}};
+    let tabletop={...TABLE_PRESETS.classic,tower:"none",towerMaterial:"stone",walls:"solid",follow:true,imageFit:"cover",imageRepeat:3,background:"meadow",panoramaVersion:1};
     try{
       const value=JSON.parse(localStorage.getItem("obsidianDiceTabletop")||"{}");
       for(const key of ["shape","surface","rim","tower","towerMaterial","imageFit","background"]){
-        const options={shape:["rectangle","square","circle","hexagon","octagon"],surface:Object.keys(TABLE_MATERIALS),rim:Object.keys(TABLE_MATERIALS),tower:["none","spiral","roman"],towerMaterial:Object.keys(TABLE_MATERIALS),imageFit:["cover","repeat"],background:["theme","image","panorama"]};
+        const options={shape:["rectangle","square","circle","hexagon","octagon"],surface:Object.keys(TABLE_MATERIALS),rim:Object.keys(TABLE_MATERIALS),tower:["none","spiral","roman"],towerMaterial:Object.keys(TABLE_MATERIALS),imageFit:["cover","repeat"],background:["theme","image","panorama",...Object.keys(PANORAMAS)]};
         if(options[key].includes(value[key]))tabletop[key]=value[key];
       }
+      if(!value.panoramaVersion&&tabletop.background==="theme")tabletop.background="meadow";
       if(/^#[0-9a-f]{6}$/i.test(value.tint||""))tabletop.tint=value.tint;
       if(value.tower==="cascade")tabletop.tower="roman";
       tabletop.grid=value.grid===undefined?true:value.grid===true;tabletop.walls=["solid","transparent","cutaway"].includes(value.walls)?value.walls:value.transparent===true?"transparent":"solid";tabletop.follow=value.follow!==false;tabletop.imageRepeat=clamp(Number(value.imageRepeat)||3,1,8);
@@ -366,6 +371,7 @@
     let tabletopGroup=null,towerGroup=null,tableBodies=[],trayPolygon=[],tableContact=null,towerPhysicsMaterial=null;
     let tableTextureCache=new Map(),assetImages={tray:null,background:null},assetURLs={tray:null,background:null},assetRevision={tray:0,background:0},assetBusy=0;
     let backgroundTexture=null,trayArtTexture=null,tableDBPromise=null,towerReleaseAt=0;
+    let panoramaImage=null,panoramaId=null,panoramaRequest=null;
     const TOWER={z:-2.25,height:7.6,half:1.65};
     function towerZ(){return tabletop.tower==="roman"?-1.85:TOWER.z}
 
@@ -424,7 +430,7 @@
         const decoded=await decodeArtwork(blob);
         if(revision!==assetRevision[key]){URL.revokeObjectURL(decoded.url);return}
         installArtwork(key,decoded);
-        if(key==="background"&&tabletop.background==="theme")tabletop.background="image";
+        if(key==="background"&&tabletop.background!=="panorama")tabletop.background="image";
         updateTabletop();
         try{await artworkStore(key,blob,true);tableNotice("Image saved on this device.")}catch{tableNotice("Image is ready for this session. Your browser could not save it for next time.")}
       }catch{tableNotice("That image could not be read. Try a PNG, JPG or WebP.")}
@@ -432,7 +438,7 @@
     }
     async function removeArtwork(key){
       if(rolling||assetBusy)return;assetRevision[key]++;installArtwork(key,null);
-      if(key==="background")tabletop.background="theme";updateTabletop();
+      if(key==="background"&&!PANORAMAS[tabletop.background])tabletop.background="theme";updateTabletop();
       try{await artworkStore(key,null,true);tableNotice("Imported image removed.")}catch{tableNotice("Removed for this session; saved image could not be cleared.")}
     }
     async function restoreArtwork(){
@@ -868,14 +874,37 @@
         for(const x of [-1.75,1.75])towerBox([.12,.55,4.1],[x,1.27,.05],[.35,0,0],shell);
       }
     }
+    async function loadPanorama(id){
+      if(panoramaRequest?.id===id)return;
+      panoramaRequest?.controller.abort();
+      const request={id,controller:new AbortController()};panoramaRequest=request;
+      const timeout=setTimeout(()=>request.controller.abort(),20000);
+      $("#panoramaStatus").textContent="Loading "+PANORAMAS[id].label+"…";
+      try{
+        const response=await fetch(PANORAMAS[id].url,{signal:request.controller.signal});
+        if(!response.ok)throw new Error("Panorama unavailable");
+        const data=await response.json(),img=new Image();img.src=data.image;await img.decode();
+        if(img.naturalWidth!==4096||img.naturalHeight!==2048)throw new Error("Invalid panorama dimensions");
+        if(panoramaRequest!==request||tabletop.background!==id)return;
+        panoramaImage=img;panoramaId=id;panoramaRequest=null;
+        $("#panoramaStatus").textContent=PANORAMAS[id].label+" · 4096 × 2048";applyBackground();
+      }catch{
+        if(panoramaRequest===request&&tabletop.background===id)$("#panoramaStatus").textContent="Panorama could not load. Showing theme color; select the panorama again to retry.";
+      }finally{clearTimeout(timeout);if(panoramaRequest===request)panoramaRequest=null}
+    }
     function applyBackground(){
       if(!scene)return;
       if(backgroundTexture){backgroundTexture.dispose();backgroundTexture=null}
-      if(tabletop.background!=="theme"&&assetImages.background){
-        backgroundTexture=new THREE.Texture(assetImages.background);backgroundTexture.colorSpace=THREE.SRGBColorSpace;backgroundTexture.needsUpdate=true;
-        if(tabletop.background==="panorama")backgroundTexture.mapping=THREE.EquirectangularReflectionMapping;
+      const preset=PANORAMAS[tabletop.background];
+      if(panoramaRequest&&panoramaRequest.id!==tabletop.background){panoramaRequest.controller.abort();panoramaRequest=null}
+      if(!preset){panoramaImage=null;panoramaId=null;$("#panoramaStatus").textContent=""}
+      const img=preset?(panoramaId===tabletop.background?panoramaImage:null):assetImages.background;
+      if(tabletop.background!=="theme"&&img){
+        backgroundTexture=new THREE.Texture(img);backgroundTexture.colorSpace=THREE.SRGBColorSpace;backgroundTexture.needsUpdate=true;
+        if(preset||tabletop.background==="panorama")backgroundTexture.mapping=THREE.EquirectangularReflectionMapping;
         scene.background=backgroundTexture;scene.fog=null;
       }else{scene.background=new THREE.Color(activeTheme.tray);scene.fog=new THREE.FogExp2(activeTheme.tray,.022)}
+      if(preset&&!img)loadPanorama(tabletop.background);
       fitBackground();
     }
     function fitBackground(){
@@ -1051,7 +1080,7 @@
     for(const [id,key]of Object.entries(workshopControls))$("#"+id).addEventListener("change",event=>{
       if(rolling||assetBusy)return;tabletop[key]=key==="imageRepeat"?Number(event.target.value):event.target.value;
       if(key==="surface")tabletop.tint=TABLE_MATERIALS[tabletop.surface].color;
-      updateTabletop();tableNotice(key==="background"&&tabletop.background!=="theme"&&!assetImages.background?"Import an image below to use this background.":"Tabletop updated.");
+      updateTabletop();tableNotice(key==="background"&&["image","panorama"].includes(tabletop.background)&&!assetImages.background?"Import an image below to use this background.":"Tabletop updated.");
     });
     for(const [id,key]of [["trayGrid","grid"],["towerFollow","follow"]])$("#"+id).addEventListener("change",event=>{if(rolling||assetBusy)return;tabletop[key]=event.target.checked;updateTabletop()});
     for(const [id,key]of [["trayImageInput","tray"],["backgroundImageInput","background"]])$("#"+id).addEventListener("change",event=>{const file=event.target.files?.[0];event.target.value="";importArtwork(key,file)});
