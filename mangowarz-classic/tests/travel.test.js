@@ -13,7 +13,7 @@ test('travel advances one day only to a different neighborhood and applies exact
   const state=game('travel-interest');assert.equal(travelTo(state,'bronx').ok,false);const result=travelTo(state,'ghetto');assert.equal(result.ok,true);assert.equal(state.day,2);assert.equal(state.trips,1);assert.equal(state.debt,6050);assert.equal(state.bank,0);
 });
 
-test('bank deposit/withdraw and Bronx debt repayment validate amounts',()=>{
+test('bank deposit/withdraw and Uptown debt repayment validate amounts',()=>{
   const state=game('finance');assert.equal(repayDebt(state,500).ok,true);assert.equal(state.cash,1500);assert.equal(state.debt,5000);assert.equal(repayDebt(state,2000).ok,false);
   resolve(state);travelTo(state,'manhattan');resolve(state);const cash=state.cash;assert.equal(deposit(state,500).ok,true);assert.equal(state.cash,cash-500);assert.equal(withdraw(state,200).ok,true);assert.equal(state.bank,300);assert.equal(deposit(state,-2).ok,false);
 });

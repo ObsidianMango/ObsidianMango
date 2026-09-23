@@ -1,49 +1,191 @@
-import { CLASSIC_PRODUCTS, EXTENDED_ASSETS, LOCATION_BY_ID, LOCATIONS, PRODUCT_BY_ID, WEAPON_BY_ID, enabledProducts } from './config.js?v=8';
-import { netWorth } from './encounters.js';
+import { LOCATION_BY_ID, PRODUCT_BY_ID, WEAPON_BY_ID, enabledProducts } from './config.js?v=8';
 import { freeCapacity, totalCapacity, usedCapacity } from './state.js';
 import { finalScore } from './scoring.js';
+import { maxBuyable, maxSellable } from './trading.js';
 import { formatMoney } from './utils.js';
 
-const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-const icon = (name,label='') => `<img src="assets/ui/${name}.svg" alt="${escapeHtml(label)}">`;
-const productArt = id => `assets/products/${id}.svg`;
+const escapeHtml=value=>String(value??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const pixelAsset=(path,label='',className='')=>`<img class="${className}" src="assets/classic-ui/${path}.svg" alt="${escapeHtml(label)}">`;
+const MAP_STATIONS=Object.freeze({
+  bronx:{x:193,y:147},
+  ghetto:{x:154,y:226},
+  'central-park':{x:329,y:196},
+  manhattan:{x:431,y:109},
+  'coney-island':{x:582,y:268},
+  brooklyn:{x:438,y:305}
+});
 
 export class Renderer {
-  constructor({main,header,status,actions}) { this.main=main; this.header=header; this.status=status; this.actions=actions; this.quantities=new Map(); }
-  showChrome(show) { this.header.hidden=!show; this.status.hidden=!show; this.actions.hidden=!show; }
-  renderTitle({classicSave=null,extendedSave=null,settings={},notice=''}) {
+  constructor({main,header,status,actions}){
+    this.main=main;
+    this.header=header;
+    this.status=status;
+    this.actions=actions;
+    this.quantities=new Map();
+  }
+
+  showChrome(showStatus=false){
+    this.header.hidden=true;
+    this.status.hidden=!showStatus;
+    this.actions.hidden=true;
+  }
+
+  renderTitle({classicSave=null,settings={},notice=''}){
     this.showChrome(false);
-    const resumes=[classicSave,extendedSave].filter(Boolean).map(save=>`<button class="resume-card" data-action="resume" data-mode="${save.mode}"><img src="assets/branding/compact-logo.svg" alt=""><span><strong>Resume ${save.mode==='classic'?'Classic':'Extended'}</strong><small>Day ${save.day} • ${LOCATION_BY_ID[save.location]?.name} • ${formatMoney(save.cash)}</small></span><span>Continue</span></button>`).join('');
-    this.main.innerHTML=`<section class="title-screen" aria-labelledby="game-title"><div class="title-grid"><figure class="title-art"><img src="assets/branding/splash.svg" alt="Coded neo-retro street scene with a trader between a neon market and police cruiser"><figcaption class="title-copy"><span class="eyebrow">Thirty days. One coat. Bad interest.</span><h1 id="game-title">MangoWarz<br><span class="positive-text">Classic</span></h1><p>Travel. Trade. Survive. Settle up.</p></figcaption></figure><div class="title-panel"><form id="new-game-form" class="form-stack"><div><span class="eyebrow">New run</span><h2>Choose your rules</h2></div>${notice?`<p class="warning-text" role="alert">${escapeHtml(notice)}</p>`:''}<div class="two-col mode-grid"><div class="mode-card"><label><input type="radio" name="mode" value="classic" checked> Classic Mode</label><small>Exact 30-day core. Inventory is not auto-liquidated.</small></div><div class="mode-card"><label><input type="radio" name="mode" value="extended"> Mango Extended</label><small>Separate save, assets, portfolio score, and absurd progression.</small></div></div><label class="check-row"><input type="checkbox" name="sixProductVariant"><span><b>Six-product historical variant</b><small>Optional simplified market; disabled by default.</small></span></label><div class="field"><label for="seed-input">Debug seed <span class="muted">(blank = secure generated seed)</span></label><input id="seed-input" name="seed" autocomplete="off" spellcheck="false" placeholder="Example: mango-30-day-test"></div><div class="two-col"><label class="check-row"><input type="checkbox" name="audio" ${settings.audio!==false?'checked':''}><span><b>Sound</b><small>Original synthesized effects</small></span></label><label class="check-row"><input type="checkbox" name="haptics" ${settings.haptics!==false?'checked':''}><span><b>Haptics</b><small>Meaningful vibration only</small></span></label></div><button class="button primary" type="submit">Start new run</button></form>${resumes?`<div class="form-stack" style="margin-top:14px"><span class="eyebrow">Saved runs</span>${resumes}</div>`:''}<button id="install-button" class="button ghost" type="button" hidden>Install MangoWarz Classic</button><p class="small" style="margin-top:12px">No analytics. No network at play time. Saves stay on this device.</p></div></div></section>`;
+    const resume=classicSave?`<button class="arcade-button" type="button" data-action="resume" data-mode="classic">CONTINUE <small>DAY ${classicSave.day}</small></button>`:'';
+    this.main.innerHTML=`<section class="title-screen arcade-screen" aria-labelledby="game-title">
+      <div class="title-lockup">
+        <h1 id="game-title"><span>MANGO</span><span>WARZ</span></h1>
+        <p>NEW YORK CITY <i aria-hidden="true">◆</i> 1985</p>
+      </div>
+      <figure class="title-city">${pixelAsset('title-city','Pixel-art New York skyline with a subway entrance and briefcase')}</figure>
+      ${notice?`<p class="arcade-notice" role="alert">${escapeHtml(notice)}</p>`:''}
+      <form id="new-game-form" class="title-menu">
+        <input type="hidden" name="mode" value="classic">
+        <button class="arcade-button primary" type="submit">NEW GAME</button>
+        ${resume}
+        <button class="arcade-button" type="button" data-action="how-to-play">HOW TO PLAY</button>
+        <details class="setup-panel"><summary>OPTIONS</summary><div class="form-stack">
+          <label class="check-row"><input type="checkbox" name="sixProductVariant"><span><b>SIX-PRODUCT VARIANT</b><small>Use the compact historical market.</small></span></label>
+          <label class="field" for="seed-input"><span>SEED (OPTIONAL)</span><input id="seed-input" name="seed" autocomplete="off" spellcheck="false" placeholder="RANDOM"></label>
+          <div class="two-col"><label class="check-row"><input type="checkbox" name="audio" ${settings.audio!==false?'checked':''}><span><b>SOUND</b></span></label><label class="check-row"><input type="checkbox" name="haptics" ${settings.haptics!==false?'checked':''}><span><b>HAPTICS</b></span></label></div>
+        </div></details>
+      </form>
+      <button id="install-button" class="arcade-button install-button" type="button" hidden>INSTALL GAME</button>
+      <p class="title-tagline">30 DAYS. ONE WAY OUT.</p>
+    </section>`;
   }
-  renderStatus(state) {
-    const free=freeCapacity(state), total=totalCapacity(state), healthClass=state.health<=25?'critical':'';
-    this.status.innerHTML=`<div class="status-item good"><span>Cash</span><strong>${formatMoney(state.cash)}</strong></div><div class="status-item bad"><span>Debt</span><strong>${formatMoney(state.debt)}</strong></div><div class="status-item"><span>Bank</span><strong>${formatMoney(state.bank)}</strong></div><div class="status-item ${healthClass?'bad':''}"><span>Health</span><strong>${state.health}/100</strong><div class="health-meter ${healthClass}" style="--meter:${state.health}%"><i></i></div></div><div class="status-item"><span>Free coat</span><strong>${free}/${total}</strong><div class="capacity-meter" style="--meter:${Math.round(usedCapacity(state)/Math.max(1,total)*100)}%"><i></i></div></div><div class="status-item"><span>Net worth</span><strong>${formatMoney(netWorth(state))}</strong></div>`;
-    this.header.querySelector('#day-location');
-    document.getElementById('day-location').innerHTML=`<span>Day ${state.day} of ${state.maxDay}</span><strong>${escapeHtml(LOCATION_BY_ID[state.location].name)}</strong>`;
+
+  renderStatus(state){
+    const used=usedCapacity(state),total=totalCapacity(state);
+    this.status.innerHTML=`
+      <div class="status-item"><span>DAY</span><strong>${String(state.day).padStart(2,'0')}/${state.maxDay}</strong></div>
+      <div class="status-item location"><span>LOCATION</span><strong>${escapeHtml(LOCATION_BY_ID[state.location].name).toUpperCase()}</strong></div>
+      <div class="status-item cash"><span>CASH</span><strong>${formatMoney(state.cash)}</strong></div>
+      <div class="status-item debt"><span>DEBT</span><strong>${formatMoney(state.debt)}</strong></div>
+      <div class="status-item health ${state.health<=25?'critical':''}"><span>HEALTH</span><strong>${state.health}</strong></div>
+      <div class="status-item coat"><span>COAT</span><strong>${used}/${total}</strong></div>`;
   }
-  renderGame(state) {
-    this.showChrome(true); this.renderStatus(state);
-    const loc=LOCATION_BY_ID[state.location];
-    const alert=state.pendingEncounter?.type==='police'&&!state.pendingEncounter.resolved;
-    const hero=`assets/locations/${state.location}-${alert?'alert':'day'}.svg`;
-    const rows=enabledProducts(state.settings).map(product=>this.marketRow(state,product)).join('');
-    const marketEvents=state.market?.events?.length ?? 0;
-    const pedestrians=Array.from({length:8},(_,i)=>`<img src="assets/civilians/pedestrian-${i+1}.svg" alt="">`).join('');
-    this.main.innerHTML=`<section class="game-screen"><div class="hero-grid"><article class="location-card"><img src="${hero}" alt="${escapeHtml(loc.name)} neighborhood establishing scene${alert?', under police alert':''}"><div class="street-crowd" aria-hidden="true">${pedestrians}</div><img class="hero-player" src="assets/characters/player-neutral.svg" alt="Your trader standing in ${escapeHtml(loc.name)}"><div class="location-overlay"><span class="eyebrow">Current neighborhood</span><h2>${escapeHtml(loc.name)}</h2><div class="location-meta"><span class="tag">Police ${loc.police}</span><span class="tag">${state.market?.listedCount??0} listings</span>${marketEvents?`<span class="tag expensive">${marketEvents} market shock${marketEvents===1?'':'s'}</span>`:''}</div></div></article><aside class="side-panel"><div class="ticker" role="status">${icon('ticker')}<p>${escapeHtml(state.ticker)}</p></div><div class="panel-card"><span class="eyebrow">Run</span><p><strong>${state.trips}</strong> trips • <strong>${state.stats.transactions}</strong> trades</p></div>${state.day===state.maxDay?`<button class="button primary" data-action="finish-run">Finish Day 30</button>`:''}</aside></div><figure class="market-atmosphere"><img src="assets/locations/${state.location}-market.svg" alt="${escapeHtml(loc.name)} street market scene"><figcaption><img src="assets/characters/player-trading.svg" alt=""><span><b>${escapeHtml(loc.name)} street board</b><small>Every listed product has its own original coded illustration.</small></span></figcaption></figure><div class="market-list" aria-label="${escapeHtml(loc.name)} market">${rows}</div></section>`;
-    this.actions.innerHTML=`<button class="nav-button primary-nav" data-action="travel" ${state.day>=state.maxDay||state.ended?'disabled':''}>${icon('travel')}<span>Travel</span></button><button class="nav-button" data-action="services">${icon('services')}<span>Services</span></button><button class="nav-button" data-action="inventory">${icon('inventory')}<span>Inventory</span></button><button class="nav-button" data-action="history">${icon('history')}<span>History</span></button><button class="nav-button" data-action="settings">${icon('settings')}<span>More</span></button>`;
+
+  renderGame(state,{view='home',selectedProductId=null,selectedDestination=null}={}){
+    this.showChrome(view==='home');
+    if(view==='home'){
+      this.renderStatus(state);
+      this.renderHub(state);
+    }else if(view==='market')this.renderMarket(state,selectedProductId);
+    else if(view==='travel')this.renderTravel(state,selectedDestination);
+    else this.renderHub(state);
   }
-  marketRow(state,product) {
-    const row=state.market?.rows?.[product.id]; const available=Boolean(row?.available); const owned=state.inventory[product.id]??0;
-    const maxBuy=available?Math.min(Math.floor(state.cash/row.price),freeCapacity(state)):0; const maxSell=available?owned:0;
-    const quantity=this.quantities.get(product.id)??1; const event=row?.event??'ordinary';
-    return `<article class="market-card ${available?'':'unavailable'}" data-event="${event}" data-product="${product.id}"><div class="product-art"><img src="${productArt(product.id)}" alt="Stylized ${escapeHtml(product.name)} product icon">${owned?`<span class="owned-dot" aria-label="${owned} owned">${owned}</span>`:''}</div><div><div class="market-head"><div class="market-name"><h3>${escapeHtml(product.name)} ${event!=='ordinary'?`<span class="tag ${event}">${event==='cheap'?'Flood':'Shortage'}</span>`:available?'':'<span class="tag unavailable">Unavailable</span>'}</h3></div><div class="market-price">${available?formatMoney(row.price):'—'}</div></div><div class="market-meta"><span>Owned ${owned}</span><span>Max buy ${maxBuy}</span><span>Max sell ${maxSell}</span></div><div class="trade-controls"><button class="qty-button" data-action="qty-minus" data-product="${product.id}" aria-label="Decrease ${product.name} quantity">−</button><input class="qty-input" data-quantity="${product.id}" inputmode="numeric" pattern="[0-9]*" value="${quantity}" aria-label="${product.name} quantity"><button class="qty-button" data-action="qty-plus" data-product="${product.id}" aria-label="Increase ${product.name} quantity">+</button><div class="max-buttons"><button class="qty-button" data-action="qty-buy-max" data-product="${product.id}" ${maxBuy===0?'disabled':''}>Buy max</button><button class="qty-button" data-action="qty-sell-max" data-product="${product.id}" ${maxSell===0?'disabled':''}>Sell max</button></div><div class="trade-buttons"><button class="button buy" data-action="buy" data-product="${product.id}" ${!available||maxBuy===0?'disabled':''}>Buy <span aria-hidden="true">＋</span></button><button class="button sell" data-action="sell" data-product="${product.id}" ${!available||maxSell===0?'disabled':''}>Sell <span aria-hidden="true">−</span></button></div></div>${row?.announcement?`<p class="event-note">${escapeHtml(row.announcement)}</p>`:''}</div></article>`;
+
+  renderHub(state){
+    const location=LOCATION_BY_ID[state.location];
+    const loanAvailable=state.location==='bronx';
+    const bankAvailable=state.location==='manhattan';
+    this.main.innerHTML=`<section class="hub-screen arcade-screen" aria-label="${escapeHtml(location.name)} street hub">
+      <figure class="location-scene">${pixelAsset(`locations/${state.location}`,`Pixel-art ${location.name} street scene`)}</figure>
+      <div class="hub-menu" aria-label="Neighborhood actions">
+        ${this.hubAction('open-market','icons/market','MARKET','','green')}
+        ${this.hubAction('open-travel','icons/travel','TRAVEL','','blue',state.day>=state.maxDay||state.ended)}
+        ${this.hubAction('service-bank','icons/bank','BANK',bankAvailable?`BAL ${formatMoney(state.bank)}`:'CHINATOWN ONLY','cyan',!bankAvailable)}
+        ${this.hubAction('service-loan','icons/loan','LOAN SHARK',loanAvailable?`OWED ${formatMoney(state.debt)}`:'UPTOWN ONLY','red',!loanAvailable)}
+        ${this.hubAction('service-clinic','icons/clinic','HOSPITAL',state.health<100?`${state.health}/100 HEALTH`:'HEALTH FULL','red')}
+        ${this.hubAction('inventory','icons/stats','STATS',`${state.stats.unitsBought} BOUGHT · ${state.stats.unitsSold} SOLD`,'gold')}
+      </div>
+      <div class="hub-tools"><button data-action="history">${pixelAsset('icons/log','')}<span>EVENT LOG</span></button><button data-action="settings">${pixelAsset('icons/options','')}<span>OPTIONS</span></button></div>
+      ${state.day===state.maxDay?`<button class="arcade-button primary finish-button" data-action="finish-run">FINISH DAY 30</button>`:''}
+      <footer class="screen-footer"><span>BANK ${formatMoney(state.bank)}</span><span>GUNS ${state.weapons.length}</span><span>PRICES CHANGE WHEN YOU TRAVEL</span></footer>
+    </section>`;
   }
-  renderFinal(state,isBest=false) {
-    this.showChrome(false); const score=state.stats.finalScore??finalScore(state); const remaining=Object.entries(state.inventory).filter(([,q])=>q>0).map(([id,q])=>`${PRODUCT_BY_ID[id].name} ×${q}`).join(', ')||'None'; const weapons=state.weapons.map(id=>WEAPON_BY_ID[id]?.name).filter(Boolean).join(', ')||'None';
-    const achievements=(state.achievements??[]).map(item=>`<span class="tag cheap">${escapeHtml(item.name)}</span>`).join(' ')||'<span class="small">No achievements this run.</span>';
-    this.main.innerHTML=`<section class="final-screen"><div class="score-hero"><img class="score-art" src="assets/branding/${state.health===0?'game-over':'victory'}.svg" alt="${state.health===0?'Defeat':'Final victory'} illustration"><span class="eyebrow">${state.mode==='classic'?'Classic':'Mango Extended'} run complete</span><h1>${state.health===0?'Run Over':'Day 30 Closed'}</h1><div class="score-number">${formatMoney(score)}</div>${isBest?'<span class="tag cheap">New personal best</span>':''}<p>Seed: <code>${escapeHtml(state.seed)}</code></p></div><div class="score-grid"><div class="score-cell"><span>Cash</span><strong>${formatMoney(state.cash)}</strong></div><div class="score-cell"><span>Bank</span><strong>${formatMoney(state.bank)}</strong></div><div class="score-cell"><span>Debt</span><strong>${formatMoney(state.debt)}</strong></div><div class="score-cell"><span>Health</span><strong>${state.health}/100</strong></div><div class="score-cell"><span>Capacity</span><strong>${freeCapacity(state)} free / ${totalCapacity(state)}</strong></div><div class="score-cell"><span>Trips</span><strong>${state.trips}</strong></div><div class="score-cell"><span>Bought / sold</span><strong>${state.stats.unitsBought} / ${state.stats.unitsSold}</strong></div><div class="score-cell"><span>Police encounters</span><strong>${state.stats.policeEncounters}</strong></div><div class="score-cell"><span>Escapes</span><strong>${state.stats.successfulEscapes}</strong></div><div class="score-cell"><span>Combat victories</span><strong>${state.stats.combatVictories}</strong></div><div class="score-cell"><span>Best trade</span><strong>${state.stats.bestTrade?`${state.stats.bestTrade.productName} ${formatMoney(state.stats.bestTrade.estimatedProfit)}`:'None'}</strong></div><div class="score-cell"><span>Worst trade</span><strong>${state.stats.worstTrade?`${state.stats.worstTrade.productName} ${formatMoney(state.stats.worstTrade.estimatedProfit)}`:'None'}</strong></div></div><div class="panel-card"><h2>${state.mode==='classic'?'Classic':'Extended'} achievements</h2><div class="location-meta">${achievements}</div></div><div class="panel-card"><h2>What remains</h2><p><b>Inventory:</b> ${escapeHtml(remaining)}</p><p><b>Weapons:</b> ${escapeHtml(weapons)}</p>${state.mode==='classic'?'<p class="small">Classic inventory is intentionally not auto-liquidated.</p>':''}</div><div class="two-col"><button class="button primary" data-action="play-again">Play again</button><button class="button sell" data-action="share-summary">Copy/share summary</button></div></section>`;
+
+  hubAction(action,asset,label,meta,tone,disabled=false){
+    return `<button class="hub-action ${tone}" data-action="${action}" ${disabled?'disabled':''}>${pixelAsset(asset,'')}<span><b>${label}</b>${meta?`<small>${meta}</small>`:''}</span></button>`;
+  }
+
+  renderMarket(state,selectedProductId){
+    const products=enabledProducts(state.settings).filter(product=>state.market?.rows?.[product.id]?.available||(state.inventory[product.id]??0)>0);
+    const fallback=products.find(product=>state.market?.rows?.[product.id]?.available)?.id??null;
+    const activeId=products.some(product=>product.id===selectedProductId&&state.market?.rows?.[product.id]?.available)?selectedProductId:fallback;
+    const rows=products.map(product=>this.marketRow(state,product,product.id===activeId)).join('');
+    const activeProduct=activeId?PRODUCT_BY_ID[activeId]:null;
+    const activeRow=activeId?state.market.rows[activeId]:null;
+    const buyMax=activeId?maxBuyable(state,activeId):0;
+    const sellMax=activeId?maxSellable(state,activeId):0;
+    const quantity=activeId?(this.quantities.get(activeId)??1):1;
+    this.main.innerHTML=`<section class="market-screen arcade-screen" aria-label="Street market">
+      <header class="screen-title"><h1>STREET MARKET</h1></header>
+      <div class="screen-readout"><strong>${escapeHtml(LOCATION_BY_ID[state.location].name).toUpperCase()}</strong><span>CASH ${formatMoney(state.cash)}</span><span>SPACE ${freeCapacity(state)}</span></div>
+      <div class="market-table">
+        <div class="market-row market-heading" aria-hidden="true"><span>GOODS</span><span>PRICE</span><span>OWN</span></div>
+        <div class="market-viewport">${rows}</div>
+      </div>
+      <div class="market-console" aria-label="Trade controls">
+        <div class="selected-readout"><span>${activeProduct?escapeHtml(activeProduct.name).toUpperCase():'NO GOODS SELECTED'}</span><strong>${activeRow?formatMoney(activeRow.price):'—'}</strong></div>
+        <div class="quantity-line">
+          <button class="pixel-qty" data-action="qty-minus" data-product="${activeId??''}" ${activeId?'':'disabled'} aria-label="Decrease quantity">−</button>
+          <input class="qty-input" data-quantity="${activeId??''}" inputmode="numeric" pattern="[0-9]*" value="${quantity}" ${activeId?'':'disabled'} aria-label="Trade quantity">
+          <button class="pixel-qty" data-action="qty-plus" data-product="${activeId??''}" ${activeId?'':'disabled'} aria-label="Increase quantity">+</button>
+        </div>
+        <div class="market-actions">
+          <button class="arcade-button buy" data-action="buy" data-product="${activeId??''}" ${buyMax===0?'disabled':''}>BUY <small>MAX ${buyMax}</small></button>
+          <button class="arcade-button sell" data-action="sell" data-product="${activeId??''}" ${sellMax===0?'disabled':''}>SELL <small>MAX ${sellMax}</small></button>
+          <button class="arcade-button max" data-action="qty-auto-max" data-product="${activeId??''}" data-buy-max="${buyMax}" data-sell-max="${sellMax}" ${buyMax===0&&sellMax===0?'disabled':''}>MAX</button>
+          <button class="arcade-button" data-action="screen-back">BACK</button>
+        </div>
+      </div>
+      <footer class="screen-footer market-message">${escapeHtml(state.ticker)}</footer>
+    </section>`;
+  }
+
+  marketRow(state,product,selected=false){
+    const row=state.market?.rows?.[product.id];
+    const available=Boolean(row?.available);
+    const owned=state.inventory[product.id]??0;
+    const event=row?.event??'ordinary';
+    const stateText=event==='cheap'?'FLOOD':event==='expensive'?'SHORTAGE':'';
+    return `<button type="button" class="market-row ${selected?'selected':''} ${available?'':'unavailable'}" data-event="${event}" data-action="trade-product" data-product="${product.id}" ${available?'':'disabled'} aria-pressed="${selected}" aria-label="${escapeHtml(product.name)}, ${available?`${formatMoney(row.price)}, ${owned} owned`:'not for sale'}, ${stateText}">
+      <span class="goods-cell">${pixelAsset(`products/${product.id}`,'')}<span><b>${escapeHtml(product.name).toUpperCase()}</b>${stateText?`<small>${stateText}</small>`:''}</span></span>
+      <span class="market-price">${available?formatMoney(row.price):'—'}</span>
+      <span class="market-owned">${owned}</span>
+    </button>`;
+  }
+
+  renderTravel(state,selectedDestination){
+    const candidates=Object.values(LOCATION_BY_ID);
+    const fallback=candidates.find(location=>location.id!==state.location)?.id??null;
+    const active=candidates.some(location=>location.id===selectedDestination&&location.id!==state.location)?selectedDestination:fallback;
+    const activeLocation=LOCATION_BY_ID[active];
+    const station=MAP_STATIONS[active]??MAP_STATIONS['central-park'];
+    const rows=candidates.map(location=>`<button class="subway-stop ${location.id===active?'selected':''} ${location.id===state.location?'current':''}" data-action="select-destination" data-destination="${location.id}" ${location.id===state.location?'disabled':''} aria-pressed="${location.id===active}"><span>${escapeHtml(location.name).toUpperCase()}</span>${location.id===state.location?'<small>YOU ARE HERE</small>':''}</button>`).join('');
+    this.main.innerHTML=`<section class="travel-screen arcade-screen" aria-label="Subway map">
+      <header class="screen-title"><h1>SUBWAY MAP</h1></header>
+      <div class="screen-readout"><span>DAY ${String(state.day).padStart(2,'0')}/${state.maxDay}</span><strong>FARE $0</strong></div>
+      <figure class="subway-map" data-map-location="${active??''}" data-map-x="${station.x}" data-map-y="${station.y}">
+        ${pixelAsset('subway-map','Abstract pixel-art subway map')}
+        <svg class="subway-map-highlight" viewBox="0 0 640 420" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <rect class="map-marker-frame" x="${station.x-18}" y="${station.y-18}" width="36" height="36"/>
+          <rect class="map-marker-core" x="${station.x-7}" y="${station.y-7}" width="14" height="14"/>
+        </svg>
+        <figcaption class="sr-only">Highlighted station: ${escapeHtml(activeLocation?.name??'')}</figcaption>
+      </figure>
+      <div class="subway-list">${rows}</div>
+      <div class="travel-actions"><button class="arcade-button buy" data-action="travel-confirm" data-destination="${active??''}" ${active?'':'disabled'}>TRAVEL</button><button class="arcade-button danger" data-action="screen-back">CANCEL</button></div>
+      <footer class="screen-footer">TRAVEL ENDS THE DAY</footer>
+    </section>`;
+  }
+
+  renderFinal(state,isBest=false){
+    this.showChrome(false);
+    const score=state.stats.finalScore??finalScore(state);
+    const remaining=Object.entries(state.inventory).filter(([,quantity])=>quantity>0).map(([id,quantity])=>`${PRODUCT_BY_ID[id].name} ×${quantity}`).join(', ')||'None';
+    const weapons=state.weapons.map(id=>WEAPON_BY_ID[id]?.name).filter(Boolean).join(', ')||'None';
+    this.main.innerHTML=`<section class="final-screen arcade-screen">
+      <header class="screen-title"><h1>${state.health===0?'GAME OVER':'RUN COMPLETE'}</h1></header>
+      <div class="final-score"><span>FINAL SCORE</span><strong>${formatMoney(score)}</strong>${isBest?'<b>NEW PERSONAL BEST</b>':''}<small>SEED ${escapeHtml(state.seed)}</small></div>
+      <div class="score-grid"><div><span>CASH</span><b>${formatMoney(state.cash)}</b></div><div><span>BANK</span><b>${formatMoney(state.bank)}</b></div><div><span>DEBT</span><b>${formatMoney(state.debt)}</b></div><div><span>HEALTH</span><b>${state.health}/100</b></div><div><span>COAT</span><b>${freeCapacity(state)} FREE / ${totalCapacity(state)}</b></div><div><span>TRIPS</span><b>${state.trips}</b></div><div><span>BOUGHT / SOLD</span><b>${state.stats.unitsBought} / ${state.stats.unitsSold}</b></div><div><span>POLICE / ESCAPES</span><b>${state.stats.policeEncounters} / ${state.stats.successfulEscapes}</b></div><div><span>COMBAT WINS</span><b>${state.stats.combatVictories}</b></div><div><span>WEAPONS</span><b>${escapeHtml(weapons)}</b></div></div>
+      <div class="final-inventory"><span>REMAINING GOODS</span><p>${escapeHtml(remaining)}</p></div>
+      <div class="final-actions"><button class="arcade-button primary" data-action="play-again">PLAY AGAIN</button><button class="arcade-button sell" data-action="share-summary">COPY SCORE</button></div>
+    </section>`;
   }
 }
 
-export { escapeHtml, icon };
+export { escapeHtml, pixelAsset as icon };
