@@ -3,7 +3,9 @@ import * as CANNON from './vendor/cannon-es.js';
 
 const $=id=>document.getElementById(id);
 const stage=$('stage'), host=$('scene');
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
+let renderer;
+try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'})}
+catch{renderer=createCanvasFallback()}
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.5;host.appendChild(renderer.domElement);
 const scene=new THREE.Scene();scene.fog=new THREE.Fog(0x8d75b5,24,51);
 const camera=new THREE.PerspectiveCamera(45,1,.1,80);camera.position.set(0,6.7,17.3);camera.lookAt(0,1.4,-4.5);
@@ -16,6 +18,30 @@ const doughMat=mat(0xc78950),sprinkleMats=[mat(0xffeb8e),mat(0x83d5dd),mat(0xe77
 const world=new CANNON.World({gravity:new CANNON.Vec3(0,-19.5,0)});world.allowSleep=true;world.defaultContactMaterial.friction=.45;world.defaultContactMaterial.restitution=.24;
 const groundMat=new CANNON.Material('ground'),donutPhys=new CANNON.Material('donut');world.addContactMaterial(new CANNON.ContactMaterial(groundMat,donutPhys,{friction:.65,restitution:.36}));
 const entities=[],decor=[],targets=[],crumbs=[];let milk=null,donut=null,ammo=0,score=0,level=0,down=0,shot=false,won=false,aiming=false,dragStart=null,shotAt=0,flightTimeout=null,broken=false,loading=false,muted=false,audio=null,lastCall=0;
+function createCanvasFallback(){
+ const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');let pixelRatio=1,w=1,h=1;
+ const project=(x,y,z)=>{const v=new THREE.Vector3(x,y,z).project(camera);return{x:(v.x+1)*w/2,y:(1-v.y)*h/2}};
+ const line=(pts,color)=>{ctx.fillStyle=color;ctx.beginPath();pts.forEach(([x,y,z],i)=>{let p=project(x,y,z);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)});ctx.closePath();ctx.fill()};
+ const ellipse=(x,y,rx,ry,color)=>{ctx.beginPath();ctx.ellipse(x,y,Math.max(1,rx),Math.max(1,ry),0,0,Math.PI*2);ctx.fillStyle=color;ctx.fill()};
+ const render=()=>{
+  camera.updateMatrixWorld();ctx.setTransform(pixelRatio,0,0,pixelRatio,0,0);ctx.clearRect(0,0,w,h);
+  line([[-6,-.15,6],[6,-.15,6],[6,-.15,-11],[-6,-.15,-11]],'#a58abb');
+  line([[-5,.5,-4.7],[5,.5,-4.7],[5,.5,-10.1],[-5,.5,-10.1]],'#ffe0a5');
+  line([[-5,.5,-4.7],[5,.5,-4.7],[5,-.1,-4.7],[-5,-.1,-4.7]],'#ce9878');
+  const draw=(e)=>{const b=e.body,p=project(b.position.x,b.position.y,b.position.z),q=project(b.position.x+.5,b.position.y,b.position.z),size=Math.max(5,Math.abs(q.x-p.x));
+   if(e.kind==='crumb'){ellipse(p.x,p.y,Math.max(2,size*.12),Math.max(2,size*.12),'#d78b5d');return}
+   if(e.kind==='donut'){drawDonut(p,size);return}
+   const tall=e.type==='domino'?1.55:e.type==='box'?1.2:1.1;const top=project(b.position.x,b.position.y+tall/2,b.position.z),bot=project(b.position.x,b.position.y-tall/2,b.position.z),height=Math.max(7,bot.y-top.y),width=size*(e.type==='box'?2:e.type==='domino'?.85:1.5);const tilt=Math.atan2(2*(b.quaternion.w*b.quaternion.z+b.quaternion.x*b.quaternion.y),1-2*(b.quaternion.y**2+b.quaternion.z**2));
+   ctx.save();ctx.translate(p.x,p.y);ctx.rotate(-tilt);ctx.fillStyle=e.type==='box'?'#ec9f7d':e.type==='domino'?'#e1bb73':['#83d0cf','#ee92ad','#f2c47b','#a98ed2'][targets.indexOf(e)%4];ctx.fillRect(-width/2,-height/2,width,height);ctx.fillStyle='#fff0d8';ctx.fillRect(-width*.48,-height*.12,width*.96,height*.23);if(e.type==='can'){ellipse(0,-height/2,width/2,width*.17,'#f7e7d8');ellipse(0,height/2,width/2,width*.17,'#d79e8a')}ctx.restore()
+  };
+  for(const e of entities.filter(e=>e.kind==='target').sort((a,b)=>a.body.position.z-b.body.position.z)){let p=project(e.body.position.x,.5,e.body.position.z);ellipse(p.x,p.y+5,26,8,'#5b3a6438');draw(e)}
+  if(milk){let p=project(milk.x,1.48,milk.z),top=project(milk.x,2.6,milk.z),bottom=project(milk.x,.5,milk.z),r=Math.abs(project(milk.x+.92,1.48,milk.z).x-p.x);ctx.fillStyle='#e7faff88';ctx.fillRect(p.x-r,top.y,r*2,bottom.y-top.y);ellipse(p.x,top.y,r,r*.26,'#d9fbff');ellipse(p.x,p.y+16,r*.85,r*.23,'#fffdf2')}
+  if(donut){let p=donut.body?project(donut.body.position.x,donut.body.position.y,donut.body.position.z):project(donut.mesh.position.x,donut.mesh.position.y,donut.mesh.position.z);let q=project((donut.body?.position.x??0)+.55,(donut.body?.position.y??1.3),(donut.body?.position.z??5.8));drawDonut(p,Math.abs(q.x-p.x))}
+  for(const e of entities.filter(e=>e.kind==='crumb'))draw(e);
+ };
+ function drawDonut(p,r){r=Math.max(12,r);ellipse(p.x+4,p.y+7,r*1.15,r*.88,'#6e466c6b');ctx.lineWidth=r*.42;ctx.strokeStyle='#b9794a';ctx.beginPath();ctx.arc(p.x,p.y,r*.74,0,Math.PI*2);ctx.stroke();ctx.lineWidth=r*.29;ctx.strokeStyle=['#f39dbb','#b58ce2','#8dd5c7','#f8ca79'][level%4];ctx.beginPath();ctx.arc(p.x,p.y-r*.08,r*.73,0,Math.PI*2);ctx.stroke();for(let i=0;i<13;i++){let a=i*2.4,r2=r*.68;ellipse(p.x+Math.cos(a)*r2,p.y-r*.08+Math.sin(a)*r2,2,2,['#fff4b6','#bdebec','#fff'][i%3])}}
+ return{domElement:canvas,shadowMap:{},setPixelRatio(v){pixelRatio=v},setSize(width,height){w=width;h=height;canvas.width=Math.round(w*pixelRatio);canvas.height=Math.round(h*pixelRatio);canvas.style.width=w+'px';canvas.style.height=h+'px'},render};
+}
 const levels=[
  {title:'The first knock',label:'01 / THE COUNTER',desc:'Topple the cans.',mission:'Knock over the cans',goal:3,ammo:5,objects:[[-1.15,'can'],[0,'can'],[1.15,'can']]},
  {title:'Stack attack',label:'02 / STACK ATTACK',desc:'A little chaos goes a long way.',mission:'Topple the stack',goal:5,ammo:6,objects:[[-1.4,'box'],[0,'box'],[1.4,'box'],[-.7,'can',2.23],[.7,'can',2.23]]},
