@@ -1289,7 +1289,7 @@
   const TYPE_ICONS={store:'$',guns:'W',garage:'V',clinic:'+',safehouse:'H',office:'!',warehouse:'!',bar:'!',diner:'$',apartment:':',cabin:'^',motel:'H'};
   const RANK_NAMES=['New arrival','Street regular','Wheelman','Operator','City legend','Kingpin'];
   const G={cash:180,hp:100,armor:0,xp:0,stamina:100,boost:0,heat:0,crimeTimer:0,weapon:0,owned:[0],upgrades:{},ammo:36,mag:{},medkits:1,food:1,drinks:0,scratches:0,interior:null,room:null,vehicle:null,cars:[],npcs:[],loot:[],spawned:new Set(),cleared:{},discovered:[],job:null,completed:0,jobSerial:0,ownedCars:[0],discoveredDistricts:[],waypoint:null,panel:false,started:false,clock:0,shot:0,reload:0,flash:0,hurt:0,saveTimer:0,hudTimer:0,spawnTimer:0,toastTimer:0,sound:true,activeContext:null,firstVisit:{},totalKills:0,meters:0,achievements:[],sounds:null,policeTimer:0};
-  const rank=()=>Math.min(6,1+Math.floor(G.xp/120));
+  const rank=()=>Math.min(12,1+Math.floor(G.xp/120));
   function districtAt(x,y){
     const bx=Math.floor(x/BLOCK),by=Math.floor(y/BLOCK);
     if(by< -2)return {name:'Pine Hills',tone:6,kind:'hills'};
@@ -1398,7 +1398,7 @@
       if(b.seed%5===0)G.loot.push({id:id+',l',x:b.ox+11,y:b.oy+31,kind:b.seed%2?'ammo':'cash',amount:b.seed%2?12:20});
     }
     G.npcs=G.npcs.filter(n=>n.job||distance(n,player)<145);
-    G.cars=G.cars.filter(c=>c===G.vehicle||c.owned||distance(c,player)<145);
+    G.cars=G.cars.filter(c=>c===G.vehicle||c.owned||c.mission||distance(c,player)<145);
     G.loot=G.loot.filter(l=>distance(l,player)<145);
     for(const id of G.spawned){const [x,y]=id.split(',').map(Number);if(Math.abs(x-bx)>3||Math.abs(y-by)>3)G.spawned.delete(id);}
     for(const id of Object.keys(G.cleared))if(G.clock-G.cleared[id]>180)delete G.cleared[id];
@@ -1478,7 +1478,7 @@
     if(!G.discoveredDistricts.includes(d.name)){G.discoveredDistricts.push(d.name);if(G.discoveredDistricts.length>1)earn(40,25,d.name+' discovered');}
     for(const b of nearbyBuildings(30))if(!G.discovered.includes(b.id))G.discovered.push(b.id);
     if(G.discovered.length>1000)G.discovered=G.discovered.slice(-1000);
-    const milestones=[{id:'jobs5',test:G.completed>=5,cash:150,xp:35,text:'5 jobs completed'},{id:'districts',test:G.discoveredDistricts.length>=5,cash:300,xp:60,text:'All 5 districts explored'},{id:'distance',test:G.meters>=1500,cash:100,xp:25,text:'1.5 km traveled'}];
+    const milestones=[{id:'jobs5',test:G.completed>=5,cash:150,xp:35,text:'5 jobs completed'},{id:'districts',test:G.discoveredDistricts.length>=5,cash:300,xp:60,text:'First 5 districts explored'},{id:'distance',test:G.meters>=1500,cash:100,xp:25,text:'1.5 km traveled'}];
     for(const a of milestones)if(a.test&&!G.achievements.includes(a.id)){G.achievements.push(a.id);earn(a.cash,a.xp,a.text);}
   }
   function panel(title,kicker='SLICE CITY II'){
@@ -1495,7 +1495,7 @@
     const root=panel('Jobs','REPUTATION '+G.xp+' · RANK '+rank());
     if(G.job){const j=G.job;root.innerHTML='<p class="tag">ACTIVE · '+j.name+'</p><p>'+jobDescription()+'</p>';addButton(root,'Track job',closePanel,'primary wide');addButton(root,'Abandon job',abandonJob,'wide');}
     else{root.innerHTML='<p>Walk to a <b class="tag">!</b> contact outside a building, or use the job board inside. Jobs repeat with new destinations.</p>';const g=section(root,'Find a contact');for(const b of nearbyBuildings(100).slice(0,6))card(g,b.name,Math.round(distance(worldPosition(),b.door))+' m away','Track',()=>{G.waypoint={...b.door,name:b.name,id:b.id};closePanel();});}
-    const g=section(root,'Milestones');card(g,'Street regular',G.completed+'/5 jobs · reward $150',null);card(g,'City explorer',G.discoveredDistricts.length+'/5 districts · reward $300',null);card(g,'Ranks',rank()+'/6 · '+RANK_NAMES[rank()-1],null);card(g,'Next rank',rank()===6?'Maximum rank':(120-G.xp%120)+' REP remaining',null);
+    const g=section(root,'Milestones');card(g,'Street regular',G.completed+'/5 jobs · reward $150',null);card(g,'City explorer',G.discoveredDistricts.length+'/50 districts · milestone rewards',null);card(g,'Ranks',rank()+'/12 · '+RANK_NAMES[rank()-1],null);card(g,'Next rank',rank()===12?'Maximum rank':(120-G.xp%120)+' REP remaining',null);
   }
   function showJobBoard(){
     if(G.job){showJobs();return;}
@@ -1670,7 +1670,7 @@
     if(boost&&Math.abs(c.speed)>2)G.stamina=Math.max(0,G.stamina-dt*20);
     c.angle+=steer*v.grip*dt*(Math.abs(c.speed)>1?Math.sign(c.speed):0)*Math.min(1,Math.abs(c.speed)/4);
     const move=Math.abs(c.speed*dt),steps=Math.max(1,Math.ceil(move/.3));let hit=false;
-    for(let i=0;i<steps;i++){const x=c.x+Math.cos(c.angle)*c.speed*dt/steps,y=c.y+Math.sin(c.angle)*c.speed*dt/steps;if(blocked(x,y)){hit=true;break;}c.x=x;c.y=y;}
+    for(let i=0;i<steps;i++){const x=c.x+Math.cos(c.angle)*c.speed*dt/steps,y=c.y+Math.sin(c.angle)*c.speed*dt/steps;if(vehicleBlocked(c,x,y)){hit=true;break;}c.x=x;c.y=y;}
     if(hit){const impact=Math.abs(c.speed);c.hp-=impact*.85;c.speed*=-.25;if(impact>6){G.hurt=.35;sound(60,.2);toast('Collision · '+Math.ceil(c.hp)+' durability');}}
     player.x=c.x;player.y=c.y;player.yaw=c.angle;
     for(const n of G.npcs)if(n.hp>0&&distance(n,c)<1.3&&Math.abs(c.speed)>5){damageNPC(n,Math.abs(c.speed)*6);c.speed*=.75;}
@@ -1759,7 +1759,7 @@
         drawPerson({x:14,y:4.5,hp:100,kind:'civilian',theme:6},args);
         label3D(12.1,4.5,2.8,G.interior.name,13,args);
         for(let x=4.2;x<8;x+=.45)for(const z of [.5,1,1.6])point3D(x,3.6,z,G.interior.type==='guns'?'T':'#',G.interior.type==='guns'?7:10+3*(Math.floor(x*7)%4),...args,-.1);
-        if(G.interior.type==='garage')renderCar(8,9,0,4,...args);
+        if(G.interior.type==='garage')renderVehicle({x:8,y:9,angle:0,type:4,hp:200},args);
         if(G.interior.type==='clinic')label3D(17.7,8,2.8,'[ + ]',28,args);
       }
     }else{
@@ -1767,7 +1767,7 @@
       for(const tree of scene.trees)renderTree(tree,...args);
       for(const block of scene.blocks)renderLamp(block,...args);
       renderAntennas(scene.buildings,...args);
-      for(const c of G.cars){if(c===G.vehicle)continue;renderVehicle(c,args);if(distance(c,player)<15)label3D(c.x,c.y,1.75,c.hp<=0?'WRECK':VEHICLES[c.type].name.toUpperCase(),c.hp<=0?5:16,args);}
+      for(const c of G.cars){if(c===G.vehicle)continue;renderVehicle(c,args);if(distance(c,player)<25)label3D(c.x,c.y,2.9,c.hp<=0?'WRECK':VEHICLES[c.type].name.toUpperCase(),c.hp<=0?5:16,args);}
       for(const n of G.npcs)drawPerson(n,args);
       for(const l of G.loot)label3D(l.x,l.y,.6+Math.sin(time*3)*.1,l.kind==='cash'?'$':l.kind==='crowbar'?'L':'+',13,args);
       const nearby=scene.buildings.filter(b=>b.door&&distance(player,b.door)<48).sort((a,b)=>distance(player,a.door)-distance(player,b.door));
@@ -1835,11 +1835,10 @@
     ctx.fillStyle='#b1cbb9';ctx.font='11px monospace';ctx.textAlign='left';ctx.fillText('N ↑',8,15);
   }
   function showMap(){
-    const root=panel('City map','FOLLOW THE GOLD MARKER');const c=document.createElement('canvas');c.className='map-large';c.width=800;c.height=480;root.append(c);drawMap(c,true);
+    const root=panel('City map','FOLLOW THE GOLD MARKER');addButton(root,'WORLD ATLAS · 10 regions / 50 districts',()=>showAtlas(),'primary wide');const c=document.createElement('canvas');c.className='map-large';c.width=800;c.height=480;root.append(c);drawMap(c,true);
     root.insertAdjacentHTML('beforeend','<p class="muted">$ Shops · W Guns · V Garage · + Clinic · H Rest · ! Jobs<br>Tap the map to place a waypoint. Roads connect every district.</p>');
     c.onclick=e=>{const r=c.getBoundingClientRect(),p=worldPosition();G.waypoint={x:p.x+((e.clientX-r.left)/r.width*800-400)/1.65,y:p.y+((e.clientY-r.top)/r.height*480-240)/1.65,name:'WAYPOINT'};closePanel();};
     const g=section(root,'Nearby services');const used=new Set();for(const b of nearbyBuildings(125)){if(used.has(b.type))continue;used.add(b.type);if(!['store','guns','garage','clinic','safehouse'].includes(b.type))continue;card(g,b.name,Math.round(distance(worldPosition(),b.door))+' m','Track',()=>{G.waypoint={...b.door,name:b.name,id:b.id};closePanel();});}
-    const d=section(root,'Districts');for(const [name,x,y] of [['Neon District',82.5,46.5],['Ironworks',-97.5,46.5],['Pine Hills',82.5,-133.5],['Southside',82.5,226.5],['Sunset Coast',262.5,46.5]])card(d,name,G.discoveredDistricts.includes(name)?'Discovered':'Unexplored','Track',()=>{G.waypoint={x,y,name};closePanel();});
     if(G.waypoint)addButton(root,'Clear waypoint',()=>{G.waypoint=null;closePanel();},'wide');
   }
   function showHelp(initial=false,loaded=false){
@@ -1877,6 +1876,307 @@
     // Read-only diagnostics plus existing functions make deterministic browser QA possible.
     window.sliceCity={state:G,player,version:VERSION};
     showHelp(true,loaded);updateHUD();
+  }
+  // World expansion: 10 regions, 50 discoverable neighborhoods and landmarks.
+  const REGIONS=[
+    {name:'Metro Core',bx:2,by:1,kind:'city',tone:7,land:2,style:'metro',districts:['Neon District','Lantern Quarter','Glass Mile','Little Arcade','Old Town'],places:['Founders Market','Lantern Theater','Glass Exchange','Pixel Palace','Old City Museum']},
+    {name:'Iron Harbor',bx:-10,by:1,kind:'industrial',tone:4,land:3,style:'harbor',districts:['Ironworks','Crane Point','Dock Nine','Freight Row','Rust Island'],places:['Steel Foundry','Crane Control','Harbor Customs','Freight Terminal','Salvage HQ']},
+    {name:'Evergreen Range',bx:2,by:-11,kind:'hills',tone:6,land:11,style:'forest',districts:['Pine Hills','Fox Hollow','Cedar Lake','Ranger Valley','Fernwood'],places:['Ranger Lodge','Firewatch Station','Lakeside Retreat','Trail Center','Forest Archive']},
+    {name:'South County',bx:2,by:13,kind:'suburb',tone:0,land:26,style:'suburb',districts:['Southside','Maple Heights','Fairview','Orchard Run','County Line'],places:['County Fair','Maple Library','Fairview Mall','Orchard Market','County Depot']},
+    {name:'Sunset Riviera',bx:14,by:1,kind:'coast',tone:2,land:8,style:'coast',districts:['Sunset Coast','Lighthouse Point','Coral Quay','Palm Beach','Marina Walk'],places:['Ocean Pavilion','Lighthouse Station','Coral Aquarium','Beach Club','Marina Garage']},
+    {name:'Red Mesa',bx:-10,by:-11,kind:'industrial',tone:4,land:35,style:'desert',districts:['Dust Bowl','Coyote Pass','Solar Flats','Copper Canyon','Last Stop'],places:['Desert Trading Post','Coyote Observatory','Solar Control','Copper Mine Office','Last Stop Diner']},
+    {name:'Frostline',bx:14,by:-11,kind:'hills',tone:3,land:6,style:'snow',districts:['Summit Village','Whiteout Ridge','Glacier Reach','Alpine Run','Northstar'],places:['Summit Lodge','Weather Station','Glacier Lab','Alpine Rally HQ','Northstar Observatory']},
+    {name:'Blackwater Delta',bx:-10,by:13,kind:'hills',tone:8,land:26,style:'swamp',districts:['Blackwater','Mossbank','Reed Landing','Bayou Bend','Ghost Marsh'],places:['Delta Boathouse','Mossbank Clinic','Reed Trading Post','Bayou Radio','Marsh Research']},
+    {name:'Mirage Strip',bx:14,by:13,kind:'city',tone:0,land:8,style:'casino',districts:['Mirage Mile','Velvet Row','Gold Plaza','Carnival End','Starlight'],places:['Mirage Grand','Velvet Lounge','Golden Arcade','Carnival Hall','Starlight Theater']},
+    {name:'Orbital Coast',bx:26,by:1,kind:'industrial',tone:2,land:14,style:'spaceport',districts:['Launch District','Radar Fields','Hangar Quarter','Research Park','Skyport'],places:['Launch Control','Radar Observatory','Hangar Seven','Research Institute','Skyport Terminal']}
+  ];
+  const PLACE_TYPES=['museum','office','garage','arcade','observatory'];
+  const DESTINATIONS=REGIONS.flatMap((r,ri)=>[[0,-1],[0,-3],[3,0],[0,3],[-3,0]].map(([dx,dy],si)=>({id:ri+'-'+si,region:ri,sector:si,name:r.districts[si],place:r.places[si],bx:r.bx+dx,by:r.by+dy,x:(r.bx+dx)*BLOCK+10.5,y:(r.by+dy)*BLOCK+23.5,type:PLACE_TYPES[(ri+si)%5]})));
+  const destinationBlocks=new Map(DESTINATIONS.map(d=>[d.bx+','+d.by,d])),districtCache=new Map();
+  districtAt=function(x,y){
+    const bx=Math.floor(x/BLOCK),by=Math.floor(y/BLOCK),key=bx+','+by;
+    if(districtCache.has(key))return districtCache.get(key);
+    let index=0,best=Infinity;REGIONS.forEach((r,i)=>{const d=(bx-r.bx)**2+(by-r.by)**2;if(d<best){index=i;best=d;}});
+    const r=REGIONS[index],dx=bx-r.bx,dy=by-r.by;
+    const sector=Math.max(Math.abs(dx),Math.abs(dy))<2?0:Math.abs(dx)>Math.abs(dy)?dx>0?2:4:dy>0?3:1;
+    const result={...r,name:r.districts[sector],region:index,sector};
+    if(districtCache.size>5000)districtCache.clear();districtCache.set(key,result);return result;
+  };
+  Object.assign(TYPE_NAMES,{museum:'MUSEUM',arcade:'ARCADE',observatory:'OBSERVATORY'});
+  Object.assign(TYPE_ICONS,{museum:'A',arcade:'$',observatory:'*'});
+  G.stamps=[];G.collectibles=[];G.tunedCars={};G.travelled=[];G.eventTimer=0;G.event=null;
+  WEAPONS.push(
+    {name:'Heavy pistol',cost:1900,rank:5,damage:76,range:60,rate:.5,clip:8},
+    {name:'Machine pistol',cost:2600,rank:7,damage:29,range:48,rate:.085,clip:32},
+    {name:'Marksman rifle',cost:3800,rank:9,damage:115,range:105,rate:.7,clip:10},
+    {name:'Auto shotgun',cost:5200,rank:11,damage:86,range:30,rate:.29,clip:12}
+  );
+  VEHICLES.push(
+    {name:'Delivery van',cost:380,rank:1,speed:22,accel:10,grip:1.2,hp:190,theme:6,shape:'van'},
+    {name:'Dune buggy',cost:650,rank:2,speed:31,accel:18,grip:2.1,hp:160,theme:4,shape:'buggy'},
+    {name:'Taxi cab',cost:750,rank:2,speed:29,accel:14,grip:1.5,hp:165,theme:0,shape:'taxi'},
+    {name:'Roadster',cost:1800,rank:4,speed:40,accel:21,grip:1.9,hp:145,theme:5,shape:'sport'},
+    {name:'Chopper',cost:1400,rank:3,speed:38,accel:23,grip:2.2,hp:90,theme:9,shape:'bike'},
+    {name:'Armored van',cost:3500,rank:6,speed:27,accel:12,grip:1.3,hp:420,theme:3,shape:'van'},
+    {name:'Rally hatch',cost:2800,rank:5,speed:43,accel:24,grip:2.3,hp:220,theme:2,shape:'rally'},
+    {name:'Muscle V8',cost:4300,rank:7,speed:47,accel:25,grip:1.6,hp:210,theme:4,shape:'muscle'},
+    {name:'Stretch limo',cost:5200,rank:8,speed:39,accel:16,grip:1.1,hp:270,theme:8,shape:'limo'},
+    {name:'Monster truck',cost:6200,rank:9,speed:41,accel:22,grip:1.6,hp:520,theme:6,shape:'monster'},
+    {name:'Hyper GT',cost:8200,rank:10,speed:61,accel:32,grip:2.15,hp:190,theme:7,shape:'hyper'},
+    {name:'Prototype X',cost:12000,rank:12,speed:72,accel:36,grip:2.4,hp:260,theme:2,shape:'hyper'}
+  );
+  ['compact','bike','sedan','sport','pickup','sport'].forEach((s,i)=>VEHICLES[i].shape=s);
+  RANK_NAMES.push('Regional ace','Heavy hitter','Trailblazer','High roller','World legend','Unstoppable');
+  const priorGetBlock=getBlock;
+  getBlock=function(bx,by){
+    const block=priorGetBlock(bx,by);if(block.expanded)return block;block.expanded=true;
+    const d=districtAt(block.ox,block.oy);block.region=d.region;block.style=d.style;
+    if(['desert','spaceport'].includes(d.style))block.trees=[];
+    if(d.style==='snow')block.trees=block.trees.map(t=>({...t,snow:true}));
+    for(const b of block.structures){b.theme=d.tone;if(d.style==='casino'){b.height*=1.25;b.sign=true;b.signZ=4;}if(d.style==='spaceport'){b.height=14;b.roof=2;b.crown=3;}}
+    const landmark=destinationBlocks.get(bx+','+by);
+    if(landmark){
+      const b=makeBuilding(block.ox,block.oy,14,15,33,33,landmark.type==='observatory'?25:landmark.type==='museum'?18:12,d.tone,block.seed);
+      b.id=bx+','+by+',0';b.type=landmark.type;b.name=landmark.place.toUpperCase();b.door={x:b.x0-.78,y:(b.y0+b.y1)/2};b.block=block;b.landmark=landmark.id;b.sign=true;b.signZ=4;
+      block.structures=[b];block.kind='city';block.trees=block.trees.filter(t=>t.x<block.ox+12||t.y<block.oy+12);
+    }
+    return block;
+  };
+  const priorGround=groundGlyph;
+  groundGlyph=function(x,y,distance){
+    if(G.interior)return priorGround(x,y,distance);
+    const zone=districtAt(x,y),lx=mod(x,BLOCK),ly=mod(y,BLOCK);
+    if(lx>=LOT&&ly>=LOT){const h=hash3(Math.floor(x),Math.floor(y),6);return styleCode(zone.style==='snow'?'*.,'[h%3]:zone.style==='desert'?':.,'[h%3]:zone.style==='swamp'?'~;,'[h%3]:zone.style==='coast'?'~..'[h%3]:zone.kind==='hills'?';,*'[h%3]:'.:',fadeGroundColor(zone.land,distance));}
+    return base_groundGlyph(x,y,distance);
+  };
+  const priorRoom=makeRoom;
+  makeRoom=function(b){
+    const room=priorRoom(b);
+    if(b.landmark){room.points.push({x:8,y:8,z:1.8,label:'DISCOVER',icon:'*',kind:'landmark',color:10,landmark:b.landmark});
+      room.points.push({x:10,y:10,z:1.7,label:'TRANSIT',icon:'T',kind:'transit',color:16});
+      if(b.type==='museum')for(const x of [5,9,13])room.boxes.push(roomBox(x,6,x+1,7,.9,0,true));
+    }
+    return room;
+  };
+  const priorEnter=enterBuilding;
+  enterBuilding=function(b){priorEnter(b);if(G.interior?.id===b.id){G.interior.landmark=b.landmark||null;G.interior.name=b.name;}};
+  const priorInteract=interact;
+  interact=function(){
+    if(G.panel||!G.started)return;
+    const c=chooseContext();
+    if(c?.kind==='landmark'){
+      const dest=DESTINATIONS.find(d=>d.id===c.landmark);if(G.stamps.includes(c.landmark)){toast('Already discovered · '+dest.place);showAtlas(dest.region);return;}
+      G.stamps.push(c.landmark);earn(90+dest.region*10,35,dest.place+' discovered');return;
+    }
+    if(c?.kind==='transit'){showAtlas();return;}
+    priorInteract();
+  };
+  const priorSave=saveGame;
+  saveGame=function(){
+    priorSave();try{const s=JSON.parse(localStorage.getItem(SAVE_KEY));if(s){s.expansion={stamps:G.stamps,collectibles:G.collectibles,tunedCars:G.tunedCars};localStorage.setItem(SAVE_KEY,JSON.stringify(s));}}catch(e){}
+  };
+  const priorLoad=loadGame;
+  loadGame=function(){const result=priorLoad();try{const ex=JSON.parse(localStorage.getItem(SAVE_KEY)||'null')?.expansion;if(ex){G.stamps=ex.stamps||[];G.collectibles=ex.collectibles||[];G.tunedCars=ex.tunedCars||{};}}catch(e){}return result;};
+  function destinationBuilding(dest){return getBlock(dest.bx,dest.by).structures[0];}
+  function trackDestination(dest){const b=destinationBuilding(dest);G.waypoint={...b.door,name:dest.place,id:b.id};closePanel();}
+  function fastTravel(dest){
+    if(G.heat>0){toast('Lose your wanted level before taking transit.');return;}
+    if(G.job){toast('Finish or abandon your job before taking transit.');return;}
+    if(!G.stamps.includes(dest.id)){toast('Discover this landmark first.');return;}
+    const cost=Math.max(15,Math.round(distance(worldPosition(),dest)/25));if(!spend(cost))return;
+    if(G.vehicle)G.vehicle.speed=0;G.vehicle=null;G.interior=null;G.room=null;G.npcs=G.npcs.filter(n=>!n.job);G.spawned.clear();
+    const b=destinationBuilding(dest);player.x=b.door.x;player.y=b.door.y;player.yaw=Math.PI;sceneCache=null;G.waypoint=null;spawnLocal();closePanel();toast('Arrived · '+dest.name);
+  }
+  function showAtlas(region=null){
+    const root=panel(region===null?'World atlas':REGIONS[region].name,G.stamps.length+'/50 LANDMARKS · '+G.discoveredDistricts.length+'/50 DISTRICTS');
+    if(region===null){root.innerHTML='<p>Ten regions. Fifty districts. Discover a landmark inside each district to collect cash, reputation, and a transit stop.</p>';
+      const grid=section(root,'Choose a region');REGIONS.forEach((r,i)=>card(grid,r.name,r.districts.join(' · '),'Explore region',()=>showAtlas(i)));
+    }else{const grid=section(root,'District landmarks');for(const d of DESTINATIONS.filter(d=>d.region===region)){
+      const found=G.stamps.includes(d.id),c=card(grid,d.name,d.place+(found?' · discovered':' · undiscovered'),'Set route',()=>trackDestination(d));
+      if(found)addButton(c,'Transit $'+Math.max(15,Math.round(distance(worldPosition(),d)/25)),()=>fastTravel(d));
+    }addButton(root,'All regions',()=>showAtlas(),'wide');}
+    addButton(root,'Local street map',showMap,'wide');
+  }
+  const priorOffers=jobOffers;
+  jobOffers=function(){
+    const offers=priorOffers(),p=worldPosition(),d=districtAt(p.x,p.y),bx=Math.floor(p.x/BLOCK)*BLOCK,by=Math.floor(p.y/BLOCK)*BLOCK;
+    const next=DESTINATIONS[((d.region+1+G.jobSerial%3)%10)*5];
+    const points=[{x:bx+10.5,y:by+46.5,name:'CRATE 1'},{x:bx+82.5,y:by+46.5,name:'CRATE 2'},{x:bx+82.5,y:by+82.5,name:'CRATE 3'}];
+    const stops=DESTINATIONS.filter(t=>t.region===d.region).slice(0,3).map(t=>({x:t.x,y:t.y,name:t.place}));
+    return offers.concat([
+      {kind:'salvage',name:'Supply sweep',description:'Collect three marked supply crates on foot.',pay:230+rank()*15,xp:50,target:points[0],points,stage:0},
+      {kind:'tour',name:'Landmark circuit',description:'Visit three landmarks in this region. Any vehicle or on foot.',pay:260+rank()*20,xp:65,target:stops[0],points:stops,stage:0},
+      {kind:'courier',name:'Regional express',description:'Deliver a sealed package to '+next.name+' in 180 seconds.',pay:420+rank()*30,xp:80,target:{x:next.x,y:next.y,name:next.place},timer:180},
+      {kind:'repo',name:'Recovery driver',description:'Recover a marked vehicle and return it intact to the depot.',pay:300+rank()*25,xp:65,pickup:{x:bx+4.5,y:by+56,name:'RECOVER VEHICLE'},target:{x:bx+4.5,y:by+56,name:'RECOVER VEHICLE'},drop:{x:bx+118.5,y:by+10.5,name:'RETURN VEHICLE'},stage:0,carType:rank()>2?2:0},
+      {kind:'escape',name:'Heat run',description:'A wanted challenge: evade a two-star pursuit, then reach the safe drop.',pay:370+rank()*25,xp:75,target:{x:bx+154.5,y:by+154.5,name:'SAFE DROP'},begun:false}
+    ]);
+  };
+  function spawnRecoveryCar(){const j=G.job;if(j?.kind!=='repo')return;const id='recovery-'+G.jobSerial;G.cars=G.cars.filter(c=>c.id!==id);G.cars.push({id,x:j.pickup.x,y:j.pickup.y,angle:Math.PI/2,type:j.carType,hp:VEHICLES[j.carType].hp,speed:0,owned:false,mission:true});}
+  const priorAccept=acceptJob;
+  acceptJob=function(offer){const allowed=!G.job;priorAccept(offer);if(!allowed)return;if(offer.kind==='repo')spawnRecoveryCar();if(offer.kind==='escape'){crime(40);G.job.begun=true;}saveGame();};
+  const priorAdvance=advanceJob;
+  advanceJob=function(dt){
+    priorAdvance(dt);const j=G.job;if(!j)return;
+    if(j.kind==='courier'){j.timer-=dt;if(j.timer<=0){G.job=null;toast('Express delivery expired.');return;}if(!G.interior&&distance(player,j.target)<7)finishJob();}
+    if(['salvage','tour'].includes(j.kind)&&!G.interior&&distance(player,j.target)<(j.kind==='salvage'?3.5:7)&&!(j.kind==='salvage'&&G.vehicle)){
+      j.stage++;sound(800,.1,'triangle');if(j.stage===j.points.length){finishJob();return;}j.target=j.points[j.stage];toast((j.kind==='salvage'?'Crate collected':'Stop reached')+' · '+j.stage+'/'+j.points.length);saveGame();
+    }
+    if(j.kind==='repo'){
+      const id='recovery-'+G.jobSerial,c=G.cars.find(c=>c.id===id);
+      if(c?.hp<=0){G.job=null;toast('Recovery failed · vehicle destroyed');return;}
+      if(G.vehicle?.id===id){j.stage=1;j.target=j.drop;if(distance(player,j.drop)<7&&Math.abs(G.vehicle.speed)<3){G.vehicle.owned=true;G.vehicle.mission=false;finishJob();}}
+      else if(j.stage===1&&c){j.target={x:c.x,y:c.y,name:'RETURN TO VEHICLE'};}
+    }
+    if(j.kind==='escape'&&G.heat===0&&!G.interior&&distance(player,j.target)<7)finishJob();
+  };
+  const priorDescription=jobDescription;
+  jobDescription=function(){
+    const j=G.job;if(!j)return'';
+    if(j.kind==='courier')return 'Regional drop · '+Math.ceil(j.timer)+' seconds';
+    if(j.kind==='salvage')return 'Collect crates on foot · '+j.stage+'/3';
+    if(j.kind==='tour')return 'Visit landmarks · '+j.stage+'/3';
+    if(j.kind==='repo')return j.stage?'Return marked vehicle · stop at depot':'Enter the marked recovery vehicle';
+    if(j.kind==='escape')return G.heat>0?'Lose your wanted level':'Reach the safe drop';
+    return priorDescription();
+  };
+  const priorExpandLoad=loadGame;
+  loadGame=function(){const ok=priorExpandLoad();if(G.job?.kind==='repo'){G.job.stage=0;G.job.target=G.job.pickup;spawnRecoveryCar();}if(G.job?.kind==='escape'&&G.job.begun)crime(40);return ok;};
+  const priorDiscovery=discover;
+  discover=function(){
+    priorDiscovery();
+    for(const [goal,cash,xp] of [[10,500,70],[25,1200,120],[50,3000,240]]){const id='explorer'+goal;if(G.discoveredDistricts.length>=goal&&!G.achievements.includes(id)){G.achievements.push(id);earn(cash,xp,goal+' districts explored');}}
+    for(const [goal,cash] of [[10,700],[25,1800],[50,5000]]){const id='stamps'+goal;if(G.stamps.length>=goal&&!G.achievements.includes(id)){G.achievements.push(id);earn(cash,100,goal+' landmarks collected');}}
+  };
+  const priorSpawns=spawnLocal;
+  spawnLocal=function(){
+    const old=new Set(G.cars.map(c=>c.id));priorSpawns();if(G.interior)return;
+    for(const c of G.cars){if(old.has(c.id)||c.owned||c.mission)continue;const d=districtAt(c.x,c.y),h=hash3(Math.floor(c.x),Math.floor(c.y),51);
+      const pool=d.style==='desert'?[0,7,4,15]:d.style==='snow'?[0,4,12,15]:d.style==='spaceport'?[0,6,11,17]:d.style==='casino'?[0,8,9,14,16]:d.style==='harbor'?[0,6,4,11]:[0,0,1,2,3,6,8,10,13];
+      c.type=pool[h%pool.length];c.hp=VEHICLES[c.type].hp;
+      // Keep the first neighborhood stocked with genuinely free, usable rides.
+      if(distance(c,{x:78.3,y:56})<35){c.type=0;c.hp=100;}
+    }
+  };
+  const priorGarage=showGarage;
+  showGarage=function(){
+    priorGarage();const root=$('panelBody'),grid=section(root,'Performance workshop');
+    const i=G.vehicle?.type??G.ownedCars[G.ownedCars.length-1],v=VEHICLES[i],tier=G.tunedCars[i]||0;
+    card(grid,v.name+' · tier '+tier+'/3','Each tier: +8% top speed and +12% acceleration.',tier===3?'Fully tuned':'Tune $'+(250*(tier+1)),()=>{if(tier<3&&spend(250*(tier+1))){G.tunedCars[i]=tier+1;saveGame();showGarage();}},tier===3);
+    addButton(root,'World atlas · explore all regions',()=>showAtlas(),'wide');
+  };
+  const priorDrive=drive;
+  drive=function(dt){const c=G.vehicle;if(!c)return;const v=VEHICLES[c.type],speed=v.speed,accel=v.accel,tier=G.tunedCars[c.type]||0;try{v.speed*=1+tier*.08;v.accel*=1+tier*.12;priorDrive(dt);}finally{v.speed=speed;v.accel=accel;}};
+  const priorDetails=renderStreetDetails;
+  renderStreetDetails=function(blocks,...args){
+    priorDetails(blocks,...args);
+    for(const b of blocks){
+      const x=b.ox+10.6,y=b.oy+30;if(Math.hypot(x-player.x,y-player.y)>65)continue;
+      const style=b.style;
+      if(style==='desert'){
+        lineWorld(x,y,0,x,y,3.5,'#',13,...args,3);lineWorld(x,y,1.8,x+.9,y,1.8,'=',13,...args,4);lineWorld(x+.9,y,1.8,x+.9,y,2.8,'|',13,...args,4);
+      }else if(style==='spaceport'){
+        lineWorld(x,y,0,x,y,4,'|',7,...args,3);for(let a=0;a<TAU;a+=.28)point3D(x+Math.cos(a)*1.5,y+Math.sin(a)*1.5,4.5-Math.sin(a)*.6,'#',16,...args,-.05);
+      }else if(style==='coast'){
+        lineWorld(x,y,0,x+.7,y,5,'|',37,...args,3);for(let a=0;a<TAU;a+=Math.PI/3)lineWorld(x+.7,y,5,x+.7+Math.cos(a)*2.5,y+Math.sin(a)*2.5,4.3,'*',28,...args,3);
+      }else if(style==='casino'){
+        label3D(x,y,3,'$$$',10,args);lineWorld(x,y,0,x,y,2.8,'|',31,...args,3);
+      }else if(style==='swamp'){
+        for(let i=0;i<5;i++)lineWorld(x+i*.3,y,0,x+i*.3,y,1.2+(i%3)*.3,';',28,...args,3);
+      }
+      const dest=destinationBlocks.get(b.bx+','+b.by);
+      if(dest){const door=b.structures[0]?.door;if(door)label3D(door.x-1,door.y,4.5,G.stamps.includes(dest.id)?'[DISCOVERED]':'[* LANDMARK]',10,args);}
+    }
+  };
+  const priorTree=renderTree;
+  renderTree=function(tree,...args){priorTree(tree,...args);if(tree.snow){for(let i=0;i<8;i++){const a=i/8*TAU;point3D(tree.x+Math.cos(a)*1.5,tree.y+Math.sin(a)*1.5,5.2,'*',7,...args,-.06);}}};
+  const priorRecoveryLoad=loadGame;
+  loadGame=function(){const ok=priorRecoveryLoad(),j=G.job;if(j&&['delivery','recovery'].includes(j.kind)){
+    const b=buildingById(j.target.id)||nearbyBuildings(125)[0];if(b)j.target={id:b.id,name:b.name,x:b.door.x,y:b.door.y};else G.job=null;
+  }return ok;};
+  // Filled glyph triangles: perspective depth, occlusion and per-face shading.
+  function glyphTriangle(a,b,c,color,char){
+    if(!a||!b||!c)return;
+    const ax=a.column,ay=a.row,bx=b.column,by=b.row,cx=c.column,cy=c.row;
+    const area=(bx-ax)*(cy-ay)-(by-ay)*(cx-ax);if(Math.abs(area)<.2)return;
+    const x0=Math.max(0,Math.floor(Math.min(ax,bx,cx))),x1=Math.min(columns-1,Math.ceil(Math.max(ax,bx,cx)));
+    const y0=Math.max(0,Math.floor(Math.min(ay,by,cy))),y1=Math.min(rows-1,Math.ceil(Math.max(ay,by,cy)));
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+      const u=((bx-x)*(cy-y)-(by-y)*(cx-x))/area;
+      const v=((cx-x)*(ay-y)-(cy-y)*(ax-x))/area,w=1-u-v;
+      if(u>=-.015&&v>=-.015&&w>=-.015){const inv=u/a.depth+v/b.depth+w/c.depth;if(inv>0)put(x,y,char,color,1/inv-.045);}
+    }
+  }
+  renderVehicle=function(c,args){
+    const dist=distance(c,player);if(dist>105)return;
+    const v=VEHICLES[c.type],shape=v.shape||'sedan',pal=THEMES[c.hp>0?v.theme:9];
+    if(dist>75){label3D(c.x,c.y,.7,'[=#=]',pal[2],args);return;}
+    const co=Math.cos(c.angle),si=Math.sin(c.angle);
+    const world=(x,y,z)=>[c.x+co*x-si*y,c.y+si*x+co*y,z];
+    const proj=(x,y,z)=>{const p=world(x,y,z),dx=p[0]-player.x,dy=p[1]-player.y,f=dx*args[0]+dy*args[1],side=-dx*args[1]+dy*args[0],dz=z-CAMERA_HEIGHT,depth=f*args[2]+dz*args[3];if(depth<.08)return null;const px=inverseBarrel(side/(depth*TAN_HALF_FOV)),py=-(-f*args[3]+dz*args[2])/(depth*tanHalfVertical)+BARREL*.20*px*px;return{column:(px+1)*.5*columns-.5,row:(py+1)*.5*rows-.5,depth};};
+    const quad=(p,color,char='#')=>{const q=p.map(t=>proj(...t));glyphTriangle(q[0],q[1],q[2],color,char);glyphTriangle(q[0],q[2],q[3],color,char);};
+    const box=(x0,y0,z0,x1,y1,z1,colors=pal,ch='#')=>{
+      quad([[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]],colors[1],ch);
+      quad([[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]],colors[2],ch);
+      quad([[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]],colors[1],ch);
+      quad([[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1]],colors[2],ch);
+      quad([[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],colors[2],'=');
+    };
+    const line=(p,q,char,color)=>lineWorld(...world(...p),...world(...q),char,color,...args,5);
+    const wheel=(x,y,z,r)=>{
+      const points=[];for(let i=0;i<10;i++){const a=i/10*TAU;points.push([x+Math.cos(a)*r,y,z+Math.sin(a)*r]);}
+      const center=proj(x,y,z),q=points.map(p=>proj(...p));for(let i=0;i<10;i++)glyphTriangle(center,q[i],q[(i+1)%10],5,'@');
+      quad([[x-r*.4,y-.015,z-r*.4],[x+r*.4,y-.015,z-r*.4],[x+r*.4,y-.015,z+r*.4],[x-r*.4,y-.015,z+r*.4]],7,'O');
+    };
+    if(shape==='bike'){
+      box(-.9,-.24,.4,.8,.24,.72);box(-.65,-.2,.7,.2,.2,.95,[3,5,6]);
+      for(const x of [-1.05,1.05]){wheel(x,-.2,.38,.38);wheel(x,.2,.38,.38);}
+      line([.8,0,.5],[.55,0,1.45],'|',7);line([.55,-.48,1.45],[.55,.48,1.45],'=',7);line([-.2,0,.6],[.8,0,.45],'#',pal[2]);
+      box(.83,-.16,.92,.98,.16,1.14,[10,10,7]);return;
+    }
+    let length=2.3,width=.98,base=.42,roof=1.62;
+    if(shape==='compact'){length=2.05;roof=1.48;}
+    if(['sport','hyper'].includes(shape)){length=2.6;width=1.05;roof=1.28;}
+    if(shape==='muscle'){length=2.7;roof=1.45;}
+    if(shape==='van'){length=2.7;width=1.12;roof=2.35;}
+    if(shape==='limo'){length=3.65;roof=1.6;}
+    if(shape==='pickup'){length=2.65;width=1.1;roof=1.9;base=.56;}
+    if(shape==='monster'){length=2.7;width=1.25;roof=2.35;base=.98;}
+    if(shape==='buggy'){length=1.9;width=1.05;roof=1.65;base=.52;}
+    const bodyTop=shape==='monster'?1.52:base+.65;
+    quad([[-length-.25,-width-.3,.035],[length+.25,-width-.3,.035],[length+.25,width+.3,.035],[-length-.25,width+.3,.035]],1,'.');
+    box(-length,-width,base,length,width,bodyTop,[pal[0],pal[2],pal[2]],'#');
+    const rear=shape==='limo'?-2.3:shape==='van'?-2.4:shape==='pickup'||shape==='monster'?-.25:-1.25;
+    const front=shape==='van'?1.65:1.0;
+    const topFront=shape==='van'?front:front-.55,topRear=shape==='van'?rear:rear+.4;
+    for(const side of [-1,1]){
+      const y=side*width*.84;
+      quad([[rear,y,bodyTop],[front,y,bodyTop],[topFront,y,roof],[topRear,y,roof]],pal[1],'%');
+      quad([[rear+.16,y+side*.01,bodyTop+.1],[front-.12,y+side*.01,bodyTop+.1],[topFront-.06,y+side*.01,roof-.1],[topRear+.12,y+side*.01,roof-.1]],19,':');
+      line([-.1,y+side*.025,bodyTop],[0,y+side*.025,roof],'|',7);
+    }
+    quad([[topRear,-width*.84,roof],[topFront,-width*.84,roof],[topFront,width*.84,roof],[topRear,width*.84,roof]],pal[2],'=');
+    quad([[front,-width*.84,bodyTop],[front,width*.84,bodyTop],[topFront,width*.84,roof],[topFront,-width*.84,roof]],16,':');
+    quad([[rear,-width*.84,bodyTop],[rear,width*.84,bodyTop],[topRear,width*.84,roof],[topRear,-width*.84,roof]],15,':');
+    if(shape==='pickup'||shape==='monster')box(-length+.15,-width+.12,bodyTop+.03,-.4,width-.12,bodyTop+.08,[3,3,5],'=');
+    const tire=shape==='monster'?.72:shape==='buggy'?.5:.43,z=tire;
+    for(const x of [-length*.65,length*.64])for(const side of [-1,1])wheel(x,side*(width+.045),z,tire);
+    // Bumpers, white headlights and red tail lamps anchor the silhouette.
+    box(length,-width,.5,length+.1,width,.66,[5,7,7]);
+    for(const side of [-1,1]){
+      box(length+.11,side*.7-.17,.76,length+.15,side*.7+.17,1.0,[7,10,7]);
+      box(-length-.07,side*.7-.18,.76,-length-.025,side*.7+.18,.96,[24,25,25]);
+      line([-length,side*width,bodyTop],[length,side*width,bodyTop],'=',7);
+    }
+    if(['sport','hyper','rally'].includes(shape))box(-length-.12,-width-.12,bodyTop+.35,-length+.15,width+.12,bodyTop+.45,[5,pal[2],7]);
+    if(shape==='taxi'){box(-.3,-.4,roof,.3,.4,roof+.25,[8,10,10]);label3D(c.x,c.y,roof+.55,'TAXI',10,args);}
+    if(shape==='buggy'){for(const y of [-.6,.6])line([-.8,y,bodyTop],[0,y,roof+.1],'#',7);}
+    if(shape==='hyper'){line([-length*.7,0,bodyTop+.04],[length,0,bodyTop+.04],'=',7);}
+  };
+
+  function vehicleBlocked(c,x,y){
+    const shape=VEHICLES[c.type].shape,half=shape==='bike'?.95:shape==='limo'?3.1:2.05,width=shape==='bike'?.24:.8,co=Math.cos(c.angle),si=Math.sin(c.angle);
+    for(const [a,b] of [[0,0],[-half,-width],[-half,width],[half,-width],[half,width]])if(base_blocked(x+co*a-si*b,y+si*a+co*b))return true;
+    return false;
   }
 
   initializeGame();
