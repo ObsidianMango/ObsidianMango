@@ -43,6 +43,15 @@
 <div class="crosshair" id="crosshair">+</div><div id="compass"></div><div class="readout" id="readout"></div><div class="context" id="context"></div><div class="toast" id="toast" role="status"></div><pre id="weaponArt"></pre><div class="critical" id="critical"></div>
 <div class="toolbar"><button id="mapButton">MAP <small>M</small></button><button id="bagButton">BAG <small>I</small></button><button id="jobsButton">JOBS <small>J</small></button><button id="helpButton">MENU <small>ESC</small></button></div>
 <div class="panel-shade" id="shade" hidden><section class="panel" role="dialog" aria-modal="true" aria-labelledby="panelTitle"><header><div><div class="eyebrow" id="panelKicker">SLICE CITY II</div><h1 id="panelTitle"></h1></div><button id="closePanel" aria-label="Close panel">×</button></header><div class="panel-body" id="panelBody"></div></section></div>
+<style>
+@media(max-width:760px),(pointer:coarse){
+ .toolbar{top:calc(max(12px,env(safe-area-inset-top)) + 114px);bottom:auto;left:auto;right:12px;transform:none;display:grid;grid-template-columns:44px 44px;gap:4px}
+ .toolbar button{padding:8px 3px;font-size:9px}.toolbar button small{display:none}
+ .mission{width:calc(100vw - 126px);max-width:300px}
+ .context{bottom:158px}.readout{bottom:205px}
+}
+@media(max-height:500px){.toolbar{top:12px;left:50%;right:auto;bottom:auto;transform:translateX(-50%);display:flex}.mission{width:240px}.context{bottom:85px}.readout{bottom:145px}}
+</style>
 
   <script>
   "use strict";
@@ -1597,6 +1606,7 @@
     if(l.kind==='ammo')G.ammo+=l.amount;
     if(l.kind==='medkit')G.medkits++;
     if(l.kind==='crowbar'){if(!G.owned.includes(1))G.owned.push(1);G.weapon=1;}
+    if(l.kind==='pistol'){if(!G.owned.includes(2))G.owned.push(2);G.weapon=2;G.mag[2]=12;}
     G.loot=G.loot.filter(x=>x!==l);toast(l.kind==='cash'?'+$'+l.amount:l.kind==='ammo'?'+'+l.amount+' rounds':l.kind+' collected');sound(670,.07,'triangle');
   }
   function lineClear(a,b){
@@ -1614,7 +1624,7 @@
   function reloadWeapon(){const w=WEAPONS[G.weapon];if(G.reload||!w.clip)return;if((G.mag[G.weapon]||0)>=w.clip)return;if(G.ammo<=0){toast('Out of reserve ammo. Visit Iron & Ammo.');return;}G.reload=1.2;toast('Reloading…');}
   function shoot(){
     if(G.panel||!G.started||G.shot>0||G.reload>0)return;
-    if(G.vehicle){sound(110,.18,'sawtooth');G.npcs.forEach(n=>{if(distance(n,player)<14)n.panic=2;});return;}
+    if(G.vehicle){G.shot=.8;sound(110,.18,'sawtooth');G.npcs.forEach(n=>{if(distance(n,player)<14)n.panic=2;});return;}
     const w=WEAPONS[G.weapon];if(w.clip&&(G.mag[G.weapon]||0)<=0){reloadWeapon();G.shot=.25;return;}
     if(w.clip)G.mag[G.weapon]--;G.shot=w.rate;G.flash=.12;sound(w.clip?90:180,w.clip?.13:.08,'sawtooth',.045);
     if(w.clip&&!G.interior)crime(5);
@@ -1636,6 +1646,7 @@
   function damageNPC(n,damage){
     n.hp-=damage;n.panic=6;if(n.kind==='civilian')crime(25);else if(n.kind==='cop')crime(20);
     if(n.hp<=0){n.deadTime=16;G.totalKills++;G.cleared[n.id]=G.clock;G.loot.push({x:n.x,y:n.y,id:n.id+'drop',kind:n.kind==='civilian'?'cash':'ammo',amount:n.kind==='civilian'?8+Math.floor(Math.random()*20):12});
+      if(n.kind==='gang'&&!G.owned.includes(2))G.loot.push({x:n.x+.8,y:n.y,id:n.id+'gun',kind:'pistol',amount:1});
       if(n.kind==='civilian')crime(20);
       if(n.job&&G.job?.kind==='bounty'){G.job.kills++;if(G.job.kills>=3)finishJob();}
     }
@@ -1722,24 +1733,41 @@
     if(d<18&&n.kind!=='civilian')label3D(n.x,n.y,2.8,n.kind==='cop'?'POLICE':n.job?'TARGET':'GANG',color,args);
     if(n.firing>0)label3D(n.x,n.y,1.3,'*',10,args);
   }
+  function renderVehicle(c,args){
+    const color=VEHICLES[c.type].theme,dx=Math.cos(c.angle),dy=Math.sin(c.angle);
+    if(c.type===1&&c.hp>0){
+      for(const sign of [-1,1]){point3D(c.x+dx*sign*.65,c.y+dy*sign*.65,.28,'O',7,...args,-.08);}
+      lineWorld(c.x-dx*.6,c.y-dy*.6,.45,c.x+dx*.6,c.y+dy*.6,.6,'=',28,...args,6);
+      lineWorld(c.x+dx*.6,c.y+dy*.6,.4,c.x+dx*.6,c.y+dy*.6,1.1,'|',7,...args,5);
+      lineWorld(c.x-dy*.45,c.y+dx*.45,.65,c.x+dy*.45,c.y-dx*.45,.65,'=',28,...args,5);
+    }else{
+      renderCar(c.x,c.y,c.angle,c.hp>0?color:9,...args);
+      if(c.type===4)for(const z of [1.2,1.5])lineWorld(c.x-dx*.8,c.y-dy*.8,z,c.x+dx*.5,c.y+dy*.5,z,'#',10,...args,5);
+      if(c.type===3||c.type===5)lineWorld(c.x-dx*1.45-dy*.8,c.y-dy*1.45+dx*.8,.95,c.x-dx*1.45+dy*.8,c.y-dy*1.45-dx*.8,.95,'=',THEMES[color][2],...args,5);
+      if(c.hp<=0)label3D(c.x,c.y,1,'xxx',4,args);
+    }
+  }
   function renderWorld(time){
     clearBuffers();const args=[Math.cos(player.yaw),Math.sin(player.yaw),Math.cos(player.pitch),Math.sin(player.pitch)];const scene=gatherScene();
     if(!G.interior)renderSky(time,0,args[2],args[3]);
     else{for(let r=0;r<rows/2;r+=3)for(let c=0;c<columns;c+=4)put(c,r,'.',2,180);}
     renderGround(...args);renderBuildings(scene.buildings,...args);
     if(G.interior){
+      for(const b of G.room.boxes.filter(b=>b.furniture))for(let x=b.x0;x<=b.x1;x+=.35)for(let y=b.y0;y<=b.y1;y+=.35)point3D(x,y,b.height,'=',THEMES[b.theme][1],...args,-.05);
       for(const p of G.room.points){label3D(p.x,p.y,p.z,p.icon, p.color,args);label3D(p.x,p.y,p.z+.55,p.label,p.color,args);}
       if(['store','guns','diner','bar','clinic','garage','office'].includes(G.interior.type)){
         drawPerson({x:14,y:4.5,hp:100,kind:'civilian',theme:6},args);
         label3D(12.1,4.5,2.8,G.interior.name,13,args);
-        for(let x=4.2;x<8;x+=.65)for(const z of [.5,1,1.6])point3D(x,3.6,z,'#',G.interior.type==='guns'?7:10,...args,-.1);
+        for(let x=4.2;x<8;x+=.45)for(const z of [.5,1,1.6])point3D(x,3.6,z,G.interior.type==='guns'?'T':'#',G.interior.type==='guns'?7:10+3*(Math.floor(x*7)%4),...args,-.1);
+        if(G.interior.type==='garage')renderCar(8,9,0,4,...args);
+        if(G.interior.type==='clinic')label3D(17.7,8,2.8,'[ + ]',28,args);
       }
     }else{
       renderStreetDetails(scene.blocks,...args);
       for(const tree of scene.trees)renderTree(tree,...args);
       for(const block of scene.blocks)renderLamp(block,...args);
       renderAntennas(scene.buildings,...args);
-      for(const c of G.cars){if(c===G.vehicle)continue;renderCar(c.x,c.y,c.angle,c.hp>0?VEHICLES[c.type].theme:9,...args);if(distance(c,player)<15)label3D(c.x,c.y,1.75,c.hp<=0?'WRECK':VEHICLES[c.type].name.toUpperCase(),c.hp<=0?5:16,args);}
+      for(const c of G.cars){if(c===G.vehicle)continue;renderVehicle(c,args);if(distance(c,player)<15)label3D(c.x,c.y,1.75,c.hp<=0?'WRECK':VEHICLES[c.type].name.toUpperCase(),c.hp<=0?5:16,args);}
       for(const n of G.npcs)drawPerson(n,args);
       for(const l of G.loot)label3D(l.x,l.y,.6+Math.sin(time*3)*.1,l.kind==='cash'?'$':l.kind==='crowbar'?'L':'+',13,args);
       const nearby=scene.buildings.filter(b=>b.door&&distance(player,b.door)<48).sort((a,b)=>distance(player,a.door)-distance(player,b.door));
@@ -1775,10 +1803,10 @@
     $('district').textContent=G.interior?G.interior.name:districtAt(player.x,player.y).name.toUpperCase();
     const stars=Math.ceil(G.heat/20);$('wanted').textContent=stars?'★'.repeat(stars)+' · '+(G.crimeTimer>0?'WANTED':'EVADE'):'☆ ☆ ☆ ☆ ☆';
     const m=$('mission');
-    if(G.job){m.innerHTML='<b>'+G.job.name.toUpperCase()+'</b><small>'+jobDescription()+'</small>';}
-    else if(G.waypoint){m.innerHTML='<b>'+G.waypoint.name+'</b><small>Follow the gold marker · '+Math.round(distance(worldPosition(),G.waypoint))+' m</small>';}
+    if(G.waypoint){m.innerHTML='<b>'+G.waypoint.name+'</b><small>Follow the gold marker · '+Math.round(distance(worldPosition(),G.waypoint))+' m</small>';}
+    else if(G.job){m.innerHTML='<b>'+G.job.name.toUpperCase()+'</b><small>'+jobDescription()+'</small>';}
     else m.innerHTML='<b>'+(G.completed?'FREE ROAM':'FIND YOUR FIRST JOB')+'</b><small>'+(G.completed?'Find ! contacts · explore · build your collection':'Talk to a yellow ! contact or enter a shop')+'</small>';
-    const w=WEAPONS[G.weapon];$('readout').innerHTML=G.vehicle?'<strong>'+VEHICLES[G.vehicle.type].name.toUpperCase()+'</strong><br>'+Math.round(Math.abs(G.vehicle.speed)*3.6)+' km/h · '+Math.ceil(G.vehicle.hp)+'% condition<br>BOOST '+Math.ceil(G.stamina)+'%':'<strong>'+w.name.toUpperCase()+'</strong><br>'+(G.reload>0?'RELOADING':w.clip?(G.mag[G.weapon]||0)+' / '+G.ammo+' rounds':'MELEE')+' · '+Math.ceil(G.stamina)+'% stamina'+(G.armor>0?'<br>'+Math.ceil(G.armor)+' armor':'');
+    const w=WEAPONS[G.weapon];$('readout').innerHTML=G.vehicle?'<strong>'+VEHICLES[G.vehicle.type].name.toUpperCase()+'</strong><br>'+Math.round(Math.abs(G.vehicle.speed)*3.6)+' km/h · '+Math.ceil(G.vehicle.hp/VEHICLES[G.vehicle.type].hp*100)+'% condition<br>BOOST '+Math.ceil(G.stamina)+'%':'<strong>'+w.name.toUpperCase()+'</strong><br>'+(G.reload>0?'RELOADING':w.clip?(G.mag[G.weapon]||0)+' / '+G.ammo+' rounds':'MELEE')+' · '+Math.ceil(G.stamina)+'% stamina'+(G.armor>0?'<br>'+Math.ceil(G.armor)+' armor':'');
     G.activeContext=chooseContext();$('context').hidden=!G.activeContext;$('context').textContent=G.activeContext?(coarsePointer?'USE · ':'[E] ')+G.activeContext.label:'';
     $('useButton').textContent=G.vehicle?'EXIT':G.activeContext?G.activeContext.kind==='enter'?'ENTER':G.activeContext.kind==='car'?'DRIVE':G.activeContext.kind==='exit'?'EXIT':'USE':'USE';
     $('fireButton').textContent=G.vehicle?'HORN':w.clip?'FIRE':'HIT';$('critical').style.display=G.hurt>0||G.hp<25?'block':'none';
@@ -1819,14 +1847,14 @@
     if(initial){$('closePanel').hidden=true;root.innerHTML='<pre class="intro-art">       |          []           |\n   [:::|:::]    [||||||]    [:::|:::]\n   [:::|:::]    [||||||]    [:::|:::]\n   [:::|:::] __ [||||||] __ [:::|:::]\n __[___|___]|[]|[______]|[]|[___|___]__\n  ===  ===  ===  ===  ===  ===  ===\n       &lt;[__]&gt;             &lt;[__]&gt;</pre><p>Find jobs. Get paid. Upgrade your gear. Drive somewhere new.</p>';addButton(root,loaded?'Continue game':'Enter city',()=>{G.started=true;closePanel();sound(700,.15,'triangle');updateHUD();},'primary wide');}
     else addButton(root,'Resume',closePanel,'primary wide');
     const title=document.createElement('h2');title.textContent='Controls';root.append(title);
-    const info=document.createElement('div');info.className='keys';info.innerHTML=coarsePointer?'<span><b>Left stick</b> move / drive</span><span><b>Swipe scene</b> look</span><span><b>USE</b> enter / talk / drive</span><span><b>FIRE</b> attack / horn</span><span><b>RUN</b> sprint / boost</span><span><b>BAG</b> gear / heal / reload</span>':'<span><b>WASD</b> move / drive</span><span><b>Drag / ← →</b> look</span><span><b>E</b> enter / use / exit</span><span><b>F / hold FIRE</b> attack</span><span><b>R</b> reload</span><span><b>Shift</b> sprint / boost</span><span><b>Space</b> brake in vehicle</span><span><b>M / I / J</b> map / bag / jobs</span>';
-    root.append(info);root.insertAdjacentHTML('beforeend','<h2>Start here</h2><p>The Quick Mart is in front of you. Talk to the yellow <b class="tag">!</b> contact beside its door for a job. Use the blue doorway to enter. Buy supplies at the counter; scratch-offs use only game cash.</p><p>Parked rustbuckets are free to drive. Better weapons and vehicles unlock with reputation. Crime attracts police. Break line of sight and keep moving to lose them. Hospital visits cost cash; you keep your equipment.</p>');
+    const info=document.createElement('div');info.className='keys';info.innerHTML=coarsePointer?'<span><b>Left stick</b> move / drive</span><span><b>Swipe scene</b> look</span><span><b>USE</b> enter / talk / drive</span><span><b>FIRE</b> attack / horn</span><span><b>RUN</b> sprint / boost</span><span><b>BAG</b> gear / heal / reload</span>':'<span><b>WASD</b> move / drive</span><span><b>Drag / ← →</b> look</span><span><b>E</b> enter / use / exit</span><span><b>Click / F</b> attack</span><span><b>R</b> reload</span><span><b>Shift</b> sprint / boost</span><span><b>Space</b> brake in vehicle</span><span><b>M / I / J</b> map / bag / jobs</span>';
+    root.append(info);root.insertAdjacentHTML('beforeend','<h2>Start here</h2><p>The Quick Mart is just ahead. Talk to the yellow <b class="tag">!</b> contact beside its door for a job. Use the blue doorway to enter. Buy supplies at the counter; scratch-offs use only game cash.</p><p>Parked rustbuckets are free to drive. Better weapons and vehicles unlock with reputation. Crime attracts police. Break line of sight and keep moving to lose them. Hospital visits cost cash; you keep your equipment.</p>');
     addButton(root,G.sound?'Sound: on':'Sound: off',()=>{G.sound=!G.sound;showHelp(initial,loaded);saveGame();},'wide');
     if(!initial){addButton(root,'Save game',()=>{saveGame();toast('Game saved');closePanel();},'wide');addButton(root,'Restart progress',()=>{const p=panel('Restart progress?');p.innerHTML='<p>This erases your saved cash, gear, and reputation.</p>';addButton(p,'Keep playing',closePanel,'primary wide');addButton(p,'Erase save and restart',()=>{localStorage.removeItem(SAVE_KEY);G.started=false;location.reload();},'wide');},'wide');}
     root.insertAdjacentHTML('beforeend','<footer>Progress saves on this browser. Menus pause the game.</footer>');
   }
   function initializeGame(){
-    player.x=81;player.y=59.5;player.yaw=0;player.pitch=.015;
+    player.x=78.3;player.y=51.5;player.yaw=.8;player.pitch=.015;
     const loaded=loadGame();spawnLocal();
     if(!loaded)G.loot.push({id:'starter-crowbar',x:80.5,y:62,kind:'crowbar',amount:1});
     $('mapButton').onclick=()=>{if(G.started)showMap()};$('miniButton').onclick=$('mapButton').onclick;$('bagButton').onclick=()=>{if(G.started)showBag()};$('jobsButton').onclick=()=>{if(G.started)showJobs()};$('helpButton').onclick=()=>showHelp(!G.started,loaded);$('closePanel').onclick=closePanel;$('useButton').onclick=interact;
@@ -1839,6 +1867,10 @@
       if(k==='e')interact();if(k==='f')keys.add('f');if(k==='r')reloadWeapon();if(k==='m')showMap();if(k==='i')showBag();if(k==='j')showJobs();if(k===' ')keys.add(' ');
       if(['1','2','3','4','5','6'].includes(k)){const i=+k-1;if(G.owned.includes(i)){G.weapon=i;G.reload=0;}}
     });
+    let tapStart=null;
+    canvas.addEventListener('pointerdown',e=>{tapStart={x:e.clientX,y:e.clientY,time:performance.now()};});
+    canvas.addEventListener('pointerup',e=>{if(tapStart&&performance.now()-tapStart.time<280&&Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)<7)shoot();tapStart=null;});
+    canvas.addEventListener('pointercancel',()=>tapStart=null);
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
     addEventListener('pagehide',()=>{if(G.started)saveGame();});
     document.addEventListener('visibilitychange',()=>{keys.clear();touchForward=touchStrafe=0;activePointer=null;stickPointer=null;if(document.hidden&&G.started)saveGame();});
