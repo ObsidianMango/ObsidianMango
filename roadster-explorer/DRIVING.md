@@ -1,6 +1,6 @@
 # Parkside — Roadster Parking
 
-Play `drive.html`. The driving game has been rebuilt as eight finite parking challenges with three selectable cars, suspension, steering wheel and crash replay system.
+Play `drive.html`. The driving game has been rebuilt as eight finite parking challenges with two selectable cars, suspension, steering wheel and crash replay system.
 
 ## Lots
 
@@ -17,7 +17,7 @@ All lots are selectable. Complete one to advance, retry for a better rating, or 
 
 ## Parking rules
 
-The complete car footprint (2.54 × 4.8 m, or 2.54 × 5.1 m for the Jeep) must fit inside the designated green bay, face its arrow within ten degrees, remain upright, and stop below 0.22 m/s for 1.35 seconds. Another empty bay does not count. Reverse challenges require meaningful backward movement near the target; gentle forward corrections are allowed.
+The complete car footprint (2.54 × 4.8 m) must fit inside the designated green bay, face its arrow within ten degrees, remain upright, and stop below 0.22 m/s for 1.35 seconds. Another empty bay does not count. Reverse challenges require meaningful backward movement near the target; gentle forward corrections are allowed.
 
 ## Controls
 
@@ -30,12 +30,12 @@ Recover resets to the entrance with a ten-second and one-bump penalty. A major i
 
 ## Implementation
 
-Self-hosted Three.js and Cannon ES, no build step. `parking-lots.js` defines the environments and parking validation; `garage-models.js` builds the photo-inspired Santa Fe and Jeep; `drive.js` handles the vehicle, campaign, controls and orbit camera; `crash-replay.js` records and plays crash transforms. Existing license files apply. Serve over HTTP, not file://.
+Self-hosted Three.js and Cannon ES, no build step. `parking-lots.js` defines the environments and parking validation; `garage-models.js` builds the photo-inspired Santa Fe; `drive.js` handles the vehicle, campaign, controls and orbit camera; `crash-replay.js` records and plays crash transforms. Existing license files apply. Serve over HTTP, not file://.
 
 Validation uses Chromium desktop/mobile emulation, including all eight target bays, mandatory reverse approach, camera gestures and presets, and level switching. It does not substitute for physical iPhone Safari testing.
 
 ## Garage update
 
-Choose the original Roadster (25 assemblies), a gray Santa Fe-inspired crossover (34 assemblies), or a black Jeep-inspired lifted SUV (35 assemblies). These are stylized procedural interpretations of the supplied photo, not imported manufacturer meshes. The selected car is saved locally. Each uses mass-scaled engine force, vehicle-specific wheel radius and track, steering, reverse, suspension, breakaway panels, complete wrecks, and recorded two-angle replays. The replay recorder rebinds when switching cars.
+Choose the original Roadster (25 assemblies) or a gray Santa Fe-inspired crossover (34 assemblies). These are stylized procedural interpretations of the supplied photo, not imported manufacturer meshes. The selected car is saved locally. Each uses mass-scaled engine force, vehicle-specific wheel radius and track, steering, reverse, suspension, breakaway panels, complete wrecks, and recorded two-angle replays. The replay recorder rebinds when switching cars.
 
-The controls now use separate highlighted D/R buttons, larger textured brake/gas pedals, camera icons with active-view feedback, and consistent tap targets. Tested in Chromium touch emulation at portrait and landscape sizes: all three cars drive, reverse, steer, complete a parking bay, scatter their full assembly count, replay and reset; touch gas and orbit work simultaneously. All 24 car/lot combinations pass parking validation at their target.
+The controls now use separate highlighted D/R buttons, larger textured brake/gas pedals, camera icons with active-view feedback, and consistent tap targets. Tested in Chromium touch emulation at portrait and landscape sizes: both available cars drive, reverse, steer, complete a parking bay, scatter their full assembly count, replay and reset; touch gas and orbit work simultaneously. All 16 available car/lot combinations pass parking validation at their target.

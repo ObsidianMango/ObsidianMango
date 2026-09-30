@@ -1,6 +1,6 @@
 import * as C from './cannon-es.js';
 import {buildRoadster} from './roadster-model.js';
-import {VEHICLES,buildSUV} from './garage-models.js?v=garage-1';
+import {VEHICLES,buildSUV} from './garage-models.js?v=garage-2';
 import {createCrashDirector} from './crash-replay.js?v=garage-1';
 import {LOTS,buildLots,assessParking} from './parking-lots.js?v=parking-1';
 const T=window.THREE,$=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));

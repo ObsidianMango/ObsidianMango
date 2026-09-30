@@ -2,7 +2,6 @@
 export const VEHICLES=[
  {id:'roadster',name:'Roadster',detail:'Vintage classic',mass:950,radius:.525,track:1.04,front:-1.48,rear:1.45,offset:.85,power:1550,box:[1.16,.26,2.28],center:.05},
  {id:'santafe',name:'Santa Fe',detail:'Gray crossover',mass:1580,radius:.40,track:.96,front:-1.43,rear:1.43,offset:.653,power:2550,box:[.97,.38,2.22],center:.23},
- {id:'jeep',name:'Jeep',detail:'Lifted 4×4',mass:1650,radius:.53,track:1.03,front:-1.43,rear:1.38,offset:.783,power:2670,box:[1.02,.40,2.19],center:.28}
 ];
 export function buildSUV(T,kind){
  const jeep=kind==='jeep',root=new T.Group(),groups=new Map();
