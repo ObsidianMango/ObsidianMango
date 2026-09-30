@@ -12,7 +12,8 @@ export const LOTS=[
 export function assessParking(pose,target){
  const dx=pose.x-target.x,dz=pose.z-target.z,c=Math.cos(target.yaw),s=Math.sin(target.yaw),x=c*dx-s*dz,z=s*dx+c*dz;
  const angle=Math.atan2(Math.sin(pose.yaw-target.yaw),Math.cos(pose.yaw-target.yaw));
- const halfW=Math.abs(Math.cos(angle))*1.27+Math.abs(Math.sin(angle))*2.4,halfD=Math.abs(Math.cos(angle))*2.4+Math.abs(Math.sin(angle))*1.27;
+ const width=pose.halfWidth??1.27,length=pose.halfLength??2.4;
+ const halfW=Math.abs(Math.cos(angle))*width+Math.abs(Math.sin(angle))*length,halfD=Math.abs(Math.cos(angle))*length+Math.abs(Math.sin(angle))*width;
  const contained=Math.abs(x)+halfW<=target.w/2&&Math.abs(z)+halfD<=target.d/2;
  const aligned=Math.abs(angle)<Math.PI/18,stopped=pose.speed<.22,upright=pose.up>.92,approach=!target.reverse||pose.lastDirection===-1;
  return {contained,aligned,stopped,approach,valid:contained&&aligned&&stopped&&upright&&approach,offset:Math.hypot(x,z),angle:Math.abs(angle),near:Math.hypot(dx,dz)<8};

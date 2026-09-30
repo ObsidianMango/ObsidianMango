@@ -27,5 +27,5 @@ export function createCrashDirector({T,scene,camera,parts,obstacles,onComplete})
  function update(dt){if(!playing)return;const s=shots[shot];cursor+=dt*s.rate;elapsed+=dt;if(cursor>=s.to){if(shot===shots.length-1){apply(s.to);aim(s.angle,1);playing=false;onComplete();return;}shot++;cursor=shots[shot].from;}const current=shots[shot];apply(cursor);aim(current.angle,(cursor-current.from)/(current.to-current.from));document.getElementById('replayAngle').textContent=current.angle?'02 / OVERHEAD ORBIT':'01 / ROADSIDE SLOW MOTION';document.getElementById('replayProgress').style.width=Math.min(100,elapsed/totalDuration*100)+'%';}
  function stop(){playing=false;camera.fov=oldFov;camera.updateProjectionMatrix();effects.visible=false;}
  function reset(){stop();frames.length=0;impact=null;capturing=false;lastRecord=-Infinity;}
- return{record,mark,begin,update,stop,reset,renderEffects,getInfo:()=>({frames:frames.length,playing,shot,cursor,impactTime:impact?.t,impactSpeed:impact?.speed}),getImpact:()=>impact};
+ return{setParts(next){reset();parts=next;nodes.splice(0,nodes.length,...parts,...obstacles.map(o=>o.mesh));},record,mark,begin,update,stop,reset,renderEffects,getInfo:()=>({frames:frames.length,playing,shot,cursor,impactTime:impact?.t,impactSpeed:impact?.speed}),getImpact:()=>impact};
 }
