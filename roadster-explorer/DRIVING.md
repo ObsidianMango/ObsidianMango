@@ -1,26 +1,35 @@
-# Country Run — Roadster Physics Demo
+# Parkside — Roadster Parking
 
-Play `drive.html`. The original component explorer remains at `index.html`.
+Play `drive.html`. The driving game has been rebuilt as eight finite parking challenges using the original roadster model, suspension, steering wheel and crash replay system.
 
-The game reuses the original Roadster Atlas geometry, regrouped into 25 independently breakable assemblies.
+## Lots
 
-## Driving
+1. Market Square — head-in parking around a central island.
+2. Sunset Diner — diagonal parking bays.
+3. Office Hours — reverse into a row of occupied spaces.
+4. Old Town — parallel parking between two cars.
+5. Garden Centre — negotiate planter islands and cones.
+6. The Courtyard — turn around the central fountain.
+7. Loading Dock — reverse into a bay beyond a narrow approach.
+8. Harbour Finish — precision reversing through staggered barriers.
 
-- Mobile: drag around the steering-wheel rim for proportional steering; it springs back on release. Hold GAS with your other thumb. BRAKE/REV stops the car, then reverses. Handbrake and slow motion have separate buttons.
-- Desktop: W/Up for throttle, S/Down for brake/reverse, A/D or arrows for steering, Space for handbrake, Shift for slow motion, C for camera, R for recovery, P/Escape for pause.
-- Country run: reach the four service/finish gates along the 2.4 km road before the four-minute timer expires. Service gates repair minor damage. Best finish time is stored locally.
-- Crash playground: no timer; E or Pause → Explode car deliberately triggers a full wreck.
+All lots are selectable. Complete one to advance, retry for a better rating, or return to the lot selector. Best star rating and time per lot are stored locally. Three stars require no bumps and completion within the displayed post-run target time; slower clean runs or up to two bumps earn two stars. More bumps earn one star. There is no endless-road mode or forced time limit.
 
-## Wrecks and instant replay
+## Parking rules
 
-Low-speed scrapes damage the body and may shed cosmetic parts while keeping the vehicle drivable. Major impacts scatter all 25 assemblies, including the chassis, body, wheels, engine, cabin and roof. Debris tumbles, collides and settles under gravity. Fire, smoke, sparks and a ground shockwave accompany the impact; enabled sound adds a bass explosion.
+The complete 2.54 × 4.8 m car footprint must fit inside the designated green bay, face its arrow within ten degrees, remain upright, and stop below 0.22 m/s for 1.35 seconds. Another empty bay does not count. Reverse challenges require meaningful backward movement near the target; gentle forward corrections are allowed.
 
-A bounded rolling recorder stores actual world transforms before and after the collision. Playback interpolates those recorded transforms without advancing physics. It shows a slow-motion roadside angle followed by an overhead orbit. Skip, Replay again and Back on the road are available. Continuing restores the car and preserves course progress, with a ten-second penalty in Country run.
+## Controls
 
-## Technical scope
+- Touch: drag the steering-wheel rim, hold GAS, tap D/R to switch direction, and use BRAKE to stop. Handbrake and recovery remain available.
+- Keyboard: W/Up drives forward, S/Down brakes into reverse, A/D or arrows steer, Space is the handbrake, R recovers, X changes the selected touch gear, P/Escape pauses.
+- Camera: drag the scene to orbit freely; pinch or scroll to zoom. Follow, Back view and Top provide quick viewpoints. Manual orbit persists while driving and reversing. Touch camera gestures are separate from the wheel and pedal pointers.
+- Curved reversing guides appear behind the car in reverse.
 
-Cannon ES rigid-body chassis, raycast suspension, tire traction, braking and dynamic obstacles. This is stylized breakaway-assembly destruction, not continuous soft-body crumpling or engineering-accurate behavior. The source vehicle is illustrative.
+Recover resets to the entrance with a ten-second and one-bump penalty. A major impact retains the full 25-assembly wreck and recorded two-angle replay; Retry this lot starts a fresh attempt.
 
-Self-hosted dependencies: Three.js (THREE-LICENSE.txt) and cannon-es 0.20.0 (CANNON-LICENSE.txt). No build step, account, analytics or remote assets. Serve over HTTP; file:// module loading is not supported reliably.
+## Implementation
 
-Validated in Chromium desktop/mobile emulation: proportional wheel direction and recentering, simultaneous wheel/throttle touch input, collision-triggered 25-part wreck, recorded replay with both angles, frozen simulation during playback, replay/skip, and recovery to a complete drivable car. Physical iPhone Safari testing is still recommended.
+Self-hosted Three.js and Cannon ES, no build step. `parking-lots.js` defines the environments and parking validation; `drive.js` handles the vehicle, campaign, controls and orbit camera; `crash-replay.js` records and plays crash transforms. Existing license files apply. Serve over HTTP, not file://.
+
+Validation uses Chromium desktop/mobile emulation, including all eight target bays, mandatory reverse approach, camera gestures and presets, and level switching. It does not substitute for physical iPhone Safari testing.
