@@ -1,5 +1,6 @@
 import * as C from './cannon-es.js';
 import {buildNovelty} from './novelty-models.js?v=chaos-1';
+import {buildHeritage} from './heritage-models.js?v=heritage-1';
 import {installTouchGuard} from './touch-guard.js?v=chaos-1';
 import {buildRoadster} from './roadster-model.js';
 import {VEHICLES,buildSUV} from './garage-models.js?v=chaos-1';
@@ -27,7 +28,7 @@ let saves=[];try{saves=JSON.parse(localStorage.getItem('parkside-chaos-saves-v1'
 function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
 const baseComplete=()=>Array.from({length:8},(_,i)=>saves[i]?.stars>=1).every(Boolean),unlocked=i=>i<8||baseComplete();
 const lot=()=>LOTS[levelIndex],view=()=>lots.views[levelIndex];
-const garage=VEHICLES.map(config=>({config,...(config.id==='roadster'?buildRoadster(T):config.id==='santafe'?buildSUV(T,config.id):buildNovelty(T,config.id))}));
+const garage=VEHICLES.map(config=>({config,...(config.id==='roadster'?buildRoadster(T):config.id==='santafe'?buildSUV(T,config.id):['flamecoupe','maybach'].includes(config.id)?buildHeritage(T,config.id):buildNovelty(T,config.id))}));
 let vehicleIndex=0;try{vehicleIndex=Math.max(0,VEHICLES.findIndex(v=>v.id===localStorage.getItem('parkside-chaos-car')));}catch{}
 let car=garage[vehicleIndex],spec=car.config;for(const item of garage){scene.add(item.root);item.root.visible=item===car;}
 const chassis=new C.Body({mass:950,allowSleep:false,material:carMat,position:new C.Vec3(0,1.2,0),linearDamping:.025,angularDamping:.48});chassis.addShape(new C.Box(new C.Vec3(1.16,.26,2.28)),new C.Vec3(0,.05,0));world.addBody(chassis);
@@ -81,7 +82,7 @@ function selectVehicle(i){
 function vehicleThumbnail(item){
  if(item.thumbnail)return item.thumbnail;
  const preview=new T.Scene();preview.background=new T.Color(0x243b3a);preview.add(new T.HemisphereLight(0xf7faf2,0x6e8d89,2.6));const light=new T.DirectionalLight(0xffebcd,3);light.position.set(-3,6,-4);preview.add(light);
- const model=item.root.clone(true);model.position.set(0,-.6,0);model.quaternion.identity();model.visible=true;preview.add(model);const cam=new T.PerspectiveCamera(36,1.8,.1,40);cam.position.set(-4.2,2.9,-5.5);cam.lookAt(0,.5,0);
+ const model=item.root.clone(true);model.position.set(0,-.6,0);model.quaternion.identity();model.visible=true;preview.add(model);const cam=new T.PerspectiveCamera(36,1.8,.1,50),span=item.config.halfLength||2.4;cam.position.set(-4.2-span*.28,2.9+span*.08,-5.5-span*.45);cam.lookAt(0,.55,0);
  renderer.setSize(252,140,false);renderer.render(preview,cam);item.thumbnail=renderer.domElement.toDataURL('image/png');resize();return item.thumbnail;
 }
 function renderGarage(){const wrap=$('garage');wrap.replaceChildren();garage.forEach((item,i)=>{const b=document.createElement('button');b.className='car-card'+(i===vehicleIndex?' selected':'');b.setAttribute('aria-pressed',String(i===vehicleIndex));b.setAttribute('aria-label','Choose '+item.config.name);const img=document.createElement('img');img.src=vehicleThumbnail(item);img.alt='';b.append(img);const name=document.createElement('b');name.textContent=item.config.name;b.append(name);const label=document.createElement('small');label.textContent=item.config.detail;b.append(label);b.onclick=()=>selectVehicle(i);wrap.append(b);});}
