@@ -37,7 +37,7 @@ export function buildShowpiece(T,kind){
    const m=b+(t-b)*.48;
    verts.push(-lw,b,z, lw,b,z, lw*1.02,m,z, uw,t,z, -uw,t,z, -lw*1.02,m,z);
   }
-  for(let r=0;r<rings.length-1;r++)for(let k=0;k<N;k++){const a=r*N+k,b=a? r*N+(k+1)%N:0,c=(r+1)*N+(k+1)%N,d=(r+1)*N+k;idx.push(a,b,c,a,c,d);}
+  for(let r=0;r<rings.length-1;r++)for(let k=0;k<N;k++){const a=r*N+k,b=r*N+(k+1)%N,c=(r+1)*N+(k+1)%N,d=(r+1)*N+k;idx.push(a,b,c,a,c,d);}
   for(let k=1;k<N-1;k++)idx.push(0,k+1,k);
   const e=(rings.length-1)*N;for(let k=1;k<N-1;k++)idx.push(e,e+k,e+k+1);
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(verts,3));g.setIndex(idx);g.computeVertexNormals();
