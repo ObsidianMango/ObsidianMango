@@ -17,3 +17,8 @@ Arcade physics only; not a real vehicle simulator.
 - Flame Coupe: boxy drag-car proportions inspired by the supplied model-car photo, teal-blue body, white flame graphics, hood scoop, chrome bumpers/grille, staggered drag stance, and breakaway body panels.
 - Maybach Zeppelin V12: long-wheelbase 1930s luxury shape with a tall vertical radiator grille, sweeping external fenders, running boards, wire-style wheels, side spares, wood/leather cabin details, long divided hood, and a visual twin-bank V12.
 - Both use their own mass, wheelbase, tire size, collision footprint, breakaway assemblies, and crash replays.
+
+## Showpiece model rebuild
+- Flame Coupe was rebuilt from the supplied photo around solid lofted body panels: full lower body, broad hood and trunk, greenhouse/roof, side doors and quarter panels, proper grille/bumpers, big hood scoop, skinny front tires and wide drag rears. The white flames are now canvas decal surfaces over the blue body instead of tube geometry.
+- Wienermobile was rebuilt as an integrated vehicle silhouette: cream/red lower car and cab, continuous split hot-dog sausage, smooth left/right bun shells with inner bread, mustard ribbon, tucked wheels, windshield/doors, lighting, grille, bumpers, engine and roof sign.
+- Both preserve named wheel, engine, chassis and body assemblies for suspension, damage, full break-apart crashes and recorded replays.
