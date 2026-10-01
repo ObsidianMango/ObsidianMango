@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Lepre-gone</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#101216; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; touch-action:none; overscroll-behavior:none; }
+  canvas { display:block; width:100%; height:100%; }
+  #hud {
+    position:fixed; inset:0; pointer-events:none; color:white;
+    text-shadow:0 2px 8px #000,0 0 3px #000;
+  }
+  #top {
+    position:absolute; left:max(14px,env(safe-area-inset-left)); right:max(14px,env(safe-area-inset-right)); top:max(12px,env(safe-area-inset-top));
+    display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
+  }
+  .panel {
+    background:rgba(0,0,0,.40); border:1px solid rgba(255,255,255,.18);
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    border-radius:14px; padding:10px 12px;
+  }
+  #title { font-weight:900; letter-spacing:.06em; font-size:13px; }
+  #score { font-size:28px; font-weight:1000; line-height:1; margin-top:4px; }
+  #stats { text-align:right; font-weight:800; font-size:14px; }
+  #boomWrap { margin-top:6px; width:160px; height:9px; background:rgba(255,255,255,.18); border-radius:999px; overflow:hidden; }
+  #boomBar { width:0%; height:100%; background:linear-gradient(90deg,#ff52aa,#ffe24a); transition:width .08s linear; }
+  #message {
+    position:absolute; left:50%; top:20%; transform:translate(-50%,-50%);
+    font-weight:1000; font-size:clamp(24px,7vw,62px); text-align:center; opacity:0;
+    transition:opacity .12s, transform .12s; pointer-events:none;
+  }
+  #message.show { opacity:1; transform:translate(-50%,-50%) scale(1.08); }
+  #start {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:auto;
+    background:radial-gradient(circle at 50% 40%,rgba(255,70,160,.2),rgba(0,0,0,.82));
+  }
+  #card { width:min(92vw,520px); padding:22px; border-radius:22px; background:rgba(14,16,20,.88); border:1px solid rgba(255,255,255,.18); text-align:center; box-shadow:0 20px 80px #000; }
+  #card h1 { margin:0 0 8px; font-size:clamp(28px,9vw,54px); line-height:.95; }
+  #card p { opacity:.82; margin:8px 0 16px; line-height:1.4; }
+  #play {
+    border:0; border-radius:15px; padding:14px 22px; font-size:18px; font-weight:1000; color:white; cursor:pointer;
+    background:linear-gradient(135deg,#ff4aa2,#b95cff);
+    box-shadow:0 8px 24px rgba(255,60,160,.35);
+  }
+  #controls {
+    position:absolute; left:0; right:0; bottom:0; padding:max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));
+    display:flex; justify-content:space-between; align-items:flex-end; pointer-events:none;
+  }
+  .cluster { display:flex; gap:10px; pointer-events:auto; }
+  .btn {
+    width:68px; height:68px; border-radius:50%; border:1px solid rgba(255,255,255,.25);
+    background:rgba(0,0,0,.42); color:#fff; font-weight:1000; font-size:22px;
+    backdrop-filter:blur(7px); -webkit-backdrop-filter:blur(7px); user-select:none; -webkit-user-select:none;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .btn:active { transform:scale(.94); background:rgba(255,70,160,.45); }
+  .wide { width:84px; border-radius:22px; font-size:12px; letter-spacing:.04em; }
+  #tip {
+    position:absolute; left:50%; bottom:96px; transform:translateX(-50%); padding:7px 10px; border-radius:999px; background:rgba(0,0,0,.32);
+    font-size:12px; font-weight:700; white-space:nowrap; opacity:.78;
+  }
+  @media (pointer:fine) { #controls { opacity:.55; } }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="top">
+    <div class="panel">
+      <div id="title">LEPRE-GONE</div>
+      <div id="score">0</div>
+    </div>
+    <div class="panel" id="stats">
+      <div>TIME <span id="time">90</span></div>
+      <div>SMASHED <span id="smashed">0</span></div>
+      <div id="boomWrap"><div id="boomBar"></div></div>
+      <div style="font-size:11px;opacity:.78;margin-top:3px">BLAST METER</div>
+    </div>
+  </div>
+
+  <div id="message">SMASH!</div>
+  <div id="tip">WASD / arrows • SPACE = blast • R = reset</div>
+
+  <div id="controls">
+    <div class="cluster">
+      <div class="btn" data-key="left">◀</div>
+      <div class="btn" data-key="right">▶</div>
+    </div>
+    <div class="cluster">
+      <div class="btn wide" data-key="blast">BLAST</div>
+      <div class="btn" data-key="brake">▼</div>
+      <div class="btn" data-key="gas">▲</div>
+    </div>
+  </div>
+
+  <div id="start">
+    <div id="card">
+      <h1>LEPRE-GONE</h1>
+      <p>Drive the lifted monster Jeep into the leprechaun crowd. Build the blast meter by smashing targets, then trigger a huge cartoon shockwave for a combo.</p>
+      <button id="play">START CHAOS</button>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.180.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8cc9ff);
+scene.fog = new THREE.Fog(0x8cc9ff, 55, 190);
+
+const camera = new THREE.PerspectiveCamera(64, innerWidth/innerHeight, 0.1, 400);
+camera.position.set(0, 8, 15);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.prepend(renderer.domElement);
+
+const hemi = new THREE.HemisphereLight(0xdff2ff, 0x4a532d, 2.3);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 3.0);
+sun.position.set(-35, 45, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-70; sun.shadow.camera.right=70; sun.shadow.camera.top=70; sun.shadow.camera.bottom=-70;
+scene.add(sun);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(240,240),
+  new THREE.MeshStandardMaterial({color:0x3c913f, roughness:1})
+);
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const arena = new THREE.Mesh(
+  new THREE.CircleGeometry(82,96),
+  new THREE.MeshStandardMaterial({color:0x777d87, roughness:0.96})
+);
+arena.rotation.x = -Math.PI/2;
+arena.position.y = .012;
+arena.receiveShadow = true;
+scene.add(arena);
+
+const ring = new THREE.Mesh(
+  new THREE.RingGeometry(80,82,96),
+  new THREE.MeshStandardMaterial({color:0xffe46e, roughness:.85})
+);
+ring.rotation.x=-Math.PI/2; ring.position.y=.022; scene.add(ring);
+
+// Props / obstacles
+const props = [];
+function makeCrate(x,z,s=1){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(2.4*s,2.4*s,2.4*s), new THREE.MeshStandardMaterial({color:0x8a5a32,roughness:.9}));
+  m.position.set(x,1.2*s,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); props.push(m);
+}
+for(let i=0;i<20;i++){
+  const a=Math.random()*Math.PI*2, r=45+Math.random()*28;
+  makeCrate(Math.cos(a)*r,Math.sin(a)*r,.7+Math.random()*.55);
+}
+
+// Jeep - inspired by the lifted boxy off-road Jeep in the photo.
+const jeep = new THREE.Group();
+scene.add(jeep);
+
+const pink = new THREE.MeshStandardMaterial({color:0xff4fa6,metalness:.22,roughness:.4});
+const pinkDark = new THREE.MeshStandardMaterial({color:0xaa175e,metalness:.18,roughness:.5});
+const dark = new THREE.MeshStandardMaterial({color:0x17191d,metalness:.55,roughness:.45});
+const glass = new THREE.MeshStandardMaterial({color:0x90c9df,metalness:.05,roughness:.18,transparent:true,opacity:.58});
+const chrome = new THREE.MeshStandardMaterial({color:0xcfd6df,metalness:.9,roughness:.25});
+const tireMat = new THREE.MeshStandardMaterial({color:0x111111,roughness:.95});
+const rimMat = new THREE.MeshStandardMaterial({color:0x242a31,metalness:.75,roughness:.4});
+
+function box(w,h,d,mat,x,y,z){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; jeep.add(m); return m;
+}
+box(6.4,1.5,10.2,pink,0,2.5,0);
+box(6.0,2.5,5.7,pink,0,4.25,-.5);
+box(5.7,1.65,2.45,glass,0,4.62,2.08);
+box(5.7,1.7,1.9,glass,0,4.6,-3.05);
+box(6.15,.28,6.2,dark,0,5.65,-.55); // roof rack base
+for(let i=-2;i<=2;i+=1){
+  box(6.55,.12,.12,dark,0,5.88,i*.95-.5);
+}
+box(6.9,.55,.5,dark,0,1.55,5.15);
+box(6.9,.55,.5,dark,0,1.55,-5.15);
+box(6.6,.22,.18,chrome,0,2.65,5.13); // grille bar
+for(let x=-2.1;x<=2.1;x+=.7) box(.14,.9,.13,dark,x,2.65,5.24);
+for(const x of [-2.35,2.35]){
+  const head=new THREE.Mesh(new THREE.BoxGeometry(.9,.55,.15),new THREE.MeshStandardMaterial({color:0xf9f3cc,emissive:0xffffdd,emissiveIntensity:1.3}));
+  head.position.set(x,2.8,5.27); jeep.add(head);
+}
+for(const x of [-2.6,2.6]) {
+  box(.18,1.55,.18,dark,x,2.15,5.7);
+}
+box(6.9,.18,.18,dark,0,2.85,5.72);
+for(const x of [-2.35,2.35]) box(.18,.18,1.2,dark,x,2.85,5.2);
+
+// windshield divider
+box(.12,1.75,.08,dark,0,4.55,2.17);
+
+// Wheels
+const wheels=[];
+function makeWheel(x,z){
+  const g=new THREE.Group();
+  const tire=new THREE.Mesh(new THREE.CylinderGeometry(1.25,1.25,.72,20,1),tireMat);
+  tire.rotation.z=Math.PI/2; tire.castShadow=true;
+  const rim=new THREE.Mesh(new THREE.CylinderGeometry(.58,.58,.77,14),rimMat);
+  rim.rotation.z=Math.PI/2;
+  g.add(tire,rim);
+  g.position.set(x,1.55,z); jeep.add(g); wheels.push(g); return g;
+}
+makeWheel(-3.05,3.4); makeWheel(3.05,3.4); makeWheel(-3.05,-3.4); makeWheel(3.05,-3.4);
+
+// lifted suspension look
+for(const x of [-2.25,2.25]) for(const z of [-3.4,3.4]) {
+  const strut=box(.16,1.4,.16,chrome,x,1.65,z); strut.rotation.z = x<0 ? -.25 : .25;
+}
+
+// Leprechauns
+const leps=[];
+const lepGeo = {
+  head:new THREE.SphereGeometry(.32,12,10),
+  body:new THREE.CapsuleGeometry(.32,.72,4,8),
+  limb:new THREE.CylinderGeometry(.09,.09,.55,8),
+  hat1:new THREE.CylinderGeometry(.3,.35,.45,12),
+  hat2:new THREE.CylinderGeometry(.48,.48,.08,12)
+};
+const greenMat=new THREE.MeshStandardMaterial({color:0x1fd053,roughness:.7});
+const darkGreen=new THREE.MeshStandardMaterial({color:0x0f6d2e,roughness:.8});
+const skinMat=new THREE.MeshStandardMaterial({color:0xffc995,roughness:.7});
+const orangeMat=new THREE.MeshStandardMaterial({color:0xe46822,roughness:.85});
+const goldMat=new THREE.MeshStandardMaterial({color:0xffd23f,metalness:.3,roughness:.5});
+
+function addPart(g, geo, mat, x,y,z, rx=0,ry=0,rz=0){
+  const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.rotation.set(rx,ry,rz); m.castShadow=true; g.add(m); return m;
+}
+
+function spawnLep(x,z){
+  const g=new THREE.Group();
+  g.position.set(x,0,z);
+  g.userData = { alive:true, vx:0,vz:0, vy:0, spin:0, hitCooldown:0 };
+  addPart(g, lepGeo.body, greenMat,0,1.0,0);
+  addPart(g, lepGeo.head, skinMat,0,1.85,0);
+  addPart(g,new THREE.BoxGeometry(.56,.16,.15),orangeMat,0,1.62,.22);
+  addPart(g,lepGeo.hat1,darkGreen,0,2.25,0);
+  addPart(g,lepGeo.hat2,darkGreen,0,2.03,0);
+  addPart(g,new THREE.BoxGeometry(.36,.13,.06),goldMat,0,2.18,.31);
+  addPart(g,lepGeo.limb,greenMat,-.33,.72,0,0,0,.25);
+  addPart(g,lepGeo.limb,greenMat,.33,.72,0,0,0,-.25);
+  addPart(g,lepGeo.limb,skinMat,-.43,1.24,0,0,0,.55);
+  addPart(g,lepGeo.limb,skinMat,.43,1.24,0,0,0,-.55);
+  scene.add(g); leps.push(g);
+  return g;
+}
+
+function respawnLep(lep){
+  let a=Math.random()*Math.PI*2, r=18+Math.random()*55;
+  lep.position.set(Math.cos(a)*r,0,Math.sin(a)*r);
+  lep.rotation.set(0,Math.random()*Math.PI*2,0);
+  lep.scale.setScalar(.85+Math.random()*.35);
+  Object.assign(lep.userData,{alive:true,vx:0,vz:0,vy:0,spin:0,hitCooldown:0});
+  lep.visible=true;
+}
+for(let i=0;i<125;i++) {
+  const l=spawnLep(0,0); respawnLep(l);
+}
+
+// particles
+const particles=[];
+function burst(pos, count=20, big=false){
+  for(let i=0;i<count;i++){
+    const m=new THREE.Mesh(
+      new THREE.SphereGeometry(big?.14:.08,6,4),
+      new THREE.MeshBasicMaterial({color:Math.random()<.5?0xffde42:0xff4fa6})
+    );
+    m.position.copy(pos);
+    m.userData.v=new THREE.Vector3((Math.random()-.5)*(big?8:5),Math.random()*(big?9:5)+1,(Math.random()-.5)*(big?8:5));
+    m.userData.life=big?1.4:.8;
+    scene.add(m); particles.push(m);
+  }
+}
+
+// giant blast ring
+let shockwave=null;
+function triggerBlast(){
+  if(!running || boom<100) return;
+  boom=0; updateHUD();
+  const ringGeo=new THREE.RingGeometry(1,1.5,64);
+  const ringMat=new THREE.MeshBasicMaterial({color:0xffef77,transparent:true,opacity:.82,side:THREE.DoubleSide,depthWrite:false});
+  shockwave=new THREE.Mesh(ringGeo,ringMat); shockwave.rotation.x=-Math.PI/2; shockwave.position.copy(jeep.position); shockwave.position.y=.18; scene.add(shockwave);
+  shockwave.userData.t=0;
+  let combo=0;
+  for(const l of leps){
+    if(!l.userData.alive) continue;
+    const d=l.position.distanceTo(jeep.position);
+    if(d<22){
+      knockOut(l, true, 8 + (22-d)*.3); combo++;
+    }
+  }
+  score += combo*25;
+  showMessage(combo>0 ? `MEGA BLAST ×${combo}` : 'BOOM!');
+}
+
+let speed=0, steer=0, score=0, smashed=0, boom=0, timeLeft=90;
+let running=false, ended=false;
+const keys={left:false,right:false,gas:false,brake:false};
+
+function updateHUD(){
+  document.querySelector('#score').textContent=score.toLocaleString();
+  document.querySelector('#smashed').textContent=smashed;
+  document.querySelector('#time').textContent=Math.max(0,Math.ceil(timeLeft));
+  document.querySelector('#boomBar').style.width=boom+'%';
+}
+const msg=document.querySelector('#message');
+let msgTimer=0;
+function showMessage(t){
+  msg.textContent=t; msg.classList.add('show'); msgTimer=.45;
+}
+
+function knockOut(lep, blast=false, force=5){
+  if(!lep.userData.alive) return;
+  lep.userData.alive=false;
+  const away=lep.position.clone().sub(jeep.position).setY(0).normalize();
+  lep.userData.vx=away.x*force + (Math.random()-.5)*2;
+  lep.userData.vz=away.z*force + (Math.random()-.5)*2;
+  lep.userData.vy=(blast?7:4)+Math.random()*3;
+  lep.userData.spin=(Math.random()-.5)*10;
+  smashed++;
+  const pts=blast?50:100+Math.round(Math.abs(speed)*12);
+  score+=pts;
+  if(!blast) boom=Math.min(100,boom+8);
+  burst(lep.position.clone().add(new THREE.Vector3(0,1,0)), blast?14:8, blast);
+  if(!blast) showMessage(Math.abs(speed)>1.2?'SMASH!':'BONK!');
+  updateHUD();
+}
+
+function resetGame(){
+  speed=0; steer=0; score=0; smashed=0; boom=0; timeLeft=90; ended=false; running=true;
+  jeep.position.set(0,0,0); jeep.rotation.set(0,0,0);
+  for(const l of leps) respawnLep(l);
+  updateHUD();
+}
+
+document.querySelector('#play').onclick=()=>{
+  document.querySelector('#start').style.display='none';
+  resetGame();
+};
+
+addEventListener('keydown',e=>{
+  if(e.code==='ArrowLeft'||e.code==='KeyA') keys.left=true;
+  if(e.code==='ArrowRight'||e.code==='KeyD') keys.right=true;
+  if(e.code==='ArrowUp'||e.code==='KeyW') keys.gas=true;
+  if(e.code==='ArrowDown'||e.code==='KeyS') keys.brake=true;
+  if(e.code==='Space'){ e.preventDefault(); triggerBlast(); }
+  if(e.code==='KeyR') resetGame();
+});
+addEventListener('keyup',e=>{
+  if(e.code==='ArrowLeft'||e.code==='KeyA') keys.left=false;
+  if(e.code==='ArrowRight'||e.code==='KeyD') keys.right=false;
+  if(e.code==='ArrowUp'||e.code==='KeyW') keys.gas=false;
+  if(e.code==='ArrowDown'||e.code==='KeyS') keys.brake=false;
+});
+
+document.querySelectorAll('.btn').forEach(b=>{
+  const k=b.dataset.key;
+  const down=e=>{e.preventDefault(); if(k==='blast') triggerBlast(); else keys[k]=true;};
+  const up=e=>{e.preventDefault(); if(k!=='blast') keys[k]=false;};
+  b.addEventListener('pointerdown',down); b.addEventListener('pointerup',up); b.addEventListener('pointercancel',up); b.addEventListener('pointerleave',up);
+});
+
+// iOS anti-zoom / gestures
+document.addEventListener('gesturestart',e=>e.preventDefault(),{passive:false});
+let lastTouchEnd=0;
+document.addEventListener('touchend',e=>{
+  const now=Date.now(); if(now-lastTouchEnd<=300) e.preventDefault(); lastTouchEnd=now;
+},{passive:false});
+
+const clock=new THREE.Clock();
+const camTarget=new THREE.Vector3();
+
+function endGame(){
+  running=false; ended=true; speed*=.5;
+  document.querySelector('#card h1').textContent='TIME!';
+  document.querySelector('#card p').innerHTML=`You smashed <b>${smashed}</b> leprechauns and scored <b>${score.toLocaleString()}</b> points.`;
+  document.querySelector('#play').textContent='RUN IT AGAIN';
+  document.querySelector('#start').style.display='flex';
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(.033,clock.getDelta());
+
+  if(running){
+    timeLeft-=dt;
+    if(timeLeft<=0) endGame();
+
+    const accel=keys.gas?15:0;
+    const brake=keys.brake?18:0;
+    speed += accel*dt;
+    speed -= brake*dt;
+    speed *= Math.pow(.985,dt*60);
+    speed = THREE.MathUtils.clamp(speed,-6,19);
+
+    const steerInput=(keys.left?1:0)-(keys.right?1:0);
+    steer=THREE.MathUtils.lerp(steer,steerInput,.12);
+    const turnStrength=(.25+Math.min(1,Math.abs(speed)/8))*1.35;
+    jeep.rotation.y += steer*turnStrength*dt*Math.sign(speed||1);
+
+    const fwd=new THREE.Vector3(Math.sin(jeep.rotation.y),0,Math.cos(jeep.rotation.y));
+    jeep.position.addScaledVector(fwd,speed*dt);
+    const r=Math.hypot(jeep.position.x,jeep.position.z);
+    if(r>79){
+      jeep.position.multiplyScalar(79/r);
+      speed*=-.22;
+      showMessage('WALL!');
+    }
+
+    for(const w of wheels) w.rotation.x -= speed*dt/1.25;
+    wheels[0].rotation.y=wheels[2].rotation.y=-steer*.35;
+    wheels[1].rotation.y=wheels[3].rotation.y=-steer*.35;
+
+    // crowd movement + collisions
+    for(const l of leps){
+      if(l.userData.alive){
+        // jittery fleeing
+        const d=jeep.position.distanceTo(l.position);
+        if(d<18){
+          const away=l.position.clone().sub(jeep.position).setY(0).normalize();
+          l.position.addScaledVector(away,dt*(1.4+(18-d)*.12));
+          l.rotation.y=Math.atan2(away.x,away.z);
+        } else {
+          l.rotation.y += Math.sin(performance.now()*.001+l.id)*.002;
+        }
+        if(d<4.5 && Math.abs(speed)>.8) knockOut(l,false,5+Math.abs(speed)*.25);
+      } else {
+        l.userData.vy -= 12*dt;
+        l.position.x += l.userData.vx*dt;
+        l.position.z += l.userData.vz*dt;
+        l.position.y += l.userData.vy*dt;
+        l.rotation.x += l.userData.spin*dt;
+        l.rotation.z += l.userData.spin*.7*dt;
+        if(l.position.y<=0){
+          l.position.y=0;
+          l.userData.vx*=.88; l.userData.vz*=.88; l.userData.vy*=-.18;
+          if(Math.abs(l.userData.vy)<.5) {
+            l.userData.hitCooldown=(l.userData.hitCooldown||0)+dt;
+            if(l.userData.hitCooldown>2.1) respawnLep(l);
+          }
+        }
+      }
+    }
+
+    if(shockwave){
+      shockwave.userData.t+=dt;
+      const s=1+shockwave.userData.t*17;
+      shockwave.scale.setScalar(s);
+      shockwave.material.opacity=Math.max(0,.82-shockwave.userData.t*.7);
+      if(shockwave.userData.t>1.15){ scene.remove(shockwave); shockwave.geometry.dispose(); shockwave.material.dispose(); shockwave=null; }
+    }
+
+    if(msgTimer>0){ msgTimer-=dt; if(msgTimer<=0) msg.classList.remove('show'); }
+    updateHUD();
+  }
+
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i]; p.userData.life-=dt; p.userData.v.y-=9.8*dt; p.position.addScaledVector(p.userData.v,dt);
+    p.scale.setScalar(Math.max(.05,p.userData.life));
+    if(p.userData.life<=0){ scene.remove(p); p.geometry.dispose(); p.material.dispose(); particles.splice(i,1); }
+  }
+
+  // chase camera
+  const back=new THREE.Vector3(-Math.sin(jeep.rotation.y),0,-Math.cos(jeep.rotation.y));
+  camTarget.copy(jeep.position).addScaledVector(back,15).add(new THREE.Vector3(0,8,0));
+  camera.position.lerp(camTarget,1-Math.pow(.002,dt));
+  const look=jeep.position.clone().add(new THREE.Vector3(0,2.4,0));
+  camera.lookAt(look);
+
+  renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
