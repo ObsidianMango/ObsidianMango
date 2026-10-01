@@ -1,6 +1,7 @@
 import * as C from './cannon-es.js';
 import {buildNovelty} from './novelty-models.js?v=chaos-1';
 import {buildHeritage} from './heritage-models.js?v=heritage-1';
+import {buildShowpiece} from './showpiece-models.js?v=showpiece-1';
 import {installTouchGuard} from './touch-guard.js?v=chaos-1';
 import {buildRoadster} from './roadster-model.js';
 import {VEHICLES,buildSUV} from './garage-models.js?v=chaos-1';
@@ -28,7 +29,7 @@ let saves=[];try{saves=JSON.parse(localStorage.getItem('parkside-chaos-saves-v1'
 function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
 const baseComplete=()=>Array.from({length:8},(_,i)=>saves[i]?.stars>=1).every(Boolean),unlocked=i=>i<8||baseComplete();
 const lot=()=>LOTS[levelIndex],view=()=>lots.views[levelIndex];
-const garage=VEHICLES.map(config=>({config,...(config.id==='roadster'?buildRoadster(T):config.id==='santafe'?buildSUV(T,config.id):['flamecoupe','maybach'].includes(config.id)?buildHeritage(T,config.id):buildNovelty(T,config.id))}));
+const garage=VEHICLES.map(config=>({config,...(config.id==='roadster'?buildRoadster(T):config.id==='santafe'?buildSUV(T,config.id):['flamecoupe','wiener'].includes(config.id)?buildShowpiece(T,config.id):config.id==='maybach'?buildHeritage(T,config.id):buildNovelty(T,config.id))}));
 let vehicleIndex=0;try{vehicleIndex=Math.max(0,VEHICLES.findIndex(v=>v.id===localStorage.getItem('parkside-chaos-car')));}catch{}
 let car=garage[vehicleIndex],spec=car.config;for(const item of garage){scene.add(item.root);item.root.visible=item===car;}
 const chassis=new C.Body({mass:950,allowSleep:false,material:carMat,position:new C.Vec3(0,1.2,0),linearDamping:.025,angularDamping:.48});chassis.addShape(new C.Box(new C.Vec3(1.16,.26,2.28)),new C.Vec3(0,.05,0));world.addBody(chassis);
