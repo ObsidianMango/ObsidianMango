@@ -1,0 +1,31 @@
+// A rolling transform recorder: playback uses the actual simulated crash, not a second explosion.
+export function createCrashDirector({T,scene,camera,parts,obstacles,onComplete}){
+ const nodes=[...parts,...obstacles.map(o=>o.mesh)],frames=[];
+ const pos=new T.Vector3(),quat=new T.Quaternion(),qa=new T.Quaternion(),qb=new T.Quaternion();
+ let impact=null,capturing=false,lastRecord=-Infinity,playing=false,shot=0,cursor=0,shots=[],elapsed=0,totalDuration=1,oldFov=54;
+ const effects=new T.Group();scene.add(effects);effects.visible=false;
+ const fireGeo=new T.IcosahedronGeometry(1,1),smokeGeo=new T.IcosahedronGeometry(1,0),puffs=[];
+ let seed=7301;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
+ for(let i=0;i<22;i++){const fire=i<9,m=new T.Mesh(fire?fireGeo:smokeGeo,new T.MeshBasicMaterial({color:fire?0xffab35:0x5b6258,transparent:true,opacity:0,depthWrite:false,blending:fire?T.AdditiveBlending:T.NormalBlending}));effects.add(m);puffs.push({m,fire,delay:fire?random()*.17:.16+random()*.75,v:new T.Vector3((random()-.5)*8,1.8+random()*4,(random()-.5)*8),size:.45+random()*.9});}
+ const count=150,positions=new Float32Array(count*3),velocities=[];for(let i=0;i<count;i++)velocities.push(new T.Vector3((random()-.5)*28,3+random()*14,(random()-.5)*28));
+ const pointGeo=new T.BufferGeometry();pointGeo.setAttribute('position',new T.BufferAttribute(positions,3));const embers=new T.Points(pointGeo,new T.PointsMaterial({color:0xffcc70,size:.12,transparent:true,opacity:1,depthWrite:false,blending:T.AdditiveBlending}));embers.frustumCulled=false;effects.add(embers);
+ const ring=new T.Mesh(new T.RingGeometry(.85,1,48),new T.MeshBasicMaterial({color:0xffd293,transparent:true,opacity:0,side:T.DoubleSide,depthWrite:false}));ring.rotation.x=-Math.PI/2;effects.add(ring);
+ function renderEffects(age){effects.visible=!!impact&&age>=0&&age<5.5;if(!effects.visible)return;effects.position.copy(impact.point);
+  for(const p of puffs){const t=age-p.delay;p.m.visible=t>0&&t<(p.fire?1.05:4.7);if(!p.m.visible)continue;p.m.position.copy(p.v).multiplyScalar(p.fire?t*.85:Math.sqrt(t)*.65);p.m.position.y+=p.fire?.2:t*.6;const scale=p.size*(p.fire?Math.sin(Math.min(1,t)*Math.PI)*2.4:.5+t*.9);p.m.scale.setScalar(Math.max(.01,scale));p.m.rotation.set(t*.5,t*.2,t*.15);p.m.material.opacity=p.fire?Math.max(0,.88-t*.85):Math.max(0,.48-t*.10);if(p.fire)p.m.material.color.setHSL(.08-t*.045,1,.6-t*.19);}
+  for(let i=0;i<count;i++){const v=velocities[i],t=Math.min(age,3);positions[i*3]=v.x*t;positions[i*3+1]=Math.max(-impact.point.y+.07,v.y*t-4.91*t*t);positions[i*3+2]=v.z*t;}pointGeo.attributes.position.needsUpdate=true;embers.material.opacity=Math.max(0,1-age/2.8);ring.position.y=-impact.point.y+.08;ring.scale.setScalar(.7+age*16);ring.material.opacity=Math.max(0,.6-age*1.2);
+ }
+ function record(t,force=false){if(playing||(!force&&t-lastRecord<1/30))return;lastRecord=t;scene.updateMatrixWorld(true);const values=new Float32Array(nodes.length*8);nodes.forEach((n,i)=>{n.getWorldPosition(pos);n.getWorldQuaternion(quat);const k=i*8;values.set([pos.x,pos.y,pos.z,quat.x,quat.y,quat.z,quat.w,n.visible?1:0],k)});frames.push({t,values});if(!capturing)while(frames.length>1&&frames[0].t<t-1.5)frames.shift();while(frames.length>210)frames.shift();}
+ function mark(info,t){impact={...info,t,point:info.point.clone(),forward:info.forward.clone()};capturing=true;record(t,true);}
+ function apply(t){if(!frames.length)return;let lo=0,hi=frames.length-1;while(lo+1<hi){let mid=(lo+hi)>>1;if(frames[mid].t<t)lo=mid;else hi=mid;}const a=frames[lo],b=frames[hi],u=Math.max(0,Math.min(1,(t-a.t)/Math.max(.00001,b.t-a.t)));
+  nodes.forEach((n,i)=>{const k=i*8;n.position.set(a.values[k]+(b.values[k]-a.values[k])*u,a.values[k+1]+(b.values[k+1]-a.values[k+1])*u,a.values[k+2]+(b.values[k+2]-a.values[k+2])*u);qa.fromArray(a.values,k+3);qb.fromArray(b.values,k+3);n.quaternion.copy(qa).slerp(qb,u);n.visible=(u<.5?a:b).values[k+7]>.5;});renderEffects(t-impact.t);}
+ const center=new T.Vector3(),right=new T.Vector3(),offset=new T.Vector3();
+ function aim(angle,progress=0){center.set(0,0,0);parts.forEach(p=>center.add(p.position));center.multiplyScalar(1/parts.length);center.y=Math.max(.8,center.y);let spread=0;for(const p of parts)spread=Math.max(spread,p.position.distanceTo(center));const distance=Math.max(11,8+Math.min(spread,30)*.85)*(camera.aspect<1?1.65:1.05);right.set(-impact.forward.z,0,impact.forward.x).normalize();
+  if(angle===0){offset.copy(right).multiplyScalar(distance).addScaledVector(impact.forward,distance*.2);offset.y=4.4+spread*.12;}else{offset.copy(right).multiplyScalar(-distance*.7).addScaledVector(impact.forward,-distance*.6);offset.applyAxisAngle(new T.Vector3(0,1,0),progress*.35);offset.y=distance*.7;}
+  camera.position.copy(center).add(offset);camera.lookAt(center);camera.fov=camera.aspect<1?62:56;camera.updateProjectionMatrix();
+ }
+ function begin(){if(!impact||frames.length<2||frames.at(-1).t-frames[0].t<.03)return false;oldFov=camera.fov;playing=true;shot=0;elapsed=0;shots=[{from:Math.max(frames[0].t,impact.t-1.1),to:Math.min(frames.at(-1).t,impact.t+1.65),rate:.7,angle:0},{from:Math.max(frames[0].t,impact.t-.18),to:frames.at(-1).t,rate:.8,angle:1}];cursor=shots[0].from;totalDuration=shots.reduce((n,s)=>n+(s.to-s.from)/s.rate,0);return true;}
+ function update(dt){if(!playing)return;const s=shots[shot];cursor+=dt*s.rate;elapsed+=dt;if(cursor>=s.to){if(shot===shots.length-1){apply(s.to);aim(s.angle,1);playing=false;onComplete();return;}shot++;cursor=shots[shot].from;}const current=shots[shot];apply(cursor);aim(current.angle,(cursor-current.from)/(current.to-current.from));document.getElementById('replayAngle').textContent=current.angle?'02 / OVERHEAD ORBIT':'01 / ROADSIDE SLOW MOTION';document.getElementById('replayProgress').style.width=Math.min(100,elapsed/totalDuration*100)+'%';}
+ function stop(){playing=false;camera.fov=oldFov;camera.updateProjectionMatrix();effects.visible=false;}
+ function reset(){stop();frames.length=0;impact=null;capturing=false;lastRecord=-Infinity;}
+ return{setParts(next){reset();parts=next;nodes.splice(0,nodes.length,...parts,...obstacles.map(o=>o.mesh));},record,mark,begin,update,stop,reset,renderEffects,getInfo:()=>({frames:frames.length,playing,shot,cursor,impactTime:impact?.t,impactSpeed:impact?.speed}),getImpact:()=>impact};
+}
