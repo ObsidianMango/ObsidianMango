@@ -144,29 +144,134 @@ export function buildDetailedVehicle(T,c){
   for(const z of [-2.74,2.61])for(const y of [.53,.63])tube(z<0?'front-bumper':'rear-bumper',[[-.96,y,z+.03],[0,y,z+(z<0?-.08:.08)],[.96,y,z+.03]],.03,'trim');plate('grille',-2.828,.68,'ZEPPELIN',.48);plate('rear-bumper',2.70,.71,'V12 1930',.48);
  }
  function buildWiener(){
-  mat('bun',0xda973d,.03,.76);mat('bread',0xf8d895,.01,.85);mat('toast',0xb5782f,.02,.8);mat('sausage',0xac3e25,.08,.43);mat('mustard',0xf6ce24,.04,.38);
-  box('chassis',1.62,.14,4.73,0,.38,0,'steel');loft('tub',[[-2.47,.67,.49,.80],[-2.15,.91,.48,.91],[-.74,1.04,.48,.89],[1.76,.99,.48,.85],[2.47,.72,.53,.79]],'accent');
-  // Open cockpit glazing at the front, with bodywork below the windows only.
-  loft('cab',[[-2.40,.63,.81,1.05],[-1.98,.76,.81,1.11],[-1.14,.70,.81,1.18]],'paint');
-  windowFrame('windshield',[[-.62,1.10,-2.34],[.62,1.10,-2.34],[.52,1.65,-1.85],[-.52,1.65,-1.85]],'accent',.031);wipers('windshield',-2.35,1.12,-1.85,1.65,.58);
-  for(const side of [-1,1]){windowFrame('door-'+side,[[side*.72,1.12,-2.03],[side*.71,1.15,-1.20],[side*.53,1.69,-1.16],[side*.53,1.66,-1.84]],'accent',.032);rounded('door-'+side,.037,.044,.17,side*.77,1.01,-1.43,'trim',.008);tube('mirror-'+side,[[side*.67,1.21,-2.0],[side*.93,1.35,-1.99]],.016,'trim');rounded('mirror-'+side,.13,.13,.06,side*.96,1.37,-1.98,'trim',.025);}
-  const dogY=1.65;
-  const dog=[];for(let i=0;i<=48;i++){const z=-1.35+i*3.75/48,t=(z+.02)/2.4;let r=Math.sqrt(Math.max(.001,1-t*t))*.60;if(z<-.95)r*=.93;dog.push([z,r,r*.88,0,dogY]);}
-  capsule('sausage',dog,'sausage');
-  // A rounded nose cap above the windshield joins the edible body without blocking it.
-  loft('cab-roof',[[-1.91,.54,1.64,1.73],[-1.36,.62,1.68,1.88]],'paint');
+  mat('bun',0xd99535,.03,.76);
+  mat('bread',0xf6d898,.01,.84);
+  mat('toast',0xb8782d,.02,.80);
+  mat('sausage',0xa83b23,.08,.42);
+  mat('sausageDark',0x7d2a1d,.06,.50);
+  mat('mustard',0xf6cf20,.04,.38);
+  mat('cabCream',0xf1e2bd,.05,.58);
+  mat('cabRed',0xc73b2e,.16,.38);
+
+  box('chassis',1.66,.14,4.88,0,.38,.02,'steel');
+
+  loft('tub',[
+    [-2.56,.67,.49,.80],
+    [-2.18,.91,.48,.96],
+    [-1.34,1.04,.48,.99],
+    [ .18,1.08,.48,.98],
+    [ 1.74,1.02,.49,.93],
+    [ 2.18,.89,.51,.87],
+    [ 2.54,.71,.54,.79]
+  ],'cabCream');
+
+  loft('cab',[
+    [-2.53,.63,.80,1.05],
+    [-2.24,.77,.80,1.18],
+    [-1.78,.86,.80,1.29],
+    [-1.23,.79,.82,1.28]
+  ],'cabRed');
+
+  windowFrame('windshield',[
+    [-.63,1.12,-2.39],
+    [ .63,1.12,-2.39],
+    [ .54,1.72,-1.88],
+    [-.54,1.72,-1.88]
+  ],'accent',.031);
+  wipers('windshield',-2.39,1.15,-1.88,1.71,.60);
+
+  loft('cab-roof',[
+    [-2.08,.54,1.67,1.77],
+    [-1.69,.64,1.73,1.91],
+    [-1.22,.59,1.69,1.84]
+  ],'cabRed');
+
   for(const side of [-1,1]){
-   const rings=[];for(let i=0;i<=48;i++){const z=-2.15+i*4.57/48,t=(z-.135)/2.3,r=Math.sqrt(Math.max(.002,1-t*t));rings.push([z,.48*r,.45*r,side*.68,1.15]);}
-   capsule('bun-front-'+side,rings,'bun');
-   const bread=rings.map(([z,rx,ry,x,y])=>[z,rx*.51,ry*.53,x-side*.13,y+.28]);capsule('bread-'+side,bread,'bread',24);
-   const crease=[];for(let i=0;i<=24;i++){const z=-1.95+i*4.1/24,rr=Math.sqrt(Math.max(.01,1-((z-.135)/2.3)**2));crease.push([side*(.68+.38*rr),1.28+.14*rr,z]);}tube('bun-front-'+side,crease.slice(0,13),.011,'toast');tube('bun-rear-'+side,crease.slice(12),.011,'toast');
-   // Service doors, inset vents and foot steps are fitted into the lower vehicle body.
-   rounded('service-door-'+side,.025,.22,.52,side*1.047,.70,.62,'paint',.005);for(let i=0;i<5;i++)box('service-door-'+side,.032,.013,.34,side*1.066,.64+i*.026,.62,'black');box('step-'+side,.25,.05,.57,side*1.015,.44,-.46,'steel');for(let i=0;i<4;i++)box('step-'+side,.20,.005,.018,side*1.015,.47,-.64+i*.12,'black');
-   lamp('headlight-'+side,side*.67,.84,-2.48,.135);rounded('tail-light-'+side,.22,.13,.06,side*.64,.83,2.47,'tailLens',.02);
+    windowFrame('door-'+side,[
+      [side*.74,1.14,-2.07],
+      [side*.73,1.17,-1.13],
+      [side*.54,1.74,-1.10],
+      [side*.54,1.71,-1.85]
+    ],'accent',.031);
+    rounded('door-'+side,.040,.047,.18,side*.79,1.02,-1.46,'trim',.009);
+    tube('mirror-'+side,[[side*.68,1.23,-2.03],[side*.96,1.38,-2.02]],.016,'trim');
+    rounded('mirror-'+side,.145,.14,.065,side*.99,1.40,-2.02,'trim',.025);
+
+    box('step-'+side,.29,.055,.66,side*1.025,.445,-.39,'steel');
+    for(let i=0;i<4;i++)box('step-'+side,.23,.006,.020,side*1.025,.478,-.61+i*.145,'black');
+    rounded('service-door-'+side,.027,.24,.59,side*1.055,.715,.64,'cabRed',.006);
+    for(let i=0;i<5;i++)box('service-door-'+side,.034,.013,.40,side*1.073,.645+i*.029,.64,'black');
+
+    lamp('headlight-'+side,side*.69,.86,-2.52,.14);
+    rounded('tail-light-'+side,.24,.14,.065,side*.66,.84,2.51,'tailLens',.020);
   }
-  const mustard=[];for(let i=0;i<=42;i++){const z=-.87+i*3.03/42,r=Math.sqrt(Math.max(.001,1-((z+.02)/2.4)**2))*.60;const x=Math.sin(i*.74)*.15;mustard.push([x,dogY+r*.88*Math.sqrt(1-x*x/(r*r))+.025,z]);}tube('mustard-front',mustard.slice(0,23),.049,'mustard',66);tube('mustard-rear',mustard.slice(22),.049,'mustard',60);
-  rounded('grille',1.16,.25,.075,0,.73,-2.46,'black',.019);for(let i=0;i<5;i++)box('grille',1.02,.018,.017,0,.65+i*.037,-2.506,'trim');rounded('front-bumper',1.81,.13,.13,0,.55,-2.50,'trim',.029);rounded('rear-bumper',1.79,.12,.13,0,.55,2.49,'trim',.03);
-  plate('front-bumper',-2.576,.57,'HOT DOG');plate('rear-bumper',2.56,.61,'HOT DOG');
-  const cv=document.createElement('canvas');cv.width=512;cv.height=192;const ctx=cv.getContext('2d');ctx.fillStyle='#efe1b9';ctx.fillRect(0,0,512,192);ctx.fillStyle='#b33227';ctx.font='bold 74px Georgia';ctx.textAlign='center';ctx.fillText('HOT DOG',256,123);const tex=new T.CanvasTexture(cv);tex.colorSpace=T.SRGBColorSpace;const sm=new T.MeshStandardMaterial({map:tex,roughness:.5,side:T.DoubleSide});rounded('sign',.075,.36,1.04,0,2.31,.45,'accent',.018);for(const side of [-1,1])k.add('sign',new T.PlaneGeometry(.98,.33),sm,side*.042,2.31,.45,0,side*Math.PI/2);
+
+  const dogY=1.67,dog=[];
+  for(let i=0;i<=64;i++){
+    const z=-1.74+i*4.38/64;
+    const t=(z-.45)/2.33;
+    let r=Math.sqrt(Math.max(.001,1-t*t))*.625;
+    if(z< -1.25)r*=.95;
+    if(z>  2.02)r*=.93;
+    dog.push([z,r,r*.87,0,dogY]);
+  }
+  capsule('sausage',dog,'sausage',30);
+
+  for(const [name,z] of [['sausage-front-cap',-1.71],['sausage-rear-cap',2.61]]){
+    const rr=z<0?.25:.23;
+    cyl(name,rr,.055,0,dogY,z,'sausageDark','z',rr,26);
+  }
+
+  for(const side of [-1,1]){
+    const bun=[];
+    for(let i=0;i<=64;i++){
+      const z=-2.24+i*4.90/64;
+      const t=(z-.21)/2.48;
+      const rr=Math.sqrt(Math.max(.002,1-t*t));
+      bun.push([z,.535*rr,.485*rr,side*.70,1.16]);
+    }
+    capsule('bun-front-'+side,bun,'bun',30);
+
+    const bread=bun.map(([z,rx,ry,x,y])=>[
+      z,rx*.56,ry*.57,x-side*.145,y+.285
+    ]);
+    capsule('bread-'+side,bread,'bread',24);
+
+    const crease=[];
+    for(let i=0;i<=32;i++){
+      const z=-2.02+i*4.30/32;
+      const rr=Math.sqrt(Math.max(.01,1-((z-.13)/2.36)**2));
+      crease.push([side*(.70+.405*rr),1.29+.15*rr,z]);
+    }
+    tube('bun-front-'+side,crease,.011,'toast',82);
+  }
+
+  const mustard=[];
+  for(let i=0;i<=60;i++){
+    const z=-1.04+i*3.61/60;
+    const t=(z-.45)/2.30;
+    const r=Math.sqrt(Math.max(.001,1-t*t))*.625;
+    const x=Math.sin(i*.57)*.145 + Math.sin(i*1.14+.7)*.025;
+    const y=dogY+r*.88*Math.sqrt(Math.max(.1,1-x*x/Math.max(.001,r*r)))+.032;
+    mustard.push([x,y,z]);
+  }
+  tube('mustard',mustard,.051,'mustard',110);
+
+  rounded('grille',1.19,.255,.080,0,.73,-2.50,'black',.020);
+  for(let i=0;i<6;i++)box('grille',1.04,.017,.017,0,.645+i*.036,-2.545,'trim');
+  rounded('front-bumper',1.86,.135,.135,0,.55,-2.55,'trim',.031);
+  rounded('rear-bumper',1.83,.125,.135,0,.55,2.55,'trim',.031);
+  plate('front-bumper',-2.625,.57,'HOT DOG');
+  plate('rear-bumper', 2.625,.61,'HOT DOG');
+
+  rounded('sign',.075,.24,.90,0,2.24,.58,'cabCream',.016);
+  const cv=document.createElement('canvas');cv.width=640;cv.height=150;
+  const ctx=cv.getContext('2d');ctx.fillStyle='#f1e2bd';ctx.fillRect(0,0,640,150);
+  ctx.strokeStyle='#b43328';ctx.lineWidth=8;ctx.strokeRect(6,6,628,138);
+  ctx.fillStyle='#b43328';ctx.font='bold 60px Georgia';ctx.textAlign='center';
+  ctx.fillText('HOT DOG',320,101);
+  const tex=new T.CanvasTexture(cv);tex.colorSpace=T.SRGBColorSpace;
+  const signMat=new T.MeshStandardMaterial({map:tex,roughness:.52,side:T.DoubleSide});
+  for(const side of [-1,1])k.add('sign',new T.PlaneGeometry(.84,.20),signMat,side*.040,2.24,.58,0,side*Math.PI/2);
  }
 }
