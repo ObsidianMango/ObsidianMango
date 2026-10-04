@@ -1,8 +1,8 @@
-import {buildDetailedVehicle} from './detailed-vehicles.js?v=wiener-rebuild-3';
+import {buildDetailedVehicle} from './detailed-vehicles.js?v=photo-2';
 import * as C from './cannon-es.js';
 import {installTouchGuard} from './touch-guard.js?v=nova-1';
 import {buildRoadster} from './roadster-model.js';
-import {VEHICLES} from './garage-models.js?v=quality-1';
+import {VEHICLES} from './garage-models.js?v=photo-2';
 import {createCrashDirector} from './crash-replay.js?v=chaos-1';
 import {LOTS,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=lots-24';
 const T=window.THREE,$=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -43,11 +43,11 @@ function updateVisualWheelSpin(dt){
   const w=vehicle.wheelInfos[i],part=wheelParts[i];
   if(!part?.userData.attached){visualWheelOmega[i]=0;visualWheelSlip[i]=0;continue;}
   const steering=i<2?w.steering:0;
-  wheelForwardLocal.set(Math.sin(steering),0,-Math.cos(steering));
+  wheelForwardLocal.set(-Math.sin(steering),0,-Math.cos(steering));
   chassis.vectorToWorldFrame(wheelForwardLocal,wheelForwardWorld);
   chassis.getVelocityAtWorldPoint(w.chassisConnectionPointWorld,wheelPointVelocity);
   const longitudinal=wheelForwardWorld.dot(wheelPointVelocity),radius=Math.max(.05,w.radius),roadOmega=longitudinal/radius;
-  const fullBrake=i>=2&&input.handbrake?70:40,brakeRatio=clamp((Math.abs(w.brake)-8)/Math.max(1,fullBrake-8),0,1);
+  const fullBrake=i>=2&&input.handbrake?70:40,brakeRatio=clamp((Math.abs(w.brake)*950/spec.mass-8)/Math.max(1,fullBrake-8),0,1);
   let targetOmega=roadOmega;
   if(w.isInContact){
    if(brakeRatio>0&&Math.abs(longitudinal)>.12){
@@ -55,13 +55,13 @@ function updateVisualWheelSpin(dt){
     targetOmega*=1-brakeRatio*(1-minimumRolling);
    }
    const engineRatio=clamp(Math.abs(w.engineForce)/(spec.power||1),0,1);
-   if(engineRatio>.01&&Math.abs(longitudinal)<6){
+   if(w.sliding&&engineRatio>.01&&Math.abs(longitudinal)<6){
     const launchSlip=(1-clamp(Math.abs(longitudinal)/6,0,1))*engineRatio;
     targetOmega+=Math.sign(w.engineForce||1)*launchSlip*5;
    }
    visualWheelSlip[i]=Math.abs(roadOmega-targetOmega)/Math.max(.5,Math.abs(roadOmega));
-   const response=brakeRatio>.15?12:18;
-   visualWheelOmega[i]+=(targetOmega-visualWheelOmega[i])*(1-Math.exp(-dt*response));
+   // Rolling contact is distance / radius, with no throttle-dependent lag.
+   visualWheelOmega[i]=targetOmega;
   }else{
    visualWheelSlip[i]=1;
    if(Math.abs(w.engineForce)>0){
@@ -86,7 +86,9 @@ wheel.addEventListener('pointerup',releaseWheel);wheel.addEventListener('pointer
 function paintWheel(){const keyboard=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0);$('wheelArt').style.transform='rotate('+(keyboard?keyboard*95:wheelAngle)+'deg)';wheel.setAttribute('aria-valuenow',String(Math.round(wheelAngle)));}
 function updateWheel(dt){if(wheelPointer===null)wheelAngle*=Math.exp(-dt*7);if(Math.abs(wheelAngle)<.05)wheelAngle=0;paintWheel();}
 function notify(message,seconds=2){$('notice').textContent=message;noticeUntil=clock+seconds;$('notice').style.opacity='1';}
-function syncCar(){car.root.position.copy(chassis.position);car.root.quaternion.copy(chassis.quaternion);car.root.position.add(new T.Vector3(0,-spec.offset,0).applyQuaternion(car.root.quaternion));car.root.updateMatrixWorld(true);for(let i=0;i<4;i++){const p=wheelParts[i];if(!p.userData.attached)continue;const w=vehicle.wheelInfos[i],physicsRotation=w.rotation;w.rotation=visualWheelAngle[i];vehicle.updateWheelTransform(i);w.rotation=physicsRotation;const t=w.worldTransform;const local=new T.Vector3().copy(t.position);car.root.worldToLocal(local);p.position.copy(local);p.quaternion.copy(car.root.quaternion).invert().multiply(new T.Quaternion().copy(t.quaternion));}}
+function syncCar(){car.root.position.copy(chassis.position);car.root.quaternion.copy(chassis.quaternion);car.root.position.add(new T.Vector3(0,-spec.offset,0).applyQuaternion(car.root.quaternion));car.root.updateMatrixWorld(true);for(let i=0;i<4;i++){const p=wheelParts[i];if(!p.userData.attached)continue;const w=vehicle.wheelInfos[i],physicsRotation=w.rotation,contact=w.isInContact;w.rotation=visualWheelAngle[i];vehicle.updateWheelTransform(i);w.rotation=physicsRotation;w.isInContact=contact;const t=w.worldTransform;const local=new T.Vector3().copy(t.position);car.root.worldToLocal(local);p.position.copy(local);p.quaternion.copy(car.root.quaternion).invert().multiply(new T.Quaternion().copy(t.quaternion));}}
+// Integrate once per fixed step, even on displays rendering faster than physics.
+world.addEventListener('postStep',()=>updateVisualWheelSpin(world.dt));
 function restore(){chassis.collisionResponse=true;chassis.collisionFilterMask=-1;for(const d of loose){world.removeBody(d.body);scene.remove(d.mesh)}loose.length=0;for(const p of car.assemblies){car.root.add(p);p.position.copy(p.userData.home);p.quaternion.identity();p.scale.set(1,1,1);p.userData.attached=true;p.visible=true;}for(const w of vehicle.wheelInfos){w.radius=spec.radius;w.suspensionStiffness=32;w.frictionSlip=3.4;}resetVisualWheelSpin();health=100;}
 function detach(part,kick=0,all=false){if(!part||!part.userData.attached||(!all&&(part.name==='chassis'||part.name==='tub')))return;part.userData.attached=false;totalLost++;scene.attach(part);const sz=part.userData.size;const body=boxBody(clamp(sz.x,.12,2.3),clamp(sz.y,.12,1.4),clamp(sz.z,.12,2.6),part.name==='engine'?65:part.name==='chassis'?90:part.name==='tub'?45:part.name.startsWith('wheel')?25:12,part.position.x,part.position.y,part.position.z);body.quaternion.copy(part.quaternion);body.velocity.copy(chassis.velocity);const outward=new T.Vector3(part.position.x-chassis.position.x,0,part.position.z-chassis.position.z).normalize();body.velocity.x+=outward.x*kick*.7+(rand()-.5)*4;body.velocity.y+=1+rand()*3+kick*.27;body.velocity.z+=outward.z*kick*.7+(rand()-.5)*4;body.angularVelocity.set((rand()-.5)*8,(rand()-.5)*8,(rand()-.5)*8);body.collisionFilterGroup=2;body.collisionFilterMask=1;body.sleepSpeedLimit=.35;loose.push({mesh:part,body,age:0});let i=wheelParts.indexOf(part);if(i>=0){vehicle.wheelInfos[i].radius=.14;vehicle.wheelInfos[i].suspensionStiffness=8;vehicle.wheelInfos[i].frictionSlip=.4;}while(loose.length>64){const d=loose.shift();world.removeBody(d.body);scene.remove(d.mesh);}}
 function burst(point,strength){for(let i=0;i<Math.min(18,5+strength);i++){const mesh=new T.Mesh(unitBox,new T.MeshBasicMaterial({color:i%2?0xffba56:0xfff4c5}));mesh.scale.set(.035,.035,.16);mesh.position.copy(point);scene.add(mesh);sparks.push({mesh,v:new T.Vector3((rand()-.5)*9,rand()*6,(rand()-.5)*9),life:.5+rand()*.5});}flash=Math.min(.65,strength/35);}
@@ -168,7 +170,7 @@ function physics(dt){physicsTime+=dt;input={gas:keys.KeyW||keys.ArrowUp||touch.g
  if(active&&health>0&&motor){if(spec.noBrakes){if(throttle){const limit=desiredGear>0?(Number.isFinite(spec.maxSpeed)?spec.maxSpeed:Infinity):4;engine=desiredGear*(forwardSpeed*desiredGear<0||Math.abs(forwardSpeed)<limit?spec.power:0);}}else if(touch.brake||input.handbrake)brake=40;else if(throttle){if(forwardSpeed*desiredGear<-.3)brake=32;else{const limit=desiredGear>0?(Number.isFinite(spec.maxSpeed)?spec.maxSpeed:Infinity):4;engine=desiredGear*(Math.abs(forwardSpeed)<limit?spec.power:0);brake=0;}}}
  for(let i=0;i<4;i++){const attached=wheelParts[i].userData.attached;vehicle.applyEngineForce(i>=2&&attached?engine:0,i);vehicle.setBrake(spec.noBrakes?0:(input.handbrake&&active&&i>=2?70:brake)*spec.mass/950,i);vehicle.wheelInfos[i].frictionSlip=attached?(off?1.8:input.handbrake&&i>=2?1.05:3.8):.4;}
  if(off&&speed>0){chassis.applyForce(chassis.velocity.scale(-40),new C.Vec3());}else if(speed>0){chassis.applyForce(chassis.velocity.scale(-8-speed*.6),new C.Vec3());}
- world.step(1/60,dt,5);updateVisualWheelSpin(dt);syncCar();if(pendingHit){const hit=pendingHit;pendingHit=null;handleHit(hit);}
+ world.step(1/60,dt,5);syncCar();if(pendingHit){const hit=pendingHit;pendingHit=null;handleHit(hit);}
  if(active&&state==='running'){time+=dt;forwardSpeed=chassis.velocity.dot(chassis.quaternion.vmult(new C.Vec3(0,0,-1)));speed=chassis.velocity.length();if(Math.abs(forwardSpeed)>.3)lastDirection=forwardSpeed>0?1:-1;
  const bayDistance=Math.hypot(chassis.position.x-view().ox-lot().target.x,chassis.position.z-lot().target.z);if(bayDistance>8)reverseTravel=0;else if(forwardSpeed<-.4)reverseTravel+=-forwardSpeed*dt;
  const f=chassis.quaternion.vmult(new C.Vec3(0,0,-1)),up=chassis.quaternion.vmult(new C.Vec3(0,1,0));parkingState=assessParking({x:chassis.position.x-view().ox,z:chassis.position.z,yaw:Math.atan2(-f.x,-f.z),halfWidth:spec.halfWidth||1.27,halfLength:spec.halfLength||2.4,speed,up:up.y,lastDirection:lot().target.reverse?(reverseTravel>.35?-1:0):lastDirection},lot().target);
