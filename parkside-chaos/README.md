@@ -22,7 +22,7 @@ Geometry is merged by material within each breakaway assembly, preserving textur
 
 ## Features
 
-- 16 parking lots; lots 9–16 unlock after completing all original eight.
+- 24 parking lots in three chapters. Lots 9–16 unlock after completing 1–8; lots 17–24 unlock after completing 1–16. Existing progress is preserved.
 - Steering wheel, pedals, D/R selection, camera orbit and camera pinch zoom.
 - Full-footprint parking checks, including wider Maybach and Wienermobile bodywork.
 - Rigid-body damage, complete break-apart wrecks and two-angle recorded crash playback.
@@ -31,3 +31,13 @@ Geometry is merged by material within each breakaway assembly, preserving textur
 ## Validation
 
 Desktop and touch-viewport Chromium checks cover all six selections, fallback from the removed Flame Coupe, forward driving, parking completion, real obstacle impacts, full detachment, both replay angles and restoration. All passed with no JavaScript errors. The Jalopy's brake forces remain zero. Model previews are inspected from front and rear; mobile rapid taps and portrait/landscape layouts are checked in emulation. Physical iOS Home Screen behavior remains device-dependent.
+
+## 24-lot expansion
+
+New sites: Station Approach, Orchard Farm, Hospital Court, Airport Shuttle, Quarry Yard, Marina Service, Mountain Lodge, and The Final Test. Each has a distinct layout and scenery, with head-in, angled, parallel, and reverse maneuvers.
+
+The full campaign audit checks collision-free spawn/target poses and a forward/reverse kinematic route using a conservative 2.68 m × 5.90 m footprint and 4.5 m minimum turning radius. All 24 lots pass. The final test's upper court and staggered walls were widened after the first audit failed. This is an automated route-clearance check, not a claim of manual playtesting every route.
+
+All 144 vehicle/lot combinations pass physical parking-completion tests, including a short reverse approach where required. Fresh, eight-complete, and sixteen-complete saves unlock exactly the correct chapters. Completing a chapter out of order opens its new chapter, and the next-lot button advances correctly rather than looping to lot 9.
+
+Other polish: removed duplicate white lines under highlighted target bays, rotated and positioned bay labels correctly, added actual collisions to seaside kiosks, replaced parked cars' square wheels with round tires/rims, and updated the menu and app manifest to 24 levels.

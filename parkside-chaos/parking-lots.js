@@ -14,8 +14,24 @@ export const LOTS=[
  {name:'Scrapyard',kind:'Obstacle maze',hint:'Navigate the scrap piles to reach J13.',code:'J13',theme:0xb1a58e,spawn:[-15,18,0],target:{x:12,z:-15,yaw:0,w:3.8,d:7.1},par:100,style:'scrap'},
  {name:'Hotel Valet',kind:'Reverse precision',hint:'Go around the fountain and reverse under the portico.',code:'V14',theme:0xc3bca8,spawn:[-16,18,0],target:{x:0,z:-17,yaw:Math.PI,w:3.7,d:7.1,reverse:true},par:100,style:'valet'},
  {name:'Factory Switchback',kind:'Double hairpin',hint:'Right around the first wall. Left around the next.',code:'F15',theme:0xa8b5b5,spawn:[-15,18,0],target:{x:-14,z:-14,yaw:0,w:3.8,d:7.2},par:120,style:'factory'},
- {name:'Festival Finale',kind:'Reverse slalom',hint:'Thread the festival stalls and reverse into the final bay.',code:'F16',theme:0xc4c2a3,spawn:[-15,18,0],target:{x:13,z:-15,yaw:Math.PI,w:3.7,d:7.4,reverse:true},par:120,style:'festival'}
+ {name:'Festival Finale',kind:'Reverse slalom',hint:'Thread the festival stalls and reverse into F16.',code:'F16',theme:0xc4c2a3,spawn:[-15,18,0],target:{x:13,z:-15,yaw:Math.PI,w:3.7,d:7.4,reverse:true},par:120,style:'festival'},
+ {name:'Station Approach',kind:'Angled bay',hint:'Pass the taxi island, then swing into R17 beside the platform.',code:'R17',theme:0xb3bac1,spawn:[-15,18,0],target:{x:12,z:-14,yaw:-Math.PI/4,w:3.9,d:7.4},par:95,style:'station'},
+ {name:'Orchard Farm',kind:'Reverse barn',hint:'Weave around the hay stacks. Back into the barn apron.',code:'O18',theme:0xb9c292,spawn:[-15,18,0],target:{x:0,z:-16,yaw:Math.PI,w:3.9,d:7.5,reverse:true},par:115,style:'orchard'},
+ {name:'Hospital Court',kind:'Island turns',hint:'Keep clear of the ambulance bays. Circle the gardens to H19.',code:'H19',theme:0xb6c5c4,spawn:[-15,18,0],target:{x:14,z:-14,yaw:0,w:3.7,d:7.2},par:110,style:'hospital'},
+ {name:'Airport Shuttle',kind:'Angled reverse',hint:'Pass the luggage islands and back diagonally into A20.',code:'A20',theme:0xb2bec9,spawn:[-15,18,0],target:{x:12,z:-13,yaw:Math.PI+Math.PI/6,w:3.9,d:7.6,reverse:true},par:125,style:'airport'},
+ {name:'Quarry Yard',kind:'Parallel reverse',hint:'Take the wide route around the stone piles, then reverse between the trucks.',code:'Q21',theme:0xc3b394,spawn:[-15,18,0],target:{x:15,z:0,yaw:0,w:3.7,d:8,reverse:true},par:130,style:'quarry'},
+ {name:'Marina Service',kind:'Dry-dock reverse',hint:'Thread the boat cradles and back into the service bay.',code:'M22',theme:0xabc3c5,spawn:[15,18,0],target:{x:-14,z:-15,yaw:Math.PI,w:3.8,d:7.5,reverse:true},par:130,style:'marina'},
+ {name:'Mountain Lodge',kind:'Angled arrival',hint:'Wind past the snow islands. Approach L23 on the diagonal.',code:'L23',theme:0xcad4d4,spawn:[-15,18,0],target:{x:0,z:-16,yaw:Math.PI/8,w:3.8,d:7.5},par:125,style:'lodge'},
+ {name:'The Final Test',kind:'Precision reverse',hint:'Clear both staggered walls, turn in the upper court, then back into T24.',code:'T24',theme:0xb9c2b4,spawn:[-15,18,0],target:{x:13,z:-17,yaw:Math.PI,w:3.65,d:7.4,reverse:true},par:150,style:'academy'}
 ];
+export const CHAPTER_SIZE=8;
+export function completedThrough(saves,count){return Array.from({length:count},(_,i)=>saves[i]?.stars>=1).every(Boolean);}
+export function isLotUnlocked(index,saves){return Number.isInteger(index)&&index>=0&&index<LOTS.length&&completedThrough(saves,Math.floor(index/CHAPTER_SIZE)*CHAPTER_SIZE);}
+export function nextLotIndex(index,saves){
+ const next=index+1;if(next<LOTS.length&&isLotUnlocked(next,saves))return next;
+ for(let i=0;i<LOTS.length;i++)if(isLotUnlocked(i,saves)&&!(saves[i]?.stars>=1))return i;
+ return null;
+}
 // Full footprint containment, heading, final approach, upright and stationary checks.
 export function assessParking(pose,target){
  const dx=pose.x-target.x,dz=pose.z-target.z,c=Math.cos(target.yaw),s=Math.sin(target.yaw),x=c*dx-s*dz,z=s*dx+c*dz;
@@ -31,12 +47,12 @@ export function buildLots({T,C,scene,world,groundMat}){
  const mat=c=>{if(!materials.has(c))materials.set(c,new T.MeshStandardMaterial({color:c,roughness:.82}));return materials.get(c);};
  LOTS.forEach((level,index)=>{const ox=index*120,g=new T.Group();scene.add(g);g.visible=index===0;let mini=[];const phys=[];
  function box(w,h,d,x,y,z,color,yaw=0,solid=false){const m=new T.Mesh(boxGeo,mat(color));m.scale.set(w,h,d);m.position.set(ox+x,y,z);m.rotation.y=yaw;m.castShadow=h>.3;m.receiveShadow=true;g.add(m);if(solid){const b=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(w/2,h/2,d/2)),position:new C.Vec3(ox+x,y,z)});b.quaternion.setFromEuler(0,yaw,0);b.userData={kind:'obstacle'};b.updateAABB();world.addBody(b);phys.push(b);mini.push({x,z,w,d,yaw,color:'#a5b6ac'});}return m;}
- function text(value,x,y,z,width=5,yaw=0,ground=false,color='#193c35'){const cv=document.createElement('canvas');cv.width=512;cv.height=128;const ctx=cv.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,512,128);ctx.fillStyle='#fff6dd';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px system-ui';ctx.fillText(value,256,65);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;const mesh=new T.Mesh(new T.PlaneGeometry(width,width/4),new T.MeshBasicMaterial({map:tx,side:T.DoubleSide}));mesh.position.set(ox+x,y,z);if(ground)mesh.rotation.x=-Math.PI/2;else mesh.rotation.y=yaw;g.add(mesh);return mesh;}
+ function text(value,x,y,z,width=5,yaw=0,ground=false,color='#193c35'){const cv=document.createElement('canvas');cv.width=512;cv.height=128;const ctx=cv.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,512,128);ctx.fillStyle='#fff6dd';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px system-ui';ctx.fillText(value,256,65);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;const mesh=new T.Mesh(new T.PlaneGeometry(width,width/4),new T.MeshBasicMaterial({map:tx,side:T.DoubleSide}));mesh.position.set(ox+x,y,z);if(ground){mesh.rotation.x=-Math.PI/2;mesh.rotation.z=yaw;}else mesh.rotation.y=yaw;g.add(mesh);return mesh;}
  function tree(x,z){box(.45,3,.45,x,1.5,z,0x6d634e,0,true);const crown=new T.Mesh(new T.IcosahedronGeometry(2.3,0),mat(0x527f65));crown.position.set(ox+x,4,z);g.add(crown);}
  function island(x,z,w,d){box(w,.28,d,x,.14,z,0xc6cab6,0,true);box(w-.4,.08,d-.4,x,.3,z,0x81946d);if(w>3)tree(x,z);}
  function cone(x,z){const m=new T.Mesh(new T.ConeGeometry(.32,.8,12),mat(0xec9d4f));m.position.set(ox+x,.4,z);g.add(m);box(.5,.08,.5,x,.04,z,0x393e37,0,true);}
- function parked(x,z,yaw,color=0x688d9b){const car=new T.Group();car.position.set(ox+x,0,z);car.rotation.y=yaw;g.add(car);function part(w,h,d,px,py,pz,col){const m=new T.Mesh(boxGeo,mat(col));m.scale.set(w,h,d);m.position.set(px,py,pz);m.castShadow=true;car.add(m);}part(1.95,.65,4.2,0,.7,0,color);part(1.55,.65,2.2,0,1.3,.1,0x40565a);part(1.62,.1,1.7,0,1.66,.2,color);for(const side of [-1,1])for(const end of [-1,1])part(.2,.65,.65,side, .43,end*1.35,0x252c2a);part(1.5,.17,.07,0,.78,-2.14,0xe7e3bf);part(1.5,.15,.07,0,.78,2.14,0xa15143);const body=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(1.04,.75,2.18)),position:new C.Vec3(ox+x,.8,z)});body.quaternion.setFromEuler(0,yaw,0);body.userData={kind:'parked car'};body.updateAABB();world.addBody(body);phys.push(body);mini.push({x,z,w:2.1,d:4.4,yaw,color:'#677e89'});}
- function bay(x,z,yaw=0,w=3.6,d=6.4,target=false){const group=new T.Group();group.position.set(ox+x,.035,z);group.rotation.y=yaw;g.add(group);for(const side of [-1,1]){const line=new T.Mesh(boxGeo,mat(target?0x83f0b0:0xcfd4bd));line.scale.set(.11,.025,d);line.position.x=side*w/2;group.add(line);}for(const end of [-1,1]){const line=new T.Mesh(boxGeo,mat(target?0x83f0b0:0xcfd4bd));line.scale.set(w,.025,.11);line.position.z=end*d/2;group.add(line);}if(target){const fill=new T.Mesh(new T.PlaneGeometry(w,d),new T.MeshBasicMaterial({color:0x74e6ab,transparent:true,opacity:.22,depthWrite:false,side:T.DoubleSide}));fill.rotation.x=-Math.PI/2;fill.position.y=.01;group.add(fill);const shape=new T.Shape();shape.moveTo(0,-1);shape.lineTo(-.55,-.2);shape.lineTo(-.17,-.2);shape.lineTo(-.17,.65);shape.lineTo(.17,.65);shape.lineTo(.17,-.2);shape.lineTo(.55,-.2);shape.closePath();const arrow=new T.Mesh(new T.ShapeGeometry(shape),new T.MeshBasicMaterial({color:0xc9ffd9,side:T.DoubleSide}));arrow.rotation.x=Math.PI/2;arrow.position.y=.08;group.add(arrow);return {group,fill};}}
+ function parked(x,z,yaw,color=0x688d9b){const car=new T.Group();car.position.set(ox+x,0,z);car.rotation.y=yaw;g.add(car);function part(w,h,d,px,py,pz,col){const m=new T.Mesh(boxGeo,mat(col));m.scale.set(w,h,d);m.position.set(px,py,pz);m.castShadow=true;car.add(m);}part(1.95,.65,4.2,0,.7,0,color);part(1.55,.65,2.2,0,1.3,.1,0x40565a);part(1.62,.1,1.7,0,1.66,.2,color);for(const side of [-1,1])for(const end of [-1,1]){const tire=new T.Mesh(new T.CylinderGeometry(.35,.35,.22,12),mat(0x252c2a));tire.rotation.z=Math.PI/2;tire.position.set(side,.40,end*1.35);tire.castShadow=true;car.add(tire);const rim=new T.Mesh(new T.CylinderGeometry(.21,.21,.225,12),mat(0xa9b5ae));rim.rotation.z=Math.PI/2;rim.position.copy(tire.position);car.add(rim);}part(1.5,.17,.07,0,.78,-2.14,0xe7e3bf);part(1.5,.15,.07,0,.78,2.14,0xa15143);const body=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(1.04,.75,2.18)),position:new C.Vec3(ox+x,.8,z)});body.quaternion.setFromEuler(0,yaw,0);body.userData={kind:'parked car'};body.updateAABB();world.addBody(body);phys.push(body);mini.push({x,z,w:2.1,d:4.4,yaw,color:'#677e89'});}
+ function bay(x,z,yaw=0,w=3.6,d=6.4,target=false){if(!target&&Math.hypot(x-level.target.x,z-level.target.z)<.1)return null;const group=new T.Group();group.position.set(ox+x,.035,z);group.rotation.y=yaw;g.add(group);for(const side of [-1,1]){const line=new T.Mesh(boxGeo,mat(target?0x83f0b0:0xcfd4bd));line.scale.set(.11,.025,d);line.position.x=side*w/2;group.add(line);}for(const end of [-1,1]){const line=new T.Mesh(boxGeo,mat(target?0x83f0b0:0xcfd4bd));line.scale.set(w,.025,.11);line.position.z=end*d/2;group.add(line);}if(target){const fill=new T.Mesh(new T.PlaneGeometry(w,d),new T.MeshBasicMaterial({color:0x74e6ab,transparent:true,opacity:.22,depthWrite:false,side:T.DoubleSide}));fill.rotation.x=-Math.PI/2;fill.position.y=.01;group.add(fill);const shape=new T.Shape();shape.moveTo(0,-1);shape.lineTo(-.55,-.2);shape.lineTo(-.17,-.2);shape.lineTo(-.17,.65);shape.lineTo(.17,.65);shape.lineTo(.17,-.2);shape.lineTo(.55,-.2);shape.closePath();const arrow=new T.Mesh(new T.ShapeGeometry(shape),new T.MeshBasicMaterial({color:0xc9ffd9,side:T.DoubleSide}));arrow.rotation.x=Math.PI/2;arrow.position.y=.08;group.add(arrow);return {group,fill};}}
  // A bounded lot with a generous internal entrance and no endless road.
  box(110,.1,105,0,-.13,0,0x8d9e81);box(46,.08,46,0,-.01,0,0x566260);
  box(47,.32,.45,0,.16,-23.3,0xbdc5b5,0,true);box(.45,.32,47,-23.3,.16,0,0xbdc5b5,0,true);box(.45,.32,47,23.3,.16,0,0xbdc5b5,0,true);box(47,.32,.45,0,.16,23.3,0xbdc5b5,0,true);
@@ -52,7 +68,7 @@ export function buildLots({T,C,scene,world,groundMat}){
  if(level.style==='warehouse'){box(37,7,9,0,3.5,-31,0x87989a);text('GOODS IN',6,3,-26.4,10);for(let x of [0,4,8,12,16]){bay(x,-14,Math.PI);if(x!==8)parked(x,-14,Math.PI,colors[x%5]);}box(14,1.3,3,-9,.65,-4,0xa89472,0,true);box(9,1.3,3,12,.65,7,0xa89472,0,true);for(let z of [-4,0,4])cone(1,z);}
  if(level.style==='harbour'){box(30,.05,75,42,-.05,0,0x6b9caa);box(1,.7,46,22,.35,0,0xd3c8a6,0,true);for(let z=-18;z<20;z+=5)box(.35,1.3,.35,21,.65,z,0x796d57,0,true);for(let x of [0,4,8,12,16]){bay(x,-14,Math.PI);if(x!==12)parked(x,-14,Math.PI,colors[x%5]);}box(19,.8,2,-8,.4,7,0xc7b285,0,true);box(14,.8,2,14,.4,-1,0xc7b285,0,true);for(let z of [-6,-3,0])cone(-2,z);}
 
- if(level.style==='seaside'){box(32,.05,90,43,-.04,0,0x6397a9);for(let z of [-15,-5,5,15]){box(5,2.8,5,-19,1.4,z,colors[(z+15)/10%5]);box(5.7,.2,5.7,-19,2.9,z,0xd9b25d);}text('SNACK SHACK',-19,3.8,-5,6);island(-5,6,13,3);island(8,-3,10,2.5);for(let x of [0,4,8,12,16]){bay(x,-15,0,4,7.2);if(x!==12)parked(x,-15,0,colors[x%5]);}}
+ if(level.style==='seaside'){box(32,.05,90,43,-.04,0,0x6397a9);for(let z of [-15,-5,5,15]){box(5,2.8,5,-19,1.4,z,colors[(z+15)/10%5],0,true);box(5.7,.2,5.7,-19,2.9,z,0xd9b25d);}text('SNACK SHACK',-19,3.8,-5,6);island(-5,6,13,3);island(8,-3,10,2.5);for(let x of [0,4,8,12,16]){bay(x,-15,0,4,7.2);if(x!==12)parked(x,-15,0,colors[x%5]);}}
  if(level.style==='construction'){box(13,.9,2,11,.45,7,0xe7bb53,0,true);box(16,.9,2,-8,.45,-2,0xe7bb53,0,true);for(let x of [-14,-9,-4]){bay(x,-15,Math.PI,3.8,7.2);if(x!==-14)parked(x,-15,Math.PI,0xbd884c);}for(let x of [10,15,20]){box(3,2,4,x,1,-15,0x8c918c,0,true);cone(x,1);}box(.4,13,.4,26,6.5,-16,0xdcb445);box(18,.5,.5,18,13,-16,0xdcb445);text('WORK ZONE',4,2.5,-23,9);}
  if(level.style==='cinema'){box(31,10,.5,0,7,-28,0x273e47);box(28,8,.1,0,7.5,-27.7,0xcbd9d7);text('DRIVE-IN',0,7.5,-27.5,14,0,false,'#536c74');for(let z of [-12,3])for(let x of [-14,-5,4,13]){bay(x,z,-Math.PI/6,3.9,7.2);if(!(x===13&&z===-12))parked(x,z,-Math.PI/6,colors[Math.abs(x+z)%5]);}}
  if(level.style==='camp'){for(const [x,z] of [[-4,8],[0,-6],[-14,-12]])island(x,z,7,6);for(const [x,z] of [[-14,0],[13,-14],[13,13]]){box(3,2.4,5,x,1.5,z,0xc6ba90,0,true);box(2.6,.15,5.4,x,2.8,z,0x839a7d);}bay(15,0,Math.PI/2,4,7.4);text('CAMPSITE',0,3,-26,10);}
@@ -61,7 +77,59 @@ export function buildLots({T,C,scene,world,groundMat}){
  if(level.style==='factory'){box(27,1.2,2,-9,.6,8,0x82969a,0,true);box(27,1.2,2,9,.6,-2,0x82969a,0,true);for(let x of [-14,-9,-4]){bay(x,-14,0,3.8,7.2);if(x!==-14)parked(x,-14,0,colors[Math.abs(x)%5]);}for(let x of [9,16])box(5,3.5,7,x,1.75,-15,0x97695d,0,true);box(42,8,8,0,4,-31,0x829094);text('FACTORY',0,5,-26.7,13);}
  if(level.style==='festival'){for(const [x,z] of [[-9,8],[9,0],[-9,-8]]){box(10,.45,3,x,.225,z,0xc7b27f,0,true);for(let k of [-1,1])box(3,2.6,3,x+k*2.5,1.3,z,colors[Math.abs(z+k)%5],0,true);}for(let x of [5,9,13,17]){bay(x,-15,Math.PI,3.7,7.4);if(x!==13)parked(x,-15,Math.PI,colors[x%5]);}text('FESTIVAL',0,4,-28,12);}
 
- const t=level.target,marker=bay(t.x,t.z,t.yaw,t.w,t.d,true);text(level.code,t.x,.07,t.z+Math.cos(t.yaw)*2.2,1.8,0,true,'#247957');
+ // Chapter three: eight distinct sites, with generous maneuvering space for the limousine.
+ if(level.style==='station'){
+  box(47,.35,5,0,.16,-28,0xa7aba6);for(const offset of [-.72,.72])box(48,.10,.12,0,.22,-34+offset,0x687575);
+  for(let x=-22;x<=22;x+=2)box(.22,.08,2.2,x,.15,-34,0x786957);
+  box(15,3.1,3.4,-7,1.9,-34,0xa65446);box(13.9,.9,3.5,-7,2.2,-34,0x637e89);box(16,.18,4.0,-7,3.6,-34,0xd5c8ab);
+  island(-3,0,15,4);for(const x of [-9,-3,3]){box(2,.4,.7,x,.7,0,0x926e4d);box(.12,1,.8,x-.7,.7,0,0x6a756d);}
+  for(const x of [-15,-8,12]){bay(x,-14,-Math.PI/4,3.9,7.4);if(x!==12)parked(x,-14,-Math.PI/4,0xc8aa48);}
+  box(10,4,6,-29,2,8,0xbab19c);text('STATION',-7,4.4,-28,12);
+ }
+ if(level.style==='orchard'){
+  box(18,6,9,0,3,-30,0x9c5946);box(5.5,4.5,.10,0,2.25,-25.4,0x443c32);box(19,.2,10,0,6,-30,0x564b43);text('ORCHARD',0,5,-25.2,10);
+  for(const [x,z,w]of [[-8,7,12],[8,-4,12]]){box(w,1.3,3,x,.65,z,0xc9aa59,0,true);for(let k=-w/2+1.5;k<w/2;k+=3){box(.04,1.33,3.02,x+k,.66,z,0x9a8246);box(2.8,.02,.035,x+k,1.31,z,0xe5cf84);}}
+  for(const x of [-29,28])for(const z of [-16,-6,4,14]){tree(x,z);box(.25,.25,.25,x+.9,3.8,z,0xad4439);}
+  for(const x of [-11,-5,0,6,12]){bay(x,-16,Math.PI,3.9,7.5);if(x!==0)parked(x,-16,Math.PI,colors[Math.abs(x)%5]);}
+ }
+ if(level.style==='hospital'){
+  box(38,12,8,0,6,-31,0xc8d4d0);for(let x=-15;x<=15;x+=5)for(const y of [3,6,9])box(3,1.5,.05,x,y,-26.94,0x7d9ea5);text('HOSPITAL',0,10.3,-26.7,12);
+  box(.8,2.7,.08,-10,5.8,-26.6,0xbd584c);box(2.7,.8,.08,-10,5.8,-26.6,0xbd584c);
+  island(-7,6,11,5);island(7,-4,9,5);for(const x of [-15,-10,-5,9,14,19]){bay(x,-14,0,3.7,7.2);if(x!==14)parked(x,-14,0,x<0?0xe4ded0:colors[x%5]);}
+  for(const z of [2,10]){box(.2,4,.2,20,2,z,0x657a79,0,true);box(1.6,.12,.5,19.4,4,z,0xd6dfbd);}
+ }
+ if(level.style==='airport'){
+  box(45,7,9,0,3.5,-32,0x92a8b1);box(42,3,.08,0,3.8,-27.44,0x537b8e);text('SHUTTLES',0,6.1,-27.3,13);
+  island(-8,6,12,3);island(8,-3,11,3);for(const [x,z]of [[-8,6],[8,-3]]){for(let j=-1;j<=1;j++){box(1,.9,1.4,x+j*2,.85,z,0x637d8a);box(.09,.5,.09,x+j*2,1.5,z,0xd4d2bb);}}
+  for(const x of [-14,-5,3,12]){bay(x,-13,Math.PI+Math.PI/6,3.9,7.6);if(x!==12)parked(x,-13,Math.PI+Math.PI/6,colors[Math.abs(x)%5]);}
+  // Aircraft silhouette is outside the play area, not an invisible collision hazard.
+  box(4,1,17,31,2,-9,0xd1d8d1);box(16,.22,3,31,2.4,-7,0xe4e6d5);box(.25,3,3,31,3,0,0x777ba1);
+ }
+ if(level.style==='quarry'){
+  for(const [x,z,w,d]of [[-7,6,12,5],[1,-7,8,5]]){box(w,1.8,d,x,.9,z,0xa8987e,0,true);for(let j=-1;j<=1;j++){const rock=new T.Mesh(new T.IcosahedronGeometry(1,1),mat(0x9f998a));rock.position.set(ox+x+j*w*.23,2,z);rock.scale.set(w*.22,2,d*.40);g.add(rock);}}
+  for(const z of [-10,10]){parked(15,z,0,0xc7a644);box(1.5,.5,2.4,15,1.9,z+.5,0x967e51);}bay(15,0,0,3.7,8);
+  box(8,4,7,-29,2,-14,0xa78e65);text('QUARRY',0,3.6,-26,12);for(const z of [-16,-8,0,8,16])box(.25,1.1,.25,21,.55,z,0xd9bc59,0,true);
+ }
+ if(level.style==='marina'){
+  box(32,.05,85,-43,-.04,0,0x649ca8);
+  for(const [x,z]of [[8,7],[-7,-3],[10,-14]]){box(9,1,3,x,.5,z,0x667d79,0,true);const hull=new T.Mesh(new T.SphereGeometry(1,16,8),mat(0xe2dfc7));hull.scale.set(4.2,.8,1.4);hull.position.set(ox+x,1.5,z);g.add(hull);box(3.2,1.2,1.5,x,2,z,0xc7d0bc);box(2.3,.6,.02,x,2.2,z+ .77,0x5d808b);}
+  for(const x of [-14,-9,-4]){bay(x,-15,Math.PI,3.8,7.5);if(x!==-14)parked(x,-15,Math.PI,0x829ca6);}text('MARINA SERVICE',-7,3.8,-26,15);
+ }
+ if(level.style==='lodge'){
+  box(110,.08,105,0,-.075,0,0xd6ded6);box(46,.09,46,0,-.008,0,0x637171);
+  for(const [x,z]of [[-8,6],[8,-5]]){box(12,.6,4,x,.30,z,0xd9e1d7,0,true);for(const tx of [x-3,x+3])tree(tx,z);}
+  box(25,5,9,0,2.5,-31,0x836a51);const roof=new T.Mesh(new T.ConeGeometry(1,1,4),mat(0xd5ddd6));roof.scale.set(20,4,8);roof.rotation.y=Math.PI/4;roof.position.set(ox,6,-31);g.add(roof);text('LODGE',0,3.6,-26.3,10);
+  for(const x of [-13,-6,0,7,14]){bay(x,-16,Math.PI/8,3.8,7.5);if(x!==0)parked(x,-16,Math.PI/8,colors[Math.abs(x)%5]);}
+  for(const [x,z,r,h]of [[-37,-37,18,24],[25,-47,24,30]]){const mountain=new T.Mesh(new T.ConeGeometry(r,h,6),mat(0xaebdba));mountain.position.set(ox+x,h/2-2,z);g.add(mountain);}
+ }
+ if(level.style==='academy'){
+  box(20,.75,2,-10,.375,8,0xc4b885,0,true);box(15,.75,2,11,.375,-2,0xc4b885,0,true);
+  for(const [x,z]of [[-10,8],[11,-2]])for(let j=-3;j<=3;j++)box(.5,.02,1.8,x+j*2,.76,z,0x686e62);
+  for(const x of [5,9,13,17]){bay(x,-17,Math.PI,3.65,7.4);if(x!==13)parked(x,-17,Math.PI,colors[x%5]);}
+  for(const z of [-13,-6,0])cone(-18,z);box(18,5,8,0,2.5,-31,0x879c86);text('FINAL TEST',0,3.5,-26.8,12);
+ }
+
+ const t=level.target,marker=bay(t.x,t.z,t.yaw,t.w,t.d,true);text(level.code,t.x+Math.sin(t.yaw)*(t.d/2-.44),.085,t.z+Math.cos(t.yaw)*(t.d/2-.44),1.55,t.yaw,true,'#247957');
  // Beacon stays low enough to avoid blocking orbit cameras.
  const beacon=text('P · '+level.code,t.x,2.8,t.z,2.8);beacon.material.depthTest=false;beacon.renderOrder=2;
  views.push({group:g,ox,marker,beacon,mini,phys});

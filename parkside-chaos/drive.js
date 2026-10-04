@@ -4,7 +4,7 @@ import {installTouchGuard} from './touch-guard.js?v=nova-1';
 import {buildRoadster} from './roadster-model.js';
 import {VEHICLES} from './garage-models.js?v=quality-1';
 import {createCrashDirector} from './crash-replay.js?v=chaos-1';
-import {LOTS,buildLots,assessParking} from './parking-lots.js?v=chaos-1';
+import {LOTS,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=lots-24';
 const T=window.THREE,$=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 installTouchGuard();
 try{boot()}catch(e){console.error(e);$('fatal').hidden=false;$('errorText').textContent=e.message;}
@@ -25,7 +25,8 @@ const lots=buildLots({T,C,scene,world,groundMat}),obstacles=lots.obstacles,loose
 let seed=842,totalLost=0,levelIndex=0,parkingHold=0,parkingState=null,bumps=0,lastDirection=0,reverseTravel=0,selectedGear=1;
 let saves=[];try{saves=JSON.parse(localStorage.getItem('parkside-chaos-saves-v1')||'[]');if(!Array.isArray(saves))saves=[];}catch{}
 function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
-const baseComplete=()=>Array.from({length:8},(_,i)=>saves[i]?.stars>=1).every(Boolean),unlocked=i=>i<8||baseComplete();
+const baseComplete=()=>completedThrough(saves,8),unlocked=i=>isLotUnlocked(i,saves);
+let completionNext=null;
 const lot=()=>LOTS[levelIndex],view=()=>lots.views[levelIndex];
 const garage=VEHICLES.map(config=>({config,...(config.id==='roadster'?buildRoadster(T):buildDetailedVehicle(T,config))}));
 let vehicleIndex=0;try{vehicleIndex=Math.max(0,VEHICLES.findIndex(v=>v.id===localStorage.getItem('parkside-chaos-car')));}catch{}
@@ -62,9 +63,23 @@ $('skipReplay').onclick=()=>{director.stop();showWreck();};$('continueWreck').on
 function recover(initial=false){pendingHit=null;director.reset();restore();const [x,z,yaw]=lot().spawn;chassis.position.set(view().ox+x,Math.max(1.05,spec.offset+.2),z);chassis.quaternion.setFromEuler(0,yaw,0);chassis.velocity.setZero();chassis.angularVelocity.setZero();chassis.force.setZero();chassis.torque.setZero();chassis.aabbNeedsUpdate=true;chassis.wakeUp();for(let i=0;i<4;i++){const w=vehicle.wheelInfos[i];w.rotation=0;w.deltaRotation=0;w.suspensionLength=.29;vehicle.applyEngineForce(0,i);vehicle.setBrake(0,i);}steer=0;wheelAngle=0;parkingHold=0;lastDirection=0;reverseTravel=0;selectedGear=1;lastImpact=physicsTime+.4;camInit=false;orbitMode='follow';paintCamera();orbitPitch=.52;orbitDistance=13;clearInput();if(!initial){bumps++;penalty+=10;notify('Reset to the entrance · +10s');}syncCar();}
 function loadLevel(i){i=clamp(i,0,LOTS.length-1);if(!unlocked(i))return false;levelIndex=i;lots.show(levelIndex);scene.background.setHex(lot().theme);scene.fog.color.setHex(lot().theme);recover(true);renderLots();return true;}
 function start(){if(!unlocked(levelIndex))return;document.body.classList.add('playing');director.reset();document.body.classList.remove('cinematic');$('replayHUD').hidden=true;$('wreckPanel').hidden=true;time=0;totalLost=0;penalty=0;bumps=0;deadTime=0;recover(true);state='running';$('intro').hidden=true;$('finish').hidden=true;$('pausePanel').hidden=true;$('hud').hidden=false;$('touch').hidden=false;$('cameraTools').hidden=false;$('explodeButton').hidden=true;notify(spec.noBrakes?'NO BRAKES — coast or select the opposite gear + GAS to slow down.':spec.id==='nova'?'1,200 HP — feather GAS to park. '+lot().hint:lot().hint,spec.noBrakes||spec.id==='nova'?6:4);resumeAudio();}
-function finish(){const bonusWasUnlocked=baseComplete();document.body.classList.remove('playing');state='ended';clearInput();$('touch').hidden=true;$('cameraTools').hidden=true;$('finish').hidden=false;const elapsed=time+penalty,stars=bumps===0&&elapsed<=lot().par?3:bumps<=2?2:1;const previous=saves[levelIndex];if(!previous||stars>previous.stars||(stars===previous.stars&&elapsed<previous.time))saves[levelIndex]={stars,time:Math.round(elapsed)};try{localStorage.setItem('parkside-chaos-saves-v1',JSON.stringify(saves))}catch{}$('finishTag').textContent='BAY '+lot().code+' / PARKED';$('finishTitle').textContent=stars===3?'Perfect parking.':'Nicely parked.';$('resultDistance').textContent='★'.repeat(stars)+'☆'.repeat(3-stars);$('resultTime').textContent=Math.round(elapsed);$('resultParts').textContent=bumps;$('best').textContent=stars===3?'Clean, accurate and on time.':'For three stars: no bumps, within '+lot().par+' seconds.';const bonusNow=baseComplete();if(!bonusWasUnlocked&&bonusNow){$('finishTag').textContent='BONUS 8 UNLOCKED';$('best').textContent='Lots 9–16 are open. The chaos chapter begins.';}const next=nextLevel();$('nextLot').textContent=next===null?'Choose a lot':!bonusWasUnlocked&&bonusNow?'Enter bonus lots →':'Next lot →';renderLots();}
+function finish(){
+ const previouslyOpen=LOTS.filter((_,i)=>unlocked(i)).length;
+ document.body.classList.remove('playing');state='ended';clearInput();$('touch').hidden=true;$('cameraTools').hidden=true;$('finish').hidden=false;
+ const elapsed=time+penalty,stars=bumps===0&&elapsed<=lot().par?3:bumps<=2?2:1,previous=saves[levelIndex];
+ if(!previous||stars>previous.stars||(stars===previous.stars&&elapsed<previous.time))saves[levelIndex]={stars,time:Math.round(elapsed)};
+ try{localStorage.setItem('parkside-chaos-saves-v1',JSON.stringify(saves))}catch{}
+ $('finishTag').textContent='BAY '+lot().code+' / PARKED';$('finishTitle').textContent=stars===3?'Perfect parking.':'Nicely parked.';
+ $('resultDistance').textContent='★'.repeat(stars)+'☆'.repeat(3-stars);$('resultTime').textContent=Math.round(elapsed);$('resultParts').textContent=bumps;
+ $('best').textContent=stars===3?'Clean, accurate and on time.':'For three stars: no bumps, within '+lot().par+' seconds.';
+ const nowOpen=LOTS.filter((_,i)=>unlocked(i)).length,newChapter=nowOpen>previouslyOpen;
+ completionNext=newChapter?previouslyOpen:nextLotIndex(levelIndex,saves);
+ if(newChapter){$('finishTag').textContent='LOTS '+(previouslyOpen+1)+'–'+nowOpen+' UNLOCKED';$('best').textContent='Eight new parking challenges are open.';}
+ else if(completedThrough(saves,LOTS.length)){$('finishTag').textContent='ALL '+LOTS.length+' LOTS COMPLETE';$('finishTitle').textContent='Parking mastered.';$('best').textContent='Replay any lot to improve your stars and time.';}
+ $('nextLot').textContent=completionNext===null?'Choose a lot':newChapter?'Enter new lots →':'Next lot →';renderLots();
+}
 
-function nextLevel(){if(levelIndex<8&&baseComplete())return 8;if(levelIndex===7)return Array.from({length:8},(_,i)=>i).find(i=>!saves[i]?.stars)??null;return levelIndex<LOTS.length-1?levelIndex+1:null;}
+function nextLevel(){return state==='ended'?completionNext:nextLotIndex(levelIndex,saves);}
 
 function paintGear(){document.querySelectorAll('[data-gear]').forEach(b=>{const active=Number(b.dataset.gear)===selectedGear;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});}
 function configureVehicle(){
@@ -86,7 +101,18 @@ function vehicleThumbnail(item){
 }
 function renderGarage(){const wrap=$('garage');wrap.replaceChildren();garage.forEach((item,i)=>{const b=document.createElement('button');b.className='car-card'+(i===vehicleIndex?' selected':'');b.setAttribute('aria-pressed',String(i===vehicleIndex));b.setAttribute('aria-label','Choose '+item.config.name);const img=document.createElement('img');img.src=vehicleThumbnail(item);img.alt='';b.append(img);const name=document.createElement('b');name.textContent=item.config.name;b.append(name);const label=document.createElement('small');label.textContent=item.config.detail;b.append(label);b.onclick=()=>selectVehicle(i);wrap.append(b);});}
 
-function renderLots(){const wrap=$('lotList');wrap.replaceChildren();const bonus=baseComplete();LOTS.forEach((l,i)=>{if(i===8){const d=document.createElement('div');d.className='bonus-divider'+(bonus?' open':'');d.innerHTML='<b>'+(bonus?'BONUS 8 UNLOCKED':'BONUS 8 LOCKED')+'</b><span>'+(bonus?'Eight new parking nightmares await.':saves.slice(0,8).filter(x=>x?.stars).length+' / 8 original lots complete')+'</span>';wrap.append(d);}const locked=!unlocked(i),b=document.createElement('button');b.className='lot-card'+(i===levelIndex?' selected':'')+(locked?' locked':'');b.disabled=locked;b.innerHTML='<span class="lot-num">'+String(i+1).padStart(2,'0')+'</span><span><b>'+l.name+'</b><small>'+(locked?'Finish lots 1–8 to unlock':l.kind)+'</small></span><em>'+(locked?'🔒':('★'.repeat(saves[i]?.stars||0)||'—'))+'</em>';b.onclick=()=>loadLevel(i);wrap.append(b);});$('start').disabled=!unlocked(levelIndex);$('start').textContent=unlocked(levelIndex)?'Drive '+lot().name+' →':'Complete the original eight';}
+function renderLots(){
+ const wrap=$('lotList');wrap.replaceChildren();
+ LOTS.forEach((l,i)=>{
+  if(i%8===0){const d=document.createElement('div'),open=unlocked(i),done=saves.slice(i,i+8).filter(s=>s?.stars>=1).length;d.className='bonus-divider'+(open?' open':'');
+   const title=['FOUNDATIONS','BONUS CHALLENGES','MASTER CHALLENGES'][Math.floor(i/8)];
+   d.innerHTML='<b>'+title+' · '+(i+1)+'–'+Math.min(i+8,LOTS.length)+'</b><span>'+(open?done+' / 8 complete':'Complete lots 1–'+i)+'</span>';wrap.append(d);}
+  const locked=!unlocked(i),b=document.createElement('button');b.className='lot-card'+(i===levelIndex?' selected':'')+(locked?' locked':'');b.disabled=locked;
+  b.setAttribute('aria-label','Lot '+(i+1)+': '+l.name+(locked?', locked':''));b.setAttribute('aria-pressed',String(i===levelIndex));
+  b.innerHTML='<span class="lot-num">'+String(i+1).padStart(2,'0')+'</span><span><b>'+l.name+'</b><small>'+(locked?'Finish lots 1–'+(Math.floor(i/8)*8):l.kind)+'</small></span><em>'+(locked?'🔒':('★'.repeat(saves[i]?.stars||0)||'—'))+'</em>';
+  b.onclick=()=>loadLevel(i);wrap.append(b);
+ });$('start').disabled=!unlocked(levelIndex);$('start').textContent=unlocked(levelIndex)?'Drive '+lot().name+' →':'Complete the previous chapters';
+}
 function openMenu(){document.body.classList.remove('playing');state='menu';clearInput();$('finish').hidden=true;$('pausePanel').hidden=true;$('intro').hidden=false;$('hud').hidden=true;$('touch').hidden=true;$('cameraTools').hidden=true;recover(true);renderLots();}
 function pause(){if(state==='running'||state==='countdown'){pausedFrom=state;state='paused';clearInput();$('pausePanel').hidden=false;$('touch').hidden=true;}else if(state==='paused'){state=pausedFrom;$('pausePanel').hidden=true;$('touch').hidden=false;}}
 function clearInput(){if(typeof cameraPointers!=='undefined')cameraPointers.clear();wheelPointer=null;wheelAngle=0;paintWheel();for(const k in keys)delete keys[k];for(const k in touch)delete touch[k];document.querySelectorAll('.pressed').forEach(b=>b.classList.remove('pressed'));}
