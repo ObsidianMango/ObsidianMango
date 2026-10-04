@@ -1,11 +1,8 @@
-import {buildNova} from './nova-model.js?v=nova-1';
+import {buildDetailedVehicle} from './detailed-vehicles.js?v=quality-1';
 import * as C from './cannon-es.js';
-import {buildNovelty} from './novelty-models.js?v=chaos-1';
-import {buildHeritage} from './heritage-models.js?v=heritage-1';
-import {buildShowpiece} from './showpiece-models.js?v=showpiece-1';
 import {installTouchGuard} from './touch-guard.js?v=nova-1';
 import {buildRoadster} from './roadster-model.js';
-import {VEHICLES,buildSUV} from './garage-models.js?v=nova-1';
+import {VEHICLES} from './garage-models.js?v=quality-1';
 import {createCrashDirector} from './crash-replay.js?v=chaos-1';
 import {LOTS,buildLots,assessParking} from './parking-lots.js?v=chaos-1';
 const T=window.THREE,$=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -30,7 +27,7 @@ let saves=[];try{saves=JSON.parse(localStorage.getItem('parkside-chaos-saves-v1'
 function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
 const baseComplete=()=>Array.from({length:8},(_,i)=>saves[i]?.stars>=1).every(Boolean),unlocked=i=>i<8||baseComplete();
 const lot=()=>LOTS[levelIndex],view=()=>lots.views[levelIndex];
-const garage=VEHICLES.map(config=>({config,...(config.id==='nova'?buildNova(T):config.id==='roadster'?buildRoadster(T):config.id==='santafe'?buildSUV(T,config.id):['flamecoupe','wiener'].includes(config.id)?buildShowpiece(T,config.id):config.id==='maybach'?buildHeritage(T,config.id):buildNovelty(T,config.id))}));
+const garage=VEHICLES.map(config=>({config,...(config.id==='roadster'?buildRoadster(T):buildDetailedVehicle(T,config))}));
 let vehicleIndex=0;try{vehicleIndex=Math.max(0,VEHICLES.findIndex(v=>v.id===localStorage.getItem('parkside-chaos-car')));}catch{}
 let car=garage[vehicleIndex],spec=car.config;for(const item of garage){scene.add(item.root);item.root.visible=item===car;}
 const chassis=new C.Body({mass:950,allowSleep:false,material:carMat,position:new C.Vec3(0,1.2,0),linearDamping:.025,angularDamping:.48});chassis.addShape(new C.Box(new C.Vec3(1.16,.26,2.28)),new C.Vec3(0,.05,0));world.addBody(chassis);
@@ -142,4 +139,3 @@ requestAnimationFrame(frame);
 window.roadster={getState:()=>({state,health,distance,time,speed,forwardSpeed,position:{...chassis.position},vehicle:spec.id,partsLost:totalLost,attached:car.assemblies.filter(p=>p.userData.attached).map(p=>p.name),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,level:levelIndex,bonusUnlocked:baseComplete(),noBrakes:!!spec.noBrakes,parking:parkingState,parkingHold,bumps,gear:selectedGear,orbitMode,orbitYaw,mode,steering:steer,wheelAngle,replay:director.getInfo()}),start,renderer,scene,camera};
 if(location.hostname==='localhost'||location.hostname==='127.0.0.1')window.roadster.test={chassis,world,vehicle,obstacles,get car(){return car;},selectVehicle,detach,explode,restore,recover,step:physics,loadLevel,assessParking,setCamera,setGear:v=>selectedGear=v,director,continueWreck,startReplay,updateWheel,setMode:v=>mode=v,setState:v=>state=v,teleport:(x,z,yaw=0,v=0)=>{chassis.position.set(view().ox+x,1,z);chassis.quaternion.setFromEuler(0,yaw,0);const f=chassis.quaternion.vmult(new C.Vec3(0,0,-1));chassis.velocity.set(f.x*v,0,f.z*v);chassis.angularVelocity.setZero();chassis.aabbNeedsUpdate=true;chassis.wakeUp();syncCar();},input:keys};
 }
-

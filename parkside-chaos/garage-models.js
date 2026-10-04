@@ -3,10 +3,9 @@ export const VEHICLES=[
  {id:'roadster',name:'Roadster',detail:'Vintage classic',mass:950,radius:.525,track:1.04,front:-1.48,rear:1.45,offset:.85,power:1550,box:[1.16,.26,2.28],center:.05},
  {id:'santafe',name:'Santa Fe',detail:'Gray crossover',mass:1580,radius:.40,track:.96,front:-1.43,rear:1.43,offset:.653,power:2550,box:[.97,.38,2.22],center:.23},
  {id:'jalopy',name:'Jalopy',detail:'Beater · NO BRAKES',noBrakes:true,mass:1150,radius:.38,track:.93,front:-1.35,rear:1.35,offset:.633,power:1650,maxSpeed:5.8,halfWidth:1.08,halfLength:2.35,box:[.98,.28,2.18],center:.15},
- {id:'wiener',name:'Wienermobile',detail:'Rebuilt classic hot-dog cruiser',mass:1900,radius:.45,track:1.04,front:-1.65,rear:1.60,offset:.703,power:2750,maxSpeed:6.4,halfWidth:1.18,halfLength:2.88,box:[1.18,.48,2.70],center:.32},
- {id:'flamecoupe',name:'Flame Coupe',detail:'Rebuilt photo-inspired drag coupe',mass:1250,radius:.41,track:.94,front:-1.48,rear:1.43,offset:.663,power:2450,maxSpeed:8.5,halfWidth:1.10,halfLength:2.35,box:[1.00,.30,2.22],center:.17},
- {id:'maybach',name:'Maybach Zeppelin V12',detail:'1930s luxury giant',mass:2800,radius:.49,track:.87,front:-1.86,rear:1.78,offset:.73,power:3900,maxSpeed:6.6,halfWidth:1.04,halfLength:2.78,box:[.96,.40,2.65],center:.27},
- {id:'nova',name:'Chevy Nova',detail:'1,200 HP · Supercharged',mass:1270,radius:.41,track:.94,front:-1.48,rear:1.43,offset:.663,power:9500,maxSpeed:27,halfWidth:1.12,halfLength:2.38,box:[1.00,.30,2.24],center:.17},
+ {id:'wiener',name:'Wienermobile',detail:'Classic hot-dog cruiser',mass:1900,radius:.45,track:1.04,front:-1.65,rear:1.60,offset:.703,power:2750,maxSpeed:6.4,halfWidth:1.24,halfLength:2.88,box:[1.18,.48,2.70],center:.32},
+ {id:'maybach',name:'Maybach Zeppelin V12',detail:'1930s luxury giant',mass:2800,radius:.49,track:.87,front:-1.86,rear:1.78,offset:.73,power:3900,maxSpeed:6.6,halfWidth:1.19,halfLength:2.88,box:[1.11,.40,2.65],center:.27},
+ {id:'nova',name:'Chevy Nova',detail:'1,200 HP · Supercharged',mass:1270,radius:.41,track:.94,front:-1.48,rear:1.43,offset:.663,power:9500,maxSpeed:27,halfWidth:1.16,halfLength:2.38,box:[1.00,.30,2.24],center:.17},
 ];
 export function buildSUV(T,kind){
  const jeep=kind==='jeep',root=new T.Group(),groups=new Map();
@@ -86,4 +85,3 @@ export function buildSUV(T,kind){
  }
  return {root,assemblies,materials};
 }
-

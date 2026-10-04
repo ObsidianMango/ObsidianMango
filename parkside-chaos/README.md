@@ -1,33 +1,33 @@
 # Parkside Chaos
 
-This is a separate sequel build. The original `roadster-explorer` folder is intentionally untouched.
+Separate parking-game build. The original `roadster-explorer` game is unchanged.
+
+## Garage
+
+Six vehicles: Roadster, Santa Fe, Jalopy, Wienermobile, Maybach Zeppelin V12, and Chevy Nova. The older Flame Coupe is removed from the garage; an old saved Flame Coupe selection safely falls back to the Roadster.
+
+The original Roadster retains its source geometry. The other five vehicles use `vehicle-detail-kit.js` and `detailed-vehicles.js`:
+
+- Solid shaped panels, transparent windows, frames, wipers, handles, mirrors, grilles, lens details, and plates.
+- Modeled tire shoulders and tread, rims, lug nuts, brake discs, calipers and valve stems. The Maybach has wire wheels and side spares; the Wienermobile has whitewalls; the Jalopy has steel wheels.
+- Seats with headrests and stitching, dashboards, instrument faces and needles, steering wheels, gear levers, pedals and seat belts.
+- Engines, ignition wires, exhaust headers, radiators, axles, differentials, coil springs, chassis rails and exhaust systems visible when bodywork breaks away.
+- Santa Fe: tapered crossover body, swept lamp clusters, roof rails, sunroof, four doors and rear hatch.
+- Jalopy: worn paint texture, mismatched panels, bolted rust repairs, cracked windshield and broken lamp. Both brakes remain disabled.
+- Wienermobile: smooth bun and sausage surfaces, mustard, glazed cab, service vents, steps and roof sign.
+- Maybach: curved full-width fenders, divided hood and louvers, leather/wood interior, period lights, luggage and radiator ornament.
+- Nova: blue/cream flame scheme, hood scoop, chrome detail, interior and aggressive 1,200 HP arcade tuning.
+
+Geometry is merged by material within each breakaway assembly, preserving texture UVs. The cars are stylized procedural models, not scanned replicas. The HP badge describes fictional arcade tuning, not a calibrated engine simulation.
 
 ## Features
-- Seven cars: Roadster, Santa Fe, Jalopy, Wienermobile, a photo-inspired blue/white Flame Coupe, and a 1930s Maybach Zeppelin V12-inspired limousine, and the photo-inspired Chevy Nova.
-- The Jalopy has no working foot brake or handbrake. Coast or select the opposite gear and use GAS to scrub speed.
-- 16 parking levels. Lots 9–16 unlock only after every original lot 1–8 has been completed at least once.
-- Independent save keys so progress here does not overwrite Parkside progress.
-- Installable standalone web-app metadata.
-- Double-tap/page zoom suppression during gameplay while retaining the game's own camera pinch-to-zoom gesture.
-- Breakaway crash physics and two-angle replay system on all cars.
 
-Arcade physics only; not a real vehicle simulator.
+- 16 parking lots; lots 9–16 unlock after completing all original eight.
+- Steering wheel, pedals, D/R selection, camera orbit and camera pinch zoom.
+- Full-footprint parking checks, including wider Maybach and Wienermobile bodywork.
+- Rigid-body damage, complete break-apart wrecks and two-angle recorded crash playback.
+- Independent saves, standalone web-app metadata, and page double-tap zoom suppression that preserves rapid button activation.
 
-## Heritage garage update
-- Flame Coupe: boxy drag-car proportions inspired by the supplied model-car photo, teal-blue body, white flame graphics, hood scoop, chrome bumpers/grille, staggered drag stance, and breakaway body panels.
-- Maybach Zeppelin V12: long-wheelbase 1930s luxury shape with a tall vertical radiator grille, sweeping external fenders, running boards, wire-style wheels, side spares, wood/leather cabin details, long divided hood, and a visual twin-bank V12.
-- Both use their own mass, wheelbase, tire size, collision footprint, breakaway assemblies, and crash replays.
+## Validation
 
-## Showpiece model rebuild
-- Flame Coupe was rebuilt from the supplied photo around solid lofted body panels: full lower body, broad hood and trunk, greenhouse/roof, side doors and quarter panels, proper grille/bumpers, big hood scoop, skinny front tires and wide drag rears. The white flames are now canvas decal surfaces over the blue body instead of tube geometry.
-- Wienermobile was rebuilt as an integrated vehicle silhouette: cream/red lower car and cab, continuous split hot-dog sausage, smooth left/right bun shells with inner bread, mustard ribbon, tucked wheels, windshield/doors, lighting, grille, bumpers, engine and roof sign.
-- Both preserve named wheel, engine, chassis and body assemblies for suspension, damage, full break-apart crashes and recorded replays.
-
-
-## Nova garage update
-- Separate Chevy Nova garage choice with dark teal-blue paint, continuous cream side flames, cream/blue flame hood, raised intake scoop, chrome trim and round headlights matching the supplied reference scheme. This is a stylized procedural model, not an exact scanned replica.
-- Fictional 1,200 HP arcade specification: 9,500 N engine force per driven rear wheel, 1,270 kg chassis and a 27 m/s forward speed cap. Tap the gas for parking; holding it gives an aggressive launch. Brakes and reverse remain functional.
-- 31 breakaway assemblies, including all four wheels, scoop, hood, doors, grille and engine, participate in recorded two-angle crash replays.
-- Rapid second taps still activate buttons while native double-tap zoom is blocked; held pedals continue using independent pointer events.
-
-Validation: desktop Chromium and mobile Chromium emulation verified Nova acceleration/braking/reverse, full parking completion, an actual obstacle collision, all 31 pieces detaching, both replay shots and restoration; seven garage choices; eight bonus lots locked/unlocked by save progress; zero brake force on the Jalopy; rapid taps and mobile control layouts. Physical iOS/Home Screen testing remains device-dependent.
+Desktop and touch-viewport Chromium checks cover all six selections, fallback from the removed Flame Coupe, forward driving, parking completion, real obstacle impacts, full detachment, both replay angles and restoration. All passed with no JavaScript errors. The Jalopy's brake forces remain zero. Model previews are inspected from front and rear; mobile rapid taps and portrait/landscape layouts are checked in emulation. Physical iOS Home Screen behavior remains device-dependent.
