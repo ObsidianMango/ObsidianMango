@@ -1,4 +1,4 @@
-import {buildDetailedVehicle} from './detailed-vehicles.js?v=wiener-2';
+import {buildDetailedVehicle} from './detailed-vehicles.js?v=wiener-reference-1';
 import * as C from './cannon-es.js';
 import {installTouchGuard} from './touch-guard.js?v=nova-1';
 import {buildRoadster} from './roadster-model.js';

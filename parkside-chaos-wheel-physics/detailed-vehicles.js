@@ -144,134 +144,151 @@ export function buildDetailedVehicle(T,c){
   for(const z of [-2.74,2.61])for(const y of [.53,.63])tube(z<0?'front-bumper':'rear-bumper',[[-.96,y,z+.03],[0,y,z+(z<0?-.08:.08)],[.96,y,z+.03]],.03,'trim');plate('grille',-2.828,.68,'ZEPPELIN',.48);plate('rear-bumper',2.70,.71,'V12 1930',.48);
  }
  function buildWiener(){
-  mat('bun',0xd99535,.03,.76);
-  mat('bread',0xf6d898,.01,.84);
-  mat('toast',0xb8782d,.02,.80);
-  mat('sausage',0xa83b23,.08,.42);
-  mat('sausageDark',0x7d2a1d,.06,.50);
-  mat('mustard',0xf6cf20,.04,.38);
-  mat('cabCream',0xf1e2bd,.05,.58);
-  mat('cabRed',0xc73b2e,.16,.38);
+  // Modern Wienermobile-inspired silhouette based closely on the supplied reference:
+  // yellow lower body, orange upper pod, rear yellow collar, bubble windshield,
+  // three dark side windows and partially faired-in wheels.
+  mat('bun',0xf4d31d,.03,.69);
+  mat('bunShade',0xdab81b,.02,.76);
+  mat('dog',0xe47f15,.10,.34);
+  mat('dogDark',0xc7610b,.10,.40);
+  mat('glassBlack',0x172126,.10,.13,{transparent:true,opacity:.82,depthWrite:false,side:T.DoubleSide});
+  mat('windowTrim',0x1b2529,.16,.30);
+  mat('badgeWhite',0xf6f0df,.02,.75);
+  mat('badgeRed',0xb63a2e,.12,.42);
 
-  box('chassis',1.66,.14,4.88,0,.38,.02,'steel');
-
+  // Lower yellow road-going body.
+  box('chassis',1.66,.14,4.92,0,.38,.02,'steel');
   loft('tub',[
-    [-2.56,.67,.49,.80],
-    [-2.18,.91,.48,.96],
-    [-1.34,1.04,.48,.99],
-    [ .18,1.08,.48,.98],
-    [ 1.74,1.02,.49,.93],
-    [ 2.18,.89,.51,.87],
-    [ 2.54,.71,.54,.79]
-  ],'cabCream');
+    [-2.62,.63,.43,.76],
+    [-2.36,.82,.44,.84],
+    [-1.73,.99,.44,.91],
+    [-.70,1.08,.45,.94],
+    [ .55,1.10,.45,.93],
+    [1.72,1.04,.46,.90],
+    [2.35,.88,.48,.84],
+    [2.62,.66,.51,.77]
+  ],'bun');
+  loft('lower-skirt',[
+    [-2.40,.77,.42,.55],
+    [-.85,.99,.42,.56],
+    [ .80,.99,.42,.56],
+    [2.39,.78,.45,.56]
+  ],'bunShade');
 
-  loft('cab',[
-    [-2.53,.63,.80,1.05],
-    [-2.24,.77,.80,1.18],
-    [-1.78,.86,.80,1.29],
-    [-1.23,.79,.82,1.28]
-  ],'cabRed');
+  // Orange upper body. Split into three crash assemblies but with matching seam rings.
+  const upper=[
+    [-2.17,.34,.30,0,1.47],
+    [-1.96,.53,.46,0,1.49],
+    [-1.59,.65,.56,0,1.50],
+    [-.93,.72,.62,0,1.50],
+    [ .00,.75,.65,0,1.50],
+    [ .94,.77,.67,0,1.50],
+    [1.52,.79,.69,0,1.50],
+    [2.05,.76,.67,0,1.50],
+    [2.40,.60,.54,0,1.50],
+    [2.63,.25,.23,0,1.50]
+  ];
+  capsule('upper-front',upper.slice(0,4),'dog',34);
+  capsule('upper-mid',upper.slice(3,7),'dog',34);
+  capsule('upper-rear',upper.slice(6),'dog',34);
 
-  windowFrame('windshield',[
-    [-.63,1.12,-2.39],
-    [ .63,1.12,-2.39],
-    [ .54,1.72,-1.88],
-    [-.54,1.72,-1.88]
-  ],'accent',.031);
-  wipers('windshield',-2.39,1.15,-1.88,1.71,.60);
+  // Yellow collar/band around the rear upper body, like the reference vehicle.
+  capsule('collar',[
+    [.98,.785,.695,0,1.50],
+    [1.12,.805,.715,0,1.50],
+    [1.42,.805,.715,0,1.50],
+    [1.58,.785,.695,0,1.50]
+  ],'bun',34);
 
-  loft('cab-roof',[
-    [-2.08,.54,1.67,1.77],
-    [-1.69,.64,1.73,1.91],
-    [-1.22,.59,1.69,1.84]
-  ],'cabRed');
-
+  // Generic side badge on the collar. It intentionally avoids changing any other app asset.
+  const badge=document.createElement('canvas');badge.width=320;badge.height=220;
+  const bc=badge.getContext('2d');bc.fillStyle='#f6f0df';bc.fillRect(0,0,320,220);
+  bc.strokeStyle='#b63a2e';bc.lineWidth=18;bc.strokeRect(12,12,296,196);
+  bc.fillStyle='#b63a2e';bc.font='900 60px system-ui';bc.textAlign='center';
+  bc.fillText('HOT',160,100);bc.fillText('DOG',160,165);
+  const badgeTex=new T.CanvasTexture(badge);badgeTex.colorSpace=T.SRGBColorSpace;
+  const badgeMat=new T.MeshStandardMaterial({map:badgeTex,roughness:.62,side:T.DoubleSide});
   for(const side of [-1,1]){
-    windowFrame('door-'+side,[
-      [side*.74,1.14,-2.07],
-      [side*.73,1.17,-1.13],
-      [side*.54,1.74,-1.10],
-      [side*.54,1.71,-1.85]
-    ],'accent',.031);
-    rounded('door-'+side,.040,.047,.18,side*.79,1.02,-1.46,'trim',.009);
-    tube('mirror-'+side,[[side*.68,1.23,-2.03],[side*.96,1.38,-2.02]],.016,'trim');
-    rounded('mirror-'+side,.145,.14,.065,side*.99,1.40,-2.02,'trim',.025);
-
-    box('step-'+side,.29,.055,.66,side*1.025,.445,-.39,'steel');
-    for(let i=0;i<4;i++)box('step-'+side,.23,.006,.020,side*1.025,.478,-.61+i*.145,'black');
-    rounded('service-door-'+side,.027,.24,.59,side*1.055,.715,.64,'cabRed',.006);
-    for(let i=0;i<5;i++)box('service-door-'+side,.034,.013,.40,side*1.073,.645+i*.029,.64,'black');
-
-    lamp('headlight-'+side,side*.69,.86,-2.52,.14);
-    rounded('tail-light-'+side,.24,.14,.065,side*.66,.84,2.51,'tailLens',.020);
+    k.add('collar',new T.PlaneGeometry(.46,.34),badgeMat,side*.807,1.48,1.29,0,side*Math.PI/2,0);
   }
 
-  const dogY=1.67,dog=[];
-  for(let i=0;i<=64;i++){
-    const z=-1.74+i*4.38/64;
-    const t=(z-.45)/2.33;
-    let r=Math.sqrt(Math.max(.001,1-t*t))*.625;
-    if(z< -1.25)r*=.95;
-    if(z>  2.02)r*=.93;
-    dog.push([z,r,r*.87,0,dogY]);
+  // Curved windshield built from several dark glass facets so the nose reads as a bubble.
+  const windXs=[-.64,-.40,-.14,.14,.40,.64];
+  for(let i=0;i<windXs.length-1;i++){
+    const x1=windXs[i],x2=windXs[i+1];
+    const curve=z=>-2.08+.18*Math.pow(Math.abs(z)/.64,1.7);
+    const z1=curve(x1),z2=curve(x2);
+    const p=[
+      [x1,1.13,z1],
+      [x2,1.13,z2],
+      [x2*.90,1.83,z2+.16],
+      [x1*.90,1.83,z1+.16]
+    ];
+    pane('windshield',p,'glassBlack');
+    tube('windshield',[p[0],p[3]],.018,'windowTrim',1);
+    if(i===windXs.length-2)tube('windshield',[p[1],p[2]],.018,'windowTrim',1);
+    tube('windshield',[p[2],p[3]],.018,'windowTrim',1);
   }
-  capsule('sausage',dog,'sausage',30);
+  tube('windshield',[[-.64,1.13,-1.90],[.64,1.13,-1.90]],.020,'windowTrim',1);
+  wipers('windshield',-1.91,1.16,-1.90,1.83,.64);
 
-  for(const [name,z] of [['sausage-front-cap',-1.71],['sausage-rear-cap',2.61]]){
-    const rr=z<0?.25:.23;
-    cyl(name,rr,.055,0,dogY,z,'sausageDark','z',rr,26);
-  }
-
+  // Three black side windows behind the bubble windshield on each side.
   for(const side of [-1,1]){
-    const bun=[];
-    for(let i=0;i<=64;i++){
-      const z=-2.24+i*4.90/64;
-      const t=(z-.21)/2.48;
-      const rr=Math.sqrt(Math.max(.002,1-t*t));
-      bun.push([z,.535*rr,.485*rr,side*.70,1.16]);
+    const x=side*.742;
+    const windows=[
+      {n:'side-window-front-'+side,z0:-1.48,z1:-.91,y0:1.20,y1:1.76,topFront:-1.39,topRear:-.87},
+      {n:'side-window-mid-'+side,z0:-.82,z1:-.24,y0:1.20,y1:1.78,topFront:-.77,topRear:-.20},
+      {n:'side-window-rear-'+side,z0:-.15,z1:.44,y0:1.20,y1:1.74,topFront:-.11,topRear:.37}
+    ];
+    for(const w of windows){
+      const p=[
+        [x,w.y0,w.z0],
+        [x,w.y0,w.z1],
+        [side*.690,w.y1,w.topRear],
+        [side*.690,w.y1,w.topFront]
+      ];
+      pane(w.n,p,'glassBlack');
+      for(let j=0;j<p.length;j++)tube(w.n,[p[j],p[(j+1)%p.length]],.020,'windowTrim',1);
     }
-    capsule('bun-front-'+side,bun,'bun',30);
 
-    const bread=bun.map(([z,rx,ry,x,y])=>[
-      z,rx*.56,ry*.57,x-side*.145,y+.285
-    ]);
-    capsule('bread-'+side,bread,'bread',24);
+    // Door seam and black mirror pod.
+    tube('door-'+side,[
+      [side*.752,1.03,-1.73],
+      [side*.756,1.08,-.88],
+      [side*.724,1.64,-.78]
+    ],.009,'dogDark',1);
+    rounded('door-'+side,.040,.050,.16,side*.775,1.02,-1.32,'windowTrim',.009);
+    tube('mirror-'+side,[[side*.69,1.23,-1.63],[side*.91,1.36,-1.68]],.017,'windowTrim',1);
+    rounded('mirror-'+side,.20,.16,.14,side*.95,1.38,-1.69,'windowTrim',.035);
 
-    const crease=[];
-    for(let i=0;i<=32;i++){
-      const z=-2.02+i*4.30/32;
-      const rr=Math.sqrt(Math.max(.01,1-((z-.13)/2.36)**2));
-      crease.push([side*(.70+.405*rr),1.29+.15*rr,z]);
-    }
-    tube('bun-front-'+side,crease,.011,'toast',82);
+    // Yellow wheel fairings and lower service details.
+    arch('fender-front-'+side,side,c.front,.47,.43,.91,.80,'bun');
+    arch('fender-rear-'+side,side,c.rear,.47,.43,.91,.80,'bun');
+    rounded('wheel-fairing-front-'+side,.18,.20,.72,side*.985,.62,c.front,'bun',.045);
+    rounded('wheel-fairing-rear-'+side,.18,.18,.65,side*.985,.61,c.rear,'bun',.045);
+
+    rounded('service-door-'+side,.024,.19,.48,side*1.074,.69,.15,'bunShade',.006);
+    rounded('marker-'+side,.026,.065,.12,side*1.082,.73,-.83,'tailLens',.006);
+    box('step-'+side,.23,.045,.47,side*.93,.43,-.31,'steel');
+    for(let j=0;j<4;j++)box('step-'+side,.18,.006,.018,side*.93,.458,-.47+j*.105,'black');
   }
 
-  const mustard=[];
-  for(let i=0;i<=60;i++){
-    const z=-1.04+i*3.61/60;
-    const t=(z-.45)/2.30;
-    const r=Math.sqrt(Math.max(.001,1-t*t))*.625;
-    const x=Math.sin(i*.57)*.145 + Math.sin(i*1.14+.7)*.025;
-    const y=dogY+r*.88*Math.sqrt(Math.max(.1,1-x*x/Math.max(.001,r*r)))+.032;
-    mustard.push([x,y,z]);
+  // Front end integrated into the yellow lower body.
+  rounded('nose',1.58,.23,.42,0,.65,-2.37,'bun',.08);
+  rounded('grille',.65,.15,.075,0,.59,-2.59,'windowTrim',.045);
+  for(const side of [-1,1]){
+    rounded('headlight-'+side,.30,.15,.07,side*.64,.78,-2.44,'trim',.04,0,-side*.15,0);
+    rounded('headlight-'+side,.22,.095,.022,side*.64,.78,-2.48,'ivory',.025,0,-side*.15,0);
+    rounded('tail-light-'+side,.22,.13,.06,side*.64,.78,2.49,'tailLens',.025);
   }
-  tube('mustard',mustard,.051,'mustard',110);
+  rounded('front-bumper',1.62,.09,.10,0,.52,-2.57,'bunShade',.025);
+  rounded('rear-bumper',1.49,.09,.10,0,.53,2.54,'bunShade',.025);
 
-  rounded('grille',1.19,.255,.080,0,.73,-2.50,'black',.020);
-  for(let i=0;i<6;i++)box('grille',1.04,.017,.017,0,.645+i*.036,-2.545,'trim');
-  rounded('front-bumper',1.86,.135,.135,0,.55,-2.55,'trim',.031);
-  rounded('rear-bumper',1.83,.125,.135,0,.55,2.55,'trim',.031);
-  plate('front-bumper',-2.625,.57,'HOT DOG');
-  plate('rear-bumper', 2.625,.61,'HOT DOG');
-
-  rounded('sign',.075,.24,.90,0,2.24,.58,'cabCream',.016);
-  const cv=document.createElement('canvas');cv.width=640;cv.height=150;
-  const ctx=cv.getContext('2d');ctx.fillStyle='#f1e2bd';ctx.fillRect(0,0,640,150);
-  ctx.strokeStyle='#b43328';ctx.lineWidth=8;ctx.strokeRect(6,6,628,138);
-  ctx.fillStyle='#b43328';ctx.font='bold 60px Georgia';ctx.textAlign='center';
-  ctx.fillText('HOT DOG',320,101);
-  const tex=new T.CanvasTexture(cv);tex.colorSpace=T.SRGBColorSpace;
-  const signMat=new T.MeshStandardMaterial({map:tex,roughness:.52,side:T.DoubleSide});
-  for(const side of [-1,1])k.add('sign',new T.PlaneGeometry(.84,.20),signMat,side*.040,2.24,.58,0,side*Math.PI/2);
+  // Small side plate recesses like the real vehicle's lower body hardware.
+  for(const side of [-1,1]){
+    rounded('tub',.020,.11,.27,side*1.075,.61,-.25,'black',.004);
+  }
+  plate('front-bumper',-2.63,.53,'HOT DOG',.32);
+  plate('rear-bumper',2.60,.57,'HOT DOG',.32);
  }
 }
