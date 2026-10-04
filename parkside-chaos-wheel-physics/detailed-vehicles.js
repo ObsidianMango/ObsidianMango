@@ -10,12 +10,19 @@ export function buildDetailedVehicle(T,c){
  if(coupe)buildCoupe();else if(suv)buildSantaFe();else if(worn)buildJalopy();else if(may)buildMaybach();else if(hot)buildWiener();
  for(const side of [-1,1])for(const [end,z]of [['front',c.front],['rear',c.rear]])k.wheel('wheel-'+end+'-'+(side>0?'left':'right'),side*c.track,c.radius,z,c.radius,may?.24:coupe&&end==='rear'?.33:.27,may?'wire':hot?'whitewall':worn?'steel':'alloy');
  k.mechanics(c,{engineZ:may?-1.52:hot?-1.65:-1.27,cylinders:may?12:suv?6:8});
- if(worn||hot||coupe)for(const mesh of k.group('engine').children)mesh.position.y-=coupe?.14:.23;
+ if(worn||hot||coupe)for(const mesh of k.group('engine').children){
+  mesh.position.y-=coupe?.14:hot?.38:.23;
+  if(hot)mesh.position.z+=.08;
+ }
  if(coupe)k.interior({baseY:.76,front:.10,rear:.83,dash:-.63,width:.76});
  if(suv)k.interior({baseY:.79,front:.04,rear:1.04,dash:-.67,width:.82});
  if(worn)k.interior({baseY:.72,front:-.05,rear:.81,dash:-.77,width:.77});
  if(may)k.interior({baseY:.81,front:.17,rear:1.20,dash:-.57,width:.76,luxury:true});
-  if(hot)k.interior({baseY:.73,front:-1.63,rear:-1.63,dash:-2.08,width:.58,rows:1});
+ if(hot){
+  k.interior({baseY:.64,front:-1.58,rear:-1.58,dash:-2.03,width:.50,rows:1});
+  const cabin=k.groups.get('cabin');
+  if(cabin)for(const mesh of cabin.children){mesh.position.y-=.06;mesh.position.z+=.03;}
+ }
  // Front and rear fenders have full inward returns rather than thin cut-out plates.
  if(suv||worn)for(const side of [-1,1])for(const end of ['front','rear'])for(const mesh of k.group('fender-'+end+'-'+side).children){if(mesh.material!==k.materials.paint&&mesh.material!==k.materials.rust)continue;const pos=mesh.geometry.attributes.position,inner=suv?.90:.87;for(let i=0;i<pos.count;i++){const depth=Math.abs(pos.getX(i))-inner;pos.setX(i,side*(inner-.18+depth*2.5));}pos.needsUpdate=true;mesh.geometry.computeVertexNormals();}
  return k.finish();
@@ -144,151 +151,133 @@ export function buildDetailedVehicle(T,c){
   for(const z of [-2.74,2.61])for(const y of [.53,.63])tube(z<0?'front-bumper':'rear-bumper',[[-.96,y,z+.03],[0,y,z+(z<0?-.08:.08)],[.96,y,z+.03]],.03,'trim');plate('grille',-2.828,.68,'ZEPPELIN',.48);plate('rear-bumper',2.70,.71,'V12 1930',.48);
  }
  function buildWiener(){
-  // Modern Wienermobile-inspired silhouette based closely on the supplied reference:
-  // yellow lower body, orange upper pod, rear yellow collar, bubble windshield,
-  // three dark side windows and partially faired-in wheels.
-  mat('bun',0xf4d31d,.03,.69);
-  mat('bunShade',0xdab81b,.02,.76);
-  mat('dog',0xe47f15,.10,.34);
-  mat('dogDark',0xc7610b,.10,.40);
-  mat('glassBlack',0x172126,.10,.13,{transparent:true,opacity:.82,depthWrite:false,side:T.DoubleSide});
-  mat('windowTrim',0x1b2529,.16,.30);
-  mat('badgeWhite',0xf6f0df,.02,.75);
-  mat('badgeRed',0xb63a2e,.12,.42);
+  // High-detail Wienermobile-inspired rebuild based on the supplied reference.
+  // Smooth yellow lower shell, orange upper pod, bubble glass, three side windows,
+  // rear yellow collar and wheel fairings. All named pieces remain breakaway assemblies.
+  mat('bun',0xf3d31e,.03,.68);
+  mat('bunShade',0xd6b51b,.02,.76);
+  mat('dog',0xe68116,.10,.34);
+  mat('dogShade',0xc7650c,.10,.40);
+  mat('glassBlack',0x172126,.10,.13,{transparent:true,opacity:.80,depthWrite:false,side:T.DoubleSide});
+  mat('windowTrim',0x172023,.22,.28);
+  mat('badgeWhite',0xf5efdf,.02,.76);
+  mat('badgeRed',0xb53b2f,.12,.42);
 
-  // Lower yellow road-going body.
-  box('chassis',1.66,.14,4.92,0,.38,.02,'steel');
+  box('chassis',1.64,.13,4.96,0,.35,.02,'steel');
+
+  // Smooth lower yellow road body. More sections = less faceted/blocky silhouette.
   loft('tub',[
-    [-2.62,.63,.43,.76],
-    [-2.36,.82,.44,.84],
-    [-1.73,.99,.44,.91],
-    [-.70,1.08,.45,.94],
-    [ .55,1.10,.45,.93],
-    [1.72,1.04,.46,.90],
-    [2.35,.88,.48,.84],
-    [2.62,.66,.51,.77]
+    [-2.63,.55,.43,.68],[-2.54,.66,.43,.75],[-2.38,.79,.43,.82],
+    [-2.10,.91,.44,.88],[-1.66,1.01,.44,.92],[-1.05,1.07,.45,.94],
+    [-.30,1.11,.45,.95],[.52,1.11,.45,.94],[1.26,1.08,.45,.92],
+    [1.83,1.02,.46,.89],[2.22,.92,.47,.85],[2.47,.78,.49,.80],
+    [2.62,.61,.51,.74]
   ],'bun');
+
   loft('lower-skirt',[
-    [-2.40,.77,.42,.55],
-    [-.85,.99,.42,.56],
-    [ .80,.99,.42,.56],
-    [2.39,.78,.45,.56]
+    [-2.45,.67,.42,.54],[-1.52,.91,.42,.56],[-.40,1.00,.42,.57],
+    [.78,1.00,.42,.57],[1.72,.93,.43,.56],[2.43,.69,.45,.55]
   ],'bunShade');
 
-  // Orange upper body. Split into three crash assemblies but with matching seam rings.
-  const upper=[
-    [-2.17,.34,.30,0,1.47],
-    [-1.96,.53,.46,0,1.49],
-    [-1.59,.65,.56,0,1.50],
-    [-.93,.72,.62,0,1.50],
-    [ .00,.75,.65,0,1.50],
-    [ .94,.77,.67,0,1.50],
-    [1.52,.79,.69,0,1.50],
-    [2.05,.76,.67,0,1.50],
-    [2.40,.60,.54,0,1.50],
-    [2.63,.25,.23,0,1.50]
+  // Rounded yellow nose and tail blend into the lower body instead of box caps.
+  rounded('nose',1.42,.19,.38,0,.61,-2.45,'bun',.085);
+  rounded('tail',1.20,.16,.28,0,.62,2.42,'bun',.070);
+
+  // Orange upper pod; matching end rings hide seams between breakaway assemblies.
+  const pod=[
+    [-2.20,.27,.24,0,1.45],[-2.10,.39,.34,0,1.47],[-1.92,.54,.47,0,1.49],
+    [-1.62,.65,.56,0,1.50],[-1.18,.71,.61,0,1.50],[-.66,.74,.64,0,1.50],
+    [-.08,.76,.66,0,1.50],[.54,.78,.68,0,1.50],[1.08,.80,.70,0,1.50],
+    [1.54,.81,.71,0,1.50],[1.93,.78,.69,0,1.50],[2.25,.68,.61,0,1.50],
+    [2.48,.51,.46,0,1.50],[2.62,.29,.26,0,1.50]
   ];
-  capsule('upper-front',upper.slice(0,4),'dog',34);
-  capsule('upper-mid',upper.slice(3,7),'dog',34);
-  capsule('upper-rear',upper.slice(6),'dog',34);
+  capsule('upper-front',pod.slice(0,6),'dog',38);
+  capsule('upper-mid',pod.slice(5,10),'dog',38);
+  capsule('upper-rear',pod.slice(9),'dog',38);
 
-  // Yellow collar/band around the rear upper body, like the reference vehicle.
+  // Rear yellow band/collar from the reference.
   capsule('collar',[
-    [.98,.785,.695,0,1.50],
-    [1.12,.805,.715,0,1.50],
-    [1.42,.805,.715,0,1.50],
-    [1.58,.785,.695,0,1.50]
-  ],'bun',34);
+    [.96,.785,.695,0,1.50],[1.06,.81,.72,0,1.50],
+    [1.40,.81,.72,0,1.50],[1.54,.785,.695,0,1.50]
+  ],'bun',36);
 
-  // Generic side badge on the collar. It intentionally avoids changing any other app asset.
+  // Small generic hot-dog badge on the collar.
   const badge=document.createElement('canvas');badge.width=320;badge.height=220;
-  const bc=badge.getContext('2d');bc.fillStyle='#f6f0df';bc.fillRect(0,0,320,220);
-  bc.strokeStyle='#b63a2e';bc.lineWidth=18;bc.strokeRect(12,12,296,196);
-  bc.fillStyle='#b63a2e';bc.font='900 60px system-ui';bc.textAlign='center';
-  bc.fillText('HOT',160,100);bc.fillText('DOG',160,165);
+  const bc=badge.getContext('2d');bc.fillStyle='#f5efdf';bc.fillRect(0,0,320,220);
+  bc.strokeStyle='#b53b2f';bc.lineWidth=18;bc.strokeRect(12,12,296,196);
+  bc.fillStyle='#b53b2f';bc.font='900 58px system-ui';bc.textAlign='center';
+  bc.fillText('HOT',160,100);bc.fillText('DOG',160,164);
   const badgeTex=new T.CanvasTexture(badge);badgeTex.colorSpace=T.SRGBColorSpace;
   const badgeMat=new T.MeshStandardMaterial({map:badgeTex,roughness:.62,side:T.DoubleSide});
-  for(const side of [-1,1]){
-    k.add('collar',new T.PlaneGeometry(.46,.34),badgeMat,side*.807,1.48,1.29,0,side*Math.PI/2,0);
-  }
+  for(const side of [-1,1])k.add('collar',new T.PlaneGeometry(.44,.32),badgeMat,side*.813,1.49,1.27,0,side*Math.PI/2,0);
 
-  // Curved windshield built from several dark glass facets so the nose reads as a bubble.
-  const windXs=[-.64,-.40,-.14,.14,.40,.64];
+  // Bubble windshield: eight facets approximate the curved glass without a blocky rectangle.
+  const windXs=[-.67,-.50,-.31,-.11,.11,.31,.50,.67];
   for(let i=0;i<windXs.length-1;i++){
     const x1=windXs[i],x2=windXs[i+1];
-    const curve=z=>-2.08+.18*Math.pow(Math.abs(z)/.64,1.7);
-    const z1=curve(x1),z2=curve(x2);
+    const zAt=x=>-2.075+.18*Math.pow(Math.abs(x)/.67,1.55);
+    const z1=zAt(x1),z2=zAt(x2);
     const p=[
-      [x1,1.13,z1],
-      [x2,1.13,z2],
-      [x2*.90,1.83,z2+.16],
-      [x1*.90,1.83,z1+.16]
+      [x1,1.10,z1],[x2,1.10,z2],
+      [x2*.88,1.84,z2+.16],[x1*.88,1.84,z1+.16]
     ];
     pane('windshield',p,'glassBlack');
-    tube('windshield',[p[0],p[3]],.018,'windowTrim',1);
+    tube('windshield',[p[0],p[1]],.009,'windowTrim',1);
+    tube('windshield',[p[2],p[3]],.009,'windowTrim',1);
+    if(i===0)tube('windshield',[p[0],p[3]],.018,'windowTrim',1);
     if(i===windXs.length-2)tube('windshield',[p[1],p[2]],.018,'windowTrim',1);
-    tube('windshield',[p[2],p[3]],.018,'windowTrim',1);
   }
-  tube('windshield',[[-.64,1.13,-1.90],[.64,1.13,-1.90]],.020,'windowTrim',1);
-  wipers('windshield',-1.91,1.16,-1.90,1.83,.64);
+  wipers('windshield',-1.95,1.14,-1.86,1.82,.62);
 
-  // Three black side windows behind the bubble windshield on each side.
+  // Three separate side windows per side, all gently sloped like the reference.
   for(const side of [-1,1]){
-    const x=side*.742;
+    const X0=side*.752,X1=side*.688;
     const windows=[
-      {n:'side-window-front-'+side,z0:-1.48,z1:-.91,y0:1.20,y1:1.76,topFront:-1.39,topRear:-.87},
-      {n:'side-window-mid-'+side,z0:-.82,z1:-.24,y0:1.20,y1:1.78,topFront:-.77,topRear:-.20},
-      {n:'side-window-rear-'+side,z0:-.15,z1:.44,y0:1.20,y1:1.74,topFront:-.11,topRear:.37}
+      {n:'side-window-front-'+side,z0:-1.53,z1:-1.00,y0:1.18,y1:1.75,t0:-1.43,t1:-.91},
+      {n:'side-window-mid-'+side,z0:-.89,z1:-.32,y0:1.19,y1:1.78,t0:-.81,t1:-.24},
+      {n:'side-window-rear-'+side,z0:-.20,z1:.42,y0:1.20,y1:1.75,t0:-.13,t1:.34}
     ];
     for(const w of windows){
-      const p=[
-        [x,w.y0,w.z0],
-        [x,w.y0,w.z1],
-        [side*.690,w.y1,w.topRear],
-        [side*.690,w.y1,w.topFront]
-      ];
+      const p=[[X0,w.y0,w.z0],[X0,w.y0,w.z1],[X1,w.y1,w.t1],[X1,w.y1,w.t0]];
       pane(w.n,p,'glassBlack');
-      for(let j=0;j<p.length;j++)tube(w.n,[p[j],p[(j+1)%p.length]],.020,'windowTrim',1);
+      for(let j=0;j<4;j++)tube(w.n,[p[j],p[(j+1)%4]],.017,'windowTrim',1);
     }
 
-    // Door seam and black mirror pod.
+    // Door seam, handle and mirror are kept tight to the body surface.
     tube('door-'+side,[
-      [side*.752,1.03,-1.73],
-      [side*.756,1.08,-.88],
-      [side*.724,1.64,-.78]
-    ],.009,'dogDark',1);
-    rounded('door-'+side,.040,.050,.16,side*.775,1.02,-1.32,'windowTrim',.009);
-    tube('mirror-'+side,[[side*.69,1.23,-1.63],[side*.91,1.36,-1.68]],.017,'windowTrim',1);
-    rounded('mirror-'+side,.20,.16,.14,side*.95,1.38,-1.69,'windowTrim',.035);
+      [side*.766,1.01,-1.72],[side*.770,1.08,-.88],[side*.724,1.64,-.77]
+    ],.008,'dogShade',1);
+    rounded('door-'+side,.035,.043,.15,side*.780,1.02,-1.30,'windowTrim',.008);
+    tube('mirror-'+side,[[side*.69,1.22,-1.61],[side*.90,1.34,-1.66]],.015,'windowTrim',1);
+    rounded('mirror-'+side,.18,.14,.12,side*.94,1.36,-1.67,'windowTrim',.032);
 
-    // Yellow wheel fairings and lower service details.
-    arch('fender-front-'+side,side,c.front,.47,.43,.91,.80,'bun');
-    arch('fender-rear-'+side,side,c.rear,.47,.43,.91,.80,'bun');
-    rounded('wheel-fairing-front-'+side,.18,.20,.72,side*.985,.62,c.front,'bun',.045);
-    rounded('wheel-fairing-rear-'+side,.18,.18,.65,side*.985,.61,c.rear,'bun',.045);
+    // Smooth wheel fairings: body-colored arches plus shallow outer skirts.
+    arch('fender-front-'+side,side,c.front,.48,.41,.91,.79,'bun');
+    arch('fender-rear-'+side,side,c.rear,.47,.40,.90,.78,'bun');
+    rounded('wheel-fairing-front-'+side,.135,.18,.66,side*1.025,.60,c.front,'bun',.045);
+    rounded('wheel-fairing-rear-'+side,.135,.17,.61,side*1.025,.59,c.rear,'bun',.045);
 
-    rounded('service-door-'+side,.024,.19,.48,side*1.074,.69,.15,'bunShade',.006);
-    rounded('marker-'+side,.026,.065,.12,side*1.082,.73,-.83,'tailLens',.006);
-    box('step-'+side,.23,.045,.47,side*.93,.43,-.31,'steel');
-    for(let j=0;j<4;j++)box('step-'+side,.18,.006,.018,side*.93,.458,-.47+j*.105,'black');
+    // Lower service hardware like the reference, tucked under the side pod.
+    rounded('service-door-'+side,.021,.17,.46,side*1.078,.68,.14,'bunShade',.005);
+    rounded('marker-'+side,.022,.058,.11,side*1.085,.72,-.82,'tailLens',.005);
+    box('step-'+side,.22,.040,.44,side*.92,.42,-.30,'steel');
+    for(let j=0;j<4;j++)box('step-'+side,.17,.005,.016,side*.92,.445,-.45+j*.10,'black');
+    rounded('vent-'+side,.016,.085,.20,side*1.083,.59,-.17,'windowTrim',.004);
   }
 
-  // Front end integrated into the yellow lower body.
-  rounded('nose',1.58,.23,.42,0,.65,-2.37,'bun',.08);
-  rounded('grille',.65,.15,.075,0,.59,-2.59,'windowTrim',.045);
+  // Integrated yellow nose details.
+  rounded('grille',.62,.14,.070,0,.57,-2.58,'windowTrim',.040);
+  for(let j=0;j<4;j++)box('grille',.48,.010,.010,0,.535+j*.027,-2.617,'trim');
+  rounded('front-bumper',1.52,.075,.085,0,.50,-2.57,'bunShade',.022);
+  rounded('rear-bumper',1.40,.075,.085,0,.51,2.54,'bunShade',.022);
+
   for(const side of [-1,1]){
-    rounded('headlight-'+side,.30,.15,.07,side*.64,.78,-2.44,'trim',.04,0,-side*.15,0);
-    rounded('headlight-'+side,.22,.095,.022,side*.64,.78,-2.48,'ivory',.025,0,-side*.15,0);
-    rounded('tail-light-'+side,.22,.13,.06,side*.64,.78,2.49,'tailLens',.025);
+    rounded('headlight-'+side,.27,.14,.060,side*.63,.76,-2.43,'trim',.036,0,-side*.14,0);
+    rounded('headlight-'+side,.19,.085,.018,side*.63,.76,-2.47,'ivory',.022,0,-side*.14,0);
+    rounded('tail-light-'+side,.20,.12,.050,side*.63,.76,2.47,'tailLens',.022);
   }
-  rounded('front-bumper',1.62,.09,.10,0,.52,-2.57,'bunShade',.025);
-  rounded('rear-bumper',1.49,.09,.10,0,.53,2.54,'bunShade',.025);
 
-  // Small side plate recesses like the real vehicle's lower body hardware.
-  for(const side of [-1,1]){
-    rounded('tub',.020,.11,.27,side*1.075,.61,-.25,'black',.004);
-  }
-  plate('front-bumper',-2.63,.53,'HOT DOG',.32);
-  plate('rear-bumper',2.60,.57,'HOT DOG',.32);
+  plate('front-bumper',-2.625,.51,'HOT DOG',.30);
+  plate('rear-bumper',2.595,.55,'HOT DOG',.30);
  }
 }
