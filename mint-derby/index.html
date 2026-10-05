@@ -979,6 +979,11 @@ let cameraDragging=false;
 let cameraPointer=null;
 let cameraLastX=0;
 let cameraLastY=0;
+let spectatorMode=false;
+let cinematicFocus=null;
+let cinematicNextCut=0;
+let cinematicShot=0;
+let cinematicWinnerShown=false;
 const input={gas:false,brake:false,handbrake:false};
 const keyboard={left:false,right:false};
 
@@ -1092,11 +1097,38 @@ function explode(car){
   });
 
   if(car.isPlayer){
-    flashNotice("TOTALLED — restart and get back in there.",3);
+    spectatorMode=true;
+    cinematicFocus=null;
+    cinematicNextCut=0;
+    cinematicShot=0;
+    input.gas=false;
+    input.brake=false;
+    input.handbrake=false;
+    keyboard.left=false;
+    keyboard.right=false;
+    document.getElementById("touch").style.display="none";
+    document.getElementById("cameraTools").style.display="none";
+    gearText.textContent="WRECKED · CINEMATIC";
+    condition.textContent="Spectating the remaining derby";
+    flashNotice("TOTALLED — cinematic spectator mode. The survivors keep fighting.",4);
   }else{
     wrecks++;
     wreckText.textContent=wrecks+" / "+ENEMY_COUNT;
-    flashNotice(wrecks===ENEMY_COUNT?"Arena cleared. Mint Monster wins.":"Opponent destroyed.",2);
+
+    if(spectatorMode){
+      const survivors=cars.filter(other=>!other.isPlayer&&other.alive);
+      if(survivors.length===1){
+        cinematicFocus=survivors[0];
+        if(!cinematicWinnerShown){
+          cinematicWinnerShown=true;
+          flashNotice((survivors[0].ai?.name||"Last car")+" wins the derby.",4);
+        }
+      }else if(survivors.length>1){
+        flashNotice((car.ai?.name||"Opponent")+" is out — "+survivors.length+" cars remain.",2.2);
+      }
+    }else{
+      flashNotice(wrecks===ENEMY_COUNT?"Arena cleared. Mint Monster wins.":"Opponent destroyed.",2);
+    }
   }
 }
 
@@ -1301,21 +1333,37 @@ function driveCar(car,dt,time){
     if(now>=car.aiNextThink){
       car.aiNextThink=now+ai.think*(.8+Math.random()*.55);
 
-      const playerPos=player.alive?player.mesh.position:new THREE.Vector3();
-      const toPlayer=playerPos.clone().sub(car.mesh.position);
-      const distance=toPlayer.length();
+      let combatTarget=null;
+      if(player.alive){
+        combatTarget=player;
+      }else{
+        const opponents=cars.filter(other=>other!==car&&!other.isPlayer&&other.alive);
+        if(opponents.length){
+          // Skilled drivers pick the nearest live opponent more often; rookies choose badly.
+          opponents.sort((a,b)=>car.mesh.position.distanceToSquared(a.mesh.position)-car.mesh.position.distanceToSquared(b.mesh.position));
+          combatTarget=Math.random()<(0.42+ai.skill*.55)
+            ? opponents[0]
+            : opponents[Math.floor(Math.random()*opponents.length)];
+        }
+      }
 
-      // Lower-skilled drivers spend more time wandering through the arena instead of
-      // perfectly homing in on the player. This makes them much easier to line up and hit.
-      const chaseChance=ai.aggression+(distance<24?.14:0);
-      if(Math.random()<chaseChance){
+      const targetPos=combatTarget?.mesh.position||new THREE.Vector3();
+      const distance=combatTarget?targetPos.distanceTo(car.mesh.position):999;
+
+      // During spectator mode the survivors become more combative so the derby keeps moving,
+      // while their original skill/accuracy differences are preserved.
+      const chaseChance=spectatorMode
+        ? Math.max(.72,ai.aggression)
+        : ai.aggression+(distance<24?.14:0);
+
+      if(combatTarget&&Math.random()<chaseChance){
         const miss=(1-ai.accuracy);
-        car.aiTarget.copy(playerPos);
-        car.aiTarget.x+=(Math.random()-.5)*38*miss;
-        car.aiTarget.z+=(Math.random()-.5)*26*miss;
+        car.aiTarget.copy(targetPos);
+        car.aiTarget.x+=(Math.random()-.5)*(spectatorMode?24:38)*miss;
+        car.aiTarget.z+=(Math.random()-.5)*(spectatorMode?18:26)*miss;
       }else{
         const a=Math.random()*Math.PI*2;
-        const radius=.18+Math.random()*.54;
+        const radius=spectatorMode?(.12+Math.random()*.38):(.18+Math.random()*.54);
         car.aiTarget.set(
           Math.sin(a)*WALL_X*radius,
           0,
@@ -1335,8 +1383,9 @@ function driveCar(car,dt,time){
     const distanceToTarget=Math.hypot(dx,dz);
     throttle=distanceToTarget>7?1:.30;
 
-    // Rookies occasionally hesitate instead of constantly charging.
-    if(Math.sin(time*.0017+car.aiOffset)>ai.skill+.54)throttle*=.25;
+    // Rookies still hesitate, but less often after the player is wrecked.
+    const hesitationLimit=spectatorMode?ai.skill+.72:ai.skill+.54;
+    if(Math.sin(time*.0017+car.aiOffset)>hesitationLimit)throttle*=.25;
   }
 
   const driveDirection=car.isPlayer?gear:1;
@@ -1537,16 +1586,102 @@ function updateDebris(dt){
 
 function updateHUD(){
   hpText.textContent=Math.ceil(player.hp);
-  speedText.textContent=Math.round(Math.abs(player.speed)*2.237);
+  speedText.textContent=spectatorMode?"—":Math.round(Math.abs(player.speed)*2.237);
   healthBar.style.width=player.hp+"%";
   healthBar.style.background=player.hp>55?"#bee794":player.hp>25?"#f2c46d":"#d85b45";
-  condition.textContent=Math.ceil(player.hp)+"% intact";
+  condition.textContent=spectatorMode
+    ? Math.max(0,cars.filter(other=>!other.isPlayer&&other.alive).length)+" cars still fighting"
+    : Math.ceil(player.hp)+"% intact";
 }
 
 const camTarget=new THREE.Vector3();
 const camDesired=new THREE.Vector3();
 
-function updateCamera(dt){
+function updateCinematicCamera(dt,now){
+  const survivors=cars.filter(car=>!car.isPlayer&&car.alive);
+
+  if(!survivors.length){
+    camTarget.copy(player.mesh.position).add(new THREE.Vector3(0,1,0));
+    camDesired.set(0,42,76);
+    camera.position.lerp(camDesired,1-Math.pow(.004,dt));
+    camera.lookAt(camTarget);
+    return;
+  }
+
+  if(!cinematicFocus||!cinematicFocus.alive||now>=cinematicNextCut){
+    // Prefer a car that is currently closest to another survivor so cuts favor actual action.
+    let best=survivors[0],bestGap=Infinity;
+    for(const car of survivors){
+      let nearest=Infinity;
+      for(const other of survivors){
+        if(other===car)continue;
+        nearest=Math.min(nearest,car.mesh.position.distanceToSquared(other.mesh.position));
+      }
+      if(nearest<bestGap){bestGap=nearest;best=car;}
+    }
+
+    // Alternate between the action car and another survivor so the film does not fixate.
+    const alternate=survivors[(survivors.indexOf(best)+cinematicShot)%survivors.length];
+    cinematicFocus=cinematicShot%3===0?best:alternate;
+    cinematicShot=(cinematicShot+1)%4;
+    cinematicNextCut=now+4.2+(cinematicShot%2)*1.1;
+  }
+
+  const focus=cinematicFocus;
+  let nearest=null,nearestD=Infinity;
+  for(const other of survivors){
+    if(other===focus)continue;
+    const d=focus.mesh.position.distanceToSquared(other.mesh.position);
+    if(d<nearestD){nearestD=d;nearest=other;}
+  }
+
+  const front=new THREE.Vector3(-Math.sin(focus.heading),0,-Math.cos(focus.heading));
+  const right=new THREE.Vector3(-front.z,0,front.x);
+  const actionCenter=focus.mesh.position.clone();
+  if(nearest&&nearestD<32*32)actionCenter.lerp(nearest.mesh.position,.34);
+
+  const orbit=now*.18+orbitYaw;
+  const shot=cinematicShot;
+
+  if(shot===0){
+    // Low chase shot.
+    camDesired.copy(focus.mesh.position)
+      .addScaledVector(front,-15)
+      .addScaledVector(right,5)
+      .add(new THREE.Vector3(0,5.2+orbitPitch*4,0));
+  }else if(shot===1){
+    // Side tracking shot.
+    camDesired.copy(actionCenter)
+      .addScaledVector(right,18)
+      .addScaledVector(front,-4)
+      .add(new THREE.Vector3(0,7.5+orbitPitch*5,0));
+  }else if(shot===2){
+    // Sweeping orbit around two cars.
+    camDesired.copy(actionCenter).add(new THREE.Vector3(
+      Math.sin(orbit)*24*orbitDistance,
+      11+orbitPitch*7,
+      Math.cos(orbit)*24*orbitDistance
+    ));
+  }else{
+    // High stadium establishing shot.
+    camDesired.copy(actionCenter).add(new THREE.Vector3(
+      Math.sin(orbit*.45)*34*orbitDistance,
+      21+orbitPitch*9,
+      Math.cos(orbit*.45)*34*orbitDistance
+    ));
+  }
+
+  camTarget.copy(actionCenter).add(new THREE.Vector3(0,1.05,0));
+  camera.position.lerp(camDesired,1-Math.pow(.0025,dt));
+  camera.lookAt(camTarget);
+}
+
+function updateCamera(dt,now){
+  if(spectatorMode){
+    updateCinematicCamera(dt,now);
+    return;
+  }
+
   const baseFront=new THREE.Vector3(-Math.sin(player.heading),0,-Math.cos(player.heading));
   const right=new THREE.Vector3(-baseFront.z,0,baseFront.x);
   const orbitFront=baseFront.clone().applyAxisAngle(new THREE.Vector3(0,1,0),orbitYaw);
@@ -1603,7 +1738,7 @@ function frame(now){
   carCollisions();
   updateDebris(dt);
   updateHUD();
-  updateCamera(dt);
+  updateCamera(dt,now);
 
   if(noticeTimer>0){
     noticeTimer-=dt;
