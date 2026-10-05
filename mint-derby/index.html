@@ -47,7 +47,8 @@ button{
 }
 button:active{filter:brightness(1.18);transform:translateY(1px)}
 button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
-#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#view.dragging{cursor:grabbing}
 #vignette{
   position:fixed;inset:0;pointer-events:none;
   background:linear-gradient(#0d211b4d,transparent 27%,transparent 68%,#0717147d);
@@ -373,6 +374,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
   <button type="button" data-camera="follow" class="active">FOLLOW</button>
   <button type="button" data-camera="rear">REAR</button>
   <button type="button" data-camera="top">TOP</button>
+  <button type="button" id="resetCamera">RESET VIEW</button>
 </div>
 
 <div id="notice" role="status" aria-live="polite"></div>
@@ -417,6 +419,9 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/+esm";
+import {buildDetailedVehicle} from "../parkside-chaos-wheel-physics/detailed-vehicles.js?v=photo-2";
+import {buildRoadster} from "../parkside-chaos-wheel-physics/roadster-model.js";
+import {VEHICLES} from "../parkside-chaos-wheel-physics/garage-models.js?v=photo-2";
 
 const canvas=document.getElementById("view");
 const loading=document.getElementById("loading");
@@ -670,8 +675,39 @@ function buildSedan(color){
   return g;
 }
 
-function createVehicle(isPlayer,color){
-  const mesh=buildSedan(color);
+function adaptParksideModel(built){
+  const root=built.root;
+  root.userData.damage=[];
+  root.userData.parts=built.assemblies||[];
+  root.userData.wheels=[];
+  root.userData.parkside=true;
+
+  for(const part of root.userData.parts){
+    part.traverse(obj=>{
+      if(obj.isMesh)root.userData.damage.push(obj);
+    });
+    if(part.name.startsWith("wheel-")){
+      root.userData.wheels.push({
+        steerPivot:part,
+        rollPivot:part,
+        front:part.name.includes("front")
+      });
+    }
+  }
+  return root;
+}
+
+function buildParksideVehicle(id){
+  const config=VEHICLES.find(v=>v.id===id);
+  if(!config)return buildSedan(0x777777);
+  const built=id==="roadster"?buildRoadster(THREE):buildDetailedVehicle(THREE,config);
+  const root=adaptParksideModel(built);
+  root.scale.setScalar(1.06);
+  return root;
+}
+
+function createVehicle(isPlayer,color,modelId=null,aiProfile=null){
+  const mesh=modelId?buildParksideVehicle(modelId):buildSedan(color);
   scene.add(mesh);
   return {
     mesh,
@@ -683,16 +719,28 @@ function createVehicle(isPlayer,color){
     hitTimer:0,
     aiOffset:Math.random()*20,
     steerVisual:0,
-    knock:new THREE.Vector3()
+    knock:new THREE.Vector3(),
+    ai:aiProfile,
+    aiTarget:new THREE.Vector3(),
+    aiNextThink:0,
+    modelId:modelId||"mint"
   };
 }
 
-const enemyColors=[0x7e332c,0x2e5b70,0xb47a28,0x55594b,0x70406d];
 const player=createVehicle(true,0x9da88a);
 const cars=[player];
 
+// Opponents use the actual detailed models from Parkside Chaos.
+// Skill varies on purpose: slower rookies are easy targets, while one skilled car keeps pressure on.
+const aiRoster=[
+  {model:"roadster", name:"Roadster Rookie", skill:.22, maxSpeed:13.5, turnRate:.84, accuracy:.40, aggression:.34, think:.95},
+  {model:"santafe", name:"Santa Fe Brawler", skill:.36, maxSpeed:15.5, turnRate:.96, accuracy:.52, aggression:.48, think:.78},
+  {model:"jalopy", name:"Jalopy Wanderer", skill:.16, maxSpeed:11.5, turnRate:.76, accuracy:.30, aggression:.26, think:1.15},
+  {model:"wiener", name:"Wienermobile Bruiser", skill:.48, maxSpeed:16.5, turnRate:1.02, accuracy:.60, aggression:.60, think:.68},
+  {model:"maybach", name:"Maybach Ace", skill:.68, maxSpeed:18.5, turnRate:1.12, accuracy:.72, aggression:.72, think:.52}
+];
+
 // Six perimeter starts chosen around the oval to maximize spacing.
-// Everyone begins near the outer edge and faces toward the center.
 const spawnPoints=[
   [0,68],
   [91,45],
@@ -712,8 +760,8 @@ function faceCenter(car){
 player.mesh.position.set(spawnPoints[0][0],0,spawnPoints[0][1]);
 faceCenter(player);
 
-enemyColors.forEach((color,i)=>{
-  const car=createVehicle(false,color);
+aiRoster.forEach((profile,i)=>{
+  const car=createVehicle(false,0x777777,profile.model,profile);
   const p=spawnPoints[i+1];
   car.mesh.position.set(p[0],0,p[1]);
   faceCenter(car);
@@ -725,6 +773,13 @@ let wrecks=0;
 let gear=1;
 let cameraMode="follow";
 let noticeTimer=0;
+let orbitYaw=0;
+let orbitPitch=.08;
+let orbitDistance=1;
+let cameraDragging=false;
+let cameraPointer=null;
+let cameraLastX=0;
+let cameraLastY=0;
 const input={gas:false,brake:false,handbrake:false};
 const keyboard={left:false,right:false};
 
@@ -746,7 +801,9 @@ function crumple(car,worldPoint,severity){
   for(const mesh of car.mesh.userData.damage){
     const pos=mesh.geometry.attributes.position;
     for(let i=0;i<pos.count;i++){
-      const local=new THREE.Vector3(pos.getX(i),pos.getY(i),pos.getZ(i)).add(mesh.position);
+      const worldVertex=new THREE.Vector3(pos.getX(i),pos.getY(i),pos.getZ(i));
+      mesh.localToWorld(worldVertex);
+      const local=car.mesh.worldToLocal(worldVertex);
       const dist=local.distanceTo(hit);
       if(dist<2.05){
         const falloff=1-dist/2.05;
@@ -762,7 +819,8 @@ function crumple(car,worldPoint,severity){
     }
     pos.needsUpdate=true;
     mesh.geometry.computeVertexNormals();
-    mesh.material.roughness=Math.min(.9,mesh.material.roughness+.008*severity);
+    const mats=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+    for(const m of mats)if(m&&"roughness" in m)m.roughness=Math.min(.9,(m.roughness??.5)+.008*severity);
   }
 
   if(severity>4){
@@ -814,14 +872,19 @@ function explode(car){
   scene.add(flash);
   setTimeout(()=>scene.remove(flash),230);
 
-  const baseColor=car.isPlayer?0x9da88a:car.mesh.userData.damage[0].material.color.getHex();
+  const firstMat=car.mesh.userData.damage[0]?.material;
+  const mat0=Array.isArray(firstMat)?firstMat[0]:firstMat;
+  const baseColor=car.isPlayer?0x9da88a:(mat0?.color?.getHex?.()??0x777777);
   makeDebris(center,baseColor,38);
 
   car.mesh.rotation.z=(Math.random()>.5?1:-1)*(.33+Math.random()*.2);
   car.mesh.rotation.x=(Math.random()-.5)*.18;
-  car.mesh.userData.damage.forEach(m=>{
-    m.material.color.multiplyScalar(.36);
-    m.material.roughness=.95;
+  car.mesh.userData.damage.forEach(mesh=>{
+    const mats=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+    for(const m of mats){
+      if(m?.color)m.color.multiplyScalar(.36);
+      if(m&&"roughness" in m)m.roughness=.95;
+    }
   });
   car.mesh.userData.parts.forEach(p=>{
     p.rotation.x+=(Math.random()-.5)*1.3;
@@ -940,6 +1003,48 @@ document.querySelectorAll("[data-camera]").forEach(button=>{
   });
 });
 
+document.getElementById("resetCamera").addEventListener("click",()=>{
+  orbitYaw=0;
+  orbitPitch=.08;
+  orbitDistance=1;
+  cameraMode="follow";
+  document.querySelectorAll("[data-camera]").forEach(b=>b.classList.toggle("active",b.dataset.camera==="follow"));
+});
+
+canvas.addEventListener("pointerdown",e=>{
+  if(e.button!==0&&e.pointerType==="mouse")return;
+  cameraDragging=true;
+  cameraPointer=e.pointerId;
+  cameraLastX=e.clientX;
+  cameraLastY=e.clientY;
+  canvas.classList.add("dragging");
+  try{canvas.setPointerCapture(e.pointerId)}catch{}
+});
+
+canvas.addEventListener("pointermove",e=>{
+  if(!cameraDragging||e.pointerId!==cameraPointer)return;
+  const dx=e.clientX-cameraLastX;
+  const dy=e.clientY-cameraLastY;
+  cameraLastX=e.clientX;
+  cameraLastY=e.clientY;
+  orbitYaw+=dx*.0075;
+  orbitPitch=THREE.MathUtils.clamp(orbitPitch+dy*.0045,-.22,.62);
+});
+
+function endCameraDrag(e){
+  if(cameraPointer!==null&&e.pointerId!==cameraPointer)return;
+  cameraDragging=false;
+  cameraPointer=null;
+  canvas.classList.remove("dragging");
+}
+canvas.addEventListener("pointerup",endCameraDrag);
+canvas.addEventListener("pointercancel",endCameraDrag);
+
+canvas.addEventListener("wheel",e=>{
+  e.preventDefault();
+  orbitDistance=THREE.MathUtils.clamp(orbitDistance+Math.sign(e.deltaY)*.10,.72,1.65);
+},{passive:false});
+
 window.addEventListener("keydown",e=>{
   const k=e.key.toLowerCase();
   if(k==="w"||k==="arrowup")input.gas=true;
@@ -991,22 +1096,53 @@ function driveCar(car,dt,time){
     steer=playerSteer();
     handbrake=input.handbrake;
   }else{
-    const target=player.alive?player.mesh.position:new THREE.Vector3(0,0,0);
-    const tx=target.x+Math.sin(time*.00062+car.aiOffset)*7;
-    const tz=target.z+Math.cos(time*.00055+car.aiOffset)*7;
-    const dx=tx-car.mesh.position.x;
-    const dz=tz-car.mesh.position.z;
+    const ai=car.ai;
+    const now=time*.001;
 
-    // The sedan's hood/grille is local -Z, so this heading points the FRONT at the target.
+    if(now>=car.aiNextThink){
+      car.aiNextThink=now+ai.think*(.8+Math.random()*.55);
+
+      const playerPos=player.alive?player.mesh.position:new THREE.Vector3();
+      const toPlayer=playerPos.clone().sub(car.mesh.position);
+      const distance=toPlayer.length();
+
+      // Lower-skilled drivers spend more time wandering through the arena instead of
+      // perfectly homing in on the player. This makes them much easier to line up and hit.
+      const chaseChance=ai.aggression+(distance<24?.14:0);
+      if(Math.random()<chaseChance){
+        const miss=(1-ai.accuracy);
+        car.aiTarget.copy(playerPos);
+        car.aiTarget.x+=(Math.random()-.5)*38*miss;
+        car.aiTarget.z+=(Math.random()-.5)*26*miss;
+      }else{
+        const a=Math.random()*Math.PI*2;
+        const radius=.18+Math.random()*.54;
+        car.aiTarget.set(
+          Math.sin(a)*WALL_X*radius,
+          0,
+          Math.cos(a)*WALL_Z*radius
+        );
+      }
+    }
+
+    const dx=car.aiTarget.x-car.mesh.position.x;
+    const dz=car.aiTarget.z-car.mesh.position.z;
     const desired=Math.atan2(-dx,-dz);
     const diff=angleWrap(desired-car.heading);
-    steer=THREE.MathUtils.clamp(diff*1.35,-1,1);
-    throttle=1;
+
+    steer=THREE.MathUtils.clamp(diff*(.72+ai.skill*.72),-1,1);
+    steer*=ai.turnRate;
+
+    const distanceToTarget=Math.hypot(dx,dz);
+    throttle=distanceToTarget>7?1:.30;
+
+    // Rookies occasionally hesitate instead of constantly charging.
+    if(Math.sin(time*.0017+car.aiOffset)>ai.skill+.54)throttle*=.25;
   }
 
   const driveDirection=car.isPlayer?gear:1;
-  const acceleration=car.isPlayer?15.5:12.2;
-  const maxForward=car.isPlayer?31:23;
+  const acceleration=car.isPlayer?15.5:(8.0+car.ai.skill*5.0);
+  const maxForward=car.isPlayer?31:car.ai.maxSpeed;
   const maxReverse=car.isPlayer?12:0;
 
   if(throttle){
@@ -1043,10 +1179,16 @@ function driveCar(car,dt,time){
 
   const spin=car.speed*dt/.49;
   car.mesh.userData.wheels.forEach(w=>{
-    w.rollPivot.rotation.x+=spin;
-    if(w.front){
-      const target=steer*.42;
-      w.steerPivot.rotation.y+=(target-w.steerPivot.rotation.y)*Math.min(1,dt*10);
+    if(car.mesh.userData.parkside){
+      w.rollPivot.rotation.x+=spin;
+      // Parkside wheel assemblies are merged groups; keep them visually stable instead of
+      // twisting the entire wheel geometry around two axes at once.
+    }else{
+      w.rollPivot.rotation.x+=spin;
+      if(w.front){
+        const target=steer*.42;
+        w.steerPivot.rotation.y+=(target-w.steerPivot.rotation.y)*Math.min(1,dt*10);
+      }
     }
   });
 
@@ -1191,33 +1333,37 @@ const camTarget=new THREE.Vector3();
 const camDesired=new THREE.Vector3();
 
 function updateCamera(dt){
-  const front=new THREE.Vector3(-Math.sin(player.heading),0,-Math.cos(player.heading));
-  const right=new THREE.Vector3(-front.z,0,front.x);
+  const baseFront=new THREE.Vector3(-Math.sin(player.heading),0,-Math.cos(player.heading));
+  const right=new THREE.Vector3(-baseFront.z,0,baseFront.x);
+  const orbitFront=baseFront.clone().applyAxisAngle(new THREE.Vector3(0,1,0),orbitYaw);
 
   camTarget.copy(player.mesh.position).add(new THREE.Vector3(0,1.1,0));
 
   if(cameraMode==="top"){
-    camDesired.copy(player.mesh.position).add(new THREE.Vector3(0,58,0.01));
+    const topHeight=58*orbitDistance;
+    camDesired.copy(player.mesh.position).add(new THREE.Vector3(
+      Math.sin(orbitYaw)*10*orbitDistance,
+      topHeight,
+      Math.cos(orbitYaw)*10*orbitDistance
+    ));
     camera.position.lerp(camDesired,1-Math.pow(.001,dt));
     camera.lookAt(player.mesh.position);
     return;
   }
 
-  if(cameraMode==="rear"){
-    camDesired.copy(player.mesh.position)
-      .addScaledVector(front,8.5)
-      .add(new THREE.Vector3(0,4.2,0));
-    camera.position.lerp(camDesired,1-Math.pow(.0008,dt));
-    camera.lookAt(camTarget.clone().addScaledVector(front,-12));
-    return;
-  }
+  const pitchHeight=(6.0+orbitPitch*11)*orbitDistance;
+  const followDistance=(cameraMode==="rear"?8.5:12.5)*orbitDistance;
+  const direction=cameraMode==="rear"?1:-1;
 
   camDesired.copy(player.mesh.position)
-    .addScaledVector(front,-12.5)
-    .addScaledVector(right,1.2)
-    .add(new THREE.Vector3(0,6.4,0));
+    .addScaledVector(orbitFront,followDistance*direction)
+    .addScaledVector(right,cameraMode==="follow"?1.2:0)
+    .add(new THREE.Vector3(0,pitchHeight,0));
+
   camera.position.lerp(camDesired,1-Math.pow(.0008,dt));
-  camera.lookAt(camTarget.clone().addScaledVector(front,5.5));
+
+  const lookDistance=cameraMode==="rear"?-8:5.5;
+  camera.lookAt(camTarget.clone().addScaledVector(orbitFront,lookDistance));
 }
 
 function resize(){
@@ -1255,7 +1401,7 @@ function frame(now){
 }
 
 loading.remove();
-flashNotice("Arena floor fixed. All six cars now start spread around the stadium.",2.4);
+flashNotice("Parkside opponents loaded · mixed AI skill · drag the arena to orbit the camera.",3);
 requestAnimationFrame(frame);
 </script>
 </body>
