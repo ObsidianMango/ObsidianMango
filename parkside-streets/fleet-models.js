@@ -37,15 +37,14 @@ export function buildFleetVehicle(T,c){
    doorSeams(s,.987,1.24,[-.74,.37,1.29],.60);tube('rocker-'+s,[[s*.968,.535,-.87],[s*.985,.535,.83]],.05,'rubber');
    tube('roof-rail-'+s,[[s*.64,1.96,-.17],[s*.68,2.065,.05],[s*.67,2.047,1.18],[s*.57,1.87,1.56]],.026,'chrome');
    // Swept headlamp housings with two projectors and an LED lower edge.
-   const hp=[[s*.49,.985,-2.335],[s*.86,1.018,-2.229],[s*.985,1.194,-2.061],[s*.68,1.18,-2.229]];
+   const hp=[[s*.51,.94,-2.286],[s*.81,.96,-2.205],[s*.88,1.075,-2.07],[s*.61,1.065,-2.228]];
    k.pane('headlight-'+s,hp,'rubber');for(let j=0;j<4;j++)tube('headlight-'+s,[hp[j],hp[(j+1)%4]],.012,'chrome',1);
-   for(let j=0;j<2;j++){const x=s*(.615+j*.177),y=1.07+j*.038,z=-2.306+j*.088;cyl('headlight-'+s,.048,.008,x,y,z,'chrome','z');cyl('headlight-'+s,.034,.011,x,y,z-.006,'lens','z');}
-   glass('headlight-'+s,hp,'chrome',.01);
-   tube('headlight-'+s,[[s*.49,.992,-2.288],[s*.73,1.014,-2.29],[s*.94,1.12,-2.19]],.012,'lens');
-   tube('bonnet',[[s*.47,1.069,-2.22],[s*.50,1.193,-1.60],[s*.65,1.253,-.93]],.008,'seam');
+   for(let j=0;j<2;j++){const x=s*(.615+j*.145),y=.997+j*.022,z=-2.256+j*.075;cyl('headlight-'+s,.039,.008,x,y,z,'chrome','z');cyl('headlight-'+s,.028,.011,x,y,z-.006,'lens','z');}
+   tube('headlight-'+s,[[s*.53,.95,-2.29],[s*.70,.966,-2.25],[s*.82,.984,-2.19]],.008,'lens');
+   tube('bonnet',[[s*.47,.986,-2.22],[s*.50,1.142,-1.60],[s*.65,1.189,-.93]],.005,'seam');
    tube('body-line-'+s,[[s*.99,1.08,-.81],[s*1.005,1.10,.33],[s*.974,1.16,1.31]],.007,'seam');
    rounded('fog-'+s,.34,.19,.10,s*.74,.668,-2.232,'rubber',.025);rounded('fog-'+s,.25,.12,.035,s*.74,.668,-2.288,'chrome',.008);lamp('fog-'+s,s*.74,.67,-2.32,.039);
-   rounded('tail-light-'+s,.41,.16,.055,s*.67,1.13,2.153,'tailLens',.018,0,-s*.24);for(let j=0;j<3;j++)tube('tail-light-'+s,[[s*.48,1.08+j*.035,2.18],[s*.83,1.10+j*.035,2.09]],.008,'tailLens');
+   rounded('tail-light-'+s,.30,.12,.035,s*.60,1.025,2.139,'tailLens',.014,0,-s*.10);for(let j=0;j<3;j++)tube('tail-light-'+s,[[s*.47,.989+j*.025,2.16],[s*.72,.996+j*.025,2.14]],.005,'tailLens');
   }
   glass('rear-glass',[[-.82,1.27,2.10],[.82,1.27,2.10],[.64,1.76,1.66],[-.64,1.76,1.66]],'rubber');
   rounded('spoiler',1.38,.07,.30,0,1.82,1.70,'paint',.02);rounded('sunroof',1.12,.022,.79,0,2.015,.46,'rubber',.005);
@@ -79,7 +78,7 @@ export function buildFleetVehicle(T,c){
    cyl('fuel-cap',.065,.016,s*1.013,.97,2.05,'chrome');
   }
   rounded('grille',1.17,.33,.075,0,.999,-2.68,'rubber',.012);for(let j=0;j<10;j++)box('grille',1.17,.010,.02,0,.859+j*.031,-2.731,'chrome');for(let j=-7;j<=7;j++)box('grille',.008,.29,.014,j*.075,1.002,-2.744,'chrome');
-  for(const z of [-2.77,2.73]){rounded(z<0?'front-bumper':'rear-bumper',2.13,.15,.18,0,.657,z,'chrome',.033);for(const s of [-1,1])rounded(z<0?'front-bumper':'rear-bumper',.26,.29,.25,s*.941,.592,z+(z<0?.025:-.025),'chrome',.047);}
+  for(const z of [-2.73,2.70]){const n=z<0?'front-bumper':'rear-bumper';rounded(n,2.03,.17,.16,0,.665,z,'chrome',.041);for(const s of [-1,1])tube(n,[[s*.80,.665,z],[s*.94,.665,z],[s*1.025,.68,z+(z<0?.14:-.14)],[s*1.018,.69,z+(z<0?.30:-.30)]],.073,'chrome',12);}
   for(const x of [-.30,.30])tube('hood',[[x,1.185,-2.34],[x*.73,1.269,-1.04]],.008,'chrome');
   cyl('hood-ornament',.018,.18,0,1.24,-2.34,'chrome','y');torus('hood-ornament',.035,.007,0,1.354,-2.34,'chrome','z',20);
   textBadge('hood','C H R Y S L E R',0,1.17,-2.717,.88);textBadge('trunk','NEW YORKER',0,1.087,2.672,.63);
@@ -115,7 +114,7 @@ export function buildFleetVehicle(T,c){
  k.mechanics(c,{engineZ:van?-1.76:suv?-1.27:-1.68,cylinders:suv?6:8});for(const m of k.group('engine').children)m.position.y-=.13;
  for(const s of [-1,1])for(const [end,z]of [['front',c.front],['rear',c.rear]]){
   const n='wheel-'+end+'-'+(s>0?'left':'right');k.wheel(n,s*c.track,c.radius,z,c.radius,van?.28:.25,van?'steel':suv?'alloy':'whitewall');
-  if(!suv&&!van){cyl(n,c.radius*.53,.03,s*(c.track+.151),c.radius,z,'chrome');for(let j=0;j<24;j++){const a=j*Math.PI/12;tube(n,[[s*(c.track+.171),c.radius+Math.sin(a)*.13,z+Math.cos(a)*.13],[s*(c.track+.171),c.radius+Math.sin(a)*.205,z+Math.cos(a)*.205]],.004,'steel',1);}torus(n,.072,.009,s*(c.track+.178),c.radius,z,'chrome');}
+  if(!suv&&!van){for(const child of [...k.group(n).children])if(child.material===k.materials.black&&child.geometry.type==='CylinderGeometry'&&child.geometry.parameters.radiusTop<c.radius*.1){k.group(n).remove(child);child.geometry.dispose();}cyl(n,c.radius*.63,.033,s*(c.track+.18),c.radius,z,'chrome');cyl(n,c.radius*.24,.025,s*(c.track+.207),c.radius,z,'chrome');torus(n,c.radius*.79,c.radius*.035,s*(c.track+.154),c.radius,z,'ivory');torus(n,c.radius*.61,.008,s*(c.track+.199),c.radius,z,'chrome');torus(n,.072,.007,s*(c.track+.225),c.radius,z,'chrome');}
   const p=[];for(let j=0;j<=36;j++){const a=j*Math.PI/36;p.push([s*(suv?1.003:van?1.074:1.05),c.radius+Math.sin(a)*(c.radius+.078),z+Math.cos(a)*(c.radius+.078)]);}tube('fender-'+end+'-'+s,p,suv?.020:.013,suv||van?'rubber':'chrome',36);
  }
  return k.finish();

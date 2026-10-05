@@ -1,5 +1,10 @@
 # Parkside Streets
 
+## Final trim cleanup
+- Santa Fe front and rear lamps now follow the body; hood accents sit against the paint.
+- New Yorker bumper corners wrap into the body, and wheel covers use clean chrome discs with whitewall trim.
+- Garage cards show vehicle names without extra descriptions.
+
 ## Model polish and parking-lot reactions
 - Refined Santa Fe glazing, pillars and wipers; rounded Nova roof, wheel trim and scoop details; flush New Yorker headlamps and better window framing. Photo-inspired paint schemes are retained.
 - Nearby parked cars become movable physics bodies in a crash blast, dent, darken and shed parts. Secondary collisions can damage other parked cars. Both replay angles capture the reactions; retry restores the lot.

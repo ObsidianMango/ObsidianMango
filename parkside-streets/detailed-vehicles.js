@@ -1,6 +1,6 @@
 import {detailKit} from './vehicle-detail-kit.js?v=quality-1';
 import {buildNova} from './nova-model.js?v=nova-1';
-import {buildFleetVehicle} from './fleet-models.js?v=traffic-2';
+import {buildFleetVehicle} from './fleet-models.js?v=trim-3';
 import {buildWienermobile} from './wienermobile-model.js?v=photo-2';
 
 export function buildDetailedVehicle(T,c){
