@@ -1,4 +1,4 @@
-import {detailKit} from './vehicle-detail-kit.js?v=quality-1';
+import {detailKit} from './vehicle-detail-kit.js?v=gold-8';
 
 // The reference vehicle is a glazed orange sausage coach on a yellow road body.
 // Surface patches share the same analytic profile, including the glass openings.

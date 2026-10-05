@@ -1,7 +1,7 @@
-import {detailKit} from './vehicle-detail-kit.js?v=quality-1';
+import {detailKit} from './vehicle-detail-kit.js?v=gold-8';
 import {buildNova} from './nova-model.js?v=nova-1';
-import {buildFleetVehicle} from './fleet-models.js?v=flush-4';
-import {buildWienermobile} from './wienermobile-model.js?v=photo-2';
+import {buildFleetVehicle} from './fleet-models.js?v=gold-8';
+import {buildWienermobile} from './wienermobile-model.js?v=gold-8';
 
 export function buildDetailedVehicle(T,c){
  if(['santafe','newyorker','e250'].includes(c.id))return buildFleetVehicle(T,c);

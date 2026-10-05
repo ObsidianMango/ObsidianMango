@@ -1,4 +1,4 @@
-import {detailKit} from './vehicle-detail-kit.js?v=quality-1';
+import {detailKit} from './vehicle-detail-kit.js?v=gold-8';
 
 export function buildFleetVehicle(T,c){
  const k=detailKit(T),{mat,box,rounded,tube,cyl,torus,lamp,plate}=k;

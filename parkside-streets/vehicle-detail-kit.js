@@ -32,12 +32,12 @@ export function detailKit(T,base=null){
   cyl(n,r*.085,.079,face+side*.03,y,z,'black');tube(n,[[face,y+r*.48,z+r*.19],[face+side*.038,y+r*.52,z+r*.20]],.011,'black',1);
  }
  function interior({front=.05,rear=1.0,baseY=.78,dash=-.65,width=.78,luxury=false,rows=2}){
-  remove('cabin');const n='cabin',seat=luxury?'leatherDetail':'seatDetail';if(!materials.seatDetail)mat('seatDetail',0x353b40,0,.88);
+  root.userData.driverSide='left';root.userData.steeringX=-width*.51;remove('cabin');const n='cabin',seat=luxury?'leatherDetail':'seatDetail';if(!materials.seatDetail)mat('seatDetail',0x353b40,0,.88);
   box(n,width*2,.055,Math.max(1.4,rear-dash+.3),0,baseY-.18,(rear+dash)/2,'black');
   for(let row=0;row<rows;row++)for(const side of [-1,1]){const z=row?rear:front,x=side*width*.5;rounded(n,width*.77,.16,.56,x,baseY,z,seat,.055);rounded(n,width*.77,.55,.13,x,baseY+.30,z+.28,seat,.04,-.10);rounded(n,width*.44,.20,.10,x,baseY+.66,z+.30,seat,.035);for(let i=-2;i<=2;i++)tube(n,[[x+i*width*.115,baseY+.02,z+.20],[x+i*width*.115,baseY+.49,z+.31]],.0045,'stitch',1);tube(n,[[x-side*.20,baseY+.46,z+.22],[x+side*.19,baseY+.10,z-.10]],.014,'black',1);}
   rounded(n,width*1.94,.18,.32,0,baseY+.42,dash,luxury?'woodDetail':'black',.025);box(n,.24,.018,.78,0,baseY+.07,(dash+front)/2,'black');tube(n,[[0,baseY+.08,front-.19],[0,baseY+.27,front-.25]],.015,'trim',1);cyl(n,.035,.045,0,baseY+.28,front-.25,'black','y');
   for(let i=0;i<4;i++){const x=-width*.6+i*width*.34;cyl(n,i===0?.075:.046,.018,x,baseY+.44,dash+.168,'trim','z');cyl(n,i===0?.065:.036,.022,x,baseY+.44,dash+.179,'gauge','z');tube(n,[[x,baseY+.44,dash+.195],[x+.02,baseY+.47,dash+.195]],.003,'ivory',1);}
-  const sx=width*.51,sy=baseY+.48,sz=dash+.40;torus(n,.16,.013,sx,sy,sz,luxury?'woodDetail':'black','z');for(let i=0;i<3;i++){const a=i*Math.PI*2/3;tube(n,[[sx,sy,sz],[sx+Math.cos(a)*.15,sy+Math.sin(a)*.15,sz]],.011,'trim',1);}cyl(n,.034,.025,sx,sy,sz,'black','z');tube(n,[[sx,sy,sz],[sx,baseY+.22,dash+.10]],.019,'steel',1);
+  const sx=-width*.51,sy=baseY+.48,sz=dash+.40;torus(n,.16,.013,sx,sy,sz,luxury?'woodDetail':'black','z');for(let i=0;i<3;i++){const a=i*Math.PI*2/3;tube(n,[[sx,sy,sz],[sx+Math.cos(a)*.15,sy+Math.sin(a)*.15,sz]],.011,'trim',1);}cyl(n,.034,.025,sx,sy,sz,'black','z');tube(n,[[sx,sy,sz],[sx,baseY+.22,dash+.10]],.019,'steel',1);
   for(const x of [sx-.08,sx+.06])box(n,.08,.025,.12,x,baseY-.09,dash+.23,'black',.3);for(const x of [-width*.65,width*.65])for(let i=0;i<4;i++)box(n,.10,.008,.023,x,baseY+.46+i*.018,dash-.02,'steel');
  }
  function mechanics(c,{engineZ=-1.3,cylinders=8}={}){
@@ -56,4 +56,3 @@ export function detailKit(T,base=null){
  }
  return{T,root,groups,materials,mat,group,remove,add,box,rounded,cyl,torus,tube,pane,loft,capsule,arch,wing,wheel,interior,mechanics,lamp,plate,finish};
 }
-

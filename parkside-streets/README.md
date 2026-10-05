@@ -1,5 +1,13 @@
 # Parkside Streets
 
+## Left-hand driving and the completion reward
+- All eight interiors have the steering rim, spokes, column and pedals on the driver's left. The original Roadster's source coordinates are converted consistently with its +X-to−Z rotation.
+- Finish all 24 lots with at least one star to unlock the Gold fleet selector. Existing completion saves qualify automatically; a saved gold selection is rejected if the challenges are incomplete.
+- Eight golden variants reuse the full detailed geometry, wheel setup and dimensions. Metallic gold bodywork preserves rubber, glazing, lamps and interiors; the Nova retains a contrasting pale-gold flame pattern. Original materials are unchanged.
+- Golden vehicles keep every assembly attached, cannot wreck, and take no damage, bump count, reset time penalty or unbanked-point loss. Gold impacts knock nearby scenery and parked cars aside; the E250's mechanical failures are disabled. Handling, checkpoint direction and full parking containment still apply.
+- Gold parking uses separate vehicle score records and does not overwrite original challenge ratings/times. The fleet choice persists across reloads.
+- Verified the actual final-lot unlock, incomplete/tampered-save lockout, left-side steering geometry, all eight gold vehicles' dimensions and parking, crash/detachment protection, free recovery, actual curb destruction, original materials/ratings, saved selection, mobile controls and ordinary-car wreck behavior.
+
 ## Larger staged routes and destructible surroundings
 - All 24 lots now have a 96 × 96 parking surface, approximately twice the previous width and length. Bays and cars keep their dimensions. Three ordered directional checkpoints, alternating barriers, and close neighbours at the final bay make the route and parking maneuver more demanding; later chapters narrow the gates. Par times scale by 1.8.
 - Buildings are hollow shells divided into facade and roof sections. Impacts deform their vertices; harder hits release physical rubble and collapse locally unsupported upper sections. Trees, signs, lights, curbs, islands and other solid scenery also break loose. Signs, foliage and other decorations follow their supports.
