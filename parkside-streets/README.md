@@ -46,7 +46,7 @@ Separate edition at `parkside-streets/`, based on the published wheel-physics ed
 - Eight playable vehicles. Rebuilt metallic warm-gray Santa Fe, pale sage Chrysler New Yorker with whitewalls and chrome trim, and a white Ford E250 cargo van.
 - New models include shaped body panels, wheel openings, framed glazing, interiors, drivetrains, lights, trim and individual breakaway assemblies (54 / 50 / 62 respectively).
 - An outer promenade beyond the south entrance has 6 pedestrians in level 1, increasing by 2 each level to 52. Walking routes remain outside the parking surface. The entrance now has an open curb gap for access.
-- Shared instanced meshes render varied clothing and animated limbs. Vehicle impacts switch characters into seven-body constrained ragdolls; they reset after nine seconds. No gore.
+- Shared instanced meshes render varied clothing and animated limbs. Vehicle impacts switch characters into seven-body constrained ragdolls. Knockdowns last for the rest of the run, including car recovery; restarting a challenge resets them. Settled physics bodies are removed while their fallen poses remain visible. No gore.
 - Pedestrian poses are recorded and interpolated alongside the car in both crash-replay angles. Restarting resets the crowd and removes its old physics bodies and constraints.
 - Verified all three revised/new vehicles against all 24 parking completion checks (72 combinations), driving/coasting/reverse, pedestrian collisions, ragdolls, replay and reset. These are automated simulation checks, not a claim that every approach route was manually driven.
 
@@ -72,3 +72,11 @@ Copied from `parkside-chaos` at commit `c4aeace4b5ce3aca88b12f1cec306a23e26239d9
 - Recovery and vehicle switches clear the interpolation buffer so the car never sweeps across the map from its previous position.
 - Reverse speed and the Nova's existing forward limit use a continuous throttle taper rather than rapidly switching full power on and off. Launch power and uncapped vehicles are unchanged.
 - Verification covers all eight vehicles at 30/60/90/120 Hz, reverse governors, coasting wheel interpolation, recovery, parking, gold immunity and crash playback.
+
+## Secret destruction district: Golden Grounds
+- Completing the original 24 parking challenges unlocks this map together with the golden fleet. Its garage card stays locked until then; entry selects a golden version of the chosen car. Original parking progress and ratings remain separate.
+- The driveable map is 480 × 480, five times a standard lot's width and length. A 520 × 520 heightfield supports the entire map. Long, wide boulevards connect downtown offices/shops, houses and gardens, harbor warehouses/quays/cranes/boats, and a forest with cabins.
+- There are 160 pedestrians across the four districts, 20 damageable parked cars, explosive barrels, trees, lights, hydrants, fences, cargo containers and segmented buildings. The city is built lazily so regular levels carry none of its extra scenery/physics cost.
+- Barrels produce pooled fire, smoke and shockwave effects and queued chain reactions. Explosions damage nearby scenery and cars and knock down pedestrians. Ragdolls are capped at 16, then their fallen poses persist; older rubble is retired from active simulation. Golden cars retain the smooth driving update and cannot wreck.
+- The live objective and district counters cover every registered target and pedestrian. Buildings clear once at least 60% of their structural sections collapse; other scenery must break, parked cars must take damage, and all pedestrians must be down. A minimap and nearest-target ring point to remaining targets. No parking or checkpoint requirement applies here.
+- Each new scenery target awards destruction points once. Clearing the whole district banks the run with a 10,000-point completion bonus before the vehicle multiplier. Car recovery keeps destruction, crowd and score progress. Restart begins a fresh sandbox; a completed-map badge is saved separately.
