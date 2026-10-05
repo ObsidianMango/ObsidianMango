@@ -422,7 +422,6 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/+esm";
 import {buildDetailedVehicle} from "../parkside-chaos-wheel-physics/detailed-vehicles.js?v=photo-2";
 import {buildRoadster} from "../parkside-chaos-wheel-physics/roadster-model.js";
 import {VEHICLES} from "../parkside-chaos-wheel-physics/garage-models.js?v=photo-2";
-import {buildMintMonster} from "./mint-monster-model.js?v=detail-1";
 
 const canvas=document.getElementById("view");
 const loading=document.getElementById("loading");
@@ -901,12 +900,7 @@ function buildParksideVehicle(id){
 }
 
 function createVehicle(isPlayer,color,modelId=null,aiProfile=null){
-  let mesh;
-  if(modelId==="mintmonster"){
-    mesh=adaptParksideModel(buildMintMonster(THREE));
-  }else{
-    mesh=modelId?buildParksideVehicle(modelId):buildSedan(color);
-  }
+  const mesh=modelId?buildParksideVehicle(modelId):buildSedan(color);
   scene.add(mesh);
   return {
     mesh,
@@ -926,7 +920,7 @@ function createVehicle(isPlayer,color,modelId=null,aiProfile=null){
   };
 }
 
-const player=createVehicle(true,0x9da88a,"mintmonster");
+const player=createVehicle(true,0x9da88a);
 const cars=[player];
 
 // Opponents use the actual detailed models from Parkside Chaos.
@@ -983,6 +977,7 @@ let spectatorMode=false;
 let cinematicFocus=null;
 let cinematicNextCut=0;
 let cinematicShot=0;
+let cinematicActiveShot=0;
 let cinematicWinnerShown=false;
 const input={gas:false,brake:false,handbrake:false};
 const keyboard={left:false,right:false};
@@ -1101,6 +1096,7 @@ function explode(car){
     cinematicFocus=null;
     cinematicNextCut=0;
     cinematicShot=0;
+    cinematicActiveShot=0;
     input.gas=false;
     input.brake=false;
     input.handbrake=false;
@@ -1598,6 +1594,7 @@ const camTarget=new THREE.Vector3();
 const camDesired=new THREE.Vector3();
 
 function updateCinematicCamera(dt,now){
+  const nowSec=now*.001;
   const survivors=cars.filter(car=>!car.isPlayer&&car.alive);
 
   if(!survivors.length){
@@ -1608,8 +1605,8 @@ function updateCinematicCamera(dt,now){
     return;
   }
 
-  if(!cinematicFocus||!cinematicFocus.alive||now>=cinematicNextCut){
-    // Prefer a car that is currently closest to another survivor so cuts favor actual action.
+  if(!cinematicFocus||!cinematicFocus.alive||nowSec>=cinematicNextCut){
+    // Favor whichever survivor is closest to another live car so cuts follow real action.
     let best=survivors[0],bestGap=Infinity;
     for(const car of survivors){
       let nearest=Infinity;
@@ -1620,11 +1617,14 @@ function updateCinematicCamera(dt,now){
       if(nearest<bestGap){bestGap=nearest;best=car;}
     }
 
-    // Alternate between the action car and another survivor so the film does not fixate.
     const alternate=survivors[(survivors.indexOf(best)+cinematicShot)%survivors.length];
     cinematicFocus=cinematicShot%3===0?best:alternate;
+    cinematicActiveShot=cinematicShot;
     cinematicShot=(cinematicShot+1)%4;
-    cinematicNextCut=now+4.2+(cinematicShot%2)*1.1;
+
+    // IMPORTANT: camera timing is in seconds. The previous version mixed milliseconds
+    // and seconds, causing cuts and orbit motion to go berserk.
+    cinematicNextCut=nowSec+5.0+(cinematicActiveShot===3?1.5:0);
   }
 
   const focus=cinematicFocus;
@@ -1640,39 +1640,39 @@ function updateCinematicCamera(dt,now){
   const actionCenter=focus.mesh.position.clone();
   if(nearest&&nearestD<32*32)actionCenter.lerp(nearest.mesh.position,.34);
 
-  const orbit=now*.18+orbitYaw;
-  const shot=cinematicShot;
+  const orbit=nowSec*.38+orbitYaw;
+  const shot=cinematicActiveShot;
 
   if(shot===0){
-    // Low chase shot.
+    // Stable low chase shot.
     camDesired.copy(focus.mesh.position)
-      .addScaledVector(front,-15)
-      .addScaledVector(right,5)
-      .add(new THREE.Vector3(0,5.2+orbitPitch*4,0));
+      .addScaledVector(front,-14)
+      .addScaledVector(right,4.5)
+      .add(new THREE.Vector3(0,5.4+orbitPitch*3,0));
   }else if(shot===1){
-    // Side tracking shot.
+    // Side tracking shot with a little more breathing room.
     camDesired.copy(actionCenter)
       .addScaledVector(right,18)
-      .addScaledVector(front,-4)
-      .add(new THREE.Vector3(0,7.5+orbitPitch*5,0));
+      .addScaledVector(front,-3)
+      .add(new THREE.Vector3(0,7.8+orbitPitch*4,0));
   }else if(shot===2){
-    // Sweeping orbit around two cars.
+    // Slow orbit around the active collision area.
     camDesired.copy(actionCenter).add(new THREE.Vector3(
-      Math.sin(orbit)*24*orbitDistance,
-      11+orbitPitch*7,
-      Math.cos(orbit)*24*orbitDistance
+      Math.sin(orbit)*22*orbitDistance,
+      11.5+orbitPitch*5,
+      Math.cos(orbit)*22*orbitDistance
     ));
   }else{
-    // High stadium establishing shot.
+    // Stadium-wide establishing shot.
     camDesired.copy(actionCenter).add(new THREE.Vector3(
-      Math.sin(orbit*.45)*34*orbitDistance,
-      21+orbitPitch*9,
-      Math.cos(orbit*.45)*34*orbitDistance
+      Math.sin(orbit*.45)*31*orbitDistance,
+      20+orbitPitch*6,
+      Math.cos(orbit*.45)*31*orbitDistance
     ));
   }
 
   camTarget.copy(actionCenter).add(new THREE.Vector3(0,1.05,0));
-  camera.position.lerp(camDesired,1-Math.pow(.0025,dt));
+  camera.position.lerp(camDesired,1-Math.pow(.006,dt));
   camera.lookAt(camTarget);
 }
 
@@ -1750,7 +1750,7 @@ function frame(now){
 }
 
 loading.remove();
-flashNotice("Mint Monster upgraded again: reshaped body, hardtop glass, chrome trim, whitewalls and hotter exhaust flames.",3.2);
+flashNotice("Mint Monster body restored to the stable detailed version · cinematic camera repaired.",3.2);
 requestAnimationFrame(frame);
 </script>
 </body>
