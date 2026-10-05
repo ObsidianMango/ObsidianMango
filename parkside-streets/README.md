@@ -65,3 +65,10 @@ Copied from `parkside-chaos` at commit `c4aeace4b5ce3aca88b12f1cec306a23e26239d9
 - Curved windshield and side glazing are actual openings in the body surface. Includes wipers, mirrors, vents, steps, detailed cabin, drivetrain and smaller ventilated silver wheels. All 45 assemblies participate in the crash replay and reset.
 - Wheel angles advance on fixed physics steps, including coasting and reverse. Rendering preserves Cannon's contact flags and uses the correct axle rotation direction. Steering and mass-scaled braking are accounted for.
 - Slower cars retain uncapped forward speed and their existing engine-force settings. The 24 lots, chapter unlocks and save key remain unchanged.
+
+## Smooth driving at speed
+- Controls, drag, suspension, damage and game timers advance together at a fixed 60 Hz. Forces are applied exactly once per physics step, including on 90/120 Hz displays and in slow motion.
+- The visible chassis and attached wheels interpolate between physics poses. The camera follows that same displayed pose; collision checks and crash recordings use the actual simulated poses.
+- Recovery and vehicle switches clear the interpolation buffer so the car never sweeps across the map from its previous position.
+- Reverse speed and the Nova's existing forward limit use a continuous throttle taper rather than rapidly switching full power on and off. Launch power and uncapped vehicles are unchanged.
+- Verification covers all eight vehicles at 30/60/90/120 Hz, reverse governors, coasting wheel interpolation, recovery, parking, gold immunity and crash playback.
