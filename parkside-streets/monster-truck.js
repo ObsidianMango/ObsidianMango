@@ -2,7 +2,7 @@ import {detailKit} from './vehicle-detail-kit.js?v=gold-8';
 
 // A dedicated reward vehicle; the player's parking-car selection stays intact.
 export function buildMonsterTruck(T){
- const config={id:'monster-gold',baseId:'monster',name:'Golden Monster Truck',golden:true,monster:true,mass:6200,power:16500,maxSpeed:32,reverseSpeed:10,radius:1.18,track:1.75,front:-2.05,rear:2.05,offset:1.73,halfWidth:2.18,halfLength:3.03,box:[1.32,.42,2.65],center:.40,scoreMultiplier:1,suspension:.55};
+ const config={id:'monster-gold',baseId:'monster',name:'Golden Monster Truck',golden:true,monster:true,mass:9500,power:22000,maxSpeed:32,reverseSpeed:10,radius:1.18,track:1.75,front:-2.05,rear:2.05,offset:1.23,halfWidth:2.18,halfLength:3.03,box:[1.32,.42,2.65],center:.40,scoreMultiplier:1,suspension:.55};
  const k=detailKit(T),{mat,box,rounded,cyl,torus,tube,pane,loft,lamp}=k;
  mat('paint',0xe9b946,.78,.25);mat('goldLight',0xffdb7d,.65,.29);mat('frame',0x263135,.45,.43);mat('shock',0xd7a02c,.58,.30);mat('rubberTrim',0x152023,.08,.8);
  // Long-travel axles, steering links, four-link suspension and exposed coilovers.

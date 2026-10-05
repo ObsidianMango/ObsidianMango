@@ -1,16 +1,17 @@
 // Damageable scenery uses the same bodies during driving, wrecks and recorded replays.
+import {createCrushContact} from './crush-contact.js?v=crush-12';
 export function createDestructibleEnvironment({T,C,world,lots,onExplode}){
- let active=[],pending=new Map(),elapsed=0,explosionCount=0,launchedBarrels=0;const explosions=[],registered=new Set(),q=new T.Quaternion(),v=new T.Vector3(),near=new C.Vec3(),local=new C.Vec3(),ramLocal=new C.Vec3();
+ let active=[],pending=new Map(),elapsed=0,explosionCount=0,launchedBarrels=0;const explosions=[],fragments=[],fragmentBox=new T.BoxGeometry(1,1,1),rubbleMat=new C.Material({friction:.55,restitution:.04}),registered=new Set(),q=new T.Quaternion(),v=new T.Vector3(),contact=createCrushContact(C);
  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
  function register(entries){for(const e of entries){if(registered.has(e))continue;registered.add(e);
-  e.home=e.body.position.clone();e.turn=e.body.quaternion.clone();e.filterGroup=e.body.collisionFilterGroup;e.geometry=e.mesh.geometry;e.color=e.mesh.material.color.clone();e.damage=0;e.broken=false;e.last=-10;e.lastRam=-10;e.dent=[0,0,0,0,0,1];e.visualDamage=-1;
+  e.home=e.body.position.clone();e.turn=e.body.quaternion.clone();e.originalPhysicsMaterial=e.body.material;e.originalShape=e.body.shapes[0];e.originalScale=e.mesh.scale.clone();e.originalSize=e.size.slice();e.filterGroup=e.body.collisionFilterGroup;e.geometry=e.mesh.geometry;e.color=e.mesh.material.color.clone();e.damage=0;e.broken=false;e.last=-10;e.lastRam=-10;e.dent=[0,0,0,0,0,1];e.visualDamage=-1;
   e.body.addEventListener('collide',event=>{
    const kind=event.body.userData?.kind,target=!!kind&&kind!=='pedestrian',armedTarget=e.explosive&&e.armed&&target&&elapsed-e.armedAt>.08&&e.body.position.distanceTo(e.launchPosition)>1.5;
    if(!active.includes(e)||event.body.mass<=0&&!armedTarget||kind==='pedestrian'||elapsed-e.last<.24&&!armedTarget)return;
    const speed=Math.abs(event.contact.getImpactVelocityAlongNormal());if(speed<1.4)return;
    const relative=event.contact.bi===e.body?event.contact.ri:event.contact.rj;
    const point=e.body.position.vadd(relative),velocity=event.body.velocity.clone();
-   if(!pending.has(e)||pending.get(e).speed<speed)pending.set(e,{speed,point,velocity,target:armedTarget});
+   if(!pending.has(e)||pending.get(e).speed<speed)pending.set(e,{speed,point,velocity,target:armedTarget,monster:!!event.body.userData?.monster});
   });
  }}register(lots.breakables);
  function deform(e,amount,dent=e.dent){
@@ -22,16 +23,29 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode}){
    p.setXYZ(i,base[k]+dent[3]*depth*falloff/scale.x,base[k+1]+dent[4]*depth*falloff/scale.y,base[k+2]+dent[5]*depth*falloff/scale.z);
   }p.needsUpdate=true;e.mesh.geometry.computeVertexNormals();e.mesh.material.color.copy(e.color).multiplyScalar(1-amount*.30);
  }
- function release(e,velocity,point){
-  if(e.broken)return;e.broken=true;e.age=0;e.body.type=C.Body.DYNAMIC;e.body.mass=e.explosive?55:clamp(e.size[0]*e.size[1]*e.size[2]*90,12,e.level===24?320:650);e.body.linearDamping=.16;e.body.angularDamping=.26;e.body.allowSleep=true;if(e.level===24)e.body.collisionFilterGroup=8;e.body.updateMassProperties();e.body.wakeUp();
-  e.body.velocity.set(clamp(velocity.x*.38,-9,9),Math.min(4,1+velocity.length()*.12),clamp(velocity.z*.38,-9,9));e.body.angularVelocity.set((e.home.z-point.z)*.16,.5,(point.x-e.home.x)*.16);e.body.aabbNeedsUpdate=true;
-  // Local support failure pulls the facade and roof above it down, not the whole city.
-  if(e.structure)for(const neighbor of active){if(neighbor===e||neighbor.broken||neighbor.structure!==e.structure)continue;
-   if(neighbor.home.y>e.home.y+1&&Math.hypot(neighbor.home.x-e.home.x,neighbor.home.z-e.home.z)<7){neighbor.damage=Math.max(neighbor.damage,.8);deform(neighbor,neighbor.damage);release(neighbor,velocity.scale(.4),point);}
+ const pieceMass=e=>e.explosive?55:clamp(e.size[0]*e.size[1]*e.size[2]*90,12,650);
+ function fracture(e){
+  if(e.level!==24||e.explosive||e.shattered||Math.max(...e.size)<=6)return;
+  e.shattered=true;const size=e.size.slice(),axes=[0,1,2].filter(i=>size[i]>6).sort((a,b)=>size[b]-size[a]),splits=[1,1,1];splits[axes[0]]=Math.min(4,Math.ceil(size[axes[0]]/2.8));if(axes.length>1)splits[axes[1]]=2;if(size[1]>2.4&&Math.min(size[0],size[2])<1)splits[1]=Math.min(3,Math.ceil(size[1]/1.4));
+  const chunk=size.map((n,i)=>n/splits[i]),count=splits[0]*splits[1]*splits[2],mass=e.body.mass/count,origin=e.body.position.clone(),turn=e.body.quaternion.clone();let index=0;
+  for(let x=0;x<splits[0];x++)for(let y=0;y<splits[1];y++)for(let z=0;z<splits[2];z++){
+   const offset=new C.Vec3((x+.5)*chunk[0]-size[0]/2,(y+.5)*chunk[1]-size[1]/2,(z+.5)*chunk[2]-size[2]/2),position=turn.vmult(offset).vadd(origin);
+   if(index++===0){e.size=chunk.slice();e.body.removeShape(e.body.shapes[0]);e.body.addShape(new C.Box(new C.Vec3(...chunk.map(n=>n/2))));e.body.mass=mass;e.body.position.copy(position);e.body.updateMassProperties();e.body.updateBoundingRadius();e.body.aabbNeedsUpdate=true;e.mesh.scale.set(e.originalScale.x/splits[0],e.originalScale.y/splits[1],e.originalScale.z/splits[2]);e.mesh.position.copy(position);continue;}
+   const mesh=new T.Mesh(fragmentBox,e.mesh.material);mesh.scale.set(...chunk);mesh.position.copy(position);mesh.quaternion.copy(turn);mesh.castShadow=mesh.receiveShadow=true;e.mesh.parent.add(mesh);
+   const body=new C.Body({mass,material:e.body.material,position,shape:new C.Box(new C.Vec3(...chunk.map(n=>n/2))),collisionFilterGroup:8,linearDamping:.20,angularDamping:.32,allowSleep:true,sleepSpeedLimit:.3,sleepTimeLimit:1.5});body.quaternion.copy(turn);body.userData={kind:'building rubble'};world.addBody(body);fragments.push({body,mesh,size:chunk.slice(),source:e,age:0});
   }
  }
+ function release(e,velocity,point,physical=false){
+  if(e.broken)return;e.broken=true;e.age=0;e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.linearDamping=.16;e.body.angularDamping=.26;e.body.allowSleep=true;if(e.level===24){e.body.collisionFilterGroup=8;e.body.material=rubbleMat;}e.body.updateMassProperties();e.body.wakeUp();
+  if(physical){e.body.velocity.setZero();e.body.angularVelocity.setZero();}else{e.body.velocity.set(clamp(velocity.x*.38,-9,9),Math.min(4,1+velocity.length()*.12),clamp(velocity.z*.38,-9,9));e.body.angularVelocity.set((e.home.z-point.z)*.16,.5,(point.x-e.home.x)*.16);}e.body.aabbNeedsUpdate=true;
+  // Local support failure pulls the facade and roof above it down, not the whole city.
+  if(e.structure)for(const neighbor of active){if(neighbor===e||neighbor.broken||neighbor.structure!==e.structure)continue;
+   if(neighbor.home.y>e.home.y+1&&Math.hypot(neighbor.home.x-e.home.x,neighbor.home.z-e.home.z)<7){neighbor.damage=Math.max(neighbor.damage,.8);deform(neighbor,neighbor.damage);release(neighbor,velocity.scale(.4),point,physical);}
+  }
+  fracture(e);
+ }
  function throwPiece(e,velocity,point){
-  release(e,velocity,point);e.age=0;e.body.type=C.Body.DYNAMIC;if(!e.body.mass)e.body.mass=clamp(e.size[0]*e.size[1]*e.size[2]*90,12,320);e.body.updateMassProperties();e.body.wakeUp();
+  release(e,velocity,point);e.age=0;e.body.type=C.Body.DYNAMIC;if(!e.body.mass)e.body.mass=pieceMass(e);e.body.updateMassProperties();e.body.wakeUp();
   const speed=Math.hypot(velocity.x,velocity.z),dx=e.body.position.x-point.x,dz=e.body.position.z-point.z,d=Math.max(1,Math.hypot(dx,dz));
   e.body.velocity.set(clamp(velocity.x*.85+dx/d*7,-34,34),Math.min(11,4+speed*.18),clamp(velocity.z*.85+dz/d*7,-34,34));e.body.angularVelocity.set(dz/d*4,2,-dx/d*4);
  }
@@ -46,24 +60,28 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode}){
   if(e.explosive){if(source==='blast'||target){detonate(e);return;}if(e.detonated)return;launchBarrel(e,velocity,point);return;}
   e.last=elapsed;const lp=e.mesh.worldToLocal(new T.Vector3(point.x,point.y,point.z)),dir=new T.Vector3(velocity.x,velocity.y,velocity.z).normalize().applyQuaternion(q.copy(e.mesh.quaternion).invert());
   e.dent=[clamp(lp.x,-.5,.5),clamp(lp.y,-.5,.5),clamp(lp.z,-.5,.5),dir.x,dir.y,dir.z];e.damage=clamp(e.damage+speed/(e.structure?15:9),0,1);deform(e,e.damage);
-  if(e.damage>=(e.structure ? .72 : .58))release(e,velocity,point);
-  if(e.level===24&&(source==='ram'||source==='blast'))throwPiece(e,velocity,point);
+  if(e.damage>=(e.structure ? .72 : .58))release(e,velocity,point,source==='ram');
+  if(e.level===24&&source==='blast')throwPiece(e,velocity,point);
  }
- function reset(level){pending.clear();explosions.length=0;explosionCount=0;launchedBarrels=0;elapsed=0;for(const e of active){e.body.type=C.Body.STATIC;e.body.mass=0;e.body.collisionFilterGroup=e.filterGroup;e.body.updateMassProperties();e.body.position.copy(e.home);e.body.quaternion.copy(e.turn);e.body.velocity.setZero();e.body.angularVelocity.setZero();e.body.force.setZero();e.body.torque.setZero();e.body.aabbNeedsUpdate=true;e.body.wakeUp();e.mesh.position.copy(e.home);e.mesh.quaternion.copy(e.turn);e.mesh.visible=true;e.damage=0;e.broken=false;e.detonated=false;e.armed=false;if(e.fuseMesh)e.fuseMesh.visible=false;deform(e,0);e.last=e.lastRam=-10;}active=lots.breakables.filter(e=>e.level===level);}
+ function reset(level){pending.clear();explosions.length=0;explosionCount=0;launchedBarrels=0;elapsed=0;for(const f of fragments){world.removeBody(f.body);f.mesh.removeFromParent();}fragments.length=0;for(const e of active){e.size=e.originalSize.slice();e.mesh.scale.copy(e.originalScale);if(e.shattered){e.body.removeShape(e.body.shapes[0]);e.body.addShape(e.originalShape);e.body.updateBoundingRadius();e.shattered=false;}e.body.type=C.Body.STATIC;e.body.mass=0;e.body.material=e.originalPhysicsMaterial;e.body.collisionFilterGroup=e.filterGroup;e.body.updateMassProperties();e.body.position.copy(e.home);e.body.quaternion.copy(e.turn);e.body.velocity.setZero();e.body.angularVelocity.setZero();e.body.force.setZero();e.body.torque.setZero();e.body.aabbNeedsUpdate=true;e.body.wakeUp();e.mesh.position.copy(e.home);e.mesh.quaternion.copy(e.turn);e.mesh.visible=true;e.damage=0;e.broken=false;e.detonated=false;e.armed=false;if(e.fuseMesh)e.fuseMesh.visible=false;deform(e,0);e.last=e.lastRam=-10;}active=lots.breakables.filter(e=>e.level===level);}
  function blast(point,strength=1){for(const e of active){const dx=e.body.position.x-point.x,dz=e.body.position.z-point.z,dy=e.body.position.y-point.y,distance=Math.hypot(dx,dz,dy),radius=18;if(distance>radius)continue;const force=(1-distance/radius)*strength;
    if(force<.08)continue;const kick=e.level===24?25:18;hit(e,8+force*15,point,new C.Vec3(dx/(distance||1)*force*kick,force*(e.level===24?7:5),dz/(distance||1)*force*kick),'blast');}
+  for(const f of fragments){const d=f.body.position.vsub(point),length=d.length(),power=Math.max(0,1-length/18)*strength;if(power<.08)continue;f.body.wakeUp();f.body.applyImpulse(new C.Vec3(d.x/Math.max(1,length)*power*f.body.mass*12,power*f.body.mass*4,d.z/Math.max(1,length)*power*f.body.mass*12));}
  }
- // Sweep the truck footprint before the solver: walls become flying rubble before
- // they can stop the chassis. Already-fallen rubble can be kicked aside again.
- function ram(chassis,dt){const speed=Math.hypot(chassis.velocity.x,chassis.velocity.z);if(speed<1.2)return;for(const e of active){if(elapsed-e.lastRam<(e.explosive?.55:.24)||e.detonated)continue;
-  e.body.pointToLocalFrame(chassis.position,local);const [w,h,d]=e.size;local.set(clamp(local.x,-w/2,w/2),clamp(local.y,-h/2,h/2),clamp(local.z,-d/2,d/2));e.body.pointToWorldFrame(local,near);chassis.pointToLocalFrame(near,ramLocal);
-  if(Math.abs(ramLocal.x)>2.3||Math.abs(ramLocal.z)>3.25+speed*dt||ramLocal.y< -1.45||ramLocal.y>1.7)continue;
-  if(e.explosive)launchBarrel(e,chassis.velocity,near);else{e.lastRam=elapsed;hit(e,Math.max(16,speed*1.2),near,chassis.velocity,'ram');}
- }}
- function update(dt){elapsed+=dt;for(const [e,h]of pending)hit(e,h.speed,h.point,h.velocity,'collision',h.target);pending.clear();for(const e of active)if(e.armed&&!e.detonated){if(elapsed-e.armedAt>3)detonate(e);else if(e.fuseMesh)e.fuseMesh.material.emissiveIntensity=1.8+Math.sin(elapsed*30);}
-  for(let i=0;i<3&&explosions.length;i++){const point=explosions.shift();explosionCount++;blast(point,2);onExplode?.(point,2);}const moving=active.filter(e=>e.broken&&e.body.type===C.Body.DYNAMIC);for(const e of moving){e.age+=dt;e.mesh.position.copy(e.body.position);e.mesh.quaternion.copy(e.body.quaternion);const resting=e.body.sleepState===C.Body.SLEEPING||e.body.velocity.length()<.25&&e.body.angularVelocity.length()<.25;if(!e.armed&&(resting&&(e.age>12||moving.length>72&&e.age>3)||active.length>400&&moving.length>72&&e.age>8)){e.body.type=C.Body.STATIC;e.body.mass=0;e.body.updateMassProperties();e.body.velocity.setZero();e.body.angularVelocity.setZero();}}
+ // Only actual collider contact can crush a piece. Held throttle continues to
+ // stress an intact wall while it resists; released pieces start at rest, so their
+ // mass and the solver's impulses give the truck a real slowdown and suspension jolt.
+ function ram(chassis,dt,driveForce=0){const speed=Math.hypot(chassis.velocity.x,chassis.velocity.z);if(speed<.15&&driveForce<1)return;for(const e of active){const point=contact(chassis,e.body,e.size);if(!point)continue;
+  if(e.explosive){if(!e.broken)release(e,chassis.velocity,point,true);continue;}
+  if(e.broken){if(e.body.type!==C.Body.DYNAMIC||!e.body.mass){e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.updateMassProperties();}e.body.wakeUp();continue;}
+  const pushing=clamp(driveForce/88000,0,1);e.damage=clamp(e.damage+pushing*(e.structure?.95:1.5)*dt,0,1);deform(e,e.damage);
+  if(elapsed-e.lastRam>.24&&speed>1.2){e.lastRam=elapsed;hit(e,speed,point,chassis.velocity,'ram');}
+  if(e.damage>=(e.structure?.72:.58))release(e,chassis.velocity,point,true);
+ }for(const f of fragments)if(contact(chassis,f.body,f.size))f.body.wakeUp();}
+ function update(dt){elapsed+=dt;for(const [e,h]of pending)hit(e,h.speed,h.point,h.velocity,h.monster?'ram':'collision',h.target);pending.clear();for(const e of active)if(e.armed&&!e.detonated){if(elapsed-e.armedAt>3)detonate(e);else if(e.fuseMesh)e.fuseMesh.material.emissiveIntensity=1.8+Math.sin(elapsed*30);}
+  for(let i=0;i<3&&explosions.length;i++){const point=explosions.shift();explosionCount++;blast(point,2);onExplode?.(point,2);}const moving=active.filter(e=>e.broken&&e.body.type===C.Body.DYNAMIC);for(const e of moving){e.age+=dt;e.mesh.position.copy(e.body.position);e.mesh.quaternion.copy(e.body.quaternion);const resting=e.body.sleepState===C.Body.SLEEPING||e.body.velocity.length()<.25&&e.body.angularVelocity.length()<.25;if(!e.armed&&resting&&(e.age>12||moving.length>72&&e.age>3)){if(e.level===24)e.body.sleep();else{e.body.type=C.Body.STATIC;e.body.mass=0;e.body.updateMassProperties();e.body.velocity.setZero();e.body.angularVelocity.setZero();}}}for(const f of fragments){f.age+=dt;f.mesh.position.copy(f.body.position);f.mesh.quaternion.copy(f.body.quaternion);}
  }
  function snapshot(){const a=new Float32Array(active.length*15);active.forEach((e,i)=>a.set([...e.mesh.position.toArray(),...e.mesh.quaternion.toArray(),e.damage,...e.dent,e.broken?1:0],i*15));return a;}
  function apply(a,b,u){if(!a||!b)return;active.forEach((e,i)=>{const n=i*15;if(b.length<=n)return;e.mesh.position.fromArray(a,n).lerp(v.fromArray(b,n),u);e.mesh.quaternion.fromArray(a,n+3).slerp(q.fromArray(b,n+3),u);deform(e,a[n+7]+(b[n+7]-a[n+7])*u,Array.from(u<.5?a.slice(n+8,n+14):b.slice(n+8,n+14)));});}
- return{register,reset,update,blast,ram,snapshot,apply,get entries(){return active;},getInfo:()=>({props:active.length,dented:active.filter(e=>e.damage>0).length,broken:active.filter(e=>e.broken).length,moving:active.filter(e=>e.broken&&e.body.type===C.Body.DYNAMIC&&e.body.sleepState!==C.Body.SLEEPING).length,explosions:explosionCount,queuedExplosions:explosions.length,rollingBarrels:active.filter(e=>e.armed&&!e.detonated).length,launchedBarrels})};
+ return{register,reset,update,blast,ram,snapshot,apply,get entries(){return active;},get fragments(){return fragments;},getInfo:()=>({props:active.length,dented:active.filter(e=>e.damage>0).length,broken:active.filter(e=>e.broken).length,moving:active.filter(e=>e.broken&&e.body.type===C.Body.DYNAMIC&&e.body.sleepState!==C.Body.SLEEPING).length,rubbleFragments:fragments.length,explosions:explosionCount,queuedExplosions:explosions.length,rollingBarrels:active.filter(e=>e.armed&&!e.detonated).length,launchedBarrels})};
 }
