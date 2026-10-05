@@ -63,9 +63,9 @@ export function buildLots({T,C,scene,world,groundMat}){
  }
  // Stretch architecture and boundary walls, while preserving full-size vehicles and bays.
  if(Math.abs(x)>44||Math.abs(z)>44){w*=2;d*=2;}
- const physical=solid||h>.12&&y>0;
+ const physical=solid||h>.025&&y>.11;
  if(physical){const nx=Math.ceil(w/7),nz=Math.ceil(d/7);let first=null;for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const px=-w/2+(i+.5)*w/nx,pz=-d/2+(j+.5)*d/nz;const m=piece(w/nx,h,d/nz,x+Math.cos(yaw)*px+Math.sin(yaw)*pz,y,z-Math.sin(yaw)*px+Math.cos(yaw)*pz,color,yaw);first??=m;}mini.push({x,z,w,d,yaw,color:'#a5b6ac'});return first;}
- const m=new T.Mesh(boxGeo,mat(color));m.scale.set(w,h,d);m.position.set(ox+x,y,z);m.rotation.y=yaw;m.receiveShadow=true;g.add(m);m.userData.guide=true;return m;}
+ const m=new T.Mesh(boxGeo,mat(color));m.scale.set(w,h,d);m.position.set(ox+x,y,z);m.rotation.y=yaw;m.receiveShadow=true;g.add(m);m.userData.guide=y<=.11;return m;}
  function text(value,x,y,z,width=5,yaw=0,ground=false,color='#193c35'){const cv=document.createElement('canvas');cv.width=512;cv.height=128;const ctx=cv.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,512,128);ctx.fillStyle='#fff6dd';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px system-ui';ctx.fillText(value,256,65);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;const mesh=new T.Mesh(new T.PlaneGeometry(width,width/4),new T.MeshBasicMaterial({map:tx,side:T.DoubleSide}));mesh.position.set(ox+x*2,y,z*2);mesh.userData.guide=ground;if(ground){mesh.rotation.x=-Math.PI/2;mesh.rotation.z=yaw;}else mesh.rotation.y=yaw;g.add(mesh);return mesh;}
  function tree(x,z){box(.45,3,.45,x,1.5,z,0x6d634e,0,true);const crown=new T.Mesh(new T.IcosahedronGeometry(2.3,0),mat(0x527f65));crown.position.set(ox+x*2,4,z*2);g.add(crown);}
  function island(x,z,w,d){box(w,.28,d,x,.14,z,0xc6cab6,0,true);box(w-.4,.08,d-.4,x,.3,z,0x81946d);if(w>3)tree(x,z);}

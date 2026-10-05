@@ -12,7 +12,7 @@ import {VEHICLES} from './garage-models.js?v=game-5';
 import {createCrashDirector} from './crash-replay.js?v=fleet-1';
 import {createDestructibleEnvironment} from './destructible-environment.js?v=world-6';
 import {createDestructibleTerrain} from './destructible-terrain.js?v=world-6';
-import {LOTS,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=world-6';
+import {LOTS,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=world-7';
 const T=window.THREE,$=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 installTouchGuard();
 try{boot()}catch(e){console.error(e);$('fatal').hidden=false;$('errorText').textContent=e.message;}
