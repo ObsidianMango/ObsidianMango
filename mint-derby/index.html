@@ -432,8 +432,10 @@ const steeringWheel=document.getElementById("steeringWheel");
 const wheelArt=document.getElementById("wheelArt");
 const restartButton=document.getElementById("restart");
 
-const ARENA_RADIUS=105;
-const WALL_RADIUS=101;
+const ARENA_X=138;
+const ARENA_Z=86;
+const WALL_X=133;
+const WALL_Z=81;
 const ENEMY_COUNT=5;
 
 const scene=new THREE.Scene();
@@ -453,10 +455,10 @@ const sun=new THREE.DirectionalLight(0xfff2d9,2.55);
 sun.position.set(60,85,35);
 sun.castShadow=true;
 sun.shadow.mapSize.set(1024,1024);
-sun.shadow.camera.left=-125;
-sun.shadow.camera.right=125;
-sun.shadow.camera.top=125;
-sun.shadow.camera.bottom=-125;
+sun.shadow.camera.left=-170;
+sun.shadow.camera.right=170;
+sun.shadow.camera.top=170;
+sun.shadow.camera.bottom=-170;
 scene.add(sun);
 
 function material(color,metal=.3,rough=.45){
@@ -464,39 +466,72 @@ function material(color,metal=.3,rough=.45){
 }
 
 const dirt=material(0x625f56,.03,.96);
-const arena=new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS,128),dirt);
+const arena=new THREE.Mesh(new THREE.CircleGeometry(1,160),dirt);
+arena.scale.set(ARENA_X,ARENA_Z,1);
 arena.rotation.x=-Math.PI/2;
 arena.receiveShadow=true;
 scene.add(arena);
 
-const centerDust=new THREE.Mesh(new THREE.CircleGeometry(78,96),material(0x777166,.02,.98));
+const centerDust=new THREE.Mesh(new THREE.CircleGeometry(1,144),material(0x777166,.02,.98));
+centerDust.scale.set(ARENA_X*.76,ARENA_Z*.76,1);
 centerDust.rotation.x=-Math.PI/2;
 centerDust.position.y=.012;
 centerDust.receiveShadow=true;
 scene.add(centerDust);
 
+// Painted oval lanes make the floor read like a real stadium derby bowl.
 const paintLine=material(0xb69248,.03,.78);
-[28,56,82,96].forEach(r=>{
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(r,.14,6,160),paintLine);
+[[.27,.27],[.52,.52],[.75,.75],[.91,.91]].forEach(scale=>{
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(1,.0012,6,192),paintLine);
+  ring.scale.set(ARENA_X*scale[0],1,ARENA_Z*scale[1]);
   ring.rotation.x=Math.PI/2;
   ring.position.y=.025;
   scene.add(ring);
 });
 
+// Stepped oval grandstands outside the crash wall.
+const standMat=material(0x343b3e,.18,.84);
+const standEdge=material(0x737b7e,.48,.52);
+for(let tier=0;tier<4;tier++){
+  const inner=1.015+tier*.045;
+  const outer=inner+.05;
+  const deck=new THREE.Mesh(new THREE.RingGeometry(inner,outer,160),standMat);
+  deck.scale.set(ARENA_X,ARENA_Z,1);
+  deck.rotation.x=-Math.PI/2;
+  deck.position.y=.28+tier*.72;
+  deck.receiveShadow=true;
+  scene.add(deck);
+
+  const edge=new THREE.Mesh(new THREE.TorusGeometry(1,.012,6,192),standEdge);
+  edge.scale.set(ARENA_X*outer,1,ARENA_Z*outer);
+  edge.rotation.x=Math.PI/2;
+  edge.position.y=.3+tier*.72;
+  scene.add(edge);
+}
+
 const wallMat=material(0x5f6568,.34,.72);
 const railMat=material(0xd2d5d5,.9,.19);
-for(let i=0;i<76;i++){
-  const a=i/76*Math.PI*2;
-  const wall=new THREE.Mesh(new THREE.BoxGeometry(8.7,1.3,.95),wallMat);
-  wall.position.set(Math.sin(a)*WALL_RADIUS,.65,Math.cos(a)*WALL_RADIUS);
-  wall.rotation.y=a;
+const wallSegments=88;
+for(let i=0;i<wallSegments;i++){
+  const a=i/wallSegments*Math.PI*2;
+  const x=Math.sin(a)*WALL_X;
+  const z=Math.cos(a)*WALL_Z;
+  const tx=Math.cos(a)*WALL_X;
+  const tz=-Math.sin(a)*WALL_Z;
+  const yaw=Math.atan2(-tz,tx);
+
+  const wall=new THREE.Mesh(new THREE.BoxGeometry(8.2,1.35,.98),wallMat);
+  wall.position.set(x,.67,z);
+  wall.rotation.y=yaw;
   wall.castShadow=true;
   wall.receiveShadow=true;
   scene.add(wall);
 
-  const rail=new THREE.Mesh(new THREE.BoxGeometry(8.5,.17,.2),railMat);
-  rail.position.set(Math.sin(a)*(WALL_RADIUS-.55),1.46,Math.cos(a)*(WALL_RADIUS-.55));
-  rail.rotation.y=a;
+  const rail=new THREE.Mesh(new THREE.BoxGeometry(8.05,.17,.2),railMat);
+  const inward=.6;
+  const normal=new THREE.Vector3(x/(WALL_X*WALL_X),0,z/(WALL_Z*WALL_Z)).normalize();
+  rail.position.set(x-normal.x*inward,1.5,z-normal.z*inward);
+  rail.rotation.y=yaw;
   rail.castShadow=true;
   scene.add(rail);
 }
@@ -645,12 +680,13 @@ function createVehicle(isPlayer,color){
     heading:0,
     hitTimer:0,
     aiOffset:Math.random()*20,
-    steerVisual:0
+    steerVisual:0,
+    knock:new THREE.Vector3()
   };
 }
 
 const player=createVehicle(true,0x9da88a);
-player.mesh.position.set(0,0,26);
+player.mesh.position.set(0,0,22);
 player.heading=0;
 player.mesh.rotation.y=0;
 
@@ -660,7 +696,7 @@ const cars=[player];
 enemyColors.forEach((color,i)=>{
   const car=createVehicle(false,color);
   const a=i/ENEMY_COUNT*Math.PI*2;
-  car.mesh.position.set(Math.sin(a)*59,0,Math.cos(a)*59);
+  car.mesh.position.set(Math.sin(a)*82,0,Math.cos(a)*48);
   const dx=-car.mesh.position.x;
   const dz=-car.mesh.position.z;
   car.heading=Math.atan2(-dx,-dz);
@@ -984,6 +1020,9 @@ function driveCar(car,dt,time){
   // IMPORTANT: front of the modeled car is -Z. Moving in drive therefore uses -Z.
   forward.set(-Math.sin(car.heading),0,-Math.cos(car.heading));
   car.mesh.position.addScaledVector(forward,car.speed*dt);
+  car.mesh.position.addScaledVector(car.knock,dt);
+  car.knock.multiplyScalar(Math.pow(.10,dt));
+  if(car.knock.lengthSq()<.0025)car.knock.set(0,0,0);
   car.mesh.rotation.y=car.heading;
 
   const spin=car.speed*dt/.49;
@@ -995,15 +1034,27 @@ function driveCar(car,dt,time){
     }
   });
 
-  const r=Math.hypot(car.mesh.position.x,car.mesh.position.z);
-  if(r>WALL_RADIUS-3.8){
-    const n=new THREE.Vector3(car.mesh.position.x,0,car.mesh.position.z).normalize();
-    car.mesh.position.addScaledVector(n,(WALL_RADIUS-3.8)-r);
-    const impact=Math.abs(car.speed);
-    car.speed*=-.3;
+  // Elliptical stadium wall collision.
+  const limitX=WALL_X-4.4;
+  const limitZ=WALL_Z-4.4;
+  const q=Math.sqrt(
+    (car.mesh.position.x*car.mesh.position.x)/(limitX*limitX)+
+    (car.mesh.position.z*car.mesh.position.z)/(limitZ*limitZ)
+  );
+  if(q>1){
+    car.mesh.position.x/=q;
+    car.mesh.position.z/=q;
+    const n=new THREE.Vector3(
+      car.mesh.position.x/(limitX*limitX),
+      0,
+      car.mesh.position.z/(limitZ*limitZ)
+    ).normalize();
+    const impact=Math.abs(car.speed)+car.knock.length();
+    car.speed*=-.18;
+    car.knock.addScaledVector(n,-Math.max(3.5,impact*.58));
     if(car.hitTimer<=0&&impact>5.5){
       damage(car,Math.min(19,impact*.5),car.mesh.position.clone().addScaledVector(n,1.8));
-      car.hitTimer=.3;
+      car.hitTimer=.34;
     }
   }
 
@@ -1020,7 +1071,16 @@ function driveCar(car,dt,time){
   car.hitTimer=Math.max(0,car.hitTimer-dt);
 }
 
+function velocityOf(car){
+  return new THREE.Vector3(
+    -Math.sin(car.heading)*car.speed+car.knock.x,
+    0,
+    -Math.cos(car.heading)*car.speed+car.knock.z
+  );
+}
+
 function carCollisions(){
+  const CONTACT=4.72;
   for(let i=0;i<cars.length;i++){
     for(let j=i+1;j<cars.length;j++){
       const a=cars[i];
@@ -1031,31 +1091,49 @@ function carCollisions(){
       delta.y=0;
       const dist=delta.length();
 
-      if(dist<4.55){
+      if(dist<CONTACT){
         const n=dist>.001?delta.multiplyScalar(1/dist):new THREE.Vector3(1,0,0);
-        const overlap=4.55-dist;
-        a.mesh.position.addScaledVector(n,-overlap*.52);
-        b.mesh.position.addScaledVector(n,overlap*.52);
 
-        const fa=new THREE.Vector3(-Math.sin(a.heading),0,-Math.cos(a.heading)).multiplyScalar(a.speed);
-        const fb=new THREE.Vector3(-Math.sin(b.heading),0,-Math.cos(b.heading)).multiplyScalar(b.speed);
-        const rel=fa.clone().sub(fb).length();
+        // Aggressive positional separation eliminates the "magnetic/sticky" overlap.
+        const overlap=CONTACT-dist;
+        const separate=(overlap*.5)+.10;
+        a.mesh.position.addScaledVector(n,-separate);
+        b.mesh.position.addScaledVector(n,separate);
 
+        const va=velocityOf(a);
+        const vb=velocityOf(b);
+        const closing=va.clone().sub(vb).dot(n);
+
+        // Even low-speed contact receives a small outward shove so cars peel apart.
+        const bounce=Math.max(2.2,Math.max(0,closing)*.68);
+        a.knock.addScaledVector(n,-bounce);
+        b.knock.addScaledVector(n,bounce);
+
+        // Scrub some drivetrain speed at impact instead of exchanging scalar speeds.
+        // The impulse above supplies the visible bounce while headings remain controllable.
+        a.speed*=closing>6?.58:.76;
+        b.speed*=closing>6?.58:.76;
+
+        // Small yaw kick on glancing hits keeps bumpers/fenders from interlocking.
+        const aFront=new THREE.Vector3(-Math.sin(a.heading),0,-Math.cos(a.heading));
+        const bFront=new THREE.Vector3(-Math.sin(b.heading),0,-Math.cos(b.heading));
+        const aSide=THREE.MathUtils.clamp(aFront.x*n.z-aFront.z*n.x,-1,1);
+        const bSide=THREE.MathUtils.clamp(bFront.x*n.z-bFront.z*n.x,-1,1);
+        a.heading+=aSide*.13;
+        b.heading-=bSide*.13;
+
+        const rel=va.clone().sub(vb).length();
         if(rel>3.2&&a.hitTimer<=0&&b.hitTimer<=0){
           const hit=a.mesh.position.clone().lerp(b.mesh.position,.5);
-          const momentumA=Math.abs(a.speed);
-          const momentumB=Math.abs(b.speed);
-          const damageA=Math.max(1.5,rel*(.34+.32*(momentumB/(momentumA+momentumB+.01))));
-          const damageB=Math.max(1.5,rel*(.34+.32*(momentumA/(momentumA+momentumB+.01))));
+          const momentumA=Math.abs(a.speed)+a.knock.length()*.35;
+          const momentumB=Math.abs(b.speed)+b.knock.length()*.35;
+          const damageA=Math.max(1.4,rel*(.30+.30*(momentumB/(momentumA+momentumB+.01))));
+          const damageB=Math.max(1.4,rel*(.30+.30*(momentumA/(momentumA+momentumB+.01))));
           damage(a,damageA,hit);
           damage(b,damageB,hit);
-          a.hitTimer=.22;
-          b.hitTimer=.22;
+          a.hitTimer=.34;
+          b.hitTimer=.34;
         }
-
-        const aSpeed=a.speed;
-        a.speed=b.speed*.27;
-        b.speed=aSpeed*.27;
       }
     }
   }
@@ -1103,7 +1181,7 @@ function updateCamera(dt){
   camTarget.copy(player.mesh.position).add(new THREE.Vector3(0,1.1,0));
 
   if(cameraMode==="top"){
-    camDesired.copy(player.mesh.position).add(new THREE.Vector3(0,31,0.01));
+    camDesired.copy(player.mesh.position).add(new THREE.Vector3(0,58,0.01));
     camera.position.lerp(camDesired,1-Math.pow(.001,dt));
     camera.lookAt(player.mesh.position);
     return;
@@ -1161,7 +1239,7 @@ function frame(now){
 }
 
 loading.remove();
-flashNotice("Arena doubled in size. D drives forward; R backs up.",2.2);
+flashNotice("Oval stadium rebuilt. Hits now bounce apart instead of sticking.",2.4);
 requestAnimationFrame(frame);
 </script>
 </body>
