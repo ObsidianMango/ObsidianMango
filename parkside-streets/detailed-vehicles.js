@@ -1,6 +1,6 @@
 import {detailKit} from './vehicle-detail-kit.js?v=quality-1';
 import {buildNova} from './nova-model.js?v=nova-1';
-import {buildFleetVehicle} from './fleet-models.js?v=fleet-1';
+import {buildFleetVehicle} from './fleet-models.js?v=traffic-2';
 import {buildWienermobile} from './wienermobile-model.js?v=photo-2';
 
 export function buildDetailedVehicle(T,c){
@@ -41,7 +41,7 @@ export function buildDetailedVehicle(T,c){
  }
  function buildCoupe(){
   // Keep the reference paint surfaces, replace the rough greenhouse and mechanical parts.
-  k.materials.glass.opacity=.25;k.materials.glass.depthWrite=false;k.materials.glass.metalness=.08;
+  k.materials.glass.opacity=.42;k.materials.glass.depthWrite=false;k.materials.glass.metalness=.16;
   k.remove('tub');loft('tub',[[-2.05,.72,.46,.61],[-.78,.86,.46,.62],[1.09,.85,.46,.62],[2.04,.68,.49,.65]],'blue');
   // Rebuild opaque body skins with actual wheel openings; flame decals sit on that same surface.
   const rings=[[-2.08,.82,.72,.53,.86],[-1.55,.94,.87,.49,.96],[-.78,.98,.91,.49,1.05],[.10,.99,.91,.49,1.10],[1.08,.98,.88,.49,1.06],[1.94,.88,.77,.52,.92],[2.12,.78,.68,.57,.82]];
@@ -54,11 +54,15 @@ export function buildDetailedVehicle(T,c){
     for(let j=0;j<steps;j++)for(let row=0;row<2;row++){const a=j*3+row;idx.push(a,a+3,a+4,a,a+4,a+1);}const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(v,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(side>0?idx:idx.flatMap((_,i)=>i%3===0?[idx[i],idx[i+2],idx[i+1]]:[]));geo.computeVertexNormals();const paint=k.materials.blue.clone();paint.side=T.DoubleSide;k.add(n,geo,paint);k.add(n,geo.clone(),k.materials.sideFlames);
    }
   }
-  k.remove('roof');loft('roof',[[-.45,.68,1.60,1.64],[-.31,.715,1.63,1.70],[.58,.70,1.64,1.71],[.84,.65,1.59,1.64]],'blueDark');
+  k.remove('roof');
+  // A shallow curved roof pressing replaces the angular cap, with sealed pillars.
+  const roofRows=[];for(let i=0;i<=24;i++){const z=-.45+i*1.29/24,t=i/24,crown=Math.sin(t*Math.PI);roofRows.push([z,.665+.045*crown,1.603+.035*crown,1.65+.046*crown]);}loft('roof',roofRows,'blueDark');
   for(const side of [-1,1]){
    const n='door-'+side;const p=[[side*.913,1.117,-.53],[side*.913,1.117,.63],[side*.695,1.604,.55],[side*.695,1.604,-.38]];
    for(let i=0;i<p.length;i++)tube(n,[p[i],p[(i+1)%p.length]],.015,'trim',1);tube(n,[[side*.913,1.12,.13],[side*.696,1.603,.13]],.015,'trim');
    tube(n,[[side*.994,.57,-.63],[side*.994,1.09,-.63],[side*.994,1.09,.70],[side*.994,.57,.70]],.007,'rubberTrim');
+   tube('roof',[[side*.818,1.105,-.75],[side*.671,1.621,-.434]],.029,'blueDark',1);
+   tube('roof',[[side*.798,1.105,1.077],[side*.652,1.626,.821]],.038,'blueDark',1);
    const frame=[[side*.823,1.11,-.755],[side*.67,1.62,-.44],[side*.66,1.63,.81],[side*.802,1.11,1.085]];for(let i=0;i<3;i++)tube('roof',[frame[i],frame[i+1]],.024,'trim',1);
    tube('sill-'+side,[[side*.999,.535,-.79],[side*1.011,.535,.90]],.026,'trim');
    // Fuel cap and quarter badges, each retained by the corresponding panel.
@@ -76,6 +80,10 @@ export function buildDetailedVehicle(T,c){
   // Window visors and rear parcel shelf are visible through the real glass.
   for(const x of [-.35,.35])rounded('cabin',.29,.035,.17,x,1.51,-.39,'black',.008);
   box('cabin',1.25,.045,.30,0,1.075,.87,'black');
+  // Flush wheel-lip trim, door locks and a finished scoop opening.
+  for(const side of [-1,1])for(const z of [c.front,c.rear]){const edge=[];for(let i=0;i<=32;i++){const a=Math.PI*i/32;edge.push([side*.989,c.radius+Math.sin(a)*.506,z+Math.cos(a)*.506]);}tube(z<0?'fender-front-'+side:'quarter-'+side,edge,.011,'trim',32);}
+  for(const side of [-1,1])cyl('door-'+side,.017,.012,side*1.023,1.013,.49,'trim');
+  rounded('scoop',.66,.028,.06,0,1.379,-1.725,'blueDark',.007);for(let i=-4;i<=4;i++)box('scoop',.006,.086,.009,i*.061,1.29,-1.838,'steel');
  }
  function buildSantaFe(){
   box('chassis',1.66,.14,4.05,0,.39,0,'steel');loft('tub',[[-.80,.89,.48,.61],[.70,.95,.48,.61],[1.97,.78,.51,.69]],'paint');

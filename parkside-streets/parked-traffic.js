@@ -1,0 +1,34 @@
+// Parked cars keep their original bay footprint; damaged cars become rigid bodies.
+export function createParkedTraffic({T,C,scene,world,lots,garage}){
+ let active=[],debris=[],clock=0;const pending=new Map(),v=new T.Vector3(),q=new T.Quaternion();
+ function disposeCopy(model){model.traverse(n=>{if(n.isMesh&&n.userData.trafficMaterial)n.material.dispose();});}
+ function prepare(item){if(item.prepared)return;item.prepared=true;item.basic=[...item.mesh.children];item.homePosition=item.body.position.clone();item.homeQuaternion=item.body.quaternion.clone();item.damage=0;item.lastHit=-10;
+  item.body.addEventListener('collide',e=>{const force=Math.abs(e.contact.getImpactVelocityAlongNormal());if(force>1.3)pending.set(item,Math.max(pending.get(item)||0,force));});
+ }
+ function setupParts(item){item.parts=[...item.mesh.children];item.parts.forEach((p,i)=>{if(!p.name)p.name=['body','glass','roof'][i]||('detail-'+i);});item.rest=item.parts.map(p=>({p:p.position.clone(),q:p.quaternion.clone(),s:p.scale.clone()}));item.materials=[];
+  item.parts.forEach(p=>p.traverse(n=>{if(n.isMesh){n.material=n.material.clone();n.userData.trafficMaterial=true;item.materials.push({material:n.material,color:n.material.color.clone()});}}));
+ }
+ function reset(level){for(const d of debris)world.removeBody(d.body);debris=[];pending.clear();for(const item of active){item.body.mass=0;item.body.type=C.Body.STATIC;item.body.updateMassProperties();item.body.position.copy(item.homePosition);item.body.quaternion.copy(item.homeQuaternion);item.body.velocity.setZero();item.body.angularVelocity.setZero();item.body.force.setZero();item.body.torque.setZero();item.body.aabbNeedsUpdate=true;item.mesh.position.set(item.homePosition.x,0,item.homePosition.z);item.mesh.quaternion.copy(item.homeQuaternion);if(item.rest)item.parts.forEach((p,i)=>{p.position.copy(item.rest[i].p);p.quaternion.copy(item.rest[i].q);p.scale.copy(item.rest[i].s);});setTint(item,0);}
+  active=lots.parked.filter(p=>p.level===level);clock=0;let specials=0;
+  active.forEach((item,i)=>{prepare(item);if(!item.parts){
+    // About one quarter of spaces, capped at two detailed garage cars per lot.
+    if((i+level)%4===1&&specials<2){const model=garage[Math.floor(Math.random()*garage.length)],copy=model.root.clone(true);copy.visible=true;copy.position.set(0,0,0);copy.quaternion.identity();copy.traverse(n=>{if(n.userData.home){n.position.copy(n.userData.home);n.quaternion.identity();}});copy.updateMatrixWorld(true);const bounds=new T.Box3().setFromObject(copy),size=bounds.getSize(new T.Vector3()),scale=Math.min(2.0/size.x,4.25/size.z,1);item.mesh.clear();for(const child of [...copy.children]){child.position.multiplyScalar(scale);child.scale.multiplyScalar(scale);item.mesh.add(child);}item.model=model.config.id;specials++;}else item.model='standard';setupParts(item);
+   }else if(item.model!=='standard')specials++;item.damage=0;item.lastHit=-10;setTint(item,0);
+  });
+ }
+ function setTint(item,damage){item.damage=damage;for(const m of item.materials||[])m.material.color.copy(m.color).multiplyScalar(1-damage*.36);}
+ function wake(item){if(item.body.mass)return;item.body.mass=1150;item.body.type=C.Body.DYNAMIC;item.body.linearDamping=.28;item.body.angularDamping=.48;item.body.updateMassProperties();item.body.wakeUp();}
+ function damage(item,amount,direction,strength){if(!active.includes(item))return;wake(item);const before=item.damage;setTint(item,Math.min(1,item.damage+amount));item.lastHit=clock;
+  item.parts.forEach((p,i)=>{if(debris.some(d=>d.part===p))return;const home=item.rest[i];if(/hood|bonnet|body|roof|grille|tub/.test(p.name)){p.scale.y=home.s.y*(1-item.damage*.28);p.scale.z=home.s.z*(1-item.damage*.12);p.rotation.x=home.q.x+item.damage*.075*(i%2?1:-1);p.position.y=home.p.y-item.damage*.10;}});
+  if(before<.45&&item.damage>=.45){let count=0;for(const p of item.parts){if(count>=2)break;if(!/bumper|headlight|detail-1[12]/.test(p.name))continue;scene.updateMatrixWorld(true);p.getWorldPosition(v);p.getWorldQuaternion(q);const box=new T.Box3().setFromObject(p).getSize(new T.Vector3()),body=new C.Body({mass:14,shape:new C.Box(new C.Vec3(Math.max(.09,Math.min(.7,box.x/2)),Math.max(.06,Math.min(.4,box.y/2)),Math.max(.07,Math.min(.5,box.z/2)))),collisionFilterGroup:2,collisionFilterMask:1,linearDamping:.15,angularDamping:.2});body.position.copy(v);body.quaternion.copy(q);body.velocity.set(direction.x*strength,2+strength*.25,direction.z*strength);body.angularVelocity.set(1.5,-2,3);world.addBody(body);debris.push({part:p,body});count++;}}
+  item.body.applyImpulse(new C.Vec3(direction.x*strength*1150,Math.min(4,strength*.3)*1150,direction.z*strength*1150),new C.Vec3(0,.2,.4));
+ }
+ function blast(point,power=1){for(const item of active){const dx=item.body.position.x-point.x,dz=item.body.position.z-point.z,distance=Math.hypot(dx,dz);if(distance>13)continue;const falloff=1-distance/13,dir={x:dx/Math.max(.2,distance),z:dz/Math.max(.2,distance)};if(distance<.2)dir.x=1;damage(item,.25+falloff*.8,dir,(2+falloff*7)*Math.min(1.25,power));}}
+ function update(dt){clock+=dt;for(const [item,impact]of pending)if(active.includes(item)&&clock-item.lastHit>.5){const speed=item.body.velocity.length(),dir=speed>.1?{x:item.body.velocity.x/speed,z:item.body.velocity.z/speed}:{x:.3,z:1};damage(item,Math.min(.6,impact*.08),dir,Math.min(1.5,impact*.1));}pending.clear();
+  for(const item of active){item.mesh.quaternion.copy(item.body.quaternion);item.mesh.position.copy(item.body.position);v.set(0,-.8,0).applyQuaternion(item.mesh.quaternion);item.mesh.position.add(v);}
+  scene.updateMatrixWorld(true);for(const d of debris){v.copy(d.body.position);d.part.parent.worldToLocal(v);d.part.position.copy(v);d.part.parent.getWorldQuaternion(q);d.part.quaternion.copy(q).invert().multiply(new T.Quaternion().copy(d.body.quaternion));}
+ }
+ function snapshot(){const data=[];for(const item of active){data.push(...item.mesh.position.toArray(),...item.mesh.quaternion.toArray(),item.damage);for(const p of item.parts)data.push(...p.position.toArray(),...p.quaternion.toArray(),...p.scale.toArray());}return new Float32Array(data);}
+ function apply(a,b,u){if(!a||!b)return;let k=0;const vec=(o)=>{o.set(a[k]+(b[k]-a[k])*u,a[k+1]+(b[k+1]-a[k+1])*u,a[k+2]+(b[k+2]-a[k+2])*u);k+=3;},rot=o=>{o.fromArray(a,k).slerp(q.fromArray(b,k),u);k+=4;};for(const item of active){vec(item.mesh.position);rot(item.mesh.quaternion);setTint(item,a[k]+(b[k]-a[k])*u);k++;for(const p of item.parts){vec(p.position);rot(p.quaternion);vec(p.scale);}}}
+ return{reset,blast,update,snapshot,apply,get active(){return active;},getInfo:()=>({count:active.length,damaged:active.filter(p=>p.damage>0).length,moving:active.filter(p=>p.body.mass>0).length,models:active.map(p=>p.model),debris:debris.length})};
+}

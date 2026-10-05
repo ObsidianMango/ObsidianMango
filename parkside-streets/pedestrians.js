@@ -1,5 +1,5 @@
 // Instanced animated pedestrians; only struck characters become articulated physics bodies.
-export function createPedestrians({T,C,scene,world,chassis,groundMat}){
+export function createPedestrians({T,C,scene,world,chassis,groundMat,onHit}){
  const max=52,people=[],pending=new Set(),root=new T.Group();scene.add(root);
  const skin=[0xf0c7a2,0xc99169,0x875a40,0x5e3d2e],shirts=[0x327c8c,0xa94443,0xd6ac47,0x64588c,0x548863,0xd0d0bc],pants=[0x35495e,0x45433d,0x252b38];
  const defs=[
@@ -36,7 +36,7 @@ export function createPedestrians({T,C,scene,world,chassis,groundMat}){
   for(let i=0;i<count;i++){const p={i,distance:i*routeLength/count,phase:i*1.7,speed:.65+(i%5)*.10,direction:i%3?1:-1,scale:.94+(i%4)*.035,pose:Array.from({length:7},()=>({p:new T.Vector3(),q:new T.Quaternion()})),bodies:null,age:0};people.push(p);const colors={skin:skin[i%4],shirt:shirts[i%6],pants:pants[i%3],shoe:0x222625,hair:[0x302720,0x62503a,0x292421,0x8b6944][i%4]};meshes.forEach((m,j)=>m.setColorAt(i,new T.Color(colors[defs[j].color])));makeSensor(p);walkingPose(p);}
   meshes.forEach(m=>{m.instanceColor.needsUpdate=true;});render();
  }
- function knockDown(p){if(p.bodies)return;world.removeBody(p.sensor);p.sensor=null;p.age=0;hitCount++;p.bodies=[];p.constraints=[];
+ function knockDown(p){if(p.bodies)return;world.removeBody(p.sensor);p.sensor=null;p.age=0;hitCount++;onHit?.();p.bodies=[];p.constraints=[];
   const motion=chassis.velocity.clone(),speed=motion.length();motion.scale(Math.min(.72,8/Math.max(1,speed)),motion);
   for(let i=0;i<7;i++){const d=defs[i],s=p.scale,b=new C.Body({mass:i===0?23:i===1?12:i===2?5:7,material:groundMat,linearDamping:.20,angularDamping:.35,collisionFilterGroup:4,collisionFilterMask:3,allowSleep:true});b.addShape(i===2?new C.Sphere(.145*s):new C.Box(new C.Vec3(d.s[0]*s/2,d.s[1]*s/2,d.s[2]*s/2)));b.position.copy(p.pose[i].p);b.quaternion.copy(p.pose[i].q);b.velocity.set(motion.x,Math.min(3,.7+speed*.15),motion.z);b.angularVelocity.set((p.i%2?1:-1)*1.2,0,.8);b.userData={kind:'pedestrian'};world.addBody(b);p.bodies.push(b);}
   const links=[[0,1,[0,.83,0]],[0,2,[0,1.38,0]],[0,3,[-.24,1.29,0]],[0,4,[.24,1.29,0]],[1,5,[-.105,.76,0]],[1,6,[.105,.76,0]]];

@@ -1,5 +1,12 @@
 # Parkside Streets
 
+## Model polish and parking-lot reactions
+- Refined Santa Fe glazing, pillars and wipers; rounded Nova roof, wheel trim and scoop details; flush New Yorker headlamps and better window framing. Photo-inspired paint schemes are retained.
+- Nearby parked cars become movable physics bodies in a crash blast, dent, darken and shed parts. Secondary collisions can damage other parked cars. Both replay angles capture the reactions; retry restores the lot.
+- Up to two spaces per lot occasionally use randomly chosen garage vehicles, scaled within the existing parking footprint.
+- Each pedestrian knockdown awards 100 points, once per knockdown. Score stays through a recovery and resets when starting a new run.
+- Verified blast motion, debris, score deduplication, replay/reset and all 24 parking completion poses with the mixed parked fleet.
+
 Separate edition at `parkside-streets/`, based on the published wheel-physics edition at `f4c26fc7cb18534c97e05c8567edbbd392338162`. Earlier game URLs are unchanged. It shares the existing parking progress key so unlocked chapters carry over.
 
 ## Fleet and pedestrians

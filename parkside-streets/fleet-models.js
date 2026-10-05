@@ -5,7 +5,7 @@ export function buildFleetVehicle(T,c){
  const suv=c.id==='santafe',van=c.id==='e250';
  mat('paint',suv?0x77736f:van?0xe4e5dd:0xa3ae91,suv?.38:.26,suv?.27:.33,{side:T.DoubleSide});
  mat('roofPaint',van?0xe4e5dd:suv?0x77736f:0xc1c5ad,.20,.37,{side:T.DoubleSide});
- mat('rubber',0x202727,.03,.76);mat('window',0x52727d,.17,.16,{transparent:true,opacity:.39,depthWrite:false,side:T.DoubleSide});
+ mat('rubber',0x202727,.03,.76);mat('window',0x405963,.20,.15,{transparent:true,opacity:.52,depthWrite:false,side:T.DoubleSide});
  mat('chrome',0xd5dfde,.67,.20);mat('seam',suv?0x363d38:van?0x929993:0x61715c,.1,.65);mat('badgeBlue',0x164776,.3,.25);
  function interp(rows,z){let j=0;while(j<rows.length-2&&z>rows[j+1][0])j++;const a=rows[j],b=rows[j+1],p=rows[Math.max(0,j-1)],n=rows[Math.min(rows.length-1,j+2)],u=Math.max(0,Math.min(1,(z-a[0])/(b[0]-a[0]))),h=b[0]-a[0];return a.slice(1).map((v,i)=>{i++;return (2*u**3-3*u*u+1)*v+(u**3-2*u*u+u)*h*(b[i]-p[i])/(b[0]-p[0])+(-2*u**3+3*u*u)*b[i]+(u**3-u*u)*h*(n[i]-a[i])/(n[0]-a[0]);});}
  // Continuous rounded pressings with wheel apertures and separate breakaway panels.
@@ -20,13 +20,16 @@ export function buildFleetVehicle(T,c){
  function glass(name,p,frame='chrome',bulge=.025){const pos=[],idx=[],a=new T.Vector3(...p[0]),b=new T.Vector3(...p[1]),d=new T.Vector3(...p[3]),cc=new T.Vector3(...p[2]),normal=b.clone().sub(a).cross(d.clone().sub(a)).normalize();for(let y=0;y<=10;y++)for(let x=0;x<=16;x++){const u=x/16,v=y/10,q=a.clone().lerp(b,u).lerp(d.clone().lerp(cc,u),v);q.addScaledVector(normal,Math.sin(u*Math.PI)*Math.sin(v*Math.PI)*bulge);pos.push(...q.toArray());}for(let y=0;y<10;y++)for(let x=0;x<16;x++){const i=y*17+x;idx.push(i,i+1,i+18,i,i+18,i+17);}const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(pos,3));g.setIndex(idx);g.computeVertexNormals();k.add(name,g,'window');for(let i=0;i<4;i++)tube(name,[p[i],p[(i+1)%4]],frame==='paint'?.028:.016,frame,1);}
  function textBadge(name,text,x,y,z,w,side=0){const cv=document.createElement('canvas');cv.width=512;cv.height=96;const ctx=cv.getContext('2d');ctx.clearRect(0,0,512,96);ctx.fillStyle='#e0e7df';ctx.font='italic bold 55px Georgia';ctx.textAlign='center';ctx.fillText(text,256,67);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;const m=new T.MeshStandardMaterial({map:tx,transparent:true,roughness:.28,metalness:.35,side:T.DoubleSide});k.add(name,new T.PlaneGeometry(w,w*96/512),m,x,y,z,0,side?side*Math.PI/2:z<0?Math.PI:0);}
  function mirrors(y,z,w,classic=false){for(const s of [-1,1]){tube('mirror-'+s,[[s*w,y-.09,z],[s*(w+.16),y,z]],.024,'chrome',4);if(classic){cyl('mirror-'+s,.103,.05,s*(w+.17),y+.04,z,'chrome','z');cyl('mirror-'+s,.084,.006,s*(w+.17),y+.04,z+.03,'trim','z');}else{rounded('mirror-'+s,.23,.18,.22,s*(w+.16),y,z,'paint',.04);rounded('mirror-'+s,.19,.13,.014,s*(w+.16),y,z+.118,'chrome',.008);}}}
- function wipers(z0,y0,z1,y1){for(const s of [-1,1]){tube('windshield',[[s*.25,y0,z0],[s*.40,y0+.11,z0+.04],[s*.61,y1,z1]],.011,'rubber',3);tube('windshield',[[s*.35,y0+.07,z0+.025],[s*.65,y1+.035,z1]],.015,'rubber',1);}}
+ function wipers(z0,y0,z1,y1){for(const s of [-1,1]){tube('windshield',[[s*.17,y0+.015,z0-.012],[s*.39,y0+.055,z0+.025]],.009,'rubber',1);tube('windshield',[[s*.24,y0+.04,z0+.015],[s*.68,y0+.078,z0+.045]],.012,'rubber',1);}}
  function doorSeams(s,width,y,zs,bottom){for(const z of zs)tube('door-'+s+'-'+z,[[s*width,bottom,z],[s*(width+.005),y-.13,z],[s*(width-.02),y,z]],.005,'seam',8);for(let i=1;i<zs.length;i++){const z=zs[i]-.16;rounded('door-'+s+'-'+zs[i],.027,.045,.19,s*(width+.024),y-.12,z,'chrome',.008);}}
  if(suv){
   skin([[-2.28,.77,.50,.98],[-2.12,.91,.46,1.10],[-1.5,.982,.47,1.18],[-.7,.98,.48,1.25],[.5,.99,.49,1.27],[1.35,.96,.49,1.26],[2.13,.83,.52,1.19]],p=>p.z<-.76?'bonnet':p.z>1.2?'tailgate':p.x>0?'door-left':'door-right','paint',true);
   skin([[-.42,.76,1.83,1.91],[-.22,.82,1.87,1.98],[.7,.83,1.87,2.0],[1.45,.75,1.79,1.92],[1.7,.65,1.75,1.83]],'roof','roofPaint');
   glass('windshield',[[-.91,1.27,-.94],[.91,1.27,-.94],[.755,1.862,-.38],[-.755,1.862,-.38]],'paint',.035);wipers(-.955,1.28,-.69,1.61);
   for(const s of [-1,1]){
+   tube('front-window-'+s,[[s*.931,1.255,-.916],[s*.771,1.875,-.365]],.033,'paint',1);
+   tube('rear-window-'+s,[[s*.965,1.27,.371],[s*.79,1.88,.355]],.027,'rubber',1);
+   tube('quarter-glass-'+s,[[s*.829,1.235,2.0],[s*.648,1.77,1.64]],.041,'paint',1);
    glass('front-window-'+s,[[s*.938,1.28,-.88],[s*.965,1.29,.33],[s*.79,1.87,.30],[s*.775,1.87,-.33]],'rubber');
    glass('rear-window-'+s,[[s*.962,1.29,.41],[s*.931,1.29,1.24],[s*.74,1.83,1.19],[s*.79,1.87,.39]],'rubber');
    glass('quarter-glass-'+s,[[s*.924,1.29,1.32],[s*.818,1.28,1.99],[s*.64,1.76,1.60],[s*.724,1.82,1.29]],'paint');
@@ -59,6 +62,9 @@ export function buildFleetVehicle(T,c){
   glass('windshield',[[-.94,1.27,-1.03],[.94,1.27,-1.03],[.75,1.80,-.65],[-.75,1.80,-.65]],'chrome');wipers(-1.044,1.28,-.87,1.53);
   glass('rear-glass',[[-.92,1.27,1.47],[.92,1.27,1.47],[.72,1.79,1.19],[-.72,1.79,1.19]],'chrome');
   for(const s of [-1,1]){
+   tube('front-window-'+s,[[s*.949,1.25,-1.01],[s*.765,1.82,-.641]],.026,'chrome',1);
+   tube('rear-window-'+s,[[s*.986,1.27,.29],[s*.776,1.824,.276]],.022,'chrome',1);
+   tube('rear-glass',[[s*.938,1.257,1.46],[s*.74,1.804,1.18]],.028,'roofPaint',1);
    glass('front-window-'+s,[[s*.991,1.28,-.93],[s*.99,1.28,.25],[s*.775,1.81,.22],[s*.767,1.81,-.58]],'chrome');
    glass('rear-window-'+s,[[s*.99,1.28,.33],[s*.962,1.28,1.39],[s*.73,1.80,1.12],[s*.775,1.81,.32]],'chrome');
    tube('vent-window-'+s,[[s*.99,1.29,-.65],[s*.77,1.80,-.46]],.015,'chrome',1);
@@ -68,7 +74,7 @@ export function buildFleetVehicle(T,c){
    textBadge('side-badge-'+s,'New Yorker',s*1.048,.73,-.90,.41,s);
    // Tall chrome headlamp eyebrows frame the paired round lights.
    rounded('headlight-'+s,.50,.38,.16,s*.79,1.016,-2.688,'chrome',.025);rounded('headlight-'+s,.445,.29,.016,s*.79,1.016,-2.782,'rubber',.003);
-   for(const dx of [-.122,.122])lamp('headlight-'+s,s*.79+dx,1.019,-2.79,.09);
+   for(const dx of [-.122,.122]){cyl('headlight-'+s,.095,.014,s*.79+dx,1.019,-2.794,'chrome','z');cyl('headlight-'+s,.081,.014,s*.79+dx,1.019,-2.808,'lens','z');for(let i=-2;i<=2;i++)tube('headlight-'+s,[[s*.79+dx+i*.025,.962,-2.818],[s*.79+dx+i*.025,1.076,-2.818]],.003,'ivory',1);}
    rounded('tail-light-'+s,.16,.29,.07,s*.83,.967,2.666,'chrome',.014);rounded('tail-light-'+s,.10,.235,.024,s*.83,.967,2.71,'tailLens',.005);
    cyl('fuel-cap',.065,.016,s*1.013,.97,2.05,'chrome');
   }
