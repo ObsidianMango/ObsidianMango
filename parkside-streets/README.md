@@ -1,5 +1,12 @@
 # Parkside Streets
 
+## Larger staged routes and destructible surroundings
+- All 24 lots now have a 96 × 96 parking surface, approximately twice the previous width and length. Bays and cars keep their dimensions. Three ordered directional checkpoints, alternating barriers, and close neighbours at the final bay make the route and parking maneuver more demanding; later chapters narrow the gates. Par times scale by 1.8.
+- Buildings are hollow shells divided into facade and roof sections. Impacts deform their vertices; harder hits release physical rubble and collapse locally unsupported upper sections. Trees, signs, lights, curbs, islands and other solid scenery also break loose. Signs, foliage and other decorations follow their supports.
+- Explosions propagate to scenery and parked cars. Deformable asphalt and soil use a shared Cannon heightfield: craters alter actual wheel and debris contacts. Up to eight craters per run and a bounded active rubble budget keep prolonged destruction manageable.
+- Damage, collapse and craters appear in both recorded replay angles. Restart restores geometry, materials, static bodies, terrain, checkpoints and the crowd. Logical parking/checkpoint paint stays visible. Pedestrians remain on the outer promenade at z=52–58.
+- Verification: all 192 vehicle/lot parking poses and checkpoint completion, 24 connected routes using 3.5m centre-path clearance, actual building collision deformation, physical crater wheel contact, explosion collapse, both replay angles, complete reset, pedestrian scoring and mobile double-tap prevention. Route connectivity checks are not a claim of manually driving every vehicle through every lot.
+
 ## Scored challenge runs
 - Multipliers: Roadster/Santa Fe/Maybach ×1, Nova ×1.3, New Yorker ×1.4, Wienermobile ×1.6, E250 ×1.8, Jalopy ×2.2. Multipliers apply to hit, parking and failure-survival points.
 - Pedestrian chains last five active-driving seconds, awarding base 100 / 150 / 200 / 250 (capped thereafter). Each knockdown counts once. Pausing freezes the combo clock.

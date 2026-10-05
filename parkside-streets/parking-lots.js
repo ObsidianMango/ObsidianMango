@@ -1,4 +1,4 @@
-export const LOTS=[
+const BASE_LOTS=[
  {name:'Market Square',kind:'Head-in',hint:'Drive around the island and park in A3.',code:'A3',theme:0xb6bca3,spawn:[-13,17,0],target:{x:4,z:-15,yaw:0,w:3.8,d:6.6},par:45,style:'market'},
  {name:'Sunset Diner',kind:'Angled bay',hint:'Follow the diagonal row. Stop inside D4.',code:'D4',theme:0xc7ab88,spawn:[-15,17,0],target:{x:7,z:-10,yaw:-Math.PI/4,w:3.7,d:6.6},par:55,style:'diner'},
  {name:'Office Hours',kind:'Reverse-in',hint:'Pass B2, select R, then back into the bay.',code:'B2',theme:0x9eb4bb,spawn:[-14,17,0],target:{x:5,z:14,yaw:0,w:3.6,d:6.5,reverse:true},par:65,style:'office'},
@@ -24,6 +24,10 @@ export const LOTS=[
  {name:'Mountain Lodge',kind:'Angled arrival',hint:'Wind past the snow islands. Approach L23 on the diagonal.',code:'L23',theme:0xcad4d4,spawn:[-15,18,0],target:{x:0,z:-16,yaw:Math.PI/8,w:3.8,d:7.5},par:125,style:'lodge'},
  {name:'The Final Test',kind:'Precision reverse',hint:'Clear both staggered walls, turn in the upper court, then back into T24.',code:'T24',theme:0xb9c2b4,spawn:[-15,18,0],target:{x:13,z:-17,yaw:Math.PI,w:3.65,d:7.4,reverse:true},par:150,style:'academy'}
 ];
+export const LOTS=BASE_LOTS.map((l,i)=>{const t={...l.target,x:l.target.x*2,z:l.target.z*2},side=l.spawn[0]<0?-1:1;
+ const gates=[{x:side*38,z:24,yaw:0},{x:-side*38,z:24,yaw:side<0?-Math.PI/2:Math.PI/2},{x:t.x+Math.sin(t.yaw)*9*(t.reverse?-1:1),z:t.z+Math.cos(t.yaw)*9*(t.reverse?-1:1),yaw:t.yaw,reverse:!!t.reverse}];
+ return {...l,target:t,spawn:[side*38,40,0],par:Math.round(l.par*1.8),gates,gateWidth:6-Math.floor(i/8)*.55,hint:'Clear the three numbered gates, then '+(t.reverse?'reverse into ':'park in ')+l.code+'.'};
+});
 export const CHAPTER_SIZE=8;
 export function completedThrough(saves,count){return Array.from({length:count},(_,i)=>saves[i]?.stars>=1).every(Boolean);}
 export function isLotUnlocked(index,saves){return Number.isInteger(index)&&index>=0&&index<LOTS.length&&completedThrough(saves,Math.floor(index/CHAPTER_SIZE)*CHAPTER_SIZE);}
@@ -43,18 +47,33 @@ export function assessParking(pose,target){
  return {contained,aligned,stopped,approach,valid:contained&&aligned&&stopped&&upright&&approach,offset:Math.hypot(x,z),angle:Math.abs(angle),near:Math.hypot(dx,dz)<8};
 }
 export function buildLots({T,C,scene,world,groundMat}){
- const parkedCars=[],obstacles=[],views=[],materials=new Map(),boxGeo=new T.BoxGeometry(1,1,1);
+ const parkedCars=[],obstacles=[],breakables=[],views=[],materials=new Map(),boxGeo=new T.BoxGeometry(1,1,1);
  const mat=c=>{if(!materials.has(c))materials.set(c,new T.MeshStandardMaterial({color:c,roughness:.82}));return materials.get(c);};
- LOTS.forEach((level,index)=>{const ox=index*120,g=new T.Group();scene.add(g);g.visible=index===0;let mini=[];const phys=[];
- function box(w,h,d,x,y,z,color,yaw=0,solid=false){const m=new T.Mesh(boxGeo,mat(color));m.scale.set(w,h,d);m.position.set(ox+x,y,z);m.rotation.y=yaw;m.castShadow=h>.3;m.receiveShadow=true;g.add(m);if(solid){const b=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(w/2,h/2,d/2)),position:new C.Vec3(ox+x,y,z)});b.quaternion.setFromEuler(0,yaw,0);b.userData={kind:'obstacle'};b.updateAABB();world.addBody(b);phys.push(b);mini.push({x,z,w,d,yaw,color:'#a5b6ac'});}return m;}
- function text(value,x,y,z,width=5,yaw=0,ground=false,color='#193c35'){const cv=document.createElement('canvas');cv.width=512;cv.height=128;const ctx=cv.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,512,128);ctx.fillStyle='#fff6dd';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px system-ui';ctx.fillText(value,256,65);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;const mesh=new T.Mesh(new T.PlaneGeometry(width,width/4),new T.MeshBasicMaterial({map:tx,side:T.DoubleSide}));mesh.position.set(ox+x,y,z);if(ground){mesh.rotation.x=-Math.PI/2;mesh.rotation.z=yaw;}else mesh.rotation.y=yaw;g.add(mesh);return mesh;}
- function tree(x,z){box(.45,3,.45,x,1.5,z,0x6d634e,0,true);const crown=new T.Mesh(new T.IcosahedronGeometry(2.3,0),mat(0x527f65));crown.position.set(ox+x,4,z);g.add(crown);}
+ LOTS.forEach((level,index)=>{const ox=index*240,g=new T.Group();scene.add(g);g.visible=index===0;let mini=[];const phys=[];
+ let structureSerial=0;
+ function piece(w,h,d,x,y,z,color,yaw=0,structure=null){const m=new T.Mesh(boxGeo,mat(color));m.scale.set(w,h,d);m.position.set(ox+x,y,z);m.rotation.y=yaw;m.castShadow=h>.3;m.receiveShadow=true;g.add(m);
+ const b=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(w/2,h/2,d/2)),position:new C.Vec3(ox+x,y,z)});b.quaternion.setFromEuler(0,yaw,0);b.userData={kind:structure?'building':'scenery'};b.updateAABB();phys.push(b);m.userData.body=b;breakables.push({mesh:m,body:b,level:index,size:[w,h,d],structure});return m;}
+ function box(w,h,d,x,y,z,color,yaw=0,solid=false){x*=2;z*=2;
+ // Ground is supplied by the deformable heightfield; markings remain logical guides.
+ if(y<0&&w>40&&d>40)return null;
+ const building=h>=4&&w>=7&&d>=5;
+ if(building){w*=2;d*=2;const id=index+':'+structureSerial++,rows=Math.ceil(h/4),hx=w/2,hz=d/2;
+  const wall=(length,axis,side)=>{const cols=Math.ceil(length/6);for(let row=0;row<rows;row++)for(let c=0;c<cols;c++){const offset=-length/2+(c+.5)*length/cols;piece(axis===0?length/cols:.55,h/rows,axis===0?.55:length/cols,x+(axis===0?offset:side*hx),y-h/2+(row+.5)*h/rows,z+(axis===0?side*hz:offset),color,yaw,id);}};
+  for(const side of [-1,1]){wall(w,0,side);wall(d,1,side);}const nx=Math.ceil(w/6),nz=Math.ceil(d/6);for(let i=0;i<nx;i++)for(let j=0;j<nz;j++)piece(w/nx,.35,d/nz,x-w/2+(i+.5)*w/nx,y+h/2+.18,z-d/2+(j+.5)*d/nz,0x7b8277,yaw,id);mini.push({x,z,w,d,yaw,color:'#677b75'});return null;
+ }
+ // Stretch architecture and boundary walls, while preserving full-size vehicles and bays.
+ if(Math.abs(x)>44||Math.abs(z)>44){w*=2;d*=2;}
+ const physical=solid||h>.12&&y>0;
+ if(physical){const nx=Math.ceil(w/7),nz=Math.ceil(d/7);let first=null;for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const px=-w/2+(i+.5)*w/nx,pz=-d/2+(j+.5)*d/nz;const m=piece(w/nx,h,d/nz,x+Math.cos(yaw)*px+Math.sin(yaw)*pz,y,z-Math.sin(yaw)*px+Math.cos(yaw)*pz,color,yaw);first??=m;}mini.push({x,z,w,d,yaw,color:'#a5b6ac'});return first;}
+ const m=new T.Mesh(boxGeo,mat(color));m.scale.set(w,h,d);m.position.set(ox+x,y,z);m.rotation.y=yaw;m.receiveShadow=true;g.add(m);m.userData.guide=true;return m;}
+ function text(value,x,y,z,width=5,yaw=0,ground=false,color='#193c35'){const cv=document.createElement('canvas');cv.width=512;cv.height=128;const ctx=cv.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,512,128);ctx.fillStyle='#fff6dd';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px system-ui';ctx.fillText(value,256,65);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;const mesh=new T.Mesh(new T.PlaneGeometry(width,width/4),new T.MeshBasicMaterial({map:tx,side:T.DoubleSide}));mesh.position.set(ox+x*2,y,z*2);mesh.userData.guide=ground;if(ground){mesh.rotation.x=-Math.PI/2;mesh.rotation.z=yaw;}else mesh.rotation.y=yaw;g.add(mesh);return mesh;}
+ function tree(x,z){box(.45,3,.45,x,1.5,z,0x6d634e,0,true);const crown=new T.Mesh(new T.IcosahedronGeometry(2.3,0),mat(0x527f65));crown.position.set(ox+x*2,4,z*2);g.add(crown);}
  function island(x,z,w,d){box(w,.28,d,x,.14,z,0xc6cab6,0,true);box(w-.4,.08,d-.4,x,.3,z,0x81946d);if(w>3)tree(x,z);}
- function cone(x,z){const m=new T.Mesh(new T.ConeGeometry(.32,.8,12),mat(0xec9d4f));m.position.set(ox+x,.4,z);g.add(m);box(.5,.08,.5,x,.04,z,0x393e37,0,true);}
- function parked(x,z,yaw,color=0x688d9b){const car=new T.Group();car.position.set(ox+x,0,z);car.rotation.y=yaw;g.add(car);function part(w,h,d,px,py,pz,col){const m=new T.Mesh(boxGeo,mat(col));m.scale.set(w,h,d);m.position.set(px,py,pz);m.castShadow=true;car.add(m);}part(1.95,.65,4.2,0,.7,0,color);part(1.55,.65,2.2,0,1.3,.1,0x40565a);part(1.62,.1,1.7,0,1.66,.2,color);for(const side of [-1,1])for(const end of [-1,1]){const tire=new T.Mesh(new T.CylinderGeometry(.35,.35,.22,12),mat(0x252c2a));tire.rotation.z=Math.PI/2;tire.position.set(side,.40,end*1.35);tire.castShadow=true;car.add(tire);const rim=new T.Mesh(new T.CylinderGeometry(.21,.21,.225,12),mat(0xa9b5ae));rim.rotation.z=Math.PI/2;rim.position.copy(tire.position);car.add(rim);}part(1.5,.17,.07,0,.78,-2.14,0xe7e3bf);part(1.5,.15,.07,0,.78,2.14,0xa15143);const body=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(1.04,.75,2.18)),position:new C.Vec3(ox+x,.8,z)});body.quaternion.setFromEuler(0,yaw,0);body.userData={kind:'parked car'};parkedCars.push({mesh:car,body,level:index});body.updateAABB();world.addBody(body);phys.push(body);mini.push({x,z,w:2.1,d:4.4,yaw,color:'#677e89'});}
- function bay(x,z,yaw=0,w=3.6,d=6.4,target=false){if(!target&&Math.hypot(x-level.target.x,z-level.target.z)<.1)return null;const group=new T.Group();group.position.set(ox+x,.035,z);group.rotation.y=yaw;g.add(group);for(const side of [-1,1]){const line=new T.Mesh(boxGeo,mat(target?0x83f0b0:0xcfd4bd));line.scale.set(.11,.025,d);line.position.x=side*w/2;group.add(line);}for(const end of [-1,1]){const line=new T.Mesh(boxGeo,mat(target?0x83f0b0:0xcfd4bd));line.scale.set(w,.025,.11);line.position.z=end*d/2;group.add(line);}if(target){const fill=new T.Mesh(new T.PlaneGeometry(w,d),new T.MeshBasicMaterial({color:0x74e6ab,transparent:true,opacity:.22,depthWrite:false,side:T.DoubleSide}));fill.rotation.x=-Math.PI/2;fill.position.y=.01;group.add(fill);const shape=new T.Shape();shape.moveTo(0,-1);shape.lineTo(-.55,-.2);shape.lineTo(-.17,-.2);shape.lineTo(-.17,.65);shape.lineTo(.17,.65);shape.lineTo(.17,-.2);shape.lineTo(.55,-.2);shape.closePath();const arrow=new T.Mesh(new T.ShapeGeometry(shape),new T.MeshBasicMaterial({color:0xc9ffd9,side:T.DoubleSide}));arrow.rotation.x=Math.PI/2;arrow.position.y=.08;group.add(arrow);return {group,fill};}}
+ function cone(x,z){const m=new T.Mesh(new T.ConeGeometry(.32,.8,12),mat(0xec9d4f));m.position.set(ox+x*2,.4,z*2);g.add(m);box(.5,.08,.5,x,.04,z,0x393e37,0,true);}
+ function parked(x,z,yaw,color=0x688d9b){x*=2;z*=2;const car=new T.Group();car.position.set(ox+x,0,z);car.rotation.y=yaw;g.add(car);function part(w,h,d,px,py,pz,col){const m=new T.Mesh(boxGeo,mat(col));m.scale.set(w,h,d);m.position.set(px,py,pz);m.castShadow=true;car.add(m);}part(1.95,.65,4.2,0,.7,0,color);part(1.55,.65,2.2,0,1.3,.1,0x40565a);part(1.62,.1,1.7,0,1.66,.2,color);for(const side of [-1,1])for(const end of [-1,1]){const tire=new T.Mesh(new T.CylinderGeometry(.35,.35,.22,12),mat(0x252c2a));tire.rotation.z=Math.PI/2;tire.position.set(side,.40,end*1.35);tire.castShadow=true;car.add(tire);const rim=new T.Mesh(new T.CylinderGeometry(.21,.21,.225,12),mat(0xa9b5ae));rim.rotation.z=Math.PI/2;rim.position.copy(tire.position);car.add(rim);}part(1.5,.17,.07,0,.78,-2.14,0xe7e3bf);part(1.5,.15,.07,0,.78,2.14,0xa15143);const body=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(1.04,.75,2.18)),position:new C.Vec3(ox+x,.8,z)});body.quaternion.setFromEuler(0,yaw,0);body.userData={kind:'parked car'};parkedCars.push({mesh:car,body,level:index});body.updateAABB();world.addBody(body);phys.push(body);mini.push({x,z,w:2.1,d:4.4,yaw,color:'#677e89'});}
+ function bay(x,z,yaw=0,w=3.6,d=6.4,target=false){x*=2;z*=2;if(!target&&Math.hypot(x-level.target.x,z-level.target.z)<.1)return null;const group=new T.Group();group.position.set(ox+x,.035,z);group.rotation.y=yaw;group.userData.guide=true;g.add(group);for(const side of [-1,1]){const line=new T.Mesh(boxGeo,mat(target?0x83f0b0:0xcfd4bd));line.scale.set(.11,.025,d);line.position.x=side*w/2;group.add(line);}for(const end of [-1,1]){const line=new T.Mesh(boxGeo,mat(target?0x83f0b0:0xcfd4bd));line.scale.set(w,.025,.11);line.position.z=end*d/2;group.add(line);}if(target){const fill=new T.Mesh(new T.PlaneGeometry(w,d),new T.MeshBasicMaterial({color:0x74e6ab,transparent:true,opacity:.22,depthWrite:false,side:T.DoubleSide}));fill.rotation.x=-Math.PI/2;fill.position.y=.01;group.add(fill);const shape=new T.Shape();shape.moveTo(0,-1);shape.lineTo(-.55,-.2);shape.lineTo(-.17,-.2);shape.lineTo(-.17,.65);shape.lineTo(.17,.65);shape.lineTo(.17,-.2);shape.lineTo(.55,-.2);shape.closePath();const arrow=new T.Mesh(new T.ShapeGeometry(shape),new T.MeshBasicMaterial({color:0xc9ffd9,side:T.DoubleSide}));arrow.rotation.x=Math.PI/2;arrow.position.y=.08;group.add(arrow);return {group,fill};}}
  // A bounded lot with a generous internal entrance and no endless road.
- box(110,.1,105,0,-.13,0,0x8d9e81);box(46,.08,46,0,-.01,0,0x566260);
+ box(110,.1,105,0,-.13,0,0x8d9e81);box(96,.08,96,0,-.01,0,0x566260);
  box(47,.32,.45,0,.16,-23.3,0xbdc5b5,0,true);box(.45,.32,47,-23.3,.16,0,0xbdc5b5,0,true);box(.45,.32,47,23.3,.16,0,0xbdc5b5,0,true);box(18,.32,.45,-14.5,.16,23.3,0xbdc5b5,0,true);box(18,.32,.45,14.5,.16,23.3,0xbdc5b5,0,true);
  for(let x=-18;x<=18;x+=9)tree(x,-28);for(let z=-12;z<=18;z+=12)tree(-28,z);
  text(level.name.toUpperCase(),0,3.7,-25,13);box(17,1.3,.2,0,3.7,-25,0x244339);box(.18,4,.18,-6,2,-25,0x626b60);box(.18,4,.18,6,2,-25,0x626b60);
@@ -106,21 +125,21 @@ export function buildLots({T,C,scene,world,groundMat}){
   box(4,1,17,31,2,-9,0xd1d8d1);box(16,.22,3,31,2.4,-7,0xe4e6d5);box(.25,3,3,31,3,0,0x777ba1);
  }
  if(level.style==='quarry'){
-  for(const [x,z,w,d]of [[-7,6,12,5],[1,-7,8,5]]){box(w,1.8,d,x,.9,z,0xa8987e,0,true);for(let j=-1;j<=1;j++){const rock=new T.Mesh(new T.IcosahedronGeometry(1,1),mat(0x9f998a));rock.position.set(ox+x+j*w*.23,2,z);rock.scale.set(w*.22,2,d*.40);g.add(rock);}}
+  for(const [x,z,w,d]of [[-7,6,12,5],[1,-7,8,5]]){box(w,1.8,d,x,.9,z,0xa8987e,0,true);for(let j=-1;j<=1;j++){const rock=new T.Mesh(new T.IcosahedronGeometry(1,1),mat(0x9f998a));rock.position.set(ox+x*2+j*w*.23,2,z*2);rock.scale.set(w*.22,2,d*.40);g.add(rock);}}
   for(const z of [-10,10]){parked(15,z,0,0xc7a644);box(1.5,.5,2.4,15,1.9,z+.5,0x967e51);}bay(15,0,0,3.7,8);
   box(8,4,7,-29,2,-14,0xa78e65);text('QUARRY',0,3.6,-26,12);for(const z of [-16,-8,0,8,16])box(.25,1.1,.25,21,.55,z,0xd9bc59,0,true);
  }
  if(level.style==='marina'){
   box(32,.05,85,-43,-.04,0,0x649ca8);
-  for(const [x,z]of [[8,7],[-7,-3],[10,-14]]){box(9,1,3,x,.5,z,0x667d79,0,true);const hull=new T.Mesh(new T.SphereGeometry(1,16,8),mat(0xe2dfc7));hull.scale.set(4.2,.8,1.4);hull.position.set(ox+x,1.5,z);g.add(hull);box(3.2,1.2,1.5,x,2,z,0xc7d0bc);box(2.3,.6,.02,x,2.2,z+ .77,0x5d808b);}
+  for(const [x,z]of [[8,7],[-7,-3],[10,-14]]){box(9,1,3,x,.5,z,0x667d79,0,true);const hull=new T.Mesh(new T.SphereGeometry(1,16,8),mat(0xe2dfc7));hull.scale.set(4.2,.8,1.4);hull.position.set(ox+x*2,1.5,z*2);g.add(hull);box(3.2,1.2,1.5,x,2,z,0xc7d0bc);box(2.3,.6,.02,x,2.2,z+ .77,0x5d808b);}
   for(const x of [-14,-9,-4]){bay(x,-15,Math.PI,3.8,7.5);if(x!==-14)parked(x,-15,Math.PI,0x829ca6);}text('MARINA SERVICE',-7,3.8,-26,15);
  }
  if(level.style==='lodge'){
-  box(110,.08,105,0,-.075,0,0xd6ded6);box(46,.09,46,0,-.008,0,0x637171);
+  box(110,.08,105,0,-.075,0,0xd6ded6);box(96,.09,96,0,-.008,0,0x637171);
   for(const [x,z]of [[-8,6],[8,-5]]){box(12,.6,4,x,.30,z,0xd9e1d7,0,true);for(const tx of [x-3,x+3])tree(tx,z);}
-  box(25,5,9,0,2.5,-31,0x836a51);const roof=new T.Mesh(new T.ConeGeometry(1,1,4),mat(0xd5ddd6));roof.scale.set(20,4,8);roof.rotation.y=Math.PI/4;roof.position.set(ox,6,-31);g.add(roof);text('LODGE',0,3.6,-26.3,10);
+  box(25,5,9,0,2.5,-31,0x836a51);const roof=new T.Mesh(new T.ConeGeometry(1,1,4),mat(0xd5ddd6));roof.scale.set(20,4,8);roof.rotation.y=Math.PI/4;roof.position.set(ox,6,-62);g.add(roof);text('LODGE',0,3.6,-26.3,10);
   for(const x of [-13,-6,0,7,14]){bay(x,-16,Math.PI/8,3.8,7.5);if(x!==0)parked(x,-16,Math.PI/8,colors[Math.abs(x)%5]);}
-  for(const [x,z,r,h]of [[-37,-37,18,24],[25,-47,24,30]]){const mountain=new T.Mesh(new T.ConeGeometry(r,h,6),mat(0xaebdba));mountain.position.set(ox+x,h/2-2,z);g.add(mountain);}
+  for(const [x,z,r,h]of [[-37,-37,18,24],[25,-47,24,30]]){const mountain=new T.Mesh(new T.ConeGeometry(r,h,6),mat(0xaebdba));mountain.position.set(ox+x*2,h/2-2,z*2);g.add(mountain);}
  }
  if(level.style==='academy'){
   box(20,.75,2,-10,.375,8,0xc4b885,0,true);box(15,.75,2,11,.375,-2,0xc4b885,0,true);
@@ -129,10 +148,33 @@ export function buildLots({T,C,scene,world,groundMat}){
   for(const z of [-13,-6,0])cone(-18,z);box(18,5,8,0,2.5,-31,0x879c86);text('FINAL TEST',0,3.5,-26.8,12);
  }
 
- const t=level.target,marker=bay(t.x,t.z,t.yaw,t.w,t.d,true);text(level.code,t.x+Math.sin(t.yaw)*(t.d/2-.44),.085,t.z+Math.cos(t.yaw)*(t.d/2-.44),1.55,t.yaw,true,'#247957');
+ const t=level.target,marker=bay(t.x/2,t.z/2,t.yaw,t.w,t.d,true);text(level.code,(t.x+Math.sin(t.yaw)*(t.d/2-.44))/2,.085,(t.z+Math.cos(t.yaw)*(t.d/2-.44))/2,1.55,t.yaw,true,'#247957');
  // Beacon stays low enough to avoid blocking orbit cameras.
- const beacon=text('P · '+level.code,t.x,2.8,t.z,2.8);beacon.material.depthTest=false;beacon.renderOrder=2;
- views.push({group:g,ox,marker,beacon,mini,phys});
+ const beacon=text('P · '+level.code,t.x/2,2.8,t.z/2,2.8);beacon.userData.guide=true;beacon.material.depthTest=false;beacon.renderOrder=2;
+ // Precision gates create a staged route; paint cannot be bypassed by blowing up posts.
+ const gates=level.gates.map((gate,i)=>{const width=level.gateWidth,group=new T.Group();group.position.set(ox+gate.x,.06,gate.z);group.rotation.y=gate.yaw;group.userData.guide=true;g.add(group);
+  const line=new T.Mesh(boxGeo,new T.MeshBasicMaterial({color:0xffcf72,transparent:true,opacity:.9,side:T.DoubleSide}));line.scale.set(width,.035,.35);group.add(line);
+  const arrowShape=new T.Shape();arrowShape.moveTo(0,-1.5);arrowShape.lineTo(-.65,-.5);arrowShape.lineTo(-.2,-.5);arrowShape.lineTo(-.2,1);arrowShape.lineTo(.2,1);arrowShape.lineTo(.2,-.5);arrowShape.lineTo(.65,-.5);arrowShape.closePath();const arrow=new T.Mesh(new T.ShapeGeometry(arrowShape),line.material);arrow.rotation.x=Math.PI/2;arrow.rotation.z=gate.reverse?Math.PI:0;arrow.position.set(0,.04,gate.reverse?-2.2:2.2);group.add(arrow);
+  const label=text(String(i+1)+(gate.reverse?' · R':''),gate.x/2,3.2,gate.z/2,2.2);label.userData.guide=true;label.material.depthTest=false;label.material.depthWrite=false;label.renderOrder=4;
+  for(const side of [-1,1])piece(.35,1,.35,gate.x+Math.cos(gate.yaw)*side*(width/2+.3),.5,gate.z-Math.sin(gate.yaw)*side*(width/2+.3),0xe7b05b);
+  return{...gate,group,label,line};});
+ // Alternating barriers force an S-turn through the cross aisle, away from bay approaches.
+ const clear=(x,z,r)=>Math.hypot(x-t.x,z-t.z)>r&&level.gates.every(a=>Math.hypot(a.x-x,a.z-z)>6);
+ for(const [x,z]of [[-22,20],[0,28],[22,20]])if(clear(x,z,11)){box(7,.85,1,x/2,.425,z/2,0xe2bb68,0,true);cone((x-4)/2,z/2);cone((x+4)/2,z/2);}
+ for(const x of [-26,-10,10,26])if(clear(x,40,10))parked(x/2,20,0,colors[(index+Math.abs(x))%5]);
+ // Close neighbours make the final bay a realistic fit even in the much larger lot.
+ for(const side of [-1,1]){const offset=t.w/2+1.25,x=t.x+Math.cos(t.yaw)*offset*side,z=t.z-Math.sin(t.yaw)*offset*side;
+  const occupied=parkedCars.some(p=>p.level===index&&Math.hypot(p.body.position.x-ox-x,p.body.position.z-z)<4.8);
+  if(!occupied)parked(x/2,z/2,t.yaw,colors[(index+(side>0?1:0))%5]);}
+ // Every remaining physical prop gets a body. Decorations ride with their support.
+ g.updateMatrixWorld(true);for(const m of [...g.children]){if(!m.isMesh||m.userData.guide||m.userData.body)continue;
+  m.geometry.computeBoundingBox();const bounds=m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld),size=new T.Vector3();bounds.getSize(size);
+  const local=breakables.filter(e=>e.level===index),support=local.map(e=>({e,d:e.mesh.position.distanceTo(m.position)})).filter(a=>a.d<Math.max(3,Math.max(...a.e.size)/2+1.5)).sort((a,b)=>a.d-b.d)[0]?.e;
+  if(support){support.mesh.attach(m);continue;}
+  const b=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(Math.max(.08,size.x/2),Math.max(.08,size.y/2),Math.max(.08,size.z/2))),position:new C.Vec3(m.position.x,m.position.y,m.position.z)});b.userData={kind:'scenery'};m.userData.body=b;phys.push(b);breakables.push({mesh:m,body:b,level:index,size:size.toArray(),structure:null});
+ }
+ views.push({group:g,ox,marker,beacon,mini,phys,gates});
+
  });
- return {views,obstacles,parked:parkedCars,show(index){views.forEach((v,i)=>{v.group.visible=i===index;for(const body of v.phys){const present=world.bodies.includes(body);if(i===index&&!present)world.addBody(body);else if(i!==index&&present)world.removeBody(body);}});}};
+ return {views,obstacles,breakables,parked:parkedCars,show(index){views.forEach((v,i)=>{v.group.visible=i===index;for(const body of v.phys){const present=world.bodies.includes(body);if(i===index&&!present)world.addBody(body);else if(i!==index&&present)world.removeBody(body);}});}};
 }

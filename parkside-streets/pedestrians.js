@@ -22,10 +22,10 @@ export function createPedestrians({T,C,scene,world,chassis,groundMat,onHit}){
  const sphere=new T.SphereGeometry(.5,12,8),capsule=new T.CapsuleGeometry(.5,.5,4,10);capsule.scale(1,2/3,1);
  const material=new T.MeshStandardMaterial({color:0xffffff,roughness:.87});
  const meshes=defs.map(d=>{const m=new T.InstancedMesh(d.sphere?sphere:capsule,material,max);m.instanceMatrix.setUsage(T.DynamicDrawUsage);m.frustumCulled=false;m.castShadow=true;root.add(m);return m;});
- const path=new T.Mesh(new T.PlaneGeometry(45,8),new T.MeshStandardMaterial({color:0xb2b2a3,roughness:1}));path.rotation.x=-Math.PI/2;path.position.set(0,.004,28);root.add(path);
+ const path=new T.Mesh(new T.PlaneGeometry(85,8),new T.MeshStandardMaterial({color:0xb2b2a3,roughness:1}));path.rotation.x=-Math.PI/2;path.position.set(0,.004,55);root.add(path);
  const obj=new T.Object3D(),q=new T.Quaternion(),yAxis=new T.Vector3(0,1,0),xAxis=new T.Vector3(1,0,0),v=new T.Vector3();let origin=0,hitCount=0,elapsed=0;
- const routeLength=92;
- function route(distance){let t=((distance%routeLength)+routeLength)%routeLength;if(t<40)return{x:origin-20+t,z:26,yaw:-Math.PI/2};t-=40;if(t<6)return{x:origin+20,z:26+t,yaw:Math.PI};t-=6;if(t<40)return{x:origin+20-t,z:32,yaw:Math.PI/2};return{x:origin-20,z:32-(t-40),yaw:0};}
+ const routeLength=172;
+ function route(distance){let t=((distance%routeLength)+routeLength)%routeLength;if(t<80)return{x:origin-40+t,z:52,yaw:-Math.PI/2};t-=80;if(t<6)return{x:origin+40,z:52+t,yaw:Math.PI};t-=6;if(t<80)return{x:origin+40-t,z:58,yaw:Math.PI/2};return{x:origin-40,z:58-(t-80),yaw:0};}
  function cleanup(p){if(p.sensor)world.removeBody(p.sensor);if(p.bodies){for(const c of p.constraints)world.removeConstraint(c);for(const b of p.bodies)world.removeBody(b);p.bodies=null;}}
  function walkingPose(p){const r=route(p.distance),base=new T.Vector3(r.x,0,r.z),turn=new T.Quaternion().setFromAxisAngle(yAxis,r.yaw+(p.direction<0?Math.PI:0)),stride=Math.sin(p.phase)*.47;
   for(let i=0;i<7;i++){const d=defs[i],pos=new T.Vector3(...d.p),rot=new T.Quaternion();if(i>=3){const a=(i%2?1:-1)*stride*(i<5?-.8:1);rot.setFromAxisAngle(xAxis,a);const pivot=new T.Vector3(d.p[0],i<5?1.29:.76,0);pos.sub(pivot).applyQuaternion(rot).add(pivot);}pos.y+=Math.abs(Math.sin(p.phase))*.022;p.pose[i].p.copy(pos).multiplyScalar(p.scale).applyQuaternion(turn).add(base);p.pose[i].q.copy(turn).multiply(rot);}
