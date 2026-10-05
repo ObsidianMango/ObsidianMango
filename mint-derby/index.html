@@ -481,9 +481,11 @@ scene.add(centerDust);
 
 // Painted oval lanes make the floor read like a real stadium derby bowl.
 const paintLine=material(0xb69248,.03,.78);
-[[.27,.27],[.52,.52],[.75,.75],[.91,.91]].forEach(scale=>{
+[.27,.52,.75,.91].forEach(scale=>{
   const ring=new THREE.Mesh(new THREE.TorusGeometry(1,.0012,6,192),paintLine);
-  ring.scale.set(ARENA_X*scale[0],1,ARENA_Z*scale[1]);
+  // TorusGeometry starts in the XY plane; scale X/Y before rotating it flat.
+  // The previous X/Z scaling caused the warped strip through the middle.
+  ring.scale.set(ARENA_X*scale,ARENA_Z*scale,1);
   ring.rotation.x=Math.PI/2;
   ring.position.y=.025;
   scene.add(ring);
@@ -503,7 +505,7 @@ for(let tier=0;tier<4;tier++){
   scene.add(deck);
 
   const edge=new THREE.Mesh(new THREE.TorusGeometry(1,.012,6,192),standEdge);
-  edge.scale.set(ARENA_X*outer,1,ARENA_Z*outer);
+  edge.scale.set(ARENA_X*outer,ARENA_Z*outer,1);
   edge.rotation.x=Math.PI/2;
   edge.position.y=.3+tier*.72;
   scene.add(edge);
@@ -685,22 +687,36 @@ function createVehicle(isPlayer,color){
   };
 }
 
-const player=createVehicle(true,0x9da88a);
-player.mesh.position.set(0,0,22);
-player.heading=0;
-player.mesh.rotation.y=0;
-
 const enemyColors=[0x7e332c,0x2e5b70,0xb47a28,0x55594b,0x70406d];
+const player=createVehicle(true,0x9da88a);
 const cars=[player];
 
-enemyColors.forEach((color,i)=>{
-  const car=createVehicle(false,color);
-  const a=i/ENEMY_COUNT*Math.PI*2;
-  car.mesh.position.set(Math.sin(a)*82,0,Math.cos(a)*48);
+// Six perimeter starts chosen around the oval to maximize spacing.
+// Everyone begins near the outer edge and faces toward the center.
+const spawnPoints=[
+  [0,68],
+  [91,45],
+  [91,-45],
+  [0,-68],
+  [-91,-45],
+  [-91,45]
+];
+
+function faceCenter(car){
   const dx=-car.mesh.position.x;
   const dz=-car.mesh.position.z;
   car.heading=Math.atan2(-dx,-dz);
   car.mesh.rotation.y=car.heading;
+}
+
+player.mesh.position.set(spawnPoints[0][0],0,spawnPoints[0][1]);
+faceCenter(player);
+
+enemyColors.forEach((color,i)=>{
+  const car=createVehicle(false,color);
+  const p=spawnPoints[i+1];
+  car.mesh.position.set(p[0],0,p[1]);
+  faceCenter(car);
   cars.push(car);
 });
 
@@ -1239,7 +1255,7 @@ function frame(now){
 }
 
 loading.remove();
-flashNotice("Oval stadium rebuilt. Hits now bounce apart instead of sticking.",2.4);
+flashNotice("Arena floor fixed. All six cars now start spread around the stadium.",2.4);
 requestAnimationFrame(frame);
 </script>
 </body>
