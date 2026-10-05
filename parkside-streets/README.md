@@ -1,5 +1,9 @@
 # Parkside Streets
 
+## Flush trim and hit feedback
+- New Yorker beltline, sill and hood accents are sampled from the same curved body profile, keeping chrome against the paint along the hood and trunk.
+- Each pedestrian hit produces its own animated gold/pink +100 burst and sparks, plus a score-counter pulse. Rapid hits remain separate; alerts expire automatically and clear on reset.
+
 ## Final trim cleanup
 - Santa Fe front and rear lamps now follow the body; hood accents sit against the paint.
 - New Yorker bumper corners wrap into the body, and wheel covers use clean chrome discs with whitewall trim.

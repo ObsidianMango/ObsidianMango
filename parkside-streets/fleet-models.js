@@ -8,6 +8,7 @@ export function buildFleetVehicle(T,c){
  mat('rubber',0x202727,.03,.76);mat('window',0x405963,.20,.15,{transparent:true,opacity:.52,depthWrite:false,side:T.DoubleSide});
  mat('chrome',0xd5dfde,.67,.20);mat('seam',suv?0x363d38:van?0x929993:0x61715c,.1,.65);mat('badgeBlue',0x164776,.3,.25);
  function interp(rows,z){let j=0;while(j<rows.length-2&&z>rows[j+1][0])j++;const a=rows[j],b=rows[j+1],p=rows[Math.max(0,j-1)],n=rows[Math.min(rows.length-1,j+2)],u=Math.max(0,Math.min(1,(z-a[0])/(b[0]-a[0]))),h=b[0]-a[0];return a.slice(1).map((v,i)=>{i++;return (2*u**3-3*u*u+1)*v+(u**3-2*u*u+u)*h*(b[i]-p[i])/(b[0]-p[0])+(-2*u**3+3*u*u)*b[i]+(u**3-u*u)*h*(n[i]-a[i])/(n[0]-a[0]);});}
+ function surfaceStrip(name,rows,z0,z1,xAt,upper=true,r=.012){const points=[];for(let i=0;i<=100;i++){const u=i/100,z=z0+(z1-z0)*u,[w,b,t]=interp(rows,z),x=xAt(w,u),s=Math.pow(Math.min(1,Math.abs(x)/w),1/.36),v=Math.pow(Math.sqrt(Math.max(0,1-s*s)),.48),y=(b+t)/2+(upper?1:-1)*v*(t-b)/2;points.push([x,y+(upper?.003:-.003),z]);}tube(name,points,r,'chrome',200);}
  // Continuous rounded pressings with wheel apertures and separate breakaway panels.
  function skin(rows,name,material='paint',wheels=false){const groups=new Map(),z0=rows[0][0],z1=rows.at(-1)[0],steps=Math.ceil((z1-z0)*36),rad=64;
   function point(z,a){const [w,b,t]=interp(rows,z),s=Math.sin(a),v=Math.cos(a),p=new T.Vector3(Math.sign(s)*Math.pow(Math.abs(s),.36)*w,(b+t)/2+Math.sign(v)*Math.pow(Math.abs(v),.48)*(t-b)/2,z);if(wheels&&Math.abs(p.x)>.69)for(const wz of [c.front,c.rear]){const dz=z-wz,r=c.radius+.075;if(Math.abs(dz)<r)p.y=Math.max(p.y,c.radius+Math.sqrt(r*r-dz*dz));}return p;}
@@ -56,7 +57,8 @@ export function buildFleetVehicle(T,c){
   textBadge('tailgate','SANTA FE',-.50,.99,2.176,.39);plate('grille',-2.39,.64,'SANTA FE');plate('tailgate',2.185,1.02,'SANTA FE');mirrors(1.37,-.63,.97);
   k.interior({front:.02,rear:1.05,baseY:.79,dash:-.69,width:.79});
  }else if(!van){
-  skin([[-2.68,.93,.53,1.04],[-2.42,1.02,.48,1.15],[-1.65,1.04,.48,1.21],[-.72,1.025,.49,1.25],[.7,1.03,.49,1.25],[1.85,1.01,.49,1.20],[2.65,.91,.54,1.12]],p=>p.z<-.8?'hood':p.z>1.22?'trunk':p.x>0?'door-left':'door-right','paint',true);
+  const bodyRows=[[-2.68,.93,.53,1.04],[-2.42,1.02,.48,1.15],[-1.65,1.04,.48,1.21],[-.72,1.025,.49,1.25],[.7,1.03,.49,1.25],[1.85,1.01,.49,1.20],[2.65,.91,.54,1.12]];
+  skin(bodyRows,p=>p.z<-.8?'hood':p.z>1.22?'trunk':p.x>0?'door-left':'door-right','paint',true);
   skin([[-.66,.755,1.79,1.85],[-.48,.80,1.84,1.92],[.92,.79,1.83,1.91],[1.20,.73,1.78,1.84]],'roof','roofPaint');
   glass('windshield',[[-.94,1.27,-1.03],[.94,1.27,-1.03],[.75,1.80,-.65],[-.75,1.80,-.65]],'chrome');wipers(-1.044,1.28,-.87,1.53);
   glass('rear-glass',[[-.92,1.27,1.47],[.92,1.27,1.47],[.72,1.79,1.19],[-.72,1.79,1.19]],'chrome');
@@ -68,8 +70,8 @@ export function buildFleetVehicle(T,c){
    glass('rear-window-'+s,[[s*.99,1.28,.33],[s*.962,1.28,1.39],[s*.73,1.80,1.12],[s*.775,1.81,.32]],'chrome');
    tube('vent-window-'+s,[[s*.99,1.29,-.65],[s*.77,1.80,-.46]],.015,'chrome',1);
    doorSeams(s,1.033,1.23,[-.97,.30,1.43],.59);
-   tube('beltline-'+s,[[s*.936,1.06,-2.64],[s*1.043,1.245,-1.98],[s*1.041,1.275,.30],[s*1.018,1.226,1.89],[s*.926,1.137,2.64]],.024,'chrome');
-   tube('sill-'+s,[[s*1.04,.552,-1.15],[s*1.043,.552,1.11]],.028,'chrome');
+   surfaceStrip('beltline-'+s,bodyRows,-2.64,2.64,w=>s*w*.955,true,.013);
+   surfaceStrip('sill-'+s,bodyRows,-1.15,1.11,w=>s*w*.955,false,.018);
    textBadge('side-badge-'+s,'New Yorker',s*1.048,.73,-.90,.41,s);
    // Tall chrome headlamp eyebrows frame the paired round lights.
    rounded('headlight-'+s,.50,.38,.16,s*.79,1.016,-2.688,'chrome',.025);rounded('headlight-'+s,.445,.29,.016,s*.79,1.016,-2.782,'rubber',.003);
@@ -79,8 +81,8 @@ export function buildFleetVehicle(T,c){
   }
   rounded('grille',1.17,.33,.075,0,.999,-2.68,'rubber',.012);for(let j=0;j<10;j++)box('grille',1.17,.010,.02,0,.859+j*.031,-2.731,'chrome');for(let j=-7;j<=7;j++)box('grille',.008,.29,.014,j*.075,1.002,-2.744,'chrome');
   for(const z of [-2.73,2.70]){const n=z<0?'front-bumper':'rear-bumper';rounded(n,2.03,.17,.16,0,.665,z,'chrome',.041);for(const s of [-1,1])tube(n,[[s*.80,.665,z],[s*.94,.665,z],[s*1.025,.68,z+(z<0?.14:-.14)],[s*1.018,.69,z+(z<0?.30:-.30)]],.073,'chrome',12);}
-  for(const x of [-.30,.30])tube('hood',[[x,1.185,-2.34],[x*.73,1.269,-1.04]],.008,'chrome');
-  cyl('hood-ornament',.018,.18,0,1.24,-2.34,'chrome','y');torus('hood-ornament',.035,.007,0,1.354,-2.34,'chrome','z',20);
+  for(const x of [-.30,.30])surfaceStrip('hood',bodyRows,-2.34,-1.04,(_w,u)=>x*(1-.27*u),true,.006);
+  const ornamentBase=interp(bodyRows,-2.34)[2];cyl('hood-ornament',.018,.16,0,ornamentBase+.08,-2.34,'chrome','y');torus('hood-ornament',.035,.007,0,ornamentBase+.175,-2.34,'chrome','z',20);
   textBadge('hood','C H R Y S L E R',0,1.17,-2.717,.88);textBadge('trunk','NEW YORKER',0,1.087,2.672,.63);
   mirrors(1.34,-.87,1.035,true);plate('front-bumper',-2.873,.665,'NEW YORK');plate('rear-bumper',2.831,.704,'NEW YORK');
   k.interior({front:.0,rear:1.03,baseY:.77,dash:-.82,width:.84,luxury:true});
