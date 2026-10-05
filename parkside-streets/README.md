@@ -1,5 +1,14 @@
 # Parkside Streets
 
+## Scored challenge runs
+- Multipliers: Roadster/Santa Fe/Maybach ×1, Nova ×1.3, New Yorker ×1.4, Wienermobile ×1.6, E250 ×1.8, Jalopy ×2.2. Multipliers apply to hit, parking and failure-survival points.
+- Pedestrian chains last five active-driving seconds, awarding base 100 / 150 / 200 / 250 (capped thereafter). Each knockdown counts once. Pausing freezes the combo clock.
+- Parking awards base 1,000 + 250 per star + 10 per full second under par. Parking banks the entire run; a wreck banks 25% once. A car reset discards unbanked points, preventing resets from farming respawned crowds.
+- E250 failures start after 18–30 seconds of moving outside the bay approach. A two-second warning precedes a loose mirror/exhaust, throttle cut, or brake fade. Control failures last 4–6 seconds, cannot overlap, and warning-stage failures cancel near the target bay. Surviving any failure and parking adds a one-time base 600 bonus.
+- Wienermobile and New Yorker body envelopes are enlarged to 3.20 × 6.18 game units. Collision bounds, wheelbases and tracks match the enlargement; tires retain circular profiles. The smallest bay is 3.45 × 6.40.
+- Score breakdowns, cumulative bank and personal bests per lot/vehicle use a separate save key. Existing parking progress and chapter unlocks carry over.
+- Checked all eight vehicles at all 24 parking completion poses (192 combinations), including reverse requirements; this does not claim manual driving of every approach route. Tested actual pedestrian collisions/combo points, replay banking, all three van failures, full parking banking, persisted records and mobile layout.
+
 ## Flush trim and hit feedback
 - New Yorker beltline, sill and hood accents are sampled from the same curved body profile, keeping chrome against the paint along the hood and trunk.
 - Each pedestrian hit produces its own animated gold/pink +100 burst and sparks, plus a score-counter pulse. Rapid hits remain separate; alerts expire automatically and clear on reset.
@@ -32,7 +41,7 @@ Separate edition at `parkside-streets/`, based on the published wheel-physics ed
 - Hard braking shows longitudinal tire slip rather than an instant visual freeze; the rear wheels slip more under the handbrake.
 - Driven wheels can over-spin when the physics reports sliding under heavy throttle.
 - Airborne wheels preserve/free-spin, while detached wheels continue to use debris-body physics.
-- The original vehicle dynamics, parking rules, 24 levels, damage system, and save progress are unchanged.
+- The existing parking rules, 24 levels, damage system and chapter progress remain compatible; challenge vehicle behavior is documented above.
 
 Copied from `parkside-chaos` at commit `c4aeace4b5ce3aca88b12f1cec306a23e26239d9`.
 
