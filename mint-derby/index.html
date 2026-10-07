@@ -140,24 +140,6 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 }
 .health i{display:block;width:100%;height:100%;background:#bee794}
 #condition{font-size:9px;color:#e2e8de}
-#notice{
-  position:fixed;
-  z-index:3;
-  top:33%;
-  left:50%;
-  transform:translateX(-50%);
-  max-width:min(78vw,480px);
-  padding:10px 15px;
-  border-radius:12px;
-  background:#122b2dd9;
-  backdrop-filter:blur(10px);
-  text-align:center;
-  font-size:12px;
-  pointer-events:none;
-  opacity:0;
-  transition:opacity .25s;
-}
-#notice.show{opacity:1}
 #cameraTools{
   position:fixed;
   z-index:3;
@@ -377,8 +359,6 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
   <button type="button" id="resetCamera">RESET VIEW</button>
 </div>
 
-<div id="notice" role="status" aria-live="polite"></div>
-
 <div id="touch">
   <div class="steering-dock">
     <div id="steeringWheel" role="slider" tabindex="0" aria-label="Steering wheel. Drag around the rim to steer." aria-valuemin="-135" aria-valuemax="135" aria-valuenow="0">
@@ -415,7 +395,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
   </div>
 </div>
 
-<div id="loading">Expanding the arena and waking up the V8…</div>
+<div id="loading">LOADING…</div>
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/+esm";
@@ -431,7 +411,6 @@ const speedText=document.getElementById("speed");
 const gearText=document.getElementById("gearText");
 const healthBar=document.getElementById("healthBar");
 const condition=document.getElementById("condition");
-const notice=document.getElementById("notice");
 const crashFlash=document.getElementById("crashFlash");
 const steeringWheel=document.getElementById("steeringWheel");
 const wheelArt=document.getElementById("wheelArt");
@@ -1298,7 +1277,6 @@ const debris=[];
 let wrecks=0;
 let gear=1;
 let cameraMode="follow";
-let noticeTimer=0;
 let orbitYaw=0;
 let orbitPitch=.08;
 let orbitDistance=1;
@@ -1314,12 +1292,6 @@ let cinematicActiveShot=0;
 let cinematicWinnerShown=false;
 const input={gas:false,brake:false,handbrake:false};
 const keyboard={left:false,right:false};
-
-function flashNotice(text,time=1.4){
-  notice.textContent=text;
-  notice.classList.add("show");
-  noticeTimer=time;
-}
 
 function hitFlash(){
   crashFlash.style.opacity=".72";
@@ -1459,9 +1431,8 @@ function explode(car){
     keyboard.right=false;
     document.getElementById("touch").style.display="none";
     document.getElementById("cameraTools").style.display="none";
-    gearText.textContent="WRECKED · CINEMATIC";
-    condition.textContent="Spectating the remaining derby";
-    flashNotice("TOTALLED — cinematic spectator mode. The survivors keep fighting.",4);
+    gearText.textContent="SPECTATE";
+    condition.textContent=cars.filter(other=>!other.isPlayer&&other.alive).length+" remaining";
   }else{
     wrecks++;
     wreckText.textContent=wrecks+" / "+ENEMY_COUNT;
@@ -1472,13 +1443,8 @@ function explode(car){
         cinematicFocus=survivors[0];
         if(!cinematicWinnerShown){
           cinematicWinnerShown=true;
-          flashNotice((survivors[0].ai?.name||"Last car")+" wins the derby.",4);
         }
-      }else if(survivors.length>1){
-        flashNotice((car.ai?.name||"Opponent")+" is out — "+survivors.length+" cars remain.",2.2);
       }
-    }else{
-      flashNotice(wrecks===ENEMY_COUNT?"Arena cleared. Mint Monster wins.":"Opponent destroyed.",2);
     }
   }
 }
@@ -1584,7 +1550,6 @@ document.querySelectorAll("[data-gear]").forEach(button=>{
       b.setAttribute("aria-pressed",String(active));
     });
     gearText.textContent=gear===1?"D · DRIVE":"R · REVERSE";
-    flashNotice(gear===1?"Drive selected":"Reverse selected",.8);
   });
 });
 
@@ -1716,7 +1681,6 @@ function updateJumpPhysics(car,dt){
 
       if(car.isPlayer){
         makeImpactSparks(car.mesh.position.clone(),8);
-        flashNotice("AIRBORNE!",.75);
       }
     }
     return;
@@ -2077,8 +2041,8 @@ function updateHUD(){
   healthBar.style.width=player.hp+"%";
   healthBar.style.background=player.hp>55?"#bee794":player.hp>25?"#f2c46d":"#d85b45";
   condition.textContent=spectatorMode
-    ? Math.max(0,cars.filter(other=>!other.isPlayer&&other.alive).length)+" cars still fighting"
-    : Math.ceil(player.hp)+"% intact";
+    ? Math.max(0,cars.filter(other=>!other.isPlayer&&other.alive).length)+" remaining"
+    : Math.ceil(player.hp)+"%";
 }
 
 const camTarget=new THREE.Vector3();
@@ -2232,17 +2196,11 @@ function frame(now){
   updateHUD();
   updateCamera(dt,now);
 
-  if(noticeTimer>0){
-    noticeTimer-=dt;
-    if(noticeTimer<=0)notice.classList.remove("show");
-  }
-
   renderer.render(scene,camera);
   requestAnimationFrame(frame);
 }
 
 loading.remove();
-flashNotice("Mint Monster reinforced to 3× durability — it still dents, but it takes a beating.",3.2);
 requestAnimationFrame(frame);
 </script>
 </body>
