@@ -360,7 +360,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
   <div class="brand">MINT MONSTER<small>FULL-SIZE DESTRUCTION DERBY</small></div>
   <div class="stats">
     <div class="stat"><b id="hpText">100</b><small>BODY</small></div>
-    <div class="stat"><b id="wreckText">0 / 5</b><small>WRECKS</small></div>
+    <div class="stat"><b id="wreckText">0 / 7</b><small>WRECKS</small></div>
     <button id="restart" type="button">Restart</button>
   </div>
 </div>
@@ -419,9 +419,9 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/+esm";
-import {buildDetailedVehicle} from "../parkside-chaos-wheel-physics/detailed-vehicles.js?v=photo-2";
-import {buildRoadster} from "../parkside-chaos-wheel-physics/roadster-model.js";
-import {VEHICLES} from "../parkside-chaos-wheel-physics/garage-models.js?v=photo-2";
+import {buildDetailedVehicle} from "../parkside-streets/detailed-vehicles.js?v=gold-8";
+import {buildRoadster} from "../parkside-streets/roadster-model.js?v=gold-8";
+import {VEHICLES} from "../parkside-streets/garage-models.js?v=game-5";
 
 const canvas=document.getElementById("view");
 const loading=document.getElementById("loading");
@@ -441,7 +441,7 @@ const ARENA_X=138;
 const ARENA_Z=86;
 const WALL_X=133;
 const WALL_Z=81;
-const ENEMY_COUNT=5;
+const ENEMY_COUNT=7;
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x171a1d);
@@ -896,11 +896,91 @@ function buildParksideVehicle(id){
   const built=id==="roadster"?buildRoadster(THREE):buildDetailedVehicle(THREE,config);
   const root=adaptParksideModel(built);
   root.scale.setScalar(1.06);
+  root.userData.vehicleConfig=config;
   return root;
+}
+
+function flameHaloTexture(){
+  const cv=document.createElement("canvas");
+  cv.width=cv.height=96;
+  const ctx=cv.getContext("2d");
+  const g=ctx.createRadialGradient(48,48,1,48,48,47);
+  g.addColorStop(0,"rgba(255,255,255,1)");
+  g.addColorStop(.16,"rgba(105,185,255,.96)");
+  g.addColorStop(.42,"rgba(255,188,70,.72)");
+  g.addColorStop(.72,"rgba(255,83,18,.34)");
+  g.addColorStop(1,"rgba(255,55,0,0)");
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,96,96);
+  const tx=new THREE.CanvasTexture(cv);
+  tx.colorSpace=THREE.SRGBColorSpace;
+  return tx;
+}
+const exhaustHaloTexture=flameHaloTexture();
+
+function attachDerbyExhaust(root,config){
+  const rear=(config?.rear??1.65)+.73;
+  const track=Math.min(.78,(config?.track??.98)*.72);
+  root.userData.exhaustFlames=[];
+
+  for(const side of [-1,1]){
+    const group=new THREE.Group();
+    group.position.set(side*track,.40,rear);
+    group.visible=false;
+
+    const matOuter=new THREE.MeshBasicMaterial({
+      color:0xff4b0f,transparent:true,opacity:.68,depthWrite:false,
+      blending:THREE.AdditiveBlending,side:THREE.DoubleSide
+    });
+    const matAmber=new THREE.MeshBasicMaterial({
+      color:0xffae28,transparent:true,opacity:.82,depthWrite:false,
+      blending:THREE.AdditiveBlending,side:THREE.DoubleSide
+    });
+    const matBlue=new THREE.MeshBasicMaterial({
+      color:0x3a9cff,transparent:true,opacity:.92,depthWrite:false,
+      blending:THREE.AdditiveBlending,side:THREE.DoubleSide
+    });
+    const matCore=new THREE.MeshBasicMaterial({
+      color:0xe9f7ff,transparent:true,opacity:.96,depthWrite:false,
+      blending:THREE.AdditiveBlending,side:THREE.DoubleSide
+    });
+
+    const outer=new THREE.Mesh(new THREE.ConeGeometry(.145,1.18,14,1,true),matOuter);
+    outer.rotation.x=Math.PI/2; outer.position.z=.55;
+    const amber=new THREE.Mesh(new THREE.ConeGeometry(.102,.88,12,1,true),matAmber);
+    amber.rotation.x=Math.PI/2; amber.position.z=.40;
+    const blue=new THREE.Mesh(new THREE.ConeGeometry(.070,.61,10,1,true),matBlue);
+    blue.rotation.x=Math.PI/2; blue.position.z=.27;
+    const core=new THREE.Mesh(new THREE.ConeGeometry(.037,.38,9,1,true),matCore);
+    core.rotation.x=Math.PI/2; core.position.z=.17;
+
+    const haloMat=new THREE.SpriteMaterial({
+      map:exhaustHaloTexture,transparent:true,opacity:.58,depthWrite:false,
+      blending:THREE.AdditiveBlending
+    });
+    const halo=new THREE.Sprite(haloMat);
+    halo.position.set(0,0,.18);
+    halo.scale.set(.48,.48,.48);
+
+    const light=new THREE.PointLight(0xff7a22,0,6,2);
+    light.position.set(0,.05,.38);
+
+    group.add(outer,amber,blue,core,halo,light);
+    root.add(group);
+    root.userData.exhaustFlames.push({group,outer,amber,blue,core,halo,light});
+  }
+}
+
+function collisionRadiusFor(modelId){
+  const cfg=VEHICLES.find(v=>v.id===modelId);
+  if(!cfg)return 2.50;
+  const half=cfg.halfLength??cfg.box?.[2]??2.45;
+  return THREE.MathUtils.clamp(half*.92,2.18,2.82);
 }
 
 function createVehicle(isPlayer,color,modelId=null,aiProfile=null){
   const mesh=modelId?buildParksideVehicle(modelId):buildSedan(color);
+  if(isPlayer&&modelId)attachDerbyExhaust(mesh,VEHICLES.find(v=>v.id===modelId));
   scene.add(mesh);
   return {
     mesh,
@@ -916,32 +996,34 @@ function createVehicle(isPlayer,color,modelId=null,aiProfile=null){
     ai:aiProfile,
     aiTarget:new THREE.Vector3(),
     aiNextThink:0,
-    modelId:modelId||"mint"
+    modelId:modelId||"mint",
+    collisionRadius:collisionRadiusFor(modelId),
+    lastThrottle:0,
+    backfire:0
   };
 }
 
-const player=createVehicle(true,0x9da88a);
+// The Mint Monster now uses the polished pale-sage Chrysler New Yorker from Parkside Streets.
+// That gives the player the same model quality and breakaway assembly system as the rest of the fleet.
+const player=createVehicle(true,0x9da88a,"newyorker");
 const cars=[player];
 
-// Opponents use the actual detailed models from Parkside Chaos.
-// Skill varies on purpose: slower rookies are easy targets, while one skilled car keeps pressure on.
+// Seven different Parkside Streets opponents. Skill, pace and aggression deliberately vary.
 const aiRoster=[
-  {model:"roadster", name:"Roadster Rookie", skill:.22, maxSpeed:13.5, turnRate:.84, accuracy:.40, aggression:.34, think:.95},
-  {model:"santafe", name:"Santa Fe Brawler", skill:.36, maxSpeed:15.5, turnRate:.96, accuracy:.52, aggression:.48, think:.78},
-  {model:"jalopy", name:"Jalopy Wanderer", skill:.16, maxSpeed:11.5, turnRate:.76, accuracy:.30, aggression:.26, think:1.15},
-  {model:"wiener", name:"Wienermobile Bruiser", skill:.48, maxSpeed:16.5, turnRate:1.02, accuracy:.60, aggression:.60, think:.68},
-  {model:"maybach", name:"Maybach Ace", skill:.68, maxSpeed:18.5, turnRate:1.12, accuracy:.72, aggression:.72, think:.52}
+  {model:"roadster", name:"Roadster Rookie", skill:.18, maxSpeed:13.0, turnRate:.82, accuracy:.36, aggression:.30, think:1.02},
+  {model:"santafe", name:"Santa Fe Brawler", skill:.35, maxSpeed:15.8, turnRate:.96, accuracy:.52, aggression:.48, think:.80},
+  {model:"jalopy", name:"Jalopy Wanderer", skill:.12, maxSpeed:11.2, turnRate:.72, accuracy:.27, aggression:.24, think:1.18},
+  {model:"wiener", name:"Wienermobile Bruiser", skill:.43, maxSpeed:16.4, turnRate:.98, accuracy:.57, aggression:.57, think:.72},
+  {model:"maybach", name:"Maybach Heavy", skill:.55, maxSpeed:17.5, turnRate:.91, accuracy:.63, aggression:.64, think:.62},
+  {model:"nova", name:"Nova Hotshot", skill:.70, maxSpeed:21.5, turnRate:1.12, accuracy:.69, aggression:.67, think:.52},
+  {model:"e250", name:"E250 Wrecker", skill:.28, maxSpeed:14.4, turnRate:.82, accuracy:.43, aggression:.55, think:.86}
 ];
 
-// Six perimeter starts chosen around the oval to maximize spacing.
-const spawnPoints=[
-  [0,68],
-  [91,45],
-  [91,-45],
-  [0,-68],
-  [-91,-45],
-  [-91,45]
-];
+// Eight cars start evenly distributed around the oval perimeter, all facing inward.
+const spawnPoints=Array.from({length:1+aiRoster.length},(_,i)=>{
+  const a=i/(1+aiRoster.length)*Math.PI*2;
+  return [Math.sin(a)*94,Math.cos(a)*65];
+});
 
 function faceCenter(car){
   const dx=-car.mesh.position.x;
@@ -1058,6 +1140,28 @@ function makeDebris(center,baseColor,count){
       life:3+Math.random()*2.4
     });
   }
+}
+
+function makeImpactSparks(point,strength){
+  const count=Math.min(18,5+Math.floor(strength*.55));
+  const sparkMat=new THREE.MeshBasicMaterial({color:0xffc35b});
+  for(let i=0;i<count;i++){
+    const spark=new THREE.Mesh(new THREE.SphereGeometry(.025+Math.random()*.025,4,3),sparkMat.clone());
+    spark.position.copy(point);
+    spark.position.y+=.25+Math.random()*.75;
+    scene.add(spark);
+    debris.push({
+      mesh:spark,
+      vel:new THREE.Vector3((Math.random()-.5)*11,2.5+Math.random()*7,(Math.random()-.5)*11),
+      spin:new THREE.Vector3(),
+      life:.20+Math.random()*.30,
+      spark:true
+    });
+  }
+  const flash=new THREE.PointLight(0xffb64d,Math.min(12,2+strength*.45),8,2);
+  flash.position.copy(point).add(new THREE.Vector3(0,.7,0));
+  scene.add(flash);
+  setTimeout(()=>scene.remove(flash),70);
 }
 
 function explode(car){
@@ -1330,13 +1434,21 @@ function driveCar(car,dt,time){
       car.aiNextThink=now+ai.think*(.8+Math.random()*.55);
 
       let combatTarget=null;
-      if(player.alive){
-        combatTarget=player;
-      }else{
-        const opponents=cars.filter(other=>other!==car&&!other.isPlayer&&other.alive);
-        if(opponents.length){
-          // Skilled drivers pick the nearest live opponent more often; rookies choose badly.
-          opponents.sort((a,b)=>car.mesh.position.distanceToSquared(a.mesh.position)-car.mesh.position.distanceToSquared(b.mesh.position));
+      const opponents=cars.filter(other=>other!==car&&other.alive);
+      if(opponents.length){
+        opponents.sort((a,b)=>car.mesh.position.distanceToSquared(a.mesh.position)-car.mesh.position.distanceToSquared(b.mesh.position));
+
+        if(player.alive){
+          // A real derby: most opponents fight whoever is convenient instead of all seven
+          // laser-targeting the player. Aggressive/skilled drivers are slightly more likely
+          // to take a shot at the Mint Monster.
+          const playerChance=.16+ai.aggression*.22;
+          combatTarget=Math.random()<playerChance
+            ? player
+            : (Math.random()<(0.50+ai.skill*.30)
+                ? opponents[0]
+                : opponents[Math.floor(Math.random()*opponents.length)]);
+        }else{
           combatTarget=Math.random()<(0.42+ai.skill*.55)
             ? opponents[0]
             : opponents[Math.floor(Math.random()*opponents.length)];
@@ -1349,8 +1461,8 @@ function driveCar(car,dt,time){
       // During spectator mode the survivors become more combative so the derby keeps moving,
       // while their original skill/accuracy differences are preserved.
       const chaseChance=spectatorMode
-        ? Math.max(.72,ai.aggression)
-        : ai.aggression+(distance<24?.14:0);
+        ? Math.max(.76,ai.aggression)
+        : Math.max(.58,ai.aggression)+(distance<24?.12:0);
 
       if(combatTarget&&Math.random()<chaseChance){
         const miss=(1-ai.accuracy);
@@ -1437,17 +1549,41 @@ function driveCar(car,dt,time){
   });
 
   if(car.isPlayer&&car.mesh.userData.exhaustFlames?.length){
-    const firing=car.alive&&gear===1&&throttle>.50;
-    const intensity=THREE.MathUtils.clamp((Math.abs(car.speed)-1.5)/18,0,1);
+    if(car.lastThrottle>.65&&throttle<.15&&Math.abs(car.speed)>9){
+      car.backfire=.16;
+    }
+    car.backfire=Math.max(0,car.backfire-dt);
+    car.lastThrottle=throttle;
+
+    const backfire=car.backfire>0;
+    const firing=car.alive&&gear===1&&(throttle>.22||backfire);
+    const speedHeat=THREE.MathUtils.clamp((Math.abs(car.speed)-1)/19,0,1);
+    const throttleHeat=THREE.MathUtils.clamp(throttle,0,1);
+    const heat=Math.max(speedHeat*.68,throttleHeat);
+    const burst=backfire?1.55:1;
+
     car.mesh.userData.exhaustFlames.forEach((f,i)=>{
       f.group.visible=firing;
-      if(!firing)return;
-      const flicker=.82+Math.sin(time*.032+i*2.1)*.13+Math.sin(time*.071+i)*.07;
-      const length=.58+intensity*1.05;
-      f.outer.scale.set(flicker,1,Math.max(.48,length*flicker));
-      if(f.mid)f.mid.scale.set(.94*flicker,.94,Math.max(.40,length*.82*flicker));
-      f.inner.scale.set(.88*flicker,.88,Math.max(.36,length*.65*flicker));
-      f.group.rotation.z=Math.sin(time*.023+i)*.035;
+      if(!firing){
+        f.light.intensity=0;
+        return;
+      }
+
+      const flicker=.88
+        +Math.sin(time*.041+i*2.7)*.08
+        +Math.sin(time*.093+i*.8)*.045;
+      const length=(.58+heat*1.35)*burst;
+      const width=(.84+heat*.30)*(backfire?1.12:1);
+
+      f.outer.scale.set(width*flicker,width*flicker,length*flicker);
+      f.amber.scale.set(width*.82*flicker,width*.82*flicker,length*.79*flicker);
+      f.blue.scale.set(width*.62*flicker,width*.62*flicker,length*.60*flicker);
+      f.core.scale.set(width*.43*flicker,width*.43*flicker,length*.44*flicker);
+      f.halo.scale.setScalar((.42+heat*.36)*(backfire?1.35:1));
+      f.halo.material.opacity=.42+heat*.30;
+      f.light.intensity=(1.2+heat*6.5)*(backfire?1.7:1);
+      f.group.rotation.z=Math.sin(time*.030+i*1.9)*.025;
+      f.group.rotation.x=Math.sin(time*.047+i)*.012;
     });
   }
 
@@ -1497,7 +1633,6 @@ function velocityOf(car){
 }
 
 function carCollisions(){
-  const CONTACT=4.72;
   for(let i=0;i<cars.length;i++){
     for(let j=i+1;j<cars.length;j++){
       const a=cars[i];
@@ -1507,12 +1642,14 @@ function carCollisions(){
       const delta=b.mesh.position.clone().sub(a.mesh.position);
       delta.y=0;
       const dist=delta.length();
+      const contact=a.collisionRadius+b.collisionRadius;
 
-      if(dist<CONTACT){
+      if(dist<contact){
         const n=dist>.001?delta.multiplyScalar(1/dist):new THREE.Vector3(1,0,0);
 
-        // Aggressive positional separation eliminates the "magnetic/sticky" overlap.
-        const overlap=CONTACT-dist;
+        // Vehicle-size-aware separation keeps the van/Wienermobile from overlapping
+        // smaller cars without making the Roadster feel surrounded by a giant invisible ball.
+        const overlap=contact-dist;
         const separate=(overlap*.5)+.10;
         a.mesh.position.addScaledVector(n,-separate);
         b.mesh.position.addScaledVector(n,separate);
@@ -1548,6 +1685,7 @@ function carCollisions(){
           const damageB=Math.max(1.4,rel*(.30+.30*(momentumA/(momentumA+momentumB+.01))));
           damage(a,damageA,hit);
           damage(b,damageB,hit);
+          makeImpactSparks(hit,rel);
           a.hitTimer=.34;
           b.hitTimer=.34;
         }
@@ -1567,12 +1705,16 @@ function updateDebris(dt){
 
     if(d.mesh.position.y<.12){
       d.mesh.position.y=.12;
-      d.vel.y*=-.22;
-      d.vel.x*=.82;
-      d.vel.z*=.82;
+      d.vel.y*=d.spark?-.08:-.22;
+      d.vel.x*=d.spark?.72:.82;
+      d.vel.z*=d.spark?.72:.82;
     }
 
     d.life-=dt;
+    if(d.spark&&d.mesh.material){
+      d.mesh.material.transparent=true;
+      d.mesh.material.opacity=THREE.MathUtils.clamp(d.life/.25,0,1);
+    }
     if(d.life<=0){
       scene.remove(d.mesh);
       debris.splice(i,1);
@@ -1750,7 +1892,7 @@ function frame(now){
 }
 
 loading.remove();
-flashNotice("Mint Monster body restored to the stable detailed version · cinematic camera repaired.",3.2);
+flashNotice("Parkside Streets fleet loaded · New Yorker Mint Monster · full destructibility · upgraded exhaust.",3.2);
 requestAnimationFrame(frame);
 </script>
 </body>
