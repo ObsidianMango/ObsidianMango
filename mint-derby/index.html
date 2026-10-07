@@ -140,6 +140,11 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 }
 .health i{display:block;width:100%;height:100%;background:#bee794}
 #condition{font-size:9px;color:#e2e8de}
+#controllerTools{margin-top:9px;pointer-events:auto;font-size:9px;max-width:210px}
+#controllerTools summary{cursor:pointer;color:#d6e5d9;padding:5px 0}
+#controllerTools p{margin:5px 0;padding:9px;border-radius:9px;background:#122b2deb;line-height:1.7}
+#controllerTools[hidden]{display:none}
+body.controller-active #touch{display:none}
 #cameraTools{
   position:fixed;
   z-index:3;
@@ -350,6 +355,10 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 <div id="hud">
   <div class="speed"><b id="speed">0</b><span>MPH</span><small id="gearText">D · DRIVE</small></div>
   <div class="health-row"><div class="health"><i id="healthBar"></i></div><span id="condition">100% intact</span></div>
+  <details id="controllerTools" hidden>
+    <summary id="controllerStatus">Controller connected</summary>
+    <p>RT · Gas<br>LT · Brake / reverse<br>Left stick · Steer<br>Right stick · Camera<br>A · Handbrake · B · Look back<br>X / R3 · Reset camera · Y · Camera view<br>LB / RB · Zoom · D-pad ↑ / ↓ · Zoom<br>Hold Menu · Restart</p>
+  </details>
 </div>
 
 <div id="cameraTools">
@@ -1292,6 +1301,145 @@ let cinematicActiveShot=0;
 let cinematicWinnerShown=false;
 const input={gas:false,brake:false,handbrake:false};
 const keyboard={left:false,right:false};
+const controller={index:null,connected:false,gas:0,brake:0,steer:0,handbrake:false,lookBack:false,previous:[],restartHeld:0};
+const controllerTools=document.getElementById("controllerTools");
+const controllerStatus=document.getElementById("controllerStatus");
+let inputSuspended=false;
+let spectatorManual=false;
+
+function stickValue(value){
+  value=Number.isFinite(value)?value:0;
+  const deadZone=.12;
+  return Math.abs(value)<=deadZone?0:Math.sign(value)*Math.min(1,(Math.abs(value)-deadZone)/(1-deadZone));
+}
+
+function clearController(){
+  controller.gas=0;
+  controller.brake=0;
+  controller.steer=0;
+  controller.handbrake=false;
+  controller.lookBack=false;
+  controller.restartHeld=0;
+  controller.previous=[];
+}
+
+function setControllerConnected(connected){
+  if(controller.connected===connected)return;
+  controller.connected=connected;
+  document.body.classList.toggle("controller-active",connected);
+  controllerTools.hidden=!connected;
+  controllerStatus.textContent="Controller connected";
+  if(!connected){controller.index=null;clearController();}
+}
+
+// Poll every frame: Safari may expose a Bluetooth pad only after its first button press.
+function pollController(dt){
+  if(inputSuspended||document.hidden)return;
+  let pads=[];
+  try{pads=navigator.getGamepads?.()||[];}catch{}
+  let pad=controller.index===null?null:pads[controller.index];
+  if(!pad?.connected){
+    pad=Array.from(pads).find(p=>p?.connected&&(p.mapping==="standard"||/xbox|xinput/i.test(p.id)));
+    if(pad){controller.index=pad.index;clearController();}
+  }
+  setControllerConnected(!!pad?.connected);
+  if(!pad)return;
+
+  const value=i=>{
+    const b=pad.buttons[i];
+    const v=typeof b==="number"?b:(b?.value??(b?.pressed?1:0));
+    return Number.isFinite(v)?THREE.MathUtils.clamp(v,0,1):0;
+  };
+  const buttons=Array.from({length:17},(_,i)=>value(i)>.5);
+  const justPressed=i=>buttons[i]&&!controller.previous[i];
+  // Keep the browser's analog trigger value; do not turn a partial squeeze into full gas.
+  controller.gas=value(7)>.015?value(7):0;
+  controller.brake=value(6)>.015?value(6):0;
+  controller.steer=-stickValue(pad.axes[0]);
+  controller.handbrake=buttons[0];
+  controller.lookBack=buttons[1];
+
+  const yaw=stickValue(pad.axes[2]);
+  const pitch=stickValue(pad.axes[3]);
+  const zoom=(buttons[5]||buttons[13]?1:0)-(buttons[4]||buttons[12]?1:0);
+  if(yaw||pitch||zoom){
+    orbitYaw=angleWrap(orbitYaw-yaw*2.2*dt);
+    orbitPitch=THREE.MathUtils.clamp(orbitPitch+pitch*.75*dt,-.22,.62);
+    orbitDistance=THREE.MathUtils.clamp(orbitDistance+zoom*.65*dt,.72,1.65);
+    if(spectatorMode)spectatorManual=true;
+  }
+  if(justPressed(2)||justPressed(11)){
+    document.getElementById("resetCamera").click();
+    spectatorManual=false;
+  }
+  if(justPressed(3)){
+    const modes=["follow","rear","top"];
+    const next=modes[(modes.indexOf(cameraMode)+1)%modes.length];
+    document.querySelector('[data-camera="'+next+'"]').click();
+    if(spectatorMode)spectatorManual=true;
+  }
+  controller.restartHeld=buttons[9]?controller.restartHeld+dt:0;
+  controllerStatus.textContent=controller.restartHeld>.15?"Restart · "+Math.min(100,Math.round(controller.restartHeld/1.2*100))+"%":"Controller connected";
+  if(controller.restartHeld>=1.2){controller.restartHeld=0;restartButton.click();}
+  controller.previous=buttons;
+}
+
+function clearDrivingInput(){
+  input.gas=false;
+  input.brake=false;
+  input.handbrake=false;
+  keyboard.left=false;
+  keyboard.right=false;
+  wheelDegrees=0;
+  wheelHeld=false;
+  wheelPointer=null;
+  cameraDragging=false;
+  cameraPointer=null;
+  canvas.classList.remove("dragging");
+  wheelArt.style.transform="rotate(0deg)";
+  steeringWheel.setAttribute("aria-valuenow","0");
+  document.querySelectorAll("[data-input]").forEach(b=>b.classList.remove("pressed"));
+  clearController();
+}
+window.addEventListener("gamepaddisconnected",e=>{
+  if(e.gamepad.index===controller.index){clearDrivingInput();setControllerConnected(false);}
+});
+window.addEventListener("blur",()=>{inputSuspended=true;clearDrivingInput();});
+window.addEventListener("focus",()=>{inputSuspended=false;});
+document.addEventListener("visibilitychange",()=>{
+  inputSuspended=document.hidden;
+  if(document.hidden)clearDrivingInput();
+});
+
+function setGear(direction){
+  if(gear===direction)return;
+  gear=direction;
+  document.querySelectorAll("[data-gear]").forEach(b=>{
+    const active=Number(b.dataset.gear)===gear;
+    b.classList.toggle("active",active);
+    b.setAttribute("aria-pressed",String(active));
+  });
+  if(!spectatorMode)gearText.textContent=gear===1?"D · DRIVE":"R · REVERSE";
+}
+
+function playerPedals(speed){
+  if(inputSuspended||document.hidden)return {throttle:0,brake:0};
+  // Touch/keyboard keep their manual D/R transmission.
+  if(input.gas||input.brake)return {throttle:input.gas?1:0,brake:input.brake?1:0};
+  const gas=controller.gas,brake=controller.brake;
+  if(gas&&brake)return {throttle:0,brake:Math.max(gas,brake)};
+  if(gas){
+    if(speed<-.35)return {throttle:0,brake:gas};
+    setGear(1);
+    return {throttle:gas,brake:0};
+  }
+  if(brake){
+    if(speed>.35)return {throttle:0,brake};
+    setGear(-1);
+    return {throttle:brake,brake:0};
+  }
+  return {throttle:0,brake:0};
+}
 
 function hitFlash(){
   crashFlash.style.opacity=".72";
@@ -1543,13 +1691,7 @@ document.querySelectorAll("[data-input]").forEach(button=>{
 
 document.querySelectorAll("[data-gear]").forEach(button=>{
   button.addEventListener("click",()=>{
-    gear=Number(button.dataset.gear);
-    document.querySelectorAll("[data-gear]").forEach(b=>{
-      const active=Number(b.dataset.gear)===gear;
-      b.classList.toggle("active",active);
-      b.setAttribute("aria-pressed",String(active));
-    });
-    gearText.textContent=gear===1?"D · DRIVE":"R · REVERSE";
+    setGear(Number(button.dataset.gear));
   });
 });
 
@@ -1610,11 +1752,9 @@ window.addEventListener("keydown",e=>{
   if(k==="d"||k==="arrowright")keyboard.right=true;
   if(k===" ")input.handbrake=true;
   if(k==="r"&&!e.repeat){
-    gear=-1;
     document.querySelector('[data-gear="-1"]').click();
   }
   if(k==="e"&&!e.repeat){
-    gear=1;
     document.querySelector('[data-gear="1"]').click();
   }
   if(["w","a","s","d","r","e","arrowup","arrowdown","arrowleft","arrowright"," "].includes(k))e.preventDefault();
@@ -1632,8 +1772,10 @@ window.addEventListener("keyup",e=>{
 restartButton.addEventListener("click",()=>location.reload());
 
 function playerSteer(){
+  if(inputSuspended||document.hidden)return 0;
   const keyboardSteer=(keyboard.left?1:0)-(keyboard.right?1:0);
   if(keyboardSteer!==0)return keyboardSteer;
+  if(controller.steer!==0&&!wheelHeld)return controller.steer;
   return THREE.MathUtils.clamp(-wheelDegrees/135,-1,1);
 }
 
@@ -1728,10 +1870,11 @@ function driveCar(car,dt,time){
   let handbrake=false;
 
   if(car.isPlayer){
-    throttle=input.gas?1:0;
-    brake=input.brake?1:0;
+    const pedals=playerPedals(car.speed);
+    throttle=pedals.throttle;
+    brake=pedals.brake;
     steer=playerSteer();
-    handbrake=input.handbrake;
+    handbrake=!inputSuspended&&(input.handbrake||controller.handbrake);
   }else{
     const ai=car.ai;
     const now=time*.001;
@@ -1810,14 +1953,14 @@ function driveCar(car,dt,time){
   if(throttle){
     const targetSpeed=driveDirection===1?maxForward:-maxReverse;
     const delta=targetSpeed-car.speed;
-    const step=acceleration*dt;
+    const step=acceleration*dt*(car.isPlayer?throttle:1);
     car.speed+=THREE.MathUtils.clamp(delta,-step,step);
   }else{
     car.speed*=Math.pow(.985,dt*60);
   }
 
   if(brake){
-    const brakeStep=28*dt;
+    const brakeStep=28*dt*brake;
     if(Math.abs(car.speed)<=brakeStep)car.speed=0;
     else car.speed-=Math.sign(car.speed)*brakeStep;
   }
@@ -2132,41 +2275,43 @@ function updateCinematicCamera(dt,now){
 }
 
 function updateCamera(dt,now){
-  if(spectatorMode){
+  if(spectatorMode&&!spectatorManual){
     updateCinematicCamera(dt,now);
     return;
   }
 
-  const baseFront=new THREE.Vector3(-Math.sin(player.heading),0,-Math.cos(player.heading));
+  const subject=spectatorMode?(cinematicFocus?.alive?cinematicFocus:cars.find(car=>!car.isPlayer&&car.alive)||player):player;
+  const mode=controller.lookBack?(cameraMode==="rear"?"follow":"rear"):cameraMode;
+  const baseFront=new THREE.Vector3(-Math.sin(subject.heading),0,-Math.cos(subject.heading));
   const right=new THREE.Vector3(-baseFront.z,0,baseFront.x);
   const orbitFront=baseFront.clone().applyAxisAngle(new THREE.Vector3(0,1,0),orbitYaw);
 
-  camTarget.copy(player.mesh.position).add(new THREE.Vector3(0,1.1,0));
+  camTarget.copy(subject.mesh.position).add(new THREE.Vector3(0,1.1,0));
 
-  if(cameraMode==="top"){
+  if(mode==="top"){
     const topHeight=58*orbitDistance;
-    camDesired.copy(player.mesh.position).add(new THREE.Vector3(
+    camDesired.copy(subject.mesh.position).add(new THREE.Vector3(
       Math.sin(orbitYaw)*10*orbitDistance,
       topHeight,
       Math.cos(orbitYaw)*10*orbitDistance
     ));
     camera.position.lerp(camDesired,1-Math.pow(.001,dt));
-    camera.lookAt(player.mesh.position);
+    camera.lookAt(subject.mesh.position);
     return;
   }
 
   const pitchHeight=(6.0+orbitPitch*11)*orbitDistance;
-  const followDistance=(cameraMode==="rear"?8.5:12.5)*orbitDistance;
-  const direction=cameraMode==="rear"?1:-1;
+  const followDistance=(mode==="rear"?8.5:12.5)*orbitDistance;
+  const direction=mode==="rear"?1:-1;
 
-  camDesired.copy(player.mesh.position)
+  camDesired.copy(subject.mesh.position)
     .addScaledVector(orbitFront,followDistance*direction)
-    .addScaledVector(right,cameraMode==="follow"?1.2:0)
+    .addScaledVector(right,mode==="follow"?1.2:0)
     .add(new THREE.Vector3(0,pitchHeight,0));
 
   camera.position.lerp(camDesired,1-Math.pow(.0008,dt));
 
-  const lookDistance=cameraMode==="rear"?-8:5.5;
+  const lookDistance=mode==="rear"?-8:5.5;
   camera.lookAt(camTarget.clone().addScaledVector(orbitFront,lookDistance));
 }
 
@@ -2181,6 +2326,7 @@ let last=performance.now();
 function frame(now){
   const dt=Math.min(.033,(now-last)/1000);
   last=now;
+  pollController(dt);
 
   if(!wheelHeld&&Math.abs(wheelDegrees)>.05){
     wheelDegrees*=Math.pow(.12,dt*2.1);
