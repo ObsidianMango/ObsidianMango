@@ -1,4 +1,4 @@
-import {createSecretDetail} from './secret-detail.js?v=endless-15';
+import {createSecretDetail} from './secret-detail.js?v=wreck-16';
 export const SECRET_LEVEL={name:'Golden Grounds',kind:'Destruction',code:'SECRET',style:'sandbox',type:'destruction',halfSize:240,worldHalf:260,spawn:[0,210,0],target:{x:0,z:0,w:0,d:0,yaw:0},gates:[],theme:0xb5cbd0,par:3600,hint:'Chain destruction, finish demolition jobs, and keep the city smashing forever.'};
 export const DISTRICTS=[{name:'City',x:-120,z:-120,color:0x899b9c},{name:'Suburbs',x:120,z:-120,color:0xa9bd87},{name:'Harbor',x:120,z:120,color:0xa0a8a0},{name:'Forest',x:-120,z:120,color:0x688d60}];
 
@@ -16,7 +16,7 @@ export function buildSecretCity({T,C,scene,lots,groundMat}){
    piece(t,w/2,h/rows,.48,x-w/2+(col+.5)*w/2,(row+.5)*h/rows,z+side*d/2,paint,id);
    piece(t,.48,h/rows,d/2,x+side*w/2,(row+.5)*h/rows,z-d/2+(col+.5)*d/2,paint,id);
   }
-  for(const side of [-1,1]){const roof=piece(t,w/2,.55,d+1,x+side*w/4,h+.3,z,house?0x7e5747:0x6d7778,id);if(house){roof.mesh.rotation.z=side*-.24;roof.body.quaternion.copy(roof.mesh.quaternion);roof.body.aabbNeedsUpdate=true;}}
+  for(const side of [-1,1]){const roof=piece(t,w/2,.55,d+1,x+side*w/4,h+.3,z,house?0x7e5747:0x6d7778,id);roof.role='roof';if(house){roof.mesh.rotation.z=side*-.24;roof.body.quaternion.copy(roof.mesh.quaternion);roof.body.aabbNeedsUpdate=true;}}
   const front=t.entries[0];visual(box,material(0x33484c),x+w*.21-front.mesh.position.x+ox,1.3-front.mesh.position.y,z-d/2-.28-front.mesh.position.z,1.5,2.6,.12,front.mesh);
   // Roof-mounted details remain part of the structure and fall with their panel.
   const roof=t.entries.at(-1);visual(box,material(house?0xc8bda5:0x909b98),0,.8,0,house?.7:2.2,house?1.4:1.2,house?.7:1.4,roof.mesh);
