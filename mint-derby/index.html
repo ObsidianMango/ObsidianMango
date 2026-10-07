@@ -563,6 +563,172 @@ function addTireStack(x,z,count){
   [61,8],[-14,68],[35,61],[-67,20],[70,-55],[8,-71]
 ].forEach((p,i)=>addTireStack(p[0],p[1],2+(i%3)));
 
+// --- Derby ramps -----------------------------------------------------------
+// Ramps are selected from pre-tested clear lanes every reload. They move around,
+// but never spawn on the starting grid, against the wall, or directly on a tire stack.
+const ramps=[];
+const rampMat=material(0x5c6265,.60,.48);
+const rampTopMat=material(0x767c7d,.54,.42);
+const rampEdgeMat=material(0xe4b94d,.52,.34);
+
+function rampWedgeGeometry(width,length,height){
+  const x=width/2,z=length/2,h=height;
+  const p=[
+    -x,0,-z, x,0,-z, x,0,z, -x,0,z,
+    -x,.08,-z, x,.08,-z, x,h,z, -x,h,z
+  ];
+  const idx=[
+    0,1,2,0,2,3,
+    4,7,6,4,6,5,
+    0,4,5,0,5,1,
+    1,5,6,1,6,2,
+    2,6,7,2,7,3,
+    3,7,4,3,4,0
+  ];
+  const g=new THREE.BufferGeometry();
+  g.setAttribute("position",new THREE.Float32BufferAttribute(p,3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+function addRamp(x,z,yaw,width=6.6,length=10.8,height=2.15){
+  const group=new THREE.Group();
+  group.position.set(x,0,z);
+  group.rotation.y=yaw;
+
+  const wedge=new THREE.Mesh(rampWedgeGeometry(width,length,height),rampMat);
+  wedge.castShadow=true;
+  wedge.receiveShadow=true;
+  group.add(wedge);
+
+  // Slightly raised driving skin keeps the ramp readable against the dirt.
+  const top=new THREE.Mesh(new THREE.PlaneGeometry(width*.90,length*.94),rampTopMat);
+  top.rotation.x=-Math.PI/2+Math.atan2(height-.08,length);
+  top.position.set(0,height*.50+.07,.04);
+  top.position.z=.02;
+  top.castShadow=true;
+  top.receiveShadow=true;
+  group.add(top);
+
+  // Bright outer rails and transverse stripes make launch direction obvious.
+  for(const side of [-1,1]){
+    const rail=new THREE.Mesh(new THREE.BoxGeometry(.13,.12,length*.96),rampEdgeMat);
+    rail.position.set(side*(width*.5-.12),height*.50+.12,0);
+    rail.rotation.x=-Math.atan2(height,length);
+    group.add(rail);
+  }
+  for(let i=0;i<4;i++){
+    const stripe=new THREE.Mesh(new THREE.BoxGeometry(width*.82,.035,.18),rampEdgeMat);
+    const t=.18+i*.20;
+    stripe.position.set(0,.11+t*height,-length*.5+t*length);
+    stripe.rotation.x=-Math.atan2(height,length);
+    group.add(stripe);
+  }
+
+  scene.add(group);
+  ramps.push({
+    group,x,z,yaw,width,length,height,
+    dir:new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw)),
+    side:new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw))
+  });
+}
+
+// Clear, useful launch lanes across the interior of the oval.
+// A shuffled subset gives every reload a different but still playable ramp layout.
+const rampSlots=[
+  [-42,-24, .55], [ 42, 24,-2.59],
+  [-44, 22, 2.56], [ 44,-22,-.58],
+  [-16,-38, .06], [ 16, 38, 3.20],
+  [-12, 30, 3.02], [ 12,-30,-.12],
+  [-58,  2, 1.50], [ 58, -2,-1.64],
+  [-27,  5, 1.38], [ 27, -5,-1.76]
+].sort(()=>Math.random()-.5).slice(0,7);
+rampSlots.forEach((r,i)=>addRamp(r[0],r[1],r[2],i%3===0?7.2:6.6,i%4===0?11.8:10.8,i%3===0?2.45:2.15));
+
+// --- Stadium crowd ---------------------------------------------------------
+const crowdBodies=[];
+const crowdHeads=[];
+const crowdBodyGeo=new THREE.BoxGeometry(.30,.66,.24);
+const crowdHeadGeo=new THREE.IcosahedronGeometry(.18,1);
+const crowdBodyMat=new THREE.MeshStandardMaterial({roughness:.82,metalness:.02});
+const crowdHeadMat=new THREE.MeshStandardMaterial({roughness:.88,metalness:0});
+const crowdCount=260;
+const crowdBodyMesh=new THREE.InstancedMesh(crowdBodyGeo,crowdBodyMat,crowdCount);
+const crowdHeadMesh=new THREE.InstancedMesh(crowdHeadGeo,crowdHeadMat,crowdCount);
+crowdBodyMesh.castShadow=false;
+crowdHeadMesh.castShadow=false;
+scene.add(crowdBodyMesh,crowdHeadMesh);
+
+const crowdDummy=new THREE.Object3D();
+const shirtColors=[
+  new THREE.Color(0xb94e45),new THREE.Color(0x3d6f8e),new THREE.Color(0xd0a84a),
+  new THREE.Color(0x657d4d),new THREE.Color(0x7c557f),new THREE.Color(0xd5d0be),
+  new THREE.Color(0x34383b),new THREE.Color(0x8f6a4d)
+];
+const skinColors=[
+  new THREE.Color(0xf0c8a0),new THREE.Color(0xd79d72),new THREE.Color(0xa96f50),
+  new THREE.Color(0x754b39),new THREE.Color(0xe1b28b)
+];
+
+for(let i=0;i<crowdCount;i++){
+  const tier=i%4;
+  const a=(i/crowdCount)*Math.PI*2+(Math.random()-.5)*.018;
+  const radial=1.055+tier*.042+(Math.random()-.5)*.012;
+  const x=Math.sin(a)*ARENA_X*radial;
+  const z=Math.cos(a)*ARENA_Z*radial;
+  const baseY=2.0+tier*.73+Math.random()*.12;
+  const yaw=Math.atan2(-x,-z);
+  const phase=Math.random()*Math.PI*2;
+  const scale=.88+Math.random()*.22;
+
+  crowdBodies.push({x,z,baseY,yaw,phase,scale});
+  crowdHeads.push({x,z,baseY:baseY+.48*scale,yaw,phase,scale});
+
+  crowdDummy.position.set(x,baseY,z);
+  crowdDummy.rotation.set(0,yaw,0);
+  crowdDummy.scale.set(scale,scale,scale);
+  crowdDummy.updateMatrix();
+  crowdBodyMesh.setMatrixAt(i,crowdDummy.matrix);
+  crowdBodyMesh.setColorAt(i,shirtColors[Math.floor(Math.random()*shirtColors.length)]);
+
+  crowdDummy.position.set(x,baseY+.48*scale,z);
+  crowdDummy.scale.setScalar(scale);
+  crowdDummy.updateMatrix();
+  crowdHeadMesh.setMatrixAt(i,crowdDummy.matrix);
+  crowdHeadMesh.setColorAt(i,skinColors[Math.floor(Math.random()*skinColors.length)]);
+}
+crowdBodyMesh.instanceMatrix.needsUpdate=true;
+crowdHeadMesh.instanceMatrix.needsUpdate=true;
+if(crowdBodyMesh.instanceColor)crowdBodyMesh.instanceColor.needsUpdate=true;
+if(crowdHeadMesh.instanceColor)crowdHeadMesh.instanceColor.needsUpdate=true;
+
+let crowdFrame=0;
+function animateCrowd(time){
+  // Update at 20 fps; enough to read as a living crowd without wasting mobile GPU time.
+  crowdFrame++;
+  if(crowdFrame%3)return;
+  const t=time*.001;
+  for(let i=0;i<crowdCount;i++){
+    const b=crowdBodies[i];
+    const cheer=Math.sin(t*2.6+b.phase)*.055+Math.sin(t*5.1+b.phase*.7)*.025;
+    crowdDummy.position.set(b.x,b.baseY+cheer,b.z);
+    crowdDummy.rotation.set(0,b.yaw,Math.sin(t*1.9+b.phase)*.035);
+    crowdDummy.scale.set(b.scale,b.scale,b.scale);
+    crowdDummy.updateMatrix();
+    crowdBodyMesh.setMatrixAt(i,crowdDummy.matrix);
+
+    const h=crowdHeads[i];
+    crowdDummy.position.set(h.x,h.baseY+cheer,h.z);
+    crowdDummy.rotation.set(0,h.yaw,0);
+    crowdDummy.scale.setScalar(h.scale);
+    crowdDummy.updateMatrix();
+    crowdHeadMesh.setMatrixAt(i,crowdDummy.matrix);
+  }
+  crowdBodyMesh.instanceMatrix.needsUpdate=true;
+  crowdHeadMesh.instanceMatrix.needsUpdate=true;
+}
+
 const chrome=material(0xe0e5e5,.96,.13);
 const rubber=material(0x0f1011,.02,.9);
 const whitewall=material(0xe8e4d8,.04,.66);
@@ -999,7 +1165,11 @@ function createVehicle(isPlayer,color,modelId=null,aiProfile=null){
     modelId:modelId||"mint",
     collisionRadius:collisionRadiusFor(modelId),
     lastThrottle:0,
-    backfire:0
+    backfire:0,
+    airborne:false,
+    verticalVel:0,
+    rampCooldown:0,
+    landingCooldown:0
   };
 }
 
@@ -1413,6 +1583,87 @@ function playerSteer(){
 
 const forward=new THREE.Vector3();
 
+function rampSupport(car){
+  if(car.airborne||car.rampCooldown>0)return null;
+  const forwardDir=new THREE.Vector3(-Math.sin(car.heading),0,-Math.cos(car.heading));
+  let best=null;
+
+  for(const ramp of ramps){
+    const relX=car.mesh.position.x-ramp.x;
+    const relZ=car.mesh.position.z-ramp.z;
+    const along=relX*ramp.dir.x+relZ*ramp.dir.z;
+    const lateral=relX*ramp.side.x+relZ*ramp.side.z;
+
+    if(Math.abs(lateral)>ramp.width*.48)continue;
+    if(along<-ramp.length*.54||along>ramp.length*.56)continue;
+
+    const alignment=forwardDir.dot(ramp.dir)*(car.speed>=0?1:-1);
+    if(alignment<.32)continue;
+
+    const t=THREE.MathUtils.clamp((along+ramp.length*.5)/ramp.length,0,1);
+    const y=.05+t*ramp.height;
+    if(!best||y>best.y)best={ramp,t,y,alignment};
+  }
+  return best;
+}
+
+function updateJumpPhysics(car,dt){
+  car.rampCooldown=Math.max(0,car.rampCooldown-dt);
+  car.landingCooldown=Math.max(0,car.landingCooldown-dt);
+
+  const support=rampSupport(car);
+  if(!car.airborne&&support){
+    // Climb the wedge rather than clipping through it.
+    car.mesh.position.y=Math.max(car.mesh.position.y,support.y);
+
+    if(support.t>.82&&Math.abs(car.speed)>7.2){
+      car.airborne=true;
+      car.verticalVel=5.1+Math.min(4.1,Math.abs(car.speed)*.13);
+      car.mesh.position.y=support.ramp.height+.16;
+      car.rampCooldown=.85;
+      car.speed*=1.015;
+
+      if(car.isPlayer){
+        makeImpactSparks(car.mesh.position.clone(),8);
+        flashNotice("AIRBORNE!",.75);
+      }
+    }
+    return;
+  }
+
+  if(car.airborne){
+    car.verticalVel-=13.2*dt;
+    car.mesh.position.y+=car.verticalVel*dt;
+
+    // Tiny airborne attitude only; it resets on landing and does not deform the model.
+    car.mesh.rotation.x=THREE.MathUtils.lerp(
+      car.mesh.rotation.x,
+      THREE.MathUtils.clamp(-car.verticalVel*.018,-.11,.10),
+      Math.min(1,dt*5)
+    );
+
+    if(car.mesh.position.y<=0){
+      const landingSpeed=Math.abs(car.verticalVel);
+      car.mesh.position.y=0;
+      car.verticalVel=0;
+      car.airborne=false;
+      car.mesh.rotation.x=0;
+      car.landingCooldown=.28;
+
+      if(landingSpeed>7.2){
+        makeImpactSparks(car.mesh.position.clone(),landingSpeed*.8);
+        if(landingSpeed>9.0){
+          damage(car,Math.min(8,(landingSpeed-8.5)*1.7),car.mesh.position.clone());
+        }
+      }
+    }
+  }else if(car.mesh.position.y>0){
+    // Smoothly settle after rolling off the low side of a ramp.
+    car.mesh.position.y=Math.max(0,car.mesh.position.y-5.5*dt);
+    if(car.mesh.position.y===0)car.mesh.rotation.x=0;
+  }
+}
+
 function driveCar(car,dt,time){
   if(!car.alive)return;
 
@@ -1532,6 +1783,7 @@ function driveCar(car,dt,time){
   car.knock.multiplyScalar(Math.pow(.10,dt));
   if(car.knock.lengthSq()<.0025)car.knock.set(0,0,0);
   car.mesh.rotation.y=car.heading;
+  updateJumpPhysics(car,dt);
 
   const spin=car.speed*dt/.49;
   car.mesh.userData.wheels.forEach(w=>{
@@ -1638,6 +1890,9 @@ function carCollisions(){
       const a=cars[i];
       const b=cars[j];
       if(!a.alive||!b.alive)continue;
+
+      const verticalGap=Math.abs(a.mesh.position.y-b.mesh.position.y);
+      if(verticalGap>1.35)continue;
 
       const delta=b.mesh.position.clone().sub(a.mesh.position);
       delta.y=0;
@@ -1879,6 +2134,7 @@ function frame(now){
   cars.forEach(car=>driveCar(car,dt,now));
   carCollisions();
   updateDebris(dt);
+  animateCrowd(now);
   updateHUD();
   updateCamera(dt,now);
 
@@ -1892,7 +2148,7 @@ function frame(now){
 }
 
 loading.remove();
-flashNotice("Parkside Streets fleet loaded · New Yorker Mint Monster · full destructibility · upgraded exhaust.",3.2);
+flashNotice("Stadium packed · seven random ramps · full jumps and destructible derby cars.",3.2);
 requestAnimationFrame(frame);
 </script>
 </body>
