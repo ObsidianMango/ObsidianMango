@@ -499,20 +499,20 @@ const paintLine=material(0xb69248,.03,.78);
 // Stepped oval grandstands outside the crash wall.
 const standMat=material(0x343b3e,.18,.84);
 const standEdge=material(0x737b7e,.48,.52);
-for(let tier=0;tier<4;tier++){
-  const inner=1.015+tier*.045;
-  const outer=inner+.05;
-  const deck=new THREE.Mesh(new THREE.RingGeometry(inner,outer,160),standMat);
+for(let tier=0;tier<8;tier++){
+  const inner=1.012+tier*.036;
+  const outer=inner+.043;
+  const deck=new THREE.Mesh(new THREE.RingGeometry(inner,outer,192),standMat);
   deck.scale.set(ARENA_X,ARENA_Z,1);
   deck.rotation.x=-Math.PI/2;
-  deck.position.y=.28+tier*.72;
+  deck.position.y=.22+tier*.58;
   deck.receiveShadow=true;
   scene.add(deck);
 
-  const edge=new THREE.Mesh(new THREE.TorusGeometry(1,.012,6,192),standEdge);
+  const edge=new THREE.Mesh(new THREE.TorusGeometry(1,.009,6,220),standEdge);
   edge.scale.set(ARENA_X*outer,ARENA_Z*outer,1);
   edge.rotation.x=Math.PI/2;
-  edge.position.y=.3+tier*.72;
+  edge.position.y=.24+tier*.58;
   scene.add(edge);
 }
 
@@ -564,67 +564,125 @@ function addTireStack(x,z,count){
 ].forEach((p,i)=>addTireStack(p[0],p[1],2+(i%3)));
 
 // --- Derby ramps -----------------------------------------------------------
-// Ramps are selected from pre-tested clear lanes every reload. They move around,
-// but never spawn on the starting grid, against the wall, or directly on a tire stack.
+// Low, broad stadium ramps: randomized from known-good launch lanes, never in the
+// starting grid and never so steep/tall that they look like giant black boxes.
 const ramps=[];
-const rampMat=material(0x5c6265,.60,.48);
-const rampTopMat=material(0x767c7d,.54,.42);
-const rampEdgeMat=material(0xe4b94d,.52,.34);
+const rampMat=material(0x7d8384,.58,.40);
+const rampSideMat=material(0x555b5d,.52,.52);
+const rampEdgeMat=material(0xe5b844,.48,.32);
+const rampStripeMat=material(0xe9dfbd,.22,.52);
 
-function rampWedgeGeometry(width,length,height){
-  const x=width/2,z=length/2,h=height;
-  const p=[
-    -x,0,-z, x,0,-z, x,0,z, -x,0,z,
-    -x,.08,-z, x,.08,-z, x,h,z, -x,h,z
-  ];
-  const idx=[
-    0,1,2,0,2,3,
-    4,7,6,4,6,5,
-    0,4,5,0,5,1,
-    1,5,6,1,6,2,
-    2,6,7,2,7,3,
-    3,7,4,3,4,0
-  ];
+function rampEase(t){
+  t=THREE.MathUtils.clamp(t,0,1);
+  return t*t*(3-2*t);
+}
+
+function rampSurfaceGeometry(width,length,height,segments=14){
+  const positions=[],indices=[];
+  for(let i=0;i<=segments;i++){
+    const t=i/segments;
+    const z=-length*.5+t*length;
+    const y=.035+rampEase(t)*height;
+    positions.push(-width*.5,y,z, width*.5,y,z);
+  }
+  for(let i=0;i<segments;i++){
+    const a=i*2,b=a+1,c=a+2,d=a+3;
+    indices.push(a,c,b,b,c,d);
+  }
   const g=new THREE.BufferGeometry();
-  g.setAttribute("position",new THREE.Float32BufferAttribute(p,3));
-  g.setIndex(idx);
+  g.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
+  g.setIndex(indices);
   g.computeVertexNormals();
   return g;
 }
 
-function addRamp(x,z,yaw,width=6.6,length=10.8,height=2.15){
+function rampSideGeometry(side,width,length,height,segments=14){
+  const positions=[],indices=[];
+  const x=side*width*.5;
+  for(let i=0;i<=segments;i++){
+    const t=i/segments;
+    const z=-length*.5+t*length;
+    const y=.035+rampEase(t)*height;
+    positions.push(x,.02,z, x,y,z);
+  }
+  for(let i=0;i<segments;i++){
+    const a=i*2,b=a+1,c=a+2,d=a+3;
+    if(side>0)indices.push(a,b,c,b,d,c);
+    else indices.push(a,c,b,b,c,d);
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
+  g.setIndex(indices);
+  g.computeVertexNormals();
+  return g;
+}
+
+function rampCurvePoints(width,length,height,side){
+  const pts=[];
+  for(let i=0;i<=12;i++){
+    const t=i/12;
+    pts.push(new THREE.Vector3(
+      side*(width*.5-.10),
+      .10+rampEase(t)*height,
+      -length*.5+t*length
+    ));
+  }
+  return pts;
+}
+
+function addRamp(x,z,yaw,width=6.9,length=12.6,height=1.72){
   const group=new THREE.Group();
   group.position.set(x,0,z);
   group.rotation.y=yaw;
 
-  const wedge=new THREE.Mesh(rampWedgeGeometry(width,length,height),rampMat);
-  wedge.castShadow=true;
-  wedge.receiveShadow=true;
-  group.add(wedge);
-
-  // Slightly raised driving skin keeps the ramp readable against the dirt.
-  const top=new THREE.Mesh(new THREE.PlaneGeometry(width*.90,length*.94),rampTopMat);
-  top.rotation.x=-Math.PI/2+Math.atan2(height-.08,length);
-  top.position.set(0,height*.50+.07,.04);
-  top.position.z=.02;
+  const top=new THREE.Mesh(rampSurfaceGeometry(width,length,height),rampMat);
   top.castShadow=true;
   top.receiveShadow=true;
   group.add(top);
 
-  // Bright outer rails and transverse stripes make launch direction obvious.
+  // Thin side skirts instead of the old giant solid wedge.
   for(const side of [-1,1]){
-    const rail=new THREE.Mesh(new THREE.BoxGeometry(.13,.12,length*.96),rampEdgeMat);
-    rail.position.set(side*(width*.5-.12),height*.50+.12,0);
-    rail.rotation.x=-Math.atan2(height,length);
+    const skirt=new THREE.Mesh(rampSideGeometry(side,width,length,height),rampSideMat);
+    skirt.castShadow=true;
+    skirt.receiveShadow=true;
+    group.add(skirt);
+
+    const curve=new THREE.CatmullRomCurve3(rampCurvePoints(width,length,height,side));
+    const rail=new THREE.Mesh(
+      new THREE.TubeGeometry(curve,28,.055,7,false),
+      rampEdgeMat
+    );
+    rail.castShadow=true;
     group.add(rail);
   }
-  for(let i=0;i<4;i++){
-    const stripe=new THREE.Mesh(new THREE.BoxGeometry(width*.82,.035,.18),rampEdgeMat);
-    const t=.18+i*.20;
-    stripe.position.set(0,.11+t*height,-length*.5+t*length);
-    stripe.rotation.x=-Math.atan2(height,length);
+
+  // Low approach plate visually joins the ramp to the dirt.
+  const approach=new THREE.Mesh(new THREE.BoxGeometry(width*.96,.055,1.25),rampSideMat);
+  approach.position.set(0,.035,-length*.5-.55);
+  approach.castShadow=true;
+  approach.receiveShadow=true;
+  group.add(approach);
+
+  // Surface chevrons follow the curve instead of hovering at the wrong angle.
+  for(let i=0;i<5;i++){
+    const t=.20+i*.14;
+    const stripe=new THREE.Mesh(new THREE.BoxGeometry(width*.72,.035,.18),rampStripeMat);
+    stripe.position.set(0,.09+rampEase(t)*height,-length*.5+t*length);
+    const slope=(6*t*(1-t)*height)/length;
+    stripe.rotation.x=-Math.atan(slope);
     group.add(stripe);
   }
+
+  // Open-frame supports under the high end make it look like a real derby jump.
+  for(const side of [-1,1]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(.16,height*.78,.16),rampSideMat);
+    leg.position.set(side*width*.36,height*.39,length*.5-.42);
+    leg.castShadow=true;
+    group.add(leg);
+  }
+  const brace=new THREE.Mesh(new THREE.BoxGeometry(width*.78,.14,.14),rampSideMat);
+  brace.position.set(0,height*.58,length*.5-.44);
+  group.add(brace);
 
   scene.add(group);
   ramps.push({
@@ -634,26 +692,34 @@ function addRamp(x,z,yaw,width=6.6,length=10.8,height=2.15){
   });
 }
 
-// Clear, useful launch lanes across the interior of the oval.
-// A shuffled subset gives every reload a different but still playable ramp layout.
+// Six good launch lanes. The order changes every reload but the lanes themselves
+// were chosen to keep long approaches and avoid the perimeter/start positions.
 const rampSlots=[
-  [-42,-24, .55], [ 42, 24,-2.59],
-  [-44, 22, 2.56], [ 44,-22,-.58],
-  [-16,-38, .06], [ 16, 38, 3.20],
-  [-12, 30, 3.02], [ 12,-30,-.12],
-  [-58,  2, 1.50], [ 58, -2,-1.64],
-  [-27,  5, 1.38], [ 27, -5,-1.76]
-].sort(()=>Math.random()-.5).slice(0,7);
-rampSlots.forEach((r,i)=>addRamp(r[0],r[1],r[2],i%3===0?7.2:6.6,i%4===0?11.8:10.8,i%3===0?2.45:2.15));
+  [-42,-22, .56], [ 42, 22,-2.58],
+  [-43, 21, 2.57], [ 43,-21,-.57],
+  [-15,-34, .05], [ 15, 34, 3.19],
+  [-57,  3, 1.50], [ 57, -3,-1.64],
+  [-25,  7, 1.37], [ 25, -7,-1.77]
+].sort(()=>Math.random()-.5).slice(0,6);
+rampSlots.forEach((r,i)=>addRamp(
+  r[0],r[1],r[2],
+  i%3===0?7.4:6.9,
+  i%2===0?13.4:12.3,
+  i%3===0?1.88:1.66
+));
 
 // --- Stadium crowd ---------------------------------------------------------
+// A real packed bowl: eight rows, 160 spectators per row. Instancing keeps this
+// to just two crowd draw calls even though there are 1,280 people.
 const crowdBodies=[];
 const crowdHeads=[];
-const crowdBodyGeo=new THREE.BoxGeometry(.30,.66,.24);
-const crowdHeadGeo=new THREE.IcosahedronGeometry(.18,1);
+const crowdBodyGeo=new THREE.BoxGeometry(.34,.74,.25);
+const crowdHeadGeo=new THREE.IcosahedronGeometry(.19,1);
 const crowdBodyMat=new THREE.MeshStandardMaterial({roughness:.82,metalness:.02});
 const crowdHeadMat=new THREE.MeshStandardMaterial({roughness:.88,metalness:0});
-const crowdCount=260;
+const crowdRows=8;
+const crowdPerRow=160;
+const crowdCount=crowdRows*crowdPerRow;
 const crowdBodyMesh=new THREE.InstancedMesh(crowdBodyGeo,crowdBodyMat,crowdCount);
 const crowdHeadMesh=new THREE.InstancedMesh(crowdHeadGeo,crowdHeadMat,crowdCount);
 crowdBodyMesh.castShadow=false;
@@ -664,39 +730,44 @@ const crowdDummy=new THREE.Object3D();
 const shirtColors=[
   new THREE.Color(0xb94e45),new THREE.Color(0x3d6f8e),new THREE.Color(0xd0a84a),
   new THREE.Color(0x657d4d),new THREE.Color(0x7c557f),new THREE.Color(0xd5d0be),
-  new THREE.Color(0x34383b),new THREE.Color(0x8f6a4d)
+  new THREE.Color(0x34383b),new THREE.Color(0x8f6a4d),new THREE.Color(0x315a4f),
+  new THREE.Color(0xc46b37),new THREE.Color(0x595f8f),new THREE.Color(0xa55262)
 ];
 const skinColors=[
   new THREE.Color(0xf0c8a0),new THREE.Color(0xd79d72),new THREE.Color(0xa96f50),
   new THREE.Color(0x754b39),new THREE.Color(0xe1b28b)
 ];
 
-for(let i=0;i<crowdCount;i++){
-  const tier=i%4;
-  const a=(i/crowdCount)*Math.PI*2+(Math.random()-.5)*.018;
-  const radial=1.055+tier*.042+(Math.random()-.5)*.012;
-  const x=Math.sin(a)*ARENA_X*radial;
-  const z=Math.cos(a)*ARENA_Z*radial;
-  const baseY=2.0+tier*.73+Math.random()*.12;
-  const yaw=Math.atan2(-x,-z);
-  const phase=Math.random()*Math.PI*2;
-  const scale=.88+Math.random()*.22;
+let crowdIndex=0;
+for(let row=0;row<crowdRows;row++){
+  for(let seat=0;seat<crowdPerRow;seat++){
+    const i=crowdIndex++;
+    const a=(seat/crowdPerRow)*Math.PI*2+(row%2)*(.5/crowdPerRow)*Math.PI*2;
+    const radial=1.036+row*.0365;
+    const x=Math.sin(a)*ARENA_X*radial;
+    const z=Math.cos(a)*ARENA_Z*radial;
+    const baseY=.98+row*.58+(Math.random()-.5)*.08;
+    const yaw=Math.atan2(-x,-z);
+    const phase=Math.random()*Math.PI*2;
+    const scale=.94+Math.random()*.18;
 
-  crowdBodies.push({x,z,baseY,yaw,phase,scale});
-  crowdHeads.push({x,z,baseY:baseY+.48*scale,yaw,phase,scale});
+    crowdBodies.push({x,z,baseY,yaw,phase,scale});
+    crowdHeads.push({x,z,baseY:baseY+.51*scale,yaw,phase,scale});
 
-  crowdDummy.position.set(x,baseY,z);
-  crowdDummy.rotation.set(0,yaw,0);
-  crowdDummy.scale.set(scale,scale,scale);
-  crowdDummy.updateMatrix();
-  crowdBodyMesh.setMatrixAt(i,crowdDummy.matrix);
-  crowdBodyMesh.setColorAt(i,shirtColors[Math.floor(Math.random()*shirtColors.length)]);
+    crowdDummy.position.set(x,baseY,z);
+    crowdDummy.rotation.set(0,yaw,0);
+    crowdDummy.scale.set(scale,scale,scale);
+    crowdDummy.updateMatrix();
+    crowdBodyMesh.setMatrixAt(i,crowdDummy.matrix);
+    crowdBodyMesh.setColorAt(i,shirtColors[Math.floor(Math.random()*shirtColors.length)]);
 
-  crowdDummy.position.set(x,baseY+.48*scale,z);
-  crowdDummy.scale.setScalar(scale);
-  crowdDummy.updateMatrix();
-  crowdHeadMesh.setMatrixAt(i,crowdDummy.matrix);
-  crowdHeadMesh.setColorAt(i,skinColors[Math.floor(Math.random()*skinColors.length)]);
+    crowdDummy.position.set(x,baseY+.51*scale,z);
+    crowdDummy.rotation.set(0,yaw,0);
+    crowdDummy.scale.setScalar(scale);
+    crowdDummy.updateMatrix();
+    crowdHeadMesh.setMatrixAt(i,crowdDummy.matrix);
+    crowdHeadMesh.setColorAt(i,skinColors[Math.floor(Math.random()*skinColors.length)]);
+  }
 }
 crowdBodyMesh.instanceMatrix.needsUpdate=true;
 crowdHeadMesh.instanceMatrix.needsUpdate=true;
@@ -704,27 +775,34 @@ if(crowdBodyMesh.instanceColor)crowdBodyMesh.instanceColor.needsUpdate=true;
 if(crowdHeadMesh.instanceColor)crowdHeadMesh.instanceColor.needsUpdate=true;
 
 let crowdFrame=0;
+let crowdBatch=0;
 function animateCrowd(time){
-  // Update at 20 fps; enough to read as a living crowd without wasting mobile GPU time.
+  // Only animate one quarter of the crowd per update. It still reads as a lively packed
+  // stadium while keeping the iPhone CPU cost much lower than moving all 1,280 at once.
   crowdFrame++;
   if(crowdFrame%3)return;
   const t=time*.001;
-  for(let i=0;i<crowdCount;i++){
+  const batchSize=Math.ceil(crowdCount/4);
+  const start=crowdBatch*batchSize;
+  const stop=Math.min(crowdCount,start+batchSize);
+
+  for(let i=start;i<stop;i++){
     const b=crowdBodies[i];
-    const cheer=Math.sin(t*2.6+b.phase)*.055+Math.sin(t*5.1+b.phase*.7)*.025;
+    const cheer=Math.sin(t*2.3+b.phase)*.045+Math.sin(t*4.8+b.phase*.7)*.018;
     crowdDummy.position.set(b.x,b.baseY+cheer,b.z);
-    crowdDummy.rotation.set(0,b.yaw,Math.sin(t*1.9+b.phase)*.035);
+    crowdDummy.rotation.set(0,b.yaw,Math.sin(t*1.8+b.phase)*.025);
     crowdDummy.scale.set(b.scale,b.scale,b.scale);
     crowdDummy.updateMatrix();
     crowdBodyMesh.setMatrixAt(i,crowdDummy.matrix);
 
     const h=crowdHeads[i];
-    crowdDummy.position.set(h.x,h.baseY+cheer,h.z);
+    crowdDummy.position.set(h.x,h.baseY+cheer,b.z);
     crowdDummy.rotation.set(0,h.yaw,0);
     crowdDummy.scale.setScalar(h.scale);
     crowdDummy.updateMatrix();
     crowdHeadMesh.setMatrixAt(i,crowdDummy.matrix);
   }
+  crowdBatch=(crowdBatch+1)%4;
   crowdBodyMesh.instanceMatrix.needsUpdate=true;
   crowdHeadMesh.instanceMatrix.needsUpdate=true;
 }
@@ -1601,7 +1679,7 @@ function rampSupport(car){
     if(alignment<.32)continue;
 
     const t=THREE.MathUtils.clamp((along+ramp.length*.5)/ramp.length,0,1);
-    const y=.05+t*ramp.height;
+    const y=.04+rampEase(t)*ramp.height;
     if(!best||y>best.y)best={ramp,t,y,alignment};
   }
   return best;
@@ -1616,10 +1694,10 @@ function updateJumpPhysics(car,dt){
     // Climb the wedge rather than clipping through it.
     car.mesh.position.y=Math.max(car.mesh.position.y,support.y);
 
-    if(support.t>.82&&Math.abs(car.speed)>7.2){
+    if(support.t>.90&&Math.abs(car.speed)>7.2){
       car.airborne=true;
-      car.verticalVel=5.1+Math.min(4.1,Math.abs(car.speed)*.13);
-      car.mesh.position.y=support.ramp.height+.16;
+      car.verticalVel=4.7+Math.min(3.7,Math.abs(car.speed)*.12);
+      car.mesh.position.y=support.ramp.height+.12;
       car.rampCooldown=.85;
       car.speed*=1.015;
 
@@ -2148,7 +2226,7 @@ function frame(now){
 }
 
 loading.remove();
-flashNotice("Stadium packed · seven random ramps · full jumps and destructible derby cars.",3.2);
+flashNotice("Ramps rebuilt as proper derby jumps · grandstands now packed with 1,280 spectators.",3.2);
 requestAnimationFrame(frame);
 </script>
 </body>
