@@ -37,15 +37,15 @@ export function createSecretDetail(T,view){
  for(let i=0;i<48;i++){const a=i*Math.PI/24,x=Math.cos(a)*310,z=Math.sin(a)*310,d=x<0?(z<0?0:3):(z<0?1:2);add(d,d===3?'hill':'horizon',x,d===3?3:7+i%5*2,z,d===3?60:18,d===3?25:14+i%5*4,d===3?45:22);}
  const keys=new Set(plans.map(p=>p.d+':'+p.key));
  for(const key of keys){const list=plans.filter(p=>p.d+':'+p.key===key),d=list[0].d,type=list[0].key,mesh=new T.InstancedMesh(type==='leaf'||type==='hill'?leaf:type==='stone'?stone:box,mats[type],list.length);mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.frustumCulled=false;mesh.receiveShadow=true;mesh.castShadow=false;view.group.add(mesh);batches.push({mesh,list,d,type});}
- const centers=[[-120,-120],[120,-120],[120,120],[-120,120]],sources=new Set(plans.filter(p=>p.source).map(p=>p.source)),axis=new T.Vector3(0,0,1);let timer=1;
+ const centers=[[-120,-120],[120,-120],[120,120],[-120,120]],sources=new Set(plans.filter(p=>p.source).map(p=>p.source)),axis=new T.Vector3(0,0,1),tint=new T.Color();let timer=1;
  function update(dt,x,z,force=false){timer+=dt;if(!force&&timer<.15)return;timer=0;
   for(const t of view.targets)for(const e of t.entries||[]){e.mesh.visible=force||Math.hypot(e.mesh.position.x-view.ox-x,e.mesh.position.z-z)<(t.kind==='building'?300:200);}
   for(const source of sources)source.updateWorldMatrix(true,false);
   for(const b of batches){const [cx,cz]=centers[b.d];b.mesh.visible=force||b.type==='horizon'||b.type==='hill'||Math.hypot(cx-x,cz-z)<275;if(!b.mesh.visible)continue;
    b.list.forEach((p,i)=>{obj.position.set(p.x+(p.source?0:view.ox),p.y,p.z);obj.scale.set(p.w,p.h,p.l);obj.quaternion.setFromAxisAngle(axis,p.turn);
     if(p.source){obj.position.divide(p.source.userData.detailScale);obj.scale.divide(p.source.userData.detailScale);if(!p.source.visible)obj.scale.setScalar(0);}
-    obj.updateMatrix();matrix.copy(obj.matrix);if(p.source)matrix.premultiply(p.source.matrixWorld);b.mesh.setMatrixAt(i,matrix);
-   });b.mesh.instanceMatrix.needsUpdate=true;
+    obj.updateMatrix();matrix.copy(obj.matrix);if(p.source)matrix.premultiply(p.source.matrixWorld);b.mesh.setMatrixAt(i,matrix);const dark=p.source?Math.max(.12,1-(p.source.userData.damage||0)*.45-(p.source.userData.charred||0)*.65):1;tint.setRGB(dark,dark,dark);b.mesh.setColorAt(i,tint);
+   });b.mesh.instanceMatrix.needsUpdate=true;b.mesh.instanceColor.needsUpdate=true;
   }
  }
  for(const p of plans)if(p.source&&!p.source.userData.detailScale)p.source.userData.detailScale=p.source.scale.clone();
