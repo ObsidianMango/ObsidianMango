@@ -1,3 +1,4 @@
+import {createSceneryDetail} from './scenery-detail.js?v=clarity-14';
 const BASE_LOTS=[
  {name:'Market Square',kind:'Head-in',hint:'Drive around the island and park in A3.',code:'A3',theme:0xb6bca3,spawn:[-13,17,0],target:{x:4,z:-15,yaw:0,w:3.8,d:6.6},par:45,style:'market'},
  {name:'Sunset Diner',kind:'Angled bay',hint:'Follow the diagonal row. Stop inside D4.',code:'D4',theme:0xc7ab88,spawn:[-15,17,0],target:{x:7,z:-10,yaw:-Math.PI/4,w:3.7,d:6.6},par:55,style:'diner'},
@@ -47,7 +48,7 @@ export function assessParking(pose,target){
  return {contained,aligned,stopped,approach,valid:contained&&aligned&&stopped&&upright&&approach,offset:Math.hypot(x,z),angle:Math.abs(angle),near:Math.hypot(dx,dz)<8};
 }
 export function buildLots({T,C,scene,world,groundMat}){
- const parkedCars=[],obstacles=[],breakables=[],views=[],materials=new Map(),boxGeo=new T.BoxGeometry(1,1,1);
+ const detail=createSceneryDetail(T);const parkedCars=[],obstacles=[],breakables=[],views=[],materials=new Map(),boxGeo=new T.BoxGeometry(1,1,1);
  const mat=c=>{if(!materials.has(c))materials.set(c,new T.MeshStandardMaterial({color:c,roughness:.82}));return materials.get(c);};
  LOTS.forEach((level,index)=>{const ox=index*240,g=new T.Group();scene.add(g);g.visible=index===0;let mini=[];const phys=[];
  let structureSerial=0;
@@ -67,7 +68,7 @@ export function buildLots({T,C,scene,world,groundMat}){
  if(physical){const nx=Math.ceil(w/7),nz=Math.ceil(d/7);let first=null;for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const px=-w/2+(i+.5)*w/nx,pz=-d/2+(j+.5)*d/nz;const m=piece(w/nx,h,d/nz,x+Math.cos(yaw)*px+Math.sin(yaw)*pz,y,z-Math.sin(yaw)*px+Math.cos(yaw)*pz,color,yaw);first??=m;}mini.push({x,z,w,d,yaw,color:'#a5b6ac'});return first;}
  const m=new T.Mesh(boxGeo,mat(color));m.scale.set(w,h,d);m.position.set(ox+x,y,z);m.rotation.y=yaw;m.receiveShadow=true;g.add(m);m.userData.guide=y<=.11;return m;}
  function text(value,x,y,z,width=5,yaw=0,ground=false,color='#193c35'){const cv=document.createElement('canvas');cv.width=512;cv.height=128;const ctx=cv.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,512,128);ctx.fillStyle='#fff6dd';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px system-ui';ctx.fillText(value,256,65);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;const mesh=new T.Mesh(new T.PlaneGeometry(width,width/4),new T.MeshBasicMaterial({map:tx,side:T.DoubleSide}));mesh.position.set(ox+x*2,y,z*2);mesh.userData.guide=ground;if(ground){mesh.rotation.x=-Math.PI/2;mesh.rotation.z=yaw;}else mesh.rotation.y=yaw;g.add(mesh);return mesh;}
- function tree(x,z){box(.45,3,.45,x,1.5,z,0x6d634e,0,true);const crown=new T.Mesh(new T.IcosahedronGeometry(2.3,0),mat(0x527f65));crown.position.set(ox+x*2,4,z*2);g.add(crown);}
+ function tree(x,z){const trunk=box(.45,3,.45,x,1.5,z,0x6d634e,0,true);detail.tree(trunk,g,x,z,ox,level.style==='lodge');}
  function island(x,z,w,d){box(w,.28,d,x,.14,z,0xc6cab6,0,true);box(w-.4,.08,d-.4,x,.3,z,0x81946d);if(w>3)tree(x,z);}
  function cone(x,z){const m=new T.Mesh(new T.ConeGeometry(.32,.8,12),mat(0xec9d4f));m.position.set(ox+x*2,.4,z*2);g.add(m);box(.5,.08,.5,x,.04,z,0x393e37,0,true);}
  function parked(x,z,yaw,color=0x688d9b){x*=2;z*=2;const car=new T.Group();car.position.set(ox+x,0,z);car.rotation.y=yaw;g.add(car);function part(w,h,d,px,py,pz,col){const m=new T.Mesh(boxGeo,mat(col));m.scale.set(w,h,d);m.position.set(px,py,pz);m.castShadow=true;car.add(m);}part(1.95,.65,4.2,0,.7,0,color);part(1.55,.65,2.2,0,1.3,.1,0x40565a);part(1.62,.1,1.7,0,1.66,.2,color);for(const side of [-1,1])for(const end of [-1,1]){const tire=new T.Mesh(new T.CylinderGeometry(.35,.35,.22,12),mat(0x252c2a));tire.rotation.z=Math.PI/2;tire.position.set(side,.40,end*1.35);tire.castShadow=true;car.add(tire);const rim=new T.Mesh(new T.CylinderGeometry(.21,.21,.225,12),mat(0xa9b5ae));rim.rotation.z=Math.PI/2;rim.position.copy(tire.position);car.add(rim);}part(1.5,.17,.07,0,.78,-2.14,0xe7e3bf);part(1.5,.15,.07,0,.78,2.14,0xa15143);const body=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(1.04,.75,2.18)),position:new C.Vec3(ox+x,.8,z)});body.quaternion.setFromEuler(0,yaw,0);body.userData={kind:'parked car'};parkedCars.push({mesh:car,body,level:index});body.updateAABB();world.addBody(body);phys.push(body);mini.push({x,z,w:2.1,d:4.4,yaw,color:'#677e89'});}
@@ -176,5 +177,6 @@ export function buildLots({T,C,scene,world,groundMat}){
  views.push({group:g,ox,marker,beacon,mini,phys,gates});
 
  });
- return {views,obstacles,breakables,parked:parkedCars,show(index){views.forEach((v,i)=>{v.group.visible=i===index;for(const body of v.phys){const present=world.bodies.includes(body);if(i===index&&!present)world.addBody(body);else if(i!==index&&present)world.removeBody(body);}});}};
+ return {views,obstacles,breakables,parked:parkedCars,show(index){views.forEach((v,i)=>{v.group.visible=i===index;for(const body of v.phys){const present=world.bodies.includes(body);if(i===index&&LOTS[i]&&!v.detail){v.detail=detail.dress({group:v.group,ox:v.ox,index:i,style:LOTS[i].style,structures:breakables.filter(e=>e.level===i)});}if(i===index&&!present)world.addBody(body);else if(i!==index&&present)world.removeBody(body);}});}};
 }
+
