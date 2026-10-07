@@ -1,5 +1,14 @@
 # Parkside Streets
 
+## Xbox controller on iPhone
+- Pair a Bluetooth Xbox controller in iPhone Settings, open the game in Safari or its Home Screen web app, and press a controller button to expose it to the Gamepad API. Standard browser mapping is used; no native app or Web Bluetooth permission is needed.
+- RT is proportional gas (0–100%); LT is proportional brake. Left stick steers with a drift dead zone. X toggles drive/reverse; RT powers the selected gear. A holds the handbrake, except on the no-brakes Jalopy. Keyboard and touch controls continue to work.
+- Right stick freely orbits the camera and changes elevation. LB/RB zoom out/in, Y cycles follow/rear/top, and right-stick click returns to follow. D-pad up/down also zoom; left/right select reverse/drive during play.
+- D-pad or left stick navigates the garage, fleet selector, unlocked levels, pause/results/replay screens with a visible focus ring and automatic scrolling. A confirms, B goes back, Menu starts/resumes/pauses. View resets the car during play; left-stick click toggles sound.
+- Controller use replaces the large touch controls with small live trigger meters. Touching the screen restores touch controls. Disconnecting, backgrounding, or losing window focus pauses driving; held pedals must be released before they can power the car after a reset or menu transition. Button actions are edge-triggered independently of the fixed 60 Hz physics loop.
+- Browser integration checks use simulated standard-mapped controllers. A physical Bluetooth Xbox controller paired with an iPhone must still be checked on hardware.
+- Verified quarter/half/full engine force on all eight cars, progressive braking and the Jalopy exception, reverse/handbrake, stick dead zones, camera orbit/zoom/views, all 19 initially available menu buttons, result/replay/retry navigation, reconnect/background/reset safety, touch/keyboard fallback, and identical acceleration with zero frozen frames at 30/60/90/120 Hz.
+
 ## Left-hand driving and the completion reward
 - All eight interiors have the steering rim, spokes, column and pedals on the driver's left. The original Roadster's source coordinates are converted consistently with its +X-to−Z rotation.
 - Finish all 24 lots with at least one star to unlock the Gold fleet selector. Existing completion saves qualify automatically; a saved gold selection is rejected if the challenges are incomplete.
