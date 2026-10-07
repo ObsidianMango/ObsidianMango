@@ -4,15 +4,18 @@ export function createRunScoring(storage=localStorage){
  let run,multiplier=1;
  const persist=()=>{try{storage.setItem(key,JSON.stringify(saved));}catch{}};
  function reset(mult=1){multiplier=mult;run={rawPedestrians:0,rawParking:0,rawFailure:0,rawDestruction:0,hits:0,combo:0,maxCombo:0,comboUntil:-1,settled:false,result:null};}
- function destroy(kind){if(!run.settled)run.rawDestruction+=kind==='building'?1200:kind==='barrel'?350:kind==='car'?300:150;}
+ let checkpointTotal=0;
+ function destroy(kind,boost=1){if(run.settled)return 0;const raw=Math.round((kind==='building'?1200:kind==='barrel'?350:kind==='car'?300:150)*boost);run.rawDestruction+=raw;return Math.round(raw*multiplier);}
+ function bonus(raw){if(!run.settled)run.rawDestruction+=Math.max(0,Math.round(raw));}
+ function checkpoint({lot,vehicle,elapsed=0}={}){if(run.settled)return 0;const points=snapshot(),amount=Math.max(0,points.pending-checkpointTotal);saved.bank+=amount;checkpointTotal=points.pending;const id=lot+':'+vehicle;if(lot!==undefined&&(!saved.bests[id]||points.pending>saved.bests[id].score))saved.bests[id]={score:points.pending,time:elapsed,stars:3,maxCombo:run.maxCombo};persist();return amount;}
  function snapshot(now=0){const pedestrianPoints=Math.round(run.rawPedestrians*multiplier),parkingPoints=Math.round(run.rawParking*multiplier),failurePoints=Math.round(run.rawFailure*multiplier),destructionPoints=Math.round(run.rawDestruction*multiplier);return{multiplier,pedestrianPoints,parkingPoints,failurePoints,destructionPoints,pending:pedestrianPoints+parkingPoints+failurePoints+destructionPoints,hits:run.hits,combo:now<=run.comboUntil?run.combo:0,comboRemaining:Math.max(0,run.comboUntil-now),maxCombo:run.maxCombo,bank:saved.bank,settled:run.settled,result:run.result};}
  function hit(now){if(run.settled)return null;run.combo=now<=run.comboUntil?run.combo+1:1;run.comboUntil=now+5;run.maxCombo=Math.max(run.maxCombo,run.combo);run.hits++;const raw=100+50*Math.min(3,run.combo-1);run.rawPedestrians+=raw;return{points:Math.round(raw*multiplier),...snapshot(now)};}
- function bank({parked,stars=0,elapsed=0,par=0,failures=0,lot,vehicle,destructionComplete=false}){if(run.settled)return run.result;
+ function bank({parked,stars=0,elapsed=0,par=0,failures=0,lot,vehicle,destructionComplete=false,endless=false}){if(run.settled)return run.result;
   if(destructionComplete)run.rawParking=10000;
-  else if(parked){run.rawParking=1000+stars*250+Math.max(0,Math.floor(par-elapsed))*10;run.rawFailure=failures?600:0;}
-  const points=snapshot(),total=points.pending,banked=parked?total:Math.floor(total*.25),id=lot+':'+vehicle,previous=saved.bests[id];saved.bank+=banked;
+  else if(parked&&!endless){run.rawParking=1000+stars*250+Math.max(0,Math.floor(par-elapsed))*10;run.rawFailure=failures?600:0;}
+  const points=snapshot(),total=points.pending,banked=parked?total:Math.floor(total*.25),id=lot+':'+vehicle,previous=saved.bests[id];saved.bank+=Math.max(0,banked-checkpointTotal);
   const newBest=parked&&(!previous||total>previous.score||(total===previous.score&&elapsed<previous.time));if(newBest)saved.bests[id]={score:total,time:elapsed,stars,maxCombo:run.maxCombo};
   run.settled=true;run.result={...points,total,banked,retained:parked?1:.25,parked,destructionComplete,newBest,best:saved.bests[id]?.score||0,bank:saved.bank};persist();return run.result;
  }
- reset();return{reset,hit,destroy,bank,snapshot,best:(lot,vehicle)=>saved.bests[lot+':'+vehicle]?.score||0};
+ reset();return{reset(mult=1){checkpointTotal=0;reset(mult);},hit,destroy,bonus,checkpoint,bank,snapshot,best:(lot,vehicle)=>saved.bests[lot+':'+vehicle]?.score||0};
 }

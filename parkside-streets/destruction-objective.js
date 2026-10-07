@@ -2,12 +2,12 @@ export function createDestructionObjective({view,crowd,onClear}){
  const credited=new Set();let next=null;
  const cleared=t=>t.kind==='car'?t.car.damage>=.35:t.kind==='barrel'?t.entries.every(e=>e.detonated):t.kind==='building'?t.entries.filter(e=>e.broken).length>=Math.ceil(t.entries.length*.6):t.entries.every(e=>e.broken);
  function all(){return[...view.targets.map(t=>({...t,...(t.kind==='barrel'?{x:t.entries[0].body.position.x-view.ox,z:t.entries[0].body.position.z}:{}),key:'prop:'+t.id,done:cleared(t)})),...crowd.people.map(p=>({key:'person:'+p.i,kind:'person',name:'Pedestrian',district:p.district,x:p.pose[0].p.x-view.ox,z:p.pose[0].p.z,done:p.down}))];}
- function update(x,z){const items=all();for(const t of items)if(t.done&&!credited.has(t.key)){credited.add(t.key);onClear?.(t);}const remaining=items.filter(t=>!t.done);next=remaining.sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z))[0]||null;
+ function update(x,z,preferred=null){const items=all();for(const t of items)if(t.done&&!credited.has(t.key)){credited.add(t.key);onClear?.(t);}let remaining=items.filter(t=>!t.done);if(preferred){const matching=remaining.filter(preferred);if(matching.length)remaining=matching;}next=remaining.sort((a,b)=>Math.hypot(a.x-x,a.z-z)-Math.hypot(b.x-x,b.z-z))[0]||null;
   if(next?.entries&&next.kind!=='barrel'){const e=next.entries.filter(e=>!e.broken).sort((a,b)=>Math.hypot(a.home.x-view.ox-x,a.home.z-z)-Math.hypot(b.home.x-view.ox-x,b.home.z-z))[0];if(e){next.x=e.home.x-view.ox;next.z=e.home.z;}}
   return info(items);
  }
  function info(items=all()){const byKind={},districts=Array.from({length:4},()=>({total:0,done:0}));for(const t of items){const category=t.kind==='person'?'people':t.kind==='building'?'buildings':'props';byKind[category]??={total:0,done:0};byKind[category].total++;districts[t.district].total++;if(t.done){byKind[category].done++;districts[t.district].done++;}}const done=items.filter(t=>t.done).length;return{total:items.length,done,remaining:items.length-done,complete:items.length>0&&done===items.length,byKind,districts,next:next?{name:next.name,district:next.district,x:next.x,z:next.z}:null};}
- return{update,reset(){credited.clear();next=null;},getInfo:info,remaining:()=>all().filter(t=>!t.done)};
+ return{update,reset(){credited.clear();next=null;},forgetDistrict(d){for(const t of view.targets)if(t.district===d)credited.delete('prop:'+t.id);next=null;},getInfo:info,remaining:()=>all().filter(t=>!t.done)};
 }
 
 export function createBarrelEffects(T,scene){
