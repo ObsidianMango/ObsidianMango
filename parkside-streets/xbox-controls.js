@@ -3,7 +3,7 @@
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const axis=v=>{v=Number.isFinite(v)?clamp(v,-1,1):0;return Math.abs(v)<.14?0:Math.sign(v)*(Math.abs(v)-.14)/.86;};
 const value=b=>{const v=typeof b==='number'?b:b?.value;return Number.isFinite(v)?clamp(v,0,1):b?.pressed?1:0;};
-const empty=()=>({connected:false,active:false,gas:0,brake:0,steering:0,cameraX:0,cameraY:0,zoom:0,handbrake:false});
+const empty=()=>({connected:false,active:false,gas:0,brake:0,steering:0,cameraX:0,cameraY:0,zoom:0,handbrake:false,moveX:0,moveY:0,fire:0});
 
 export function createXboxControls({onAction,onConnection,onMode}){
  let index=null,previous=[],armed=false,active=false,input=empty(),focus=null,focusKey='',root=null,nav='',repeat=0;
@@ -35,7 +35,7 @@ export function createXboxControls({onAction,onConnection,onMode}){
   }
   focusButton(next);
  }
- function poll(dt,{menuRoot=null,defaultButton='',driving=false}={}){
+ function poll(dt,{menuRoot=null,defaultButton='',driving=false,walking=false}={}){
   let pads=[];try{pads=Array.from(navigator.getGamepads?.()||[]);}catch{}
   const supported=p=>p?.connected&&(p.mapping==='standard'||(!p.mapping&&/xbox/i.test(p.id)&&p.buttons.length>=16&&p.axes.length>=4));
   let pad=pads.find(p=>p?.index===index&&supported(p));
@@ -50,7 +50,7 @@ export function createXboxControls({onAction,onConnection,onMode}){
   // Require released pedals after a menu, recovery, disconnect or backgrounding.
   if(!armed&&gas<=.02&&brake<=.02&&!down[0])armed=true;
   input={connected:true,active,gas:active&&armed&&driving&&gas>.02?gas:0,brake:active&&armed&&driving&&brake>.02?brake:0,steering:active&&driving?x:0,cameraX:active?cx:0,cameraY:active?cy:0,zoom:active?((down[4]||down[13]?1:0)-(down[5]||down[12]?1:0)):0,handbrake:active&&armed&&driving&&!!down[0]};
-  const all=menuFocus(menuRoot,defaultButton);
+  input.moveX=active&&walking?x:0;input.moveY=active&&walking?y:0;input.fire=active&&armed&&walking?gas:0;const all=menuFocus(menuRoot,defaultButton);
   // Store the held state before callbacks: resets must not manufacture new edges.
   previous=down;
   if(menuRoot){
@@ -63,9 +63,9 @@ export function createXboxControls({onAction,onConnection,onMode}){
    else if(edge(9))onAction('menu');
   }else{
    if(edge(9)||edge(1))onAction('pause');
-   else if(edge(2))onAction('gear');
-   else if(edge(3))onAction('camera');
-   else if(edge(8))onAction('recover');
+   else if(edge(2))onAction(walking?'interact':'gear');
+   else if(edge(3))onAction(walking?'weapon':'camera');
+   else if(edge(8))onAction('interact');
    else if(edge(11))onAction('center');
    else if(edge(14))onAction('reverse');
    else if(edge(15))onAction('drive');
@@ -78,3 +78,4 @@ export function createXboxControls({onAction,onConnection,onMode}){
  window.addEventListener('keydown',()=>setMode(false));
  return {poll,suspend,getState:()=>({...input})};
 }
+

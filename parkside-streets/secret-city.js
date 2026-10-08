@@ -4,14 +4,14 @@ export const DISTRICTS=[{name:'City',x:-120,z:-120,color:0x899b9c},{name:'Suburb
 
 // Built only after the reward unlock: normal parking lots carry no city overhead.
 export function buildSecretCity({T,C,scene,lots,groundMat}){
- const index=24,ox=6000,group=new T.Group(),phys=[],entries=[],targets=[],mini=[],materials=new Map(),box=new T.BoxGeometry(1,1,1),cylinder=new T.CylinderGeometry(.5,.5,1,16),canopy=new T.IcosahedronGeometry(1,1),facades=new Map();
+ const index=24,ox=6000,group=new T.Group(),phys=[],entries=[],targets=[],mini=[],buildings=[],materials=new Map(),box=new T.BoxGeometry(1,1,1),cylinder=new T.CylinderGeometry(.5,.5,1,16),canopy=new T.IcosahedronGeometry(1,1),facades=new Map();
  group.visible=false;scene.add(group);
  const material=(color)=>{if(!materials.has(color))materials.set(color,new T.MeshStandardMaterial({color,roughness:.78}));return materials.get(color);};
  const target=(name,district,kind,x,z)=>{const t={id:targets.length,name,district,kind,x,z,entries:[]};targets.push(t);return t;};
  function visual(geo,mat,x,y,z,sx=1,sy=1,sz=1,parent=group){const m=new T.Mesh(geo,mat),s=parent===group?{x:1,y:1,z:1}:parent.scale;m.position.set((x+(parent===group?ox:0))/s.x,y/s.y,z/s.z);m.scale.set(sx/s.x,sy/s.y,sz/s.z);m.castShadow=sy>.4;m.receiveShadow=true;parent.add(m);return m;}
  function piece(t,w,h,d,x,y,z,color,structure=null,geo=box){const mesh=visual(geo,typeof color==='number'?material(color):color,x,y,z,w,h,d),body=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(w/2,h/2,d/2)),position:new C.Vec3(ox+x,y,z)});body.userData={kind:structure?'building':t.kind==='barrel'?'explosive barrel':'scenery'};body.updateAABB();phys.push(body);const e={mesh,body,level:index,size:[w,h,d],structure,explosive:t.kind==='barrel',target:t};entries.push(e);t.entries.push(e);return e;}
  function facade(color,house=false){const key=color+':'+house;if(facades.has(key))return facades.get(key);const cv=document.createElement('canvas');cv.width=cv.height=256;const c=cv.getContext('2d');c.fillStyle='#'+color.toString(16).padStart(6,'0');c.fillRect(0,0,256,256);c.strokeStyle='#00000019';for(let y=0;y<256;y+=16){c.beginPath();c.moveTo(0,y);c.lineTo(256,y);c.stroke();}for(const x of [42,142]){c.fillStyle='#d2ddcf';c.fillRect(x-5,52,64,142);c.fillStyle=house?'#49616a':'#375568';c.fillRect(x,57,54,132);c.fillStyle='#7698a2';c.fillRect(x+4,61,18,114);c.fillStyle='#d2ddcf';c.fillRect(x+25,57,3,132);c.fillRect(x,118,54,3);}const map=new T.CanvasTexture(cv);map.colorSpace=T.SRGBColorSpace;const paint=new T.MeshStandardMaterial({color:0xffffff,map,roughness:.77});facades.set(key,paint);return paint;}
- function building(name,district,x,z,w,d,h,color,house=false){const t=target(name,district,'building',x,z),id='secret:'+t.id,rows=Math.ceil(h/4),paint=facade(color,house);
+ function building(name,district,x,z,w,d,h,color,house=false){const t=target(name,district,'building',x,z),id='secret:'+t.id,rows=Math.ceil(h/4),paint=facade(color,house);buildings.push({id,level:index,district,x:ox+x,z,w,d,h,yaw:0,name,type:name==='Mint Mart'?'convenience':name==='Golden Arms'?'gun':house?'house':name.startsWith('Warehouse')?'warehouse':'office',target:t});
   for(const side of [-1,1])for(let row=0;row<rows;row++)for(let col=0;col<2;col++){
    piece(t,w/2,h/rows,.48,x-w/2+(col+.5)*w/2,(row+.5)*h/rows,z+side*d/2,paint,id);
    piece(t,.48,h/rows,d/2,x+side*w/2,(row+.5)*h/rows,z-d/2+(col+.5)*d/2,paint,id);
@@ -34,7 +34,7 @@ export function buildSecretCity({T,C,scene,lots,groundMat}){
  for(const x of [-220,-70,0,70,220])road(x,0,x===0?28:16,480);
  for(const z of [-220,-70,0,70,220])road(0,z,480,z===0?28:16);
  // Downtown streets: taller offices, brick shops, a low garage and service yards.
- let n=0;for(const x of [-162,-112,-38])for(const z of [-162,-112,-38]){building(['Office','Shop','Apartments'][n%3]+' '+(++n),0,x,z,24,24,n%3===0?16:8,[0xb9b3a0,0x96acb0,0xbd806b][n%3]);barrel(x+16,z+10,0);barrel(x+16,z+14,0);}
+ let n=0;for(const x of [-162,-112,-38])for(const z of [-162,-112,-38]){building(n===0?'Mint Mart':n===1?'Golden Arms':['Office','Shop','Apartments'][n%3]+' '+(n+1),0,x,z,24,24,n%3===0?16:8,[0xb9b3a0,0x96acb0,0xbd806b][n%3]);n++;barrel(x+16,z+10,0);barrel(x+16,z+14,0);}
  // Houses have pitched roofs, chimneys, driveways, garages and low garden fences.
  n=0;for(const x of [40,118,173])for(const z of [-174,-118,-40]){building('House '+(++n),1,x,z,17,15,5,[0xd2bc96,0xb6c8b0,0xa6bed0][n%3],true);visual(box,material(0xb0b6a6),x+13,.03,z+10,10,.035,25);const f=prop('Garden fence',1,'fence',x,z+12,18,1.2,.18,0xcebda0);for(const dx of [-.4,-.2,0,.2,.4])visual(box,material(0xe1d5bb),dx*18,0,0,.12,1.15,.25,f.mesh);barrel(x-13,z+8,1);tree(x+18,z-12,1,n);}
  // Harbor: connected quays and piers; water is decorative over the driveable base.
@@ -75,7 +75,7 @@ export function buildSecretCity({T,C,scene,lots,groundMat}){
  const marker=new T.Mesh(new T.TorusGeometry(2,.09,6,32),new T.MeshBasicMaterial({color:0xffdf76,depthTest:false}));marker.rotation.x=-Math.PI/2;marker.position.set(ox,.12,0);marker.renderOrder=4;group.add(marker);
  const beacon=new T.Mesh(new T.ConeGeometry(.7,1.4,8),marker.material);beacon.rotation.x=Math.PI;group.add(beacon);
  const routes=DISTRICTS.map((d,district)=>({district,x0:d.x<0?-210:20,x1:d.x<0?-20:210,z0:d.z<0?-210:20,z1:d.z<0?-20:210}));
- const view={group,ox,phys,mini,gates:[],marker:{fill:marker},beacon,targets,routes};lots.views.push(view);lots.breakables.push(...entries);view.detail=createSecretDetail(T,view);
+ const view={group,ox,phys,mini,gates:[],marker:{fill:marker},beacon,targets,routes,buildings};lots.views.push(view);lots.breakables.push(...entries);view.detail=createSecretDetail(T,view);
  return view;
 }
 
