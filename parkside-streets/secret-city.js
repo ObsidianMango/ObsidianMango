@@ -1,6 +1,6 @@
-import {addBuildingContents} from './building-contents.js?v=street-22';
+import {addBuildingContents} from './building-contents.js?v=street-26';
 import {buildRacerBike} from './racer-bike.js?v=street-20';
-import {createSecretDetail} from './secret-detail.js?v=street-22';
+import {createSecretDetail} from './secret-detail.js?v=street-26';
 export const SECRET_LEVEL={name:'Golden Grounds',kind:'Destruction',code:'SECRET',style:'sandbox',type:'destruction',halfSize:240,worldHalf:260,spawn:[0,210,0],target:{x:0,z:0,w:0,d:0,yaw:0},gates:[],theme:0xb5cbd0,par:3600,hint:'Chain destruction, finish demolition jobs, and keep the city smashing forever.'};
 export const DISTRICTS=[{name:'City',x:-120,z:-120,color:0x899b9c},{name:'Suburbs',x:120,z:-120,color:0xa9bd87},{name:'Harbor',x:120,z:120,color:0xa0a8a0},{name:'Forest',x:-120,z:120,color:0x688d60}];
 
