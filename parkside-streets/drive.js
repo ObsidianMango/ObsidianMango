@@ -1,9 +1,9 @@
 import {createBikeDynamics} from './bike-dynamics.js?v=street-22';
 import {createWorldBoundary} from './world-boundary.js?v=street-20';
-import {createStreetLife} from './street-life.js?v=street-23';
+import {createStreetLife} from './street-life.js?v=street-24';
 import {createDestructionLoop} from './destruction-loop.js?v=street-17';
 import {createSky} from './scenery-detail.js?v=street-22';
-import {createXboxControls} from './xbox-controls.js?v=street-17';
+import {createXboxControls} from './xbox-controls.js?v=street-24';
 import {buildGoldenVehicle} from './golden-fleet.js?v=gold-8';
 import {buildMonsterTruck} from './monster-truck.js?v=crush-12';
 import {createVehicleMotion,motorForce} from './vehicle-motion.js?v=smooth-9';
@@ -15,7 +15,7 @@ import {createVanFailures} from './van-failures.js?v=game-5';
 import {sizeChallengeVehicle} from './vehicle-sizing.js?v=game-5';
 import {createHitFeedback} from './hit-feedback.js?v=clarity-14';
 import {createParkedTraffic} from './parked-traffic.js?v=street-17';
-import {createPedestrians} from './pedestrians.js?v=street-23';
+import {createPedestrians} from './pedestrians.js?v=street-24';
 import * as C from './cannon-es.js';
 import {installTouchGuard} from './touch-guard.js?v=mobile-21';
 import {buildRoadster} from './roadster-model.js?v=gold-8';
@@ -66,7 +66,7 @@ const chassis=new C.Body({mass:950,allowSleep:false,material:carMat,position:new
 const vehicle=new C.RaycastVehicle({chassisBody:chassis,indexRightAxis:0,indexUpAxis:1,indexForwardAxis:2});
 const traffic=createParkedTraffic({T,C,scene,world,lots,garage,onWreck:point=>{barrelEffects.show(point);burst(point,16);crashSound(30);}});
 const hitFeedback=createHitFeedback();
-const crowd=createPedestrians({T,C,scene,world,chassis,groundMat,getImpactView:()=>({first:firstPerson&&streetLife.mode==='vehicle'&&!spec.bike,eyeX:car.root.userData.steeringX||-.42,eyeY:spec.monster?3.55:1.45,offset:spec.offset,halfWidth:spec.halfWidth||spec.box[0]}),onHit:()=>{if(state!=='running')return;const award=scoring.hit(time);if(award){runScore=award.pending;hitFeedback.show(award.points,runScore,award.combo,spec.scoreMultiplier);}}});
+const crowd=createPedestrians({T,C,scene,world,chassis,groundMat,onThrownImpact:(body,point,power)=>{if(state!=='running')return;environment.strike(body,point,power);traffic.strike(body,point,power);burst(point,5);crashSound(power*.4);},getImpactView:()=>({first:firstPerson&&streetLife.mode==='vehicle'&&!spec.bike,eyeX:car.root.userData.steeringX||-.42,eyeY:spec.monster?3.55:1.45,offset:spec.offset,halfWidth:spec.halfWidth||spec.box[0]}),onHit:()=>{if(state!=='running')return;const award=scoring.hit(time);if(award){runScore=award.pending;hitFeedback.show(award.points,runScore,award.combo,spec.scoreMultiplier);}}});
 const replayExtras={snapshot:()=>({crowd:crowd.snapshot(),traffic:traffic.snapshot(),environment:environment.snapshot(),terrain:terrain.snapshot()}),apply:(a,b,u)=>{if(a&&b){crowd.apply(a.crowd,b.crowd,u);traffic.apply(a.traffic,b.traffic,u);environment.apply(a.environment,b.environment,u);terrain.apply(a.terrain,b.terrain,u);}}};
 for(const z of [-1.48,1.45])for(const x of [-1.04,1.04])vehicle.addWheel({radius:.525,directionLocal:new C.Vec3(0,-1,0),axleLocal:new C.Vec3(-1,0,0),chassisConnectionPointLocal:new C.Vec3(x,-.04,z),suspensionStiffness:32,suspensionRestLength:.29,maxSuspensionTravel:.22,frictionSlip:3.4,dampingRelaxation:2.3,dampingCompression:4.4,maxSuspensionForce:90000,rollInfluence:.07,customSlidingRotationalSpeed:-25,useCustomSlidingRotationalSpeed:true});vehicle.addToWorld(world);
 // Tires can climb solid rubble and damaged cars; tiny detached trim and pedestrian
@@ -221,7 +221,7 @@ function openMenu(){if(isSecret()&&['running','paused','ended'].includes(state))
 function pause(){streetLife?.closeShop();if(state==='running'||state==='countdown'){pausedFrom=state;state='paused';clearInput();$('pausePanel').hidden=false;$('touch').hidden=true;}else if(state==='paused'){state=pausedFrom;$('pausePanel').hidden=true;$('touch').hidden=false;}}
 function clearInput(){streetLife?.resetInput();if(typeof cameraPointers!=='undefined')cameraPointers.clear();controller?.suspend();padInput={gas:0,brake:0,steering:0,handbrake:false};wheelPointer=null;wheelAngle=0;paintWheel();for(const k in keys)delete keys[k];for(const k in touch)delete touch[k];document.querySelectorAll('.pressed').forEach(b=>b.classList.remove('pressed'));}
 $('start').onclick=start;$('again').onclick=start;$('restart').onclick=start;$('resume').onclick=pause;$('pauseButton').onclick=pause;$('cameraButton').onclick=()=>setCamera(orbitMode==='follow'?'back':orbitMode==='back'?'top':'follow');$('recover').onclick=()=>{if(state==='paused')pause();if(state==='running')recover()};$('menu').onclick=openMenu;$('pauseMenu').onclick=openMenu;$('nextLot').onclick=()=>{const next=nextLevel();if(next===null)openMenu();else if(loadLevel(next))start();};for(const b of document.querySelectorAll('[data-gear]'))b.onclick=()=>{selectedGear=Number(b.dataset.gear);paintGear();};$('explodeButton').onclick=()=>{pause();explode()};$('endDestruction').onclick=finishDestruction;
-window.addEventListener('keydown',e=>{if(streetLife.shopOpen){if(e.code==='Escape'){e.preventDefault();streetLife.closeShop();}return;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();keys[e.code]=true;if(e.repeat)return;if(e.code==='KeyP'||e.code==='Escape'){if(state==='replay'||state==='wreck'){director.stop();showWreck();}else pause();}if(e.code==='KeyF'&&state==='running')togglePerspective();if(e.code==='KeyC')setCamera(orbitMode==='follow'?'back':orbitMode==='back'?'top':'follow');if(e.code==='KeyX'){if(streetLife.mode==='foot')streetLife.cycleWeapon();else selectedGear*=-1;}if(e.code==='KeyR'&&state==='running')recover();if(e.code==='KeyE'&&state==='running')streetLife.interact();});window.addEventListener('keyup',e=>delete keys[e.code]);
+window.addEventListener('keydown',e=>{if(streetLife.shopOpen){if(e.code==='Escape'){e.preventDefault();streetLife.closeShop();}return;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();keys[e.code]=true;if(e.repeat)return;if(e.code==='KeyP'||e.code==='Escape'){if(state==='replay'||state==='wreck'){director.stop();showWreck();}else pause();}if(e.code==='KeyF'&&state==='running')togglePerspective();if(e.code==='KeyC')setCamera(orbitMode==='follow'?'back':orbitMode==='back'?'top':'follow');if(e.code==='KeyX'){if(streetLife.mode==='foot')streetLife.cycleWeapon();else selectedGear*=-1;}if(e.code==='KeyR'&&state==='running')recover();if(e.code==='KeyH'&&state==='running')streetLife.hulk.toggle();if(e.code==='KeyQ'&&state==='running')streetLife.hulk.split();if(e.code==='KeyE'&&state==='running')streetLife.interact();});window.addEventListener('keyup',e=>delete keys[e.code]);
 for(const b of document.querySelectorAll('[data-input]')){b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);touch[b.dataset.input]=true;b.classList.add('pressed');resumeAudio()});const release=()=>{touch[b.dataset.input]=false;b.classList.remove('pressed')};b.addEventListener('pointerup',release);b.addEventListener('pointercancel',release);b.addEventListener('lostpointercapture',release);}
 window.addEventListener('blur',()=>{clearInput();if(state==='running'||state==='countdown')pause()});document.addEventListener('visibilitychange',()=>{if(document.hidden){clearInput();if(state==='running'||state==='countdown')pause()}});
 let audioCtx,engineOsc,gain,sound=false;function resumeAudio(){if(sound){if(!audioCtx){audioCtx=new(window.AudioContext||window.webkitAudioContext)();engineOsc=audioCtx.createOscillator();engineOsc.type='sawtooth';gain=audioCtx.createGain();gain.gain.value=0;const filter=audioCtx.createBiquadFilter();filter.type='lowpass';filter.frequency.value=480;engineOsc.connect(filter).connect(gain).connect(audioCtx.destination);engineOsc.start();}audioCtx.resume().catch(()=>{});}}
@@ -298,7 +298,7 @@ controller=createXboxControls({
   if(action==='sound'){$('sound').click();return;}
   if(action==='back'&&streetLife.shopOpen){streetLife.closeShop();return;}if(action==='back'){if(state==='paused')pause();else if(state==='ended')openMenu();else if(state==='wreckReview')continueWreck();else if(state==='replay'||state==='wreck')$('skipReplay').click();return;}
   if(action==='menu'){if(streetLife.shopOpen){pause();return;}if(state==='menu')start();else if(state==='paused')pause();else{const button=$(controllerMenu().defaultButton);button?.click();}return;}
-  if(action==='pause'){pause();return;}if(action==='interact'&&state==='running'){streetLife.interact();return;}if(action==='weapon'&&state==='running'){streetLife.cycleWeapon();return;}
+  if(action==='hulk'&&state==='running'){streetLife.hulk.toggle();return;}if(action==='rip'&&state==='running'){streetLife.hulk.split();return;}if(action==='drop'&&state==='running'){streetLife.hulk.drop();return;}if(action==='pause'){pause();return;}if(action==='interact'&&state==='running'){streetLife.interact();return;}if(action==='weapon'&&state==='running'){streetLife.cycleWeapon();return;}
   if(!['running','countdown','paused'].includes(state))return;
   if(action==='gear'||action==='drive'||action==='reverse'){selectedGear=action==='gear'?-selectedGear:action==='drive'?1:-1;paintGear();}
   if(action==='camera')setCamera(orbitMode==='follow'?'back':orbitMode==='back'?'top':'follow');
