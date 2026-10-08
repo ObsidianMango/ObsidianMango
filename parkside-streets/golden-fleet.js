@@ -6,7 +6,7 @@ export function buildGoldenVehicle(T,base){
  root.traverse(mesh=>{if(!mesh.isMesh)return;const material=mesh.material;
   // Some curved body sections use clones of the named paint material.
   if(!material.transparent&&!material.map&&(paints.has(material)||baseColors.has(material.color.getHex()))){
-   if(!replacements.has(material)){const gold=material.clone();gold.color.setHex(lightColors.has(material.color.getHex())?0xffdf86:0xe6b64c);gold.metalness=.78;gold.roughness=.27;replacements.set(material,gold);}mesh.material=replacements.get(material);
+   if(!replacements.has(material)){const gold=material.clone();gold.userData.garagePaint=true;gold.color.setHex(lightColors.has(material.color.getHex())?0xffdf86:0xe6b64c);gold.metalness=.78;gold.roughness=.27;replacements.set(material,gold);}mesh.material=replacements.get(material);
   }
  });
  const assemblies=base.assemblies.map(part=>root.children.find(p=>p.name===part.name));

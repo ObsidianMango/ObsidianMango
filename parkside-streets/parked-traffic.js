@@ -7,7 +7,7 @@ export function createParkedTraffic({T,C,scene,world,lots,garage,onWreck}){
  function prepare(item){if(item.prepared)return;item.prepared=true;item.homePosition=item.body.position.clone();item.homeQuaternion=item.body.quaternion.clone();item.physicsMaterial=item.body.material;item.collisionSize=item.body.shapes[0].halfExtents.clone();item.damage=0;item.charred=0;item.exploded=false;item.lastHit=-10;item.detached=new Set();item.frozen=new Map();
   item.body.addEventListener('collide',e=>{if(item.exploded||item.occupied)return;const force=Math.abs(e.contact.getImpactVelocityAlongNormal());if(force>1.3)pending.set(item,Math.max(pending.get(item)||0,force));});
  }
- function standardModel(item){const paint=new T.MeshStandardMaterial({color:item.mesh.children[0]?.material?.color||0x8d9b99,roughness:.55});item.mesh.clear();
+ function standardModel(item){const paint=new T.MeshStandardMaterial({name:'paint',userData:{garagePaint:true},color:item.mesh.children[0]?.material?.color||0x8d9b99,roughness:.55});item.mesh.clear();
   const part=(name,x,y,z,w,h,d,material=paint,geo=boxGeo)=>{const m=new T.Mesh(geo,material);m.name=name;m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=m.receiveShadow=true;item.mesh.add(m);return m;};
   part('chassis',0,.48,0,1.8,.24,3.9,metal);part('hood',0,.88,-1.38,1.88,.28,1.25);part('trunk',0,.88,1.5,1.88,.30,1.0);part('roof',0,1.57,.15,1.52,.16,1.85);
   for(const side of [-1,1])for(const end of [-1,1]){part((side<0?'left':'right')+'-door-'+end,side*.94,.95,end*.52,.12,.75,.94);const wheel=part('wheel-'+side+'-'+end,side*.98,.4,end*1.36,1,1,1,rubber,wheelGeo);wheel.rotation.z=Math.PI/2;}

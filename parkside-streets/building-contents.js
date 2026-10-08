@@ -1,7 +1,7 @@
 // Furnished floor clusters share two existing furniture bodies per story.
 export function addBuildingContents(building,make,decorate){
  const {w,d,h,type}=building,stories=Math.ceil(h/4),step=h/stories,added=[];
- const home=['house','camp','lodge','orchard','motel'].includes(type),shop=['convenience','gun','market','diner','casino'].includes(type),industrial=['warehouse','factory','harbour','construction','scrap','marina','quarry'].includes(type);
+ const home=['house','camp','lodge','orchard','motel'].includes(type),shop=['convenience','gun','market','diner','casino'].includes(type),industrial=['garage','warehouse','factory','harbour','construction','scrap','marina','quarry'].includes(type);
  function item(kind,x,y,z,floor){
   let size,color,parts=[];
   const part=(key,x,y,z,w,h,d,loose=false)=>parts.push({key,x,y,z,w,h,d,loose});

@@ -2,7 +2,7 @@
 export function detailKit(T,base=null){
  const root=base?.root||new T.Group(),groups=new Map(),materials={...base?.materials};
  if(base)for(const g of base.assemblies){for(const child of g.children)child.position.add(g.position);g.position.set(0,0,0);groups.set(g.name,g);}
- const mat=(name,color,metalness=0,roughness=.5,extra={})=>materials[name]=new T.MeshStandardMaterial({color,metalness,roughness,...extra});
+ const mat=(name,color,metalness=0,roughness=.5,extra={})=>materials[name]=new T.MeshStandardMaterial({name,color,metalness,roughness,...extra,userData:{garagePaint:['paint','roofPaint','blue','blueDark','yellow','orange','accent','rust'].includes(name)}});
  mat('trim',0xc5d0d1,.45,.23);mat('steel',0x576165,.5,.4);mat('black',0x142023,.05,.65);mat('tire',0x191d20,0,.91);mat('tread',0x262b2d,0,.94);mat('ivory',0xf3e6c7,.08,.45);mat('lens',0xfff2ce,.08,.19,{emissive:0xffdfa0,emissiveIntensity:.12});mat('tailLens',0x9b1720,.15,.23);mat('amberLens',0xe89125,.1,.27);mat('glassDetail',0x7eabb5,.08,.14,{transparent:true,opacity:.27,depthWrite:false,side:T.DoubleSide});mat('leatherDetail',0x734b33,0,.78);mat('stitch',0xad8a61,0,.8);mat('gauge',0x0c1517,.1,.4);mat('woodDetail',0x754122,.05,.45);mat('disc',0x909a9e,.55,.4);mat('caliper',0x8d2928,.25,.44);
  function group(n){if(!groups.has(n)){const g=new T.Group();g.name=n;groups.set(n,g);root.add(g);}return groups.get(n);}
  function remove(n){const g=groups.get(n);if(g){root.remove(g);groups.delete(n);}}
