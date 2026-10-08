@@ -1,5 +1,5 @@
-import {createScratchUI} from './scratch-ui.js?v=street-20';
-import {createCasinoUI} from './casino-ui.js?v=street-20';
+import {createScratchUI} from './scratch-ui.js?v=mobile-21';
+import {createCasinoUI} from './casino-ui.js?v=mobile-21';
 import {createCasinoRoom,CASINO_STATIONS} from './casino-room.js?v=street-20';
 import {createShopEconomy,WEAPONS} from './shop-economy.js?v=street-20';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -86,11 +86,11 @@ export function createStreetLife({T,C,scene,world,lots,chassis,groundMat,getView
   if(gun){for(const w of WEAPONS){const row=document.createElement('div');row.className='shop-row';const text=document.createElement('div');text.textContent=w.name;const small=document.createElement('small');small.textContent=s.owned.includes(w.id)?w.rounds?s.ammo[w.id]+' rounds':'Unlimited swings':w.rounds?w.rounds+' rounds included':'Unlimited swings';text.append(small);row.append(text);const buy=document.createElement('button');buy.textContent=s.owned.includes(w.id)?s.equipped===w.id?'Equipped':'Equip':'Buy · $'+w.price;buy.disabled=s.owned.includes(w.id)?s.equipped===w.id:s.cash<w.price;buy.onclick=()=>{s.owned.includes(w.id)?economy.equip(w.id):economy.buy(w.id);renderShop();};row.append(buy);if(s.owned.includes(w.id)&&w.refill){const refill=document.createElement('button');refill.textContent='+'+w.rounds+' · $'+w.refill;refill.disabled=s.cash<w.refill||s.ammo[w.id]>9999-w.rounds;refill.onclick=()=>{economy.refill(w.id);renderShop();};row.append(refill);}$('shopStock').append(row);}}
   else scratchUI.render();
  }
- function openShop(){if(!inside||!['convenience','gun'].includes(inside.type))return false;shopOpen=true;clearInput();$('shopPanel').hidden=false;renderShop();return true;}
- function openCasino(game){if(inside?.type!=='casino'||getState()!=='running')return false;if(game==='sit'){setSeated(!seated);notify(seated?'Take a seat · move or interact to stand':'Back on your feet');return true;}shopOpen=true;clearInput();casinoUI.open(game);return true;}
+ function openShop(){if(!inside||!['convenience','gun'].includes(inside.type))return false;shopOpen=true;document.body.classList.add('menu-open');clearInput();$('shopPanel').hidden=false;renderShop();return true;}
+ function openCasino(game){if(inside?.type!=='casino'||getState()!=='running')return false;if(game==='sit'){setSeated(!seated);notify(seated?'Take a seat · move or interact to stand':'Back on your feet');return true;}shopOpen=true;document.body.classList.add('menu-open');clearInput();casinoUI.open(game);return true;}
  function setSeated(value){if(value){standingPos={x:body.position.x,z:body.position.z};body.position.set(origin-2.9,.63,5.35);}else if(standingPos){body.position.set(standingPos.x,.83,standingPos.z);standingPos=null;}seated=value;}
- function closeShop(){scratchUI.flush();if(!shopOpen)return;shopOpen=false;$('shopPanel').hidden=true;casinoUI.hide();fireHeld=false;walkX=walkY=0;clearInput();}
- $('closeShop').onclick=closeShop;
+ function closeShop(){scratchUI.flush();if(!shopOpen)return;shopOpen=false;document.body.classList.remove('menu-open');$('shopPanel').hidden=true;casinoUI.hide();fireHeld=false;walkX=walkY=0;clearInput();}
+ $('closeShop').onclick=$('shopClose').onclick=closeShop;
  $('interactButton').onclick=interact;$('weaponButton').onclick=cycleWeapon;
  const stick=$('walkStick');function stickMove(e){const r=stick.getBoundingClientRect();walkX=clamp((e.clientX-r.left-r.width/2)/(r.width*.36),-1,1);walkY=clamp((e.clientY-r.top-r.height/2)/(r.height*.36),-1,1);$('walkKnob').style.transform='translate('+walkX*26+'px,'+walkY*26+'px)';}
  stick.addEventListener('pointerdown',e=>{if(mode!=='foot'||stickPointer!==null)return;e.preventDefault();stickPointer=e.pointerId;stick.setPointerCapture(e.pointerId);stickMove(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickPointer)stickMove(e);});for(const ev of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(ev,e=>{if(e.pointerId===stickPointer){stickPointer=null;walkX=walkY=0;$('walkKnob').style.transform='translate(0,0)';}});
