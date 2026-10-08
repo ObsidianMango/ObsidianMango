@@ -1,4 +1,5 @@
-import {createSceneryDetail} from './scenery-detail.js?v=clarity-14';
+import {addBuildingContents} from './building-contents.js?v=street-22';
+import {createSceneryDetail} from './scenery-detail.js?v=street-22';
 const BASE_LOTS=[
  {name:'Market Square',kind:'Head-in',hint:'Drive around the island and park in A3.',code:'A3',theme:0xb6bca3,spawn:[-13,17,0],target:{x:4,z:-15,yaw:0,w:3.8,d:6.6},par:45,style:'market'},
  {name:'Sunset Diner',kind:'Angled bay',hint:'Follow the diagonal row. Stop inside D4.',code:'D4',theme:0xc7ab88,spawn:[-15,17,0],target:{x:7,z:-10,yaw:-Math.PI/4,w:3.7,d:6.6},par:55,style:'diner'},
@@ -167,6 +168,7 @@ export function buildLots({T,C,scene,world,groundMat}){
  for(const side of [-1,1]){const offset=t.w/2+1.25,x=t.x+Math.cos(t.yaw)*offset*side,z=t.z-Math.sin(t.yaw)*offset*side;
   const occupied=parkedCars.some(p=>p.level===index&&Math.hypot(p.body.position.x-ox-x,p.body.position.z-z)<4.8);
   if(!occupied)parked(x/2,z/2,t.yaw,colors[(index+(side>0?1:0))%5]);}
+ for(const building of buildings){addBuildingContents(building,(size,dx,y,dz,color)=>{const c=Math.cos(building.yaw),s=Math.sin(building.yaw);piece(...size,building.x-ox+c*dx+s*dz,y,building.z-s*dx+c*dz,color,building.yaw,building.id);return breakables.at(-1);},(e,parts)=>{const colors={metal:0x657679,glass:0x486e79,fabric:0x657d6f,wood:0x95744e,paper:0xd4c8ad};for(const p of parts){const m=new T.Mesh(boxGeo,mat(colors[p.key]));m.position.set(p.x/e.size[0],p.y/e.size[1],p.z/e.size[2]);m.scale.set(p.w/e.size[0],p.h/e.size[1],p.d/e.size[2]);e.mesh.add(m);}});}
  // Every remaining physical prop gets a body. Decorations ride with their support.
  g.updateMatrixWorld(true);for(const m of [...g.children]){if(!m.isMesh||m.userData.guide||m.userData.body)continue;
   m.geometry.computeBoundingBox();const bounds=m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld),size=new T.Vector3();bounds.getSize(size);
