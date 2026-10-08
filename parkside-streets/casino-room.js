@@ -8,7 +8,7 @@ export function createCasinoRoom(T){
  const glow=new T.MeshBasicMaterial({color:0xffcd77}),pink=new T.MeshBasicMaterial({color:0xf195d0});
  function mesh(parent,geo,color,x,y,z,sx,sy,sz){const m=new T.Mesh(geo,material(color));m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=m.receiveShadow=true;parent.add(m);return m;}
  function dynamic(m,kind){m.userData.casinoMotion=kind;movers.push(m);return m;}
- function batch(room){const groups=new Map();for(const m of [...room.children]){if(!m.isMesh||m.userData.casinoMotion||m.material.map)continue;const key=m.geometry.uuid+':'+m.material.uuid;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(m);}let instances=0,batches=0;for(const list of groups.values()){if(list.length<2)continue;const batch=new T.InstancedMesh(list[0].geometry,list[0].material,list.length);list.forEach((m,i)=>{m.updateMatrix();batch.setMatrixAt(i,m.matrix);room.remove(m);});batch.castShadow=false;batch.receiveShadow=true;batch.computeBoundingSphere();batch.instanceMatrix.needsUpdate=true;batch.name='Casino shared detail';room.add(batch);instances+=list.length;batches++;}resources={batches:resources.batches+batches,instances:resources.instances+instances};}
+ function batch(room){const groups=new Map();for(const m of [...room.children]){if(!m.isMesh||m.userData.casinoMotion||m.material.map)continue;const key=m.geometry.uuid+':'+m.material.uuid;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(m);}let instances=0,batches=0;for(const list of groups.values()){if(list.length<2)continue;const batch=new T.InstancedMesh(list[0].geometry,list[0].material,list.length);list.forEach((m,i)=>{m.updateMatrix();batch.setMatrixAt(i,m.matrix);room.remove(m);});batch.castShadow=false;batch.receiveShadow=true;batch.computeBoundingSphere();batch.instanceMatrix.needsUpdate=true;batch.userData.indoorParts=list.map(m=>({position:m.position.clone(),scale:m.scale.clone(),matrix:m.matrix.clone()}));batch.name='Casino shared detail';room.add(batch);instances+=list.length;batches++;}resources={batches:resources.batches+batches,instances:resources.instances+instances};}
  function build({room,box,label}){resources={batches:0,instances:0};movers=[];reelFaces=[];ball=null;clock=0;
   box(room,15.8,.02,13.8,0,.012,0,0x563650);for(let x=-7;x<8;x+=2)for(let z=-6;z<7;z+=2)box(room,.9,.014,.9,x,.029,z,0x674563);
   for(const x of [-7.8,7.8]){box(room,.1,.18,13.8,x,.25,0,0xccaa61);box(room,.1,.12,13.8,x,2.8,0,0xccaa61);}
@@ -23,6 +23,7 @@ export function createCasinoRoom(T){
    for(let i=0;i<3;i++){box(room,.03,.46,.23,-5.72,1.36,z-.31+i*.31,0xf3e5c6);const face=dynamic(mesh(room,sphere,[0xcf554d,0xe2bb5a,0x7bad88][i],-5.69,1.36,z-.31+i*.31,.035,.075,.075),'reel');reelFaces.push(face);}
    box(room,.65,.15,1.13,-5.94,.87,z,0x4b3c58);for(const offset of [-.28,0,.28])mesh(room,cylinder,0xe8bd6c,-5.68,.97,z+offset,.07,.04,.07);box(room,.015,.035,.3,-5.73,.62,z,0xccaa61);const sign=label(room,'SLOTS',-5.7,2.18,z,1.2);sign.rotation.y=Math.PI/2;
   }
+  for(const z of [-2,.1,2.2]){mesh(room,cylinder,0x33263e,-4.65,.25,z,.12,.5,.12);mesh(room,cylinder,0x954766,-4.65,.52,z,.3,.12,.3);}
   function table(x,z,w,d,title){box(room,w,.15,d,x,.9,z,0x253e37,true);box(room,w+.15,.13,d+.15,x,.8,z,0x39283e);for(const side of [-1,1])box(room,.14,.72,.14,x+side*(w/2-.2),.4,z,0xccaa61);label(room,title,x,1.48,z-.55,2);}
   table(-2,-2.9,2.8,1.8,'BLACKJACK');table(4,-2.9,3,2,'DRAW POKER');
   // Cards and chip stacks on both felt tables.
@@ -59,4 +60,14 @@ export function createCasinoRoom(T){
  function update(dt,result){clock+=Math.min(dt,.05);if(result?.game==='roulette')lastNumber=result.number;const angle=WHEEL_ORDER.indexOf(lastNumber)*Math.PI*2/37;if(ball)ball.position.set(4+Math.sin(angle)*.72,1.15,1.6+Math.cos(angle)*.72);for(let i=0;i<movers.length;i++){const m=movers[i],kind=m.userData.casinoMotion;if(!reducedMotion&&kind==='head')m.rotation.y=Math.sin(clock*.7+i)*.12;else if(!reducedMotion&&kind==='arm')m.rotation.x=Math.sin(clock*.8+i)*.12;}if(result?.game==='slots')for(let i=0;i<reelFaces.length;i++)reelFaces[i].material=material([0xcf554d,0xe2bb5a,0x7bad88,0xf195d0,0xf4eacb][result.reels[i%result.reels.length]]);}
  return {build,update,clear(){movers=[];reelFaces=[];ceiling=null;ball=null;},setFirstPerson(value){if(ceiling)ceiling.visible=value;},geometries:new Set([cylinder,sphere,ring]),getInfo:()=>({sharedGeometries:3,materials:mats.size+2,...resources,animatedParts:movers.length})};
 }
-export const CASINO_STATIONS=[{game:'slots',x:-4.8,z:-2,name:'Cherry slot'},{game:'slots',x:-4.8,z:.1,name:'Mango slot'},{game:'slots',x:-4.8,z:2.2,name:'Diamond slot'},{game:'roulette',x:2.1,z:1.6,name:'Roulette'},{game:'poker',x:2.05,z:-2.6,name:'Draw poker'},{game:'blackjack',x:-3.15,z:-.8,name:'Blackjack'},{game:'lobby',x:5.5,z:3.45,name:'Cashier & player card'},{game:'bar',x:0,z:-4.5,name:'Bar'},{game:'sit',x:-4,z:4.4,name:'Lounge seat'}];
+export const CASINO_STATIONS=[
+ {game:'slots',x:-4.8,z:-2,seatX:-4.65,seatZ:-2,yaw:Math.PI/2,name:'Cherry slot'},
+ {game:'slots',x:-4.8,z:.1,seatX:-4.65,seatZ:.1,yaw:Math.PI/2,name:'Mango slot'},
+ {game:'slots',x:-4.8,z:2.2,seatX:-4.65,seatZ:2.2,yaw:Math.PI/2,name:'Diamond slot'},
+ {game:'roulette',x:2.1,z:1.6,seatX:4,seatZ:3.25,yaw:0,name:'Roulette'},
+ {game:'poker',x:2.05,z:-2.6,seatX:4,seatZ:-1.15,yaw:0,name:'Draw poker'},
+ {game:'blackjack',x:-3.15,z:-.8,seatX:-2,seatZ:-1.2,yaw:0,name:'Blackjack'},
+ {game:'lobby',x:5.5,z:3.45,name:'Cashier & player card'},
+ {game:'bar',x:0,z:-4.5,name:'Bar'},
+ {game:'sit',x:-4,z:4.4,seatX:-2.9,seatZ:5.35,yaw:0,name:'Lounge seat'}
+];
