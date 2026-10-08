@@ -1,12 +1,12 @@
 // Endless jobs reuse the same city. Only an unoccupied district can be rebuilt.
-export function createDestructionLoop({view,objective,environment,traffic,scoring,onAward,onJob,storage=localStorage}){
+export function createDestructionLoop({view,objective,environment,traffic,scoring,onAward,onJob,protectedPositions=()=>[],storage=localStorage}){
  const key='parkside-destruction-record-v1',order=[3,0,1,2];
  let record={jobs:0,chain:0,score:0};try{const r=JSON.parse(storage.getItem(key));if(r)for(const k of Object.keys(record))if(Number.isFinite(r[k]))record[k]=Math.max(0,r[k]);}catch{}
- let now=0,chain=0,chainUntil=-1,jobs=0,total=0,job=null,waiting=false,completedAt=-1;
+ let now=0,chain=0,chainUntil=-1,jobs=0,total=0,job=null,waiting=false,completedAt=-1,rebuildAllowed=true;
  const matches=(t,type)=>t.kind!=='person'&&(type==='any'||type==='buildings'&&t.kind==='building'||type==='barrels'&&t.kind==='barrel'||type==='props'&&!['building','barrel'].includes(t.kind));
  const boost=()=>1+Math.min(4,Math.floor(Math.max(0,chain-1)/3))*.5;
  function persist(){record.jobs=Math.max(record.jobs,jobs);record.chain=Math.max(record.chain,chain);record.score=Math.max(record.score,scoring.snapshot(now).pending);try{storage.setItem(key,JSON.stringify(record));}catch{}}
- function canRebuild(d,x,z){const px=view.ox+x;return view.targets.filter(t=>t.district===d).every(t=>{
+ function canRebuild(d,x,z){if(!rebuildAllowed)return false;for(const p of protectedPositions())if(view.targets.some(t=>t.district===d&&Math.hypot(view.ox+t.x-p.x,t.z-p.z)<60))return false;const px=view.ox+x;return view.targets.filter(t=>t.district===d).every(t=>{
   if(Math.hypot(t.x-x,t.z-z)<60)return false;
   return (t.entries||[t.car]).every(e=>Math.hypot(e.body.position.x-px,e.body.position.z-z)>60);
  });}
@@ -26,7 +26,7 @@ export function createDestructionLoop({view,objective,environment,traffic,scorin
   onAward?.(points,chain,boost());record.chain=Math.max(record.chain,chain);
   if(!waiting&&completedAt<0&&t.district===job.district&&matches(t,job.type)){job.done++;if(job.done>=job.quota)completedAt=now;}
  }
- function update(dt,x,z,vehicle,elapsed){now+=dt;if(now>chainUntil)chain=0;
+ function update(dt,x,z,vehicle,elapsed,allowRebuild=true){rebuildAllowed=allowRebuild;now+=dt;if(now>chainUntil)chain=0;
   if(waiting)prepare(x,z);
   if(completedAt>=0&&now-completedAt>=1.2){const quick=completedAt-job.started<=job.bonusTime,bonus=(1000+Math.min(5000,jobs*150))*(quick?1.5:1);scoring.bonus(bonus);jobs++;const banked=checkpoint(vehicle,elapsed);persist();onJob?.({number:jobs,banked,quick});select(x,z);}
  }

@@ -51,20 +51,20 @@ export function buildLots({T,C,scene,world,groundMat}){
  const detail=createSceneryDetail(T);const parkedCars=[],obstacles=[],breakables=[],views=[],materials=new Map(),boxGeo=new T.BoxGeometry(1,1,1);
  const mat=c=>{if(!materials.has(c))materials.set(c,new T.MeshStandardMaterial({color:c,roughness:.82}));return materials.get(c);};
  LOTS.forEach((level,index)=>{const ox=index*240,g=new T.Group();scene.add(g);g.visible=index===0;let mini=[];const phys=[];
- let structureSerial=0;
+ let structureSerial=0;const buildings=[];
  function piece(w,h,d,x,y,z,color,yaw=0,structure=null){const m=new T.Mesh(boxGeo,mat(color));m.scale.set(w,h,d);m.position.set(ox+x,y,z);m.rotation.y=yaw;m.castShadow=h>.3;m.receiveShadow=true;g.add(m);
  const b=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(w/2,h/2,d/2)),position:new C.Vec3(ox+x,y,z)});b.quaternion.setFromEuler(0,yaw,0);b.userData={kind:structure?'building':'scenery'};b.updateAABB();phys.push(b);m.userData.body=b;breakables.push({mesh:m,body:b,level:index,size:[w,h,d],structure});return m;}
  function box(w,h,d,x,y,z,color,yaw=0,solid=false){x*=2;z*=2;
  // Ground is supplied by the deformable heightfield; markings remain logical guides.
  if(y<0&&w>40&&d>40)return null;
  const building=h>=4&&w>=7&&d>=5;
- if(building){w*=2;d*=2;const id=index+':'+structureSerial++,rows=Math.ceil(h/4),hx=w/2,hz=d/2;
+ if(building){w*=2;d*=2;const id=index+':'+structureSerial++;buildings.push({id,level:index,x:ox+x,z,w,d,h,yaw,name:level.style.replace(/^./,c=>c.toUpperCase()),type:level.style});const rows=Math.ceil(h/4),hx=w/2,hz=d/2;
   const wall=(length,axis,side)=>{const cols=Math.ceil(length/6);for(let row=0;row<rows;row++)for(let c=0;c<cols;c++){const offset=-length/2+(c+.5)*length/cols;piece(axis===0?length/cols:.55,h/rows,axis===0?.55:length/cols,x+(axis===0?offset:side*hx),y-h/2+(row+.5)*h/rows,z+(axis===0?side*hz:offset),color,yaw,id);}};
   for(const side of [-1,1]){wall(w,0,side);wall(d,1,side);}const nx=Math.ceil(w/6),nz=Math.ceil(d/6);for(let i=0;i<nx;i++)for(let j=0;j<nz;j++)piece(w/nx,.35,d/nz,x-w/2+(i+.5)*w/nx,y+h/2+.18,z-d/2+(j+.5)*d/nz,0x7b8277,yaw,id);mini.push({x,z,w,d,yaw,color:'#677b75'});return null;
  }
  // Stretch architecture and boundary walls, while preserving full-size vehicles and bays.
  if(Math.abs(x)>44||Math.abs(z)>44){w*=2;d*=2;}
- const physical=solid||h>.025&&y>.11;
+ if(h>=2.6&&w>=5&&d>=5)buildings.push({id:index+':hut:'+buildings.length,level:index,x:ox+x,z,w,d,h,yaw,name:level.style==='seaside'?'Beach hut':'Outbuilding',type:level.style==='seaside'?'house':'warehouse'});const physical=solid||h>.025&&y>.11;
  if(physical){const nx=Math.ceil(w/7),nz=Math.ceil(d/7);let first=null;for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const px=-w/2+(i+.5)*w/nx,pz=-d/2+(j+.5)*d/nz;const m=piece(w/nx,h,d/nz,x+Math.cos(yaw)*px+Math.sin(yaw)*pz,y,z-Math.sin(yaw)*px+Math.cos(yaw)*pz,color,yaw);first??=m;}mini.push({x,z,w,d,yaw,color:'#a5b6ac'});return first;}
  const m=new T.Mesh(boxGeo,mat(color));m.scale.set(w,h,d);m.position.set(ox+x,y,z);m.rotation.y=yaw;m.receiveShadow=true;g.add(m);m.userData.guide=y<=.11;return m;}
  function text(value,x,y,z,width=5,yaw=0,ground=false,color='#193c35'){const cv=document.createElement('canvas');cv.width=512;cv.height=128;const ctx=cv.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,512,128);ctx.fillStyle='#fff6dd';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 46px system-ui';ctx.fillText(value,256,65);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;const mesh=new T.Mesh(new T.PlaneGeometry(width,width/4),new T.MeshBasicMaterial({map:tx,side:T.DoubleSide}));mesh.position.set(ox+x*2,y,z*2);mesh.userData.guide=ground;if(ground){mesh.rotation.x=-Math.PI/2;mesh.rotation.z=yaw;}else mesh.rotation.y=yaw;g.add(mesh);return mesh;}
@@ -174,7 +174,7 @@ export function buildLots({T,C,scene,world,groundMat}){
   if(support){support.mesh.attach(m);continue;}
   const b=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(Math.max(.08,size.x/2),Math.max(.08,size.y/2),Math.max(.08,size.z/2))),position:new C.Vec3(m.position.x,m.position.y,m.position.z)});b.userData={kind:'scenery'};m.userData.body=b;phys.push(b);breakables.push({mesh:m,body:b,level:index,size:size.toArray(),structure:null});
  }
- views.push({group:g,ox,marker,beacon,mini,phys,gates});
+ views.push({group:g,ox,marker,beacon,mini,phys,gates,buildings});
 
  });
  return {views,obstacles,breakables,parked:parkedCars,show(index){views.forEach((v,i)=>{v.group.visible=i===index;for(const body of v.phys){const present=world.bodies.includes(body);if(i===index&&LOTS[i]&&!v.detail){v.detail=detail.dress({group:v.group,ox:v.ox,index:i,style:LOTS[i].style,structures:breakables.filter(e=>e.level===i)});}if(i===index&&!present)world.addBody(body);else if(i!==index&&present)world.removeBody(body);}});}};
