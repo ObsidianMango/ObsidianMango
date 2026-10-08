@@ -34,7 +34,7 @@ export function createSecretDetail(T,view){
  for(const z of [-220,-70,0,70,220])for(let x=-204;x<=204;x+=24){const d=x<0?(z<0?0:3):(z<0?1:2),side=z===0?15:9;for(const sign of [-1,1])add(d,'curb',x,.06,z+sign*side,22,.1,1.25);}
  for(const x of [-70,70])for(const z of [-70,70])for(let i=0;i<7;i++)add(x<0?(z<0?0:3):(z<0?1:2),'trim',x-5+i*1.7,.055,z+11,1,.025,5);
  for(let i=0;i<120;i++){const x=-206+(i%12)*15,z=32+Math.floor(i/12)*19;if(Math.abs(x+70)<14||Math.abs(z-70)<14)continue;add(3,i%4?'soil':'stone',x,.2,z,1.2,.4,1.5,null,i*.6);}
- for(let i=0;i<48;i++){const a=i*Math.PI/24,x=Math.cos(a)*310,z=Math.sin(a)*310,d=x<0?(z<0?0:3):(z<0?1:2);add(d,d===3?'hill':'horizon',x,d===3?3:7+i%5*2,z,d===3?60:18,d===3?25:14+i%5*4,d===3?45:22);}
+
  const keys=new Set(plans.map(p=>p.d+':'+p.key));
  for(const key of keys){const list=plans.filter(p=>p.d+':'+p.key===key),d=list[0].d,type=list[0].key,mesh=new T.InstancedMesh(type==='leaf'||type==='hill'?leaf:type==='stone'?stone:box,mats[type],list.length);mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.frustumCulled=false;mesh.receiveShadow=true;mesh.castShadow=false;view.group.add(mesh);batches.push({mesh,list,d,type});}
  const centers=[[-120,-120],[120,-120],[120,120],[-120,120]],sources=new Set(plans.filter(p=>p.source).map(p=>p.source)),axis=new T.Vector3(0,0,1),tint=new T.Color();let timer=1;
