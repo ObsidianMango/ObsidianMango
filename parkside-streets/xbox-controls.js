@@ -49,7 +49,7 @@ export function createXboxControls({onAction,onConnection,onMode}){
   if(x||y||cx||cy||gas>.02||brake>.02||down.some(Boolean))setMode(true);
   // Require released pedals after a menu, recovery, disconnect or backgrounding.
   if(!armed&&gas<=.02&&brake<=.02&&!down[0])armed=true;
-  input={connected:true,active,gas:active&&armed&&driving&&gas>.02?gas:0,brake:active&&armed&&driving&&brake>.02?brake:0,steering:active&&driving?x:0,cameraX:active?cx:0,cameraY:active?cy:0,zoom:active?((down[4]||down[13]?1:0)-(down[5]||down[12]?1:0)):0,handbrake:active&&armed&&driving&&!!down[0]};
+  input={connected:true,active,gas:active&&armed&&driving&&gas>.02?gas:0,brake:active&&armed&&driving&&brake>.02?brake:0,steering:active&&driving?x:0,cameraX:active?cx:0,cameraY:active?cy:0,zoom:active?((down[4]||(!walking&&down[13])?1:0)-(down[5]||down[12]?1:0)):0,handbrake:active&&armed&&driving&&!!down[0]};
   input.moveX=active&&walking?x:0;input.moveY=active&&walking?y:0;input.fire=active&&armed&&walking?gas:0;const all=menuFocus(menuRoot,defaultButton);
   // Store the held state before callbacks: resets must not manufacture new edges.
   previous=down;
@@ -63,6 +63,9 @@ export function createXboxControls({onAction,onConnection,onMode}){
    else if(edge(9))onAction('menu');
   }else{
    if(edge(9)||edge(1))onAction('pause');
+   else if(walking&&edge(13))onAction('hulk');
+   else if(walking&&edge(6))onAction('rip');
+   else if(walking&&edge(0))onAction('drop');
    else if(edge(2))onAction(walking?'interact':'gear');
    else if(edge(3))onAction(walking?'weapon':'camera');
    else if(edge(8))onAction('interact');
