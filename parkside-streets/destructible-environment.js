@@ -6,8 +6,8 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode}){
  const crackedRubble=new T.MeshStandardMaterial({color:0x9b978d,roughness:1}),burnedRubble=new T.MeshStandardMaterial({color:0x34312b,roughness:1});setDamageAppearance(T,crackedRubble,.85,0);setDamageAppearance(T,burnedRubble,1,1);
  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
  function register(entries){for(const e of entries){if(registered.has(e))continue;registered.add(e);
-  e.home=e.body.position.clone();e.turn=e.body.quaternion.clone();e.originalPhysicsMaterial=e.body.material;e.originalShape=e.body.shapes[0];e.originalScale=e.mesh.scale.clone();e.originalSize=e.size.slice();e.filterGroup=e.body.collisionFilterGroup;e.geometry=e.mesh.geometry;e.color=e.mesh.material.color.clone();e.damage=0;e.charred=0;e.broken=false;e.childMaterials=[];e.last=-10;e.lastRam=-10;e.dent=[0,0,0,0,0,1];e.visualDamage=-1;
-  if(e.level===24&&e.structure){if(!structures.has(e.structure))structures.set(e.structure,{entries:[],ordered:[],supports:new Map()});structures.get(e.structure).entries.push(e);}
+  e.body.updateAABB();e.supportWidth=e.body.aabb.upperBound.x-e.body.aabb.lowerBound.x;e.supportDepth=e.body.aabb.upperBound.z-e.body.aabb.lowerBound.z;e.home=e.body.position.clone();e.turn=e.body.quaternion.clone();e.originalPhysicsMaterial=e.body.material;e.originalShape=e.body.shapes[0];e.originalScale=e.mesh.scale.clone();e.originalSize=e.size.slice();e.filterGroup=e.body.collisionFilterGroup;e.geometry=e.mesh.geometry;e.color=e.mesh.material.color.clone();e.damage=0;e.charred=0;e.broken=false;e.childMaterials=[];e.last=-10;e.lastRam=-10;e.dent=[0,0,0,0,0,1];e.visualDamage=-1;
+  if(e.structure){if(!structures.has(e.structure))structures.set(e.structure,{entries:[],ordered:[],supports:new Map()});structures.get(e.structure).entries.push(e);}
   e.body.addEventListener('collide',event=>{
    const kind=event.body.userData?.kind,target=!!kind&&kind!=='pedestrian',armedTarget=e.explosive&&e.armed&&target&&elapsed-e.armedAt>.08&&e.body.position.distanceTo(e.launchPosition)>1.5;
    if(!active.includes(e)||event.body.mass<=0&&!armedTarget||kind==='pedestrian'||elapsed-e.last<.24&&!armedTarget)return;
@@ -16,7 +16,7 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode}){
    const point=e.body.position.vadd(relative),velocity=event.body.velocity.clone();
    if(!pending.has(e)||pending.get(e).speed<speed)pending.set(e,{speed,point,velocity,target:armedTarget,monster:!!event.body.userData?.monster});
   });
- }for(const group of structures.values()){group.ordered=group.entries.slice().sort((a,b)=>a.home.y-b.home.y);for(const e of group.ordered){const bottom=e.home.y-e.originalSize[1]/2;e.foundation=bottom<=.65;e.roof=e.role==='roof'||e.originalSize[1]<1&&Math.max(e.originalSize[0],e.originalSize[2])>6;group.supports.set(e,group.ordered.filter(o=>o!==e&&o.home.y<e.home.y-.2&&bottom<=o.home.y+o.originalSize[1]/2+1&&Math.abs(o.home.x-e.home.x)<(o.originalSize[0]+e.originalSize[0])/2+.6&&Math.abs(o.home.z-e.home.z)<(o.originalSize[2]+e.originalSize[2])/2+.6));}}}register(lots.breakables);
+ }for(const group of structures.values()){group.ordered=group.entries.slice().sort((a,b)=>a.home.y-b.home.y);for(const e of group.ordered){const bottom=e.home.y-e.originalSize[1]/2;e.foundation=e.role!=='contents'&&bottom<=.65;e.roof=e.role==='roof'||!e.role&&e.originalSize[1]<1&&Math.max(e.originalSize[0],e.originalSize[2])>6;group.supports.set(e,e.floorOwner?[e.floorOwner]:group.ordered.filter(o=>o.role!=='contents'&&o!==e&&o.home.y<e.home.y-.2&&bottom<=o.home.y+o.originalSize[1]/2+1&&Math.abs(o.home.x-e.home.x)<(o.supportWidth+e.supportWidth)/2+.6&&Math.abs(o.home.z-e.home.z)<(o.supportDepth+e.supportDepth)/2+.6));}}}register(lots.breakables);
  function deform(e,amount,dent=e.dent){
   if(Math.abs(e.visualDamage-amount)<.012&&e.visualChar===e.charred)return;e.visualChar=e.charred;e.mesh.userData.damage=amount;e.mesh.userData.charred=e.charred;e.visualDamage=amount;
   if(amount===0){if(e.mesh.geometry!==e.geometry)e.mesh.geometry.dispose();e.mesh.geometry=e.geometry;if(e.mesh.material!==e.originalMaterial&&e.originalMaterial){e.mesh.material.dispose();e.mesh.material=e.originalMaterial;}for(const child of e.childMaterials){child.mesh.material=child.original;child.material.dispose();}e.childMaterials.length=0;return;}
@@ -45,13 +45,10 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode}){
   if(e.broken)return;e.broken=true;e.age=0;e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.linearDamping=.16;e.body.angularDamping=.26;e.body.allowSleep=true;if(e.level===24){e.body.collisionFilterGroup=8;e.body.material=rubbleMat;}e.body.updateMassProperties();e.body.wakeUp();
   if(physical){e.body.velocity.setZero();e.body.angularVelocity.setZero();}else{e.body.velocity.set(clamp(velocity.x*.38,-9,9),Math.min(4,1+velocity.length()*.12),clamp(velocity.z*.38,-9,9));e.body.angularVelocity.set((e.home.z-point.z)*.16,.5,(point.x-e.home.x)*.16);}e.body.aabbNeedsUpdate=true;
   // Local support failure pulls the facade and roof above it down, not the whole city.
-  if(e.level===24&&e.structure)dirtyStructures.add(e.structure);
-  if(e.level!==24&&e.structure)for(const neighbor of active){if(neighbor===e||neighbor.broken||neighbor.structure!==e.structure)continue;
-   if(neighbor.home.y>e.home.y+1&&Math.hypot(neighbor.home.x-e.home.x,neighbor.home.z-e.home.z)<7){neighbor.damage=Math.max(neighbor.damage,.8);deform(neighbor,neighbor.damage);release(neighbor,velocity.scale(.4),point,physical);}
-  }
+  if(e.structure)dirtyStructures.add(e.structure);
   fracture(e);
  }
- function collapseUnsupported(){for(const id of dirtyStructures){const group=structures.get(id);if(!group)continue;const supported=new Set();for(const e of group.ordered){if(e.broken)continue;const below=group.supports.get(e).filter(o=>supported.has(o)&&!o.broken),valid=e.foundation||below.length>=(e.roof?2:1);if(valid){supported.add(e);continue;}e.damage=Math.max(e.damage,.9);deform(e,e.damage);release(e,new C.Vec3(),e.body.position,true);e.body.sleepTimeLimit=2;e.body.wakeUp();}}dirtyStructures.clear();}
+ function collapseUnsupported(){for(const id of dirtyStructures){const group=structures.get(id);if(!group)continue;const supported=new Set();for(const e of group.ordered){if(e.broken)continue;const below=group.supports.get(e).filter(o=>supported.has(o)&&!o.broken),valid=e.foundation||below.length>=(e.roof||e.role==='floor'?2:1);if(valid){supported.add(e);continue;}e.damage=Math.max(e.damage,.9);deform(e,e.damage);release(e,new C.Vec3(),e.body.position,true);e.body.sleepTimeLimit=2;e.body.wakeUp();}}dirtyStructures.clear();}
  function throwPiece(e,velocity,point){
   release(e,velocity,point);e.age=0;e.body.type=C.Body.DYNAMIC;if(!e.body.mass)e.body.mass=pieceMass(e);e.body.updateMassProperties();e.body.wakeUp();
   const speed=Math.hypot(velocity.x,velocity.z),dx=e.body.position.x-point.x,dz=e.body.position.z-point.z,d=Math.max(1,Math.hypot(dx,dz));

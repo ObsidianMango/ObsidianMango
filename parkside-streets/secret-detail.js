@@ -1,7 +1,7 @@
 // Fixed-capacity district batches. Attached details follow the actual broken panels.
 export function createSecretDetail(T,view){
  const box=new T.BoxGeometry(1,1,1),leaf=new T.IcosahedronGeometry(1,1),stone=new T.IcosahedronGeometry(1,0),obj=new T.Object3D(),matrix=new T.Matrix4(),batches=[],plans=[];
- const colors={trim:0xd2d0b6,glass:0x486e79,metal:0x657679,leaf:0x568951,stone:0x9c9c85,curb:0xbbbba5,soil:0x67784d,horizon:0x8da2a5,hill:0x97ac8c};
+ const colors={trim:0xd2d0b6,glass:0x486e79,metal:0x657679,leaf:0x568951,stone:0x9c9c85,curb:0xbbbba5,soil:0x67784d,horizon:0x8da2a5,hill:0x97ac8c,wood:0x95744e,fabric:0x657d6f,paper:0xd4c8ad};
  const mats=Object.fromEntries(Object.entries(colors).map(([k,color])=>[k,new T.MeshStandardMaterial({color,roughness:k==='glass'?.35:.87})]));
  function add(d,key,x,y,z,w,h,l,source=null,turn=0){plans.push({d,key,x,y,z,w,h,l,source,turn});}
  for(const t of view.targets){
@@ -13,6 +13,8 @@ export function createSecretDetail(T,view){
   }
   if(t.kind==='building'){
    for(const e of t.entries){const [w,h,l]=e.size;
+    if(e.role==='contents'){for(const p of e.contentsParts)add(d,p.key,p.x,p.y,p.z,p.w,p.h,p.d,e.mesh);continue;}
+    if(e.role==='floor'){for(let i=-2;i<=2;i++)add(d,'wood',i*w/5,.15,0,.035,.015,l,e.mesh);continue;}
     if(h<1){add(d,'metal',0,.7,0,1.4,1.15,1.2,e.mesh);add(d,'glass',0,.3,Math.min(2,l*.25),Math.min(2.5,w*.6),.18,1.4,e.mesh);continue;}
     if(Math.min(w,l)>.8)continue;
     const front=l<w;

@@ -63,7 +63,7 @@ export function createSceneryDetail(T){
   const hills=new T.InstancedMesh(leaf,material(style==='lodge'?0xa4b7b3:0x809886),8);
   for(let i=0;i<8;i++){const a=i*Math.PI/4;dummy.position.set(ox+Math.sin(a)*183,-10,Math.cos(a)*183);dummy.rotation.set(0,a,0);dummy.scale.set(42,22+rng()*20,32);dummy.updateMatrix();hills.setMatrixAt(i,dummy.matrix);}root.add(hills);
   // Facade details attach to their structural section, so they fall with that section.
-  const byStructure=new Map();for(const e of structures){if(!e.structure)continue;if(!byStructure.has(e.structure))byStructure.set(e.structure,[]);byStructure.get(e.structure).push(e);}
+  const byStructure=new Map();for(const e of structures){if(!e.structure||e.role==='floor'||e.role==='contents')continue;if(!byStructure.has(e.structure))byStructure.set(e.structure,[]);byStructure.get(e.structure).push(e);}
   let facadeWindows=0;
   for(const sections of byStructure.values()){
    const front=Math.max(...sections.filter(e=>e.size[2]<1).map(e=>e.mesh.position.z));
