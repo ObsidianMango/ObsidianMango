@@ -1,5 +1,5 @@
-import {addBuildingContents} from './building-contents.js?v=street-26';
-import {buildRacerBike} from './racer-bike.js?v=street-20';
+import {addBuildingContents} from './building-contents.js?v=street-27';
+import {buildRacerBike} from './racer-bike.js?v=street-27';
 import {createSecretDetail} from './secret-detail.js?v=street-26';
 export const SECRET_LEVEL={name:'Golden Grounds',kind:'Destruction',code:'SECRET',style:'sandbox',type:'destruction',halfSize:240,worldHalf:260,spawn:[0,210,0],target:{x:0,z:0,w:0,d:0,yaw:0},gates:[],theme:0xb5cbd0,par:3600,hint:'Chain destruction, finish demolition jobs, and keep the city smashing forever.'};
 export const DISTRICTS=[{name:'City',x:-120,z:-120,color:0x899b9c},{name:'Suburbs',x:120,z:-120,color:0xa9bd87},{name:'Harbor',x:120,z:120,color:0xa0a8a0},{name:'Forest',x:-120,z:120,color:0x688d60}];
@@ -13,7 +13,7 @@ export function buildSecretCity({T,C,scene,lots,groundMat,rampMat=groundMat}){
  function visual(geo,mat,x,y,z,sx=1,sy=1,sz=1,parent=group){const m=new T.Mesh(geo,mat),s=parent===group?{x:1,y:1,z:1}:parent.scale;m.position.set((x+(parent===group?ox:0))/s.x,y/s.y,z/s.z);m.scale.set(sx/s.x,sy/s.y,sz/s.z);m.castShadow=sy>.4;m.receiveShadow=true;parent.add(m);return m;}
  function piece(t,w,h,d,x,y,z,color,structure=null,geo=box){const mesh=visual(geo,typeof color==='number'?material(color):color,x,y,z,w,h,d),body=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(w/2,h/2,d/2)),position:new C.Vec3(ox+x,y,z)});body.userData={kind:structure?'building':t.kind==='barrel'?'explosive barrel':'scenery'};body.updateAABB();phys.push(body);const e={mesh,body,level:index,size:[w,h,d],structure,explosive:t.kind==='barrel',target:t};entries.push(e);t.entries.push(e);return e;}
  function facade(color,house=false){const key=color+':'+house;if(facades.has(key))return facades.get(key);const cv=document.createElement('canvas');cv.width=cv.height=256;const c=cv.getContext('2d');c.fillStyle='#'+color.toString(16).padStart(6,'0');c.fillRect(0,0,256,256);c.strokeStyle='#00000019';for(let y=0;y<256;y+=16){c.beginPath();c.moveTo(0,y);c.lineTo(256,y);c.stroke();}for(const x of [42,142]){c.fillStyle='#d2ddcf';c.fillRect(x-5,52,64,142);c.fillStyle=house?'#49616a':'#375568';c.fillRect(x,57,54,132);c.fillStyle='#7698a2';c.fillRect(x+4,61,18,114);c.fillStyle='#d2ddcf';c.fillRect(x+25,57,3,132);c.fillRect(x,118,54,3);}const map=new T.CanvasTexture(cv);map.colorSpace=T.SRGBColorSpace;const paint=new T.MeshStandardMaterial({color:0xffffff,map,roughness:.77});facades.set(key,paint);return paint;}
- function building(name,district,x,z,w,d,h,color,house=false){const t=target(name,district,'building',x,z),id='secret:'+t.id,rows=Math.ceil(h/4),paint=facade(color,house);buildings.push({id,level:index,district,x:ox+x,z,w,d,h,yaw:0,name,type:name==='Mint Mart'?'convenience':name==='Golden Arms'?'gun':name==='Lucky Mango Casino'?'casino':house?'house':name.startsWith('Warehouse')?'warehouse':'office',target:t});
+ function building(name,district,x,z,w,d,h,color,house=false){const t=target(name,district,'building',x,z),id='secret:'+t.id,rows=Math.ceil(h/4),paint=facade(color,house);buildings.push({id,level:index,district,x:ox+x,z,w,d,h,yaw:0,name,type:name==='Mint Mart'?'convenience':name==='Golden Arms'?'gun':name==='Lucky Mango Casino'?'casino':name==='Mango Motors'?'garage':house?'house':name.startsWith('Warehouse')?'warehouse':'office',target:t});
   for(const side of [-1,1])for(let row=0;row<rows;row++)for(let col=0;col<2;col++){
    piece(t,w/2,h/rows,.48,x-w/2+(col+.5)*w/2,(row+.5)*h/rows,z+side*d/2,paint,id);
    piece(t,.48,h/rows,d/2,x+side*w/2,(row+.5)*h/rows,z-d/2+(col+.5)*d/2,paint,id);
@@ -43,7 +43,7 @@ export function buildSecretCity({T,C,scene,lots,groundMat,rampMat=groundMat}){
  // Harbor: connected quays and piers; water is decorative over the driveable base.
  visual(box,new T.MeshStandardMaterial({color:0x437f98,roughness:.22,metalness:.28}),178,.018,155,96,.025,105);
  for(const z of [116,151,188]){visual(box,material(0x9b9e8c),168,.04,z,103,.03,10);mini.push({x:168,z,w:103,d:10,color:'#bdc5b0',road:true});}
- for(const [i,x,z]of [[0,39,115],[1,106,105],[2,110,40]]){building('Warehouse '+(i+1),2,x,z,28,24,8,0x9aa6a2);barrel(x+18,z+10,2);barrel(x+18,z+14,2);}
+ for(const [i,x,z]of [[0,39,115],[1,106,105],[2,110,40]]){building(i===2?'Mango Motors':'Warehouse '+(i+1),2,x,z,28,24,8,0x9aa6a2);barrel(x+18,z+10,2);barrel(x+18,z+14,2);}
  for(let i=0;i<12;i++){const x=34+(i%3)*27,z=152+Math.floor(i/3)*16,e=prop('Cargo container',2,'cargo',x,z,13,3,6,[0xac684e,0x618d91,0xc2a050][i%3]);for(let j=-5;j<=5;j+=2)visual(box,material(0xcbd1bf),j,0,-3.05,.14,3,.08,e.mesh);barrel(x-9,z,2);}
  for(let i=0;i<7;i++)prop('Dock bollard',2,'bollard',170+i*7,104,1,1.4,1,0x556767);
  for(const z of [130,171]){

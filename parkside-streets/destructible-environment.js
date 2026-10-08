@@ -2,7 +2,7 @@ import {createContentsDebris} from './contents-debris.js?v=street-26';
 import {setDamageAppearance} from './damage-appearance.js?v=wreck-16';
 // Damageable scenery uses the same bodies during driving, wrecks and recorded replays.
 import {createCrushContact} from './crush-contact.js?v=crush-12';
-export function createDestructibleEnvironment({T,C,world,lots,onExplode}){
+export function createDestructibleEnvironment({T,C,world,lots,onExplode,onContact}){
  let active=[],pending=new Map(),elapsed=0,explosionCount=0,launchedBarrels=0;const FRAGMENT_LIMIT=96,AWAKE_LIMIT=144;const structures=new Map(),dirtyStructures=new Set();const explosions=[],fragments=[],fragmentPool=[],fragmentBox=new T.BoxGeometry(1,1,1),rubbleMat=new C.Material({friction:.55,restitution:.04}),registered=new Set(),q=new T.Quaternion(),v=new T.Vector3(),contact=createCrushContact(C);
  const contentsDebris=createContentsDebris(T,fragmentBox);
  const crackedRubble=new T.MeshStandardMaterial({color:0x9b978d,roughness:1}),burnedRubble=new T.MeshStandardMaterial({color:0x34312b,roughness:1});setDamageAppearance(T,crackedRubble,.85,0);setDamageAppearance(T,burnedRubble,1,1);
@@ -11,6 +11,7 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode}){
   e.body.updateAABB();e.supportWidth=e.body.aabb.upperBound.x-e.body.aabb.lowerBound.x;e.supportDepth=e.body.aabb.upperBound.z-e.body.aabb.lowerBound.z;e.home=e.body.position.clone();e.turn=e.body.quaternion.clone();e.originalPhysicsMaterial=e.body.material;e.originalShape=e.body.shapes[0];e.originalScale=e.mesh.scale.clone();e.originalSize=e.size.slice();e.filterGroup=e.body.collisionFilterGroup;e.geometry=e.mesh.geometry;e.color=e.mesh.material.color.clone();e.damage=0;e.charred=0;e.broken=false;e.childMaterials=[];e.last=-10;e.lastRam=-10;e.dent=[0,0,0,0,0,1];e.visualDamage=-1;
   if(e.structure){if(!structures.has(e.structure))structures.set(e.structure,{entries:[],ordered:[],supports:new Map()});structures.get(e.structure).entries.push(e);}
   e.body.addEventListener('collide',event=>{
+   if(active.includes(e))onContact?.(e,event.body,Math.abs(event.contact.getImpactVelocityAlongNormal()));
    const kind=event.body.userData?.kind,target=!!kind&&kind!=='pedestrian',armedTarget=e.explosive&&e.armed&&target&&elapsed-e.armedAt>.08&&e.body.position.distanceTo(e.launchPosition)>1.5;
    if(!active.includes(e)||event.body.mass<=0&&!armedTarget||kind==='pedestrian'||elapsed-e.last<.24&&!armedTarget)return;
    const speed=Math.abs(event.contact.getImpactVelocityAlongNormal());if(speed<1.4)return;
@@ -38,7 +39,7 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode}){
    const offset=new C.Vec3((x+.5)*chunk[0]-size[0]/2,(y+.5)*chunk[1]-size[1]/2,(z+.5)*chunk[2]-size[2]/2),position=turn.vmult(offset).vadd(origin);
    if(index++===0){e.size=chunk.slice();e.body.removeShape(e.body.shapes[0]);e.body.addShape(new C.Box(new C.Vec3(...chunk.map(n=>n/2))));e.body.mass=mass;e.body.position.copy(position);e.body.updateMassProperties();e.body.updateBoundingRadius();e.body.aabbNeedsUpdate=true;e.mesh.scale.set(e.originalScale.x/splits[0],e.originalScale.y/splits[1],e.originalScale.z/splits[2]);e.mesh.position.copy(position);continue;}
    let f=fragmentPool.find(f=>!f.active);
-   if(!f&&fragmentPool.length<FRAGMENT_LIMIT){const mesh=new T.Mesh(fragmentBox,e.charred>.15?burnedRubble:crackedRubble),body=new C.Body({mass:1,material:rubbleMat,shape:new C.Box(new C.Vec3(1,1,1)),collisionFilterGroup:8,linearDamping:.20,angularDamping:.32,allowSleep:true,sleepSpeedLimit:.3,sleepTimeLimit:1.5});body.userData={kind:'building rubble'};f={mesh,body,size:[1,1,1],active:false};fragmentPool.push(f);}
+   if(!f&&fragmentPool.length<FRAGMENT_LIMIT){const mesh=new T.Mesh(fragmentBox,e.charred>.15?burnedRubble:crackedRubble),body=new C.Body({mass:1,material:rubbleMat,shape:new C.Box(new C.Vec3(1,1,1)),collisionFilterGroup:8,linearDamping:.20,angularDamping:.32,allowSleep:true,sleepSpeedLimit:.3,sleepTimeLimit:1.5});body.userData={kind:'building rubble'};f={mesh,body,size:[1,1,1],active:false};body.addEventListener('collide',event=>{if(f.active&&f.source)onContact?.(f.source,event.body,Math.abs(event.contact.getImpactVelocityAlongNormal()),f.body);});fragmentPool.push(f);}
    // Keep existing near-impact rubble when the pool is full; omit extra chips.
    if(!f)continue;const {mesh,body}=f;mesh.material=e.charred>.15?burnedRubble:crackedRubble;mesh.scale.set(...chunk);mesh.position.copy(position);mesh.quaternion.copy(turn);mesh.visible=true;mesh.castShadow=mesh.receiveShadow=true;e.mesh.parent.add(mesh);
    body.removeShape(body.shapes[0]);body.addShape(new C.Box(new C.Vec3(...chunk.map(n=>n/2))));body.mass=mass;body.position.copy(position);body.quaternion.copy(turn);body.velocity.copy(e.body.velocity);body.angularVelocity.copy(e.body.angularVelocity);body.force.setZero();body.torque.setZero();body.updateMassProperties();body.updateBoundingRadius();body.aabbNeedsUpdate=true;body.wakeUp();world.addBody(body);Object.assign(f,{size:chunk.slice(),source:e,age:0,active:true});fragments.push(f);
@@ -83,10 +84,10 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode}){
  // Only actual collider contact can crush a piece. Held throttle continues to
  // stress an intact wall while it resists; released pieces start at rest, so their
  // mass and the solver's impulses give the truck a real slowdown and suspension jolt.
- function ram(chassis,dt,driveForce=0){const speed=Math.hypot(chassis.velocity.x,chassis.velocity.z);if(speed<.15&&driveForce<1)return;for(const e of active){const point=contact(chassis,e.body,e.size);if(!point)continue;
+ function ram(chassis,dt,driveForce=0,multiplier=1){const speed=Math.hypot(chassis.velocity.x,chassis.velocity.z);if(speed<.15&&driveForce<1)return;for(const e of active){const point=contact(chassis,e.body,e.size);if(!point)continue;
   if(e.explosive){if(!e.broken)release(e,chassis.velocity,point,true);continue;}
   if(e.broken){if(e.body.type!==C.Body.DYNAMIC||!e.body.mass){e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.updateMassProperties();}e.body.wakeUp();continue;}
-  const pushing=clamp(driveForce/88000,0,1);e.damage=clamp(e.damage+pushing*(e.structure?.95:1.5)*dt,0,1);deform(e,e.damage);
+  const pushing=clamp(driveForce/88000,0,1);e.damage=clamp(e.damage+pushing*(e.structure?.95:1.5)*dt*multiplier,0,1);deform(e,e.damage);
   if(elapsed-e.lastRam>.24&&speed>1.2){e.lastRam=elapsed;hit(e,speed,point,chassis.velocity,'ram');}
   if(e.damage>=(e.structure?.72:.58))release(e,chassis.velocity,point,true);
  }for(const f of fragments)if(contact(chassis,f.body,f.size))f.body.wakeUp();}

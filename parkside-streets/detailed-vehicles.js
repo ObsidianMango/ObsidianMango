@@ -1,4 +1,4 @@
-import {detailKit} from './vehicle-detail-kit.js?v=gold-8';
+import {detailKit} from './vehicle-detail-kit.js?v=street-27';
 import {buildNova} from './nova-model.js?v=nova-1';
 import {buildFleetVehicle} from './fleet-models.js?v=gold-8';
 import {buildWienermobile} from './wienermobile-model.js?v=gold-8';

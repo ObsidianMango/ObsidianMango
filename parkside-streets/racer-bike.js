@@ -1,4 +1,4 @@
-import {detailKit} from './vehicle-detail-kit.js?v=gold-8';
+import {detailKit} from './vehicle-detail-kit.js?v=street-27';
 // A reusable sport motorcycle with two actual raycast wheels and a removable rider.
 export function buildRacerBike(T){
  const config={id:'racer-bike',name:'Mango RR',bike:true,golden:true,mass:260,power:1800,maxSpeed:48,reverseSpeed:3,radius:.36,track:0,front:-.76,rear:.76,offset:.5,halfWidth:.46,halfLength:1.16,box:[.25,.28,1.02],center:.36,suspension:.22,scoreMultiplier:1};
