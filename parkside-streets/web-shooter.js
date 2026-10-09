@@ -1,8 +1,8 @@
 // Two fixed instanced batches: adhesive strands and wet beads, no rigid bodies.
 export function createWebShooter(T,scene){
- const LIMIT=24,STRANDS=LIMIT*34+10,BEADS=LIMIT*7,lifeTime=6;
+ const LIMIT=24,STRANDS=LIMIT*10+10,BEADS=LIMIT*7,lifeTime=6;
  const material=new T.MeshStandardMaterial({color:0xf4faf7,roughness:.18,metalness:.02}),tube=new T.CylinderGeometry(1,1,1,6),sphere=new T.IcosahedronGeometry(1,0);
- const root=new T.Group();root.name='Sticky white webs';scene.add(root);
+ const root=new T.Group();root.name='Sticky white goo';scene.add(root);
  const strands=new T.InstancedMesh(tube,material,STRANDS),beads=new T.InstancedMesh(sphere,material,BEADS);
  for(const mesh of [strands,beads]){mesh.count=0;mesh.frustumCulled=false;mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);root.add(mesh);}
  const marks=Array.from({length:LIMIT},()=>({life:0,age:0,body:null,p:new T.Vector3(),q:new T.Quaternion(),local:new T.Vector3(),localQ:new T.Quaternion(),anchor:new T.Vector3(),size:1}));
@@ -14,9 +14,8 @@ export function createWebShooter(T,scene){
  function attach(mark,target){mark.body=target;bodyQ.copy(target.quaternion);inverse.copy(bodyQ).invert();mark.local.copy(mark.p).sub(target.position).applyQuaternion(inverse);mark.localQ.copy(inverse).multiply(mark.q);}
  function shoot(from,to,hitNormal,target){beamFrom.copy(from);beamTo.copy(to);beamLife=.20;if(hitNormal){const m=marks[cursor++%LIMIT];m.life=lifeTime;m.age=0;m.body=null;m.size=target?.userData?.person ? .6 : .72;normal.copy(hitNormal).normalize();m.p.copy(to).addScaledVector(normal,.045);m.anchor.copy(m.p);m.q.setFromUnitVectors(forward,normal);if(target)attach(m,target);}render();}
  function render(){strands.count=beads.count=stretching=0;
-  for(const m of marks){if(m.life<=0)continue;const fade=Math.min(1,m.life),r=.025*fade,spread=1+.12*(1-Math.exp(-m.age*5));
-   // Thick irregular spokes, two elastic rings and a wet central blob.
-   for(let i=0;i<8;i++){const angle=i*Math.PI/4,angle2=(i+1)*Math.PI/4,reach=(i%2?.88:1)*spread;point(m,0,0,.018,a);point(m,Math.cos(angle)*reach,Math.sin(angle)*reach,.012,b);strand(a,b,r);for(const size of [.37,.72]){point(m,Math.cos(angle)*size*spread,Math.sin(angle)*size*spread,.023,a);point(m,Math.cos(angle2)*size*spread,Math.sin(angle2)*size*spread,.023,b);strand(a,b,r*.72);}}
+  for(const m of marks){if(m.life<=0)continue;const fade=Math.min(1,m.life),r=.025*fade;
+   // Wet impact blob and irregular drips, with no spokes or web rings.
    point(m,0,0,.045,a);bead(a,.115*m.size*fade,.67);
    // Gravity drips project down the surface; beads elongate before dissolving.
    normal.copy(forward).applyQuaternion(m.q);fall.set(0,-1,0).addScaledVector(normal,normal.y);if(fall.lengthSq()<.01)fall.set(.15,0,.05);fall.normalize();

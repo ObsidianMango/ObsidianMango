@@ -8,7 +8,8 @@ web.shoot(from,hit,normal,target);const root=scene.children[0],strands=root.chil
 const centerAt=()=>{beads.getMatrixAt(0,matrix);return center.setFromMatrixPosition(matrix).clone();};
 const start=centerAt();target.position.x=1;web.update(.1);assert(centerAt().distanceTo(start.clone().add(new T.Vector3(1,0,0)))<1e-5);assert.equal(web.getInfo().stretching,1);
 target.quaternion.setFromAxisAngle(new C.Vec3(0,1,0),Math.PI/2);web.update(.1);const expected=start.clone().applyQuaternion(new T.Quaternion().copy(target.quaternion)).add(target.position);assert(centerAt().distanceTo(expected)<1e-5,'adhesion follows target rotation as well as translation');
-assert(web.getInfo().beads>=7);assert(web.getInfo().strands>=30);
+assert(web.getInfo().beads>=7);assert.equal(web.getInfo().strands,10,'only six drip segments and four stretch segments remain after the shot');
+web.clear();web.shoot(from,hit,normal);web.update(.25);assert.equal(web.getInfo().strands,6,'stationary splat has drips only, without radial spokes or rings');assert.equal(web.getInfo().beads,7);
 web.clear();for(let i=0;i<24;i++)web.shoot(from,hit,normal,target);target.velocity.set(10,0,0);target.angularVelocity.set(0,10,0);web.update(.1);assert(Math.abs(target.velocity.x-10*Math.exp(-.28))<1e-8,'multiple webs apply drag only once per target');assert.equal(web.getInfo().viscousTargets,1);
 web.clear();const geometryCount=new Set(root.children.map(m=>m.geometry)).size,materialCount=new Set(root.children.map(m=>m.material)).size;
 for(let i=0;i<300;i++){web.shoot(from,new T.Vector3(i%8,2,0),normal);web.update(1/60);assert(web.getInfo().active<=24);assert(strands.count<=strands.instanceMatrix.count);assert(beads.count<=beads.instanceMatrix.count);}
