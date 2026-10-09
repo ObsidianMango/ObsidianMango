@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#151027">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>APOO: Food Fight Frenzy</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Arial Rounded MT Bold",sans-serif}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#171026;touch-action:none;overscroll-behavior:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none}
+#hud{position:fixed;inset:0 0 auto;pointer-events:none;padding:calc(env(safe-area-inset-top) + 10px) 12px 0;z-index:2;text-shadow:0 2px 4px #0009}
+.top{display:flex;align-items:center;gap:9px;justify-content:space-between}
+.pill{background:#120f29cf;border:1px solid #ffffff30;border-radius:15px;padding:6px 10px;font-weight:950;box-shadow:0 3px 0 #0003;font-size:14px;white-space:nowrap}
+#score{font-variant-numeric:tabular-nums;min-width:87px}
+#hearts{color:#ff668e;letter-spacing:1px;font-size:18px}
+#round{color:#fff29b}
+#progressBox{height:12px;margin-top:9px;border-radius:30px;background:#0a0922bf;box-shadow:0 2px 5px #0006;overflow:hidden;border:1px solid #ffffff55}
+#progress{height:100%;width:0;background:linear-gradient(90deg,#ffdb3d,#ff7f76);border-radius:30px;transition:width .12s linear}
+#stage{margin:8px auto 0;text-align:center;font-size:13px;letter-spacing:.09em;font-weight:1000;color:#fff}
+#combo{position:fixed;left:12px;top:calc(env(safe-area-inset-top) + 95px);pointer-events:none;color:#ffe275;font-size:15px;font-weight:1000;text-shadow:0 3px 5px #000}
+#controls{pointer-events:auto;display:flex;gap:5px}
+.tiny{appearance:none;border:1px solid #ffffff50;border-radius:13px;background:#21173ddd;color:#fff;font-size:17px;width:37px;height:36px;font-weight:900}
+#special{position:fixed;right:13px;bottom:calc(env(safe-area-inset-bottom) + 22px);z-index:4;border:2px solid #ffffff99;color:white;font-weight:1000;letter-spacing:.03em;text-shadow:0 2px 2px #000a;border-radius:23px;padding:13px 12px;min-width:112px;background:linear-gradient(165deg,#8c45bb,#3d2973);box-shadow:0 6px 0 #1b1238,0 11px 24px #0008;touch-action:manipulation;transition:transform .12s,filter .12s}
+#special:disabled{filter:grayscale(.8) brightness(.65);opacity:.7}
+#special:not(:disabled):active{transform:translateY(5px);box-shadow:0 1px 0 #1b1238}
+#help{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 14px);left:13px;right:137px;z-index:2;font-size:11px;font-weight:900;color:#ffffffb0;pointer-events:none;text-shadow:0 2px 3px #000}
+#flash{position:fixed;inset:0;background:white;opacity:0;pointer-events:none;z-index:5}
+#overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#100a20b8;backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);z-index:6;padding:18px;overflow:auto}
+#overlay.hidden{display:none}
+.panel{width:min(440px,100%);max-height:calc(100dvh - 32px);overflow:auto;border-radius:30px;text-align:center;background:linear-gradient(160deg,#34204d,#17122f 80%);border:2px solid #eac6ff7a;box-shadow:0 18px 60px #0009, inset 0 2px #ffffff24;padding:24px 19px 21px}
+.hero{font-size:64px;filter:drop-shadow(0 8px 1px #0005);line-height:1.2}
+.panel h1{font-size:clamp(29px,8vw,46px);margin:8px 0 4px;letter-spacing:-.05em;line-height:1.04;color:#ffed89;text-shadow:0 4px 0 #a43776}
+.panel h2{font-size:clamp(24px,6vw,34px);margin:9px 0;color:#ffed89;line-height:1.05}
+.panel p{color:#dfd3eb;line-height:1.45;margin:10px 0 19px;font-size:14px}
+.action{border:0;touch-action:manipulation;cursor:pointer;background:linear-gradient(#ffeb8d,#ffad45);color:#48264a;font-weight:1000;border-radius:17px;padding:15px 24px;font-size:19px;width:100%;box-shadow:0 5px 0 #9f5a34}
+.action:active,.upgrade:active{transform:translateY(3px);box-shadow:0 2px 0 #713f39}
+.sub{font-size:12px;color:#bfb5cc;margin-top:15px}
+.upgradeGrid{display:grid;grid-template-columns:1fr;gap:9px;margin:16px 0}
+.upgrade{border:1px solid #ffffff70;background:linear-gradient(135deg,#493564,#372755);text-align:left;border-radius:16px;padding:12px 15px;color:#fff;display:flex;align-items:center;gap:13px;min-height:65px;box-shadow:0 4px 0 #140d20;touch-action:manipulation;cursor:pointer}
+.upgrade .em{font-size:29px;flex:0 0 38px;text-align:center}
+.upgrade strong{display:block;font-size:16px;color:#fff2a8}
+.upgrade small{display:block;font-size:12px;color:#d9cfe6;margin-top:3px}
+body.playing #overlay{display:none}
+@media(max-height:550px){.panel{padding:14px}.hero{font-size:42px}.panel p{margin:6px 0 12px}.panel h1{font-size:29px}.upgradeGrid{gap:6px}.upgrade{min-height:53px;padding:7px 10px}#hud{padding-top:calc(env(safe-area-inset-top) + 5px)}}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Food Fight Frenzy arcade game"></canvas>
+<div id="hud">
+  <div class="top">
+    <span class="pill" id="score">★ 0</span>
+    <span class="pill" id="round">ROUND 1</span>
+    <span class="pill" id="hearts">♥♥♥</span>
+    <div id="controls"><button class="tiny" id="sound" aria-label="Toggle sound">♫</button><button class="tiny" id="pause" aria-label="Pause game">Ⅱ</button></div>
+  </div>
+  <div id="progressBox"><div id="progress"></div></div>
+  <div id="stage">CATCH THE FOOD!</div>
+</div>
+<div id="combo"></div>
+<div id="help">DRAG TO MOVE · CATCH FOOD · DODGE BOMBS</div>
+<button id="special" disabled>⚡ POWER 0%</button>
+<div id="flash"></div>
+<div id="overlay">
+  <div class="panel" id="panel">
+    <div class="hero">😋 🍔 💩 🚽</div>
+    <h1>APOO!<br>FOOD FIGHT FRENZY</h1>
+    <p>Gobble falling food, dodge the gross stuff, then unleash your poop cannon against increasingly ridiculous toilet bosses. Survive, upgrade, repeat.</p>
+    <button class="action" id="primary">LET'S EAT!</button>
+    <div class="sub">ONE-FINGER ARCADE · SOUND OPTIONAL · HIGH SCORES SAVED</div>
+  </div>
+</div>
+<script>
+(function(){
+"use strict";
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d",{alpha:false});
+const ui={overlay:document.getElementById("overlay"),panel:document.getElementById("panel"),score:document.getElementById("score"),round:document.getElementById("round"),hearts:document.getElementById("hearts"),progress:document.getElementById("progress"),stage:document.getElementById("stage"),combo:document.getElementById("combo"),help:document.getElementById("help"),special:document.getElementById("special"),flash:document.getElementById("flash"),sound:document.getElementById("sound"),pause:document.getElementById("pause")};
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v)),rand=(a,b)=>a+Math.random()*(b-a),choose=a=>a[Math.floor(Math.random()*a.length)];
+const FOODS=["🍔","🍕","🍟","🌭","🌮","🍩","🥐","🍗","🍉","🍓","🥨","🧀","🥭","🍪","🍦","🍜","🍒","🥑","🥞","🍣","🧁","🍝"];
+const BOSSES=[["PORCELAIN PETE","#ffbd83"],["ROYAL FLUSH","#d7aaff"],["THE DOOM BOWL","#a9ffa0"],["LORD LOO","#ffa7d5"],["THE FINAL FLUSH?","#a5dfff"]];
+const UPGRADES=[
+ {id:"legs",emoji:"👟",name:"Turbo Toes",desc:"Run 22% faster."},
+ {id:"cannon",emoji:"💨",name:"Rapid Fire",desc:"Shoot 22% faster."},
+ {id:"damage",emoji:"💥",name:"Heavy Payload",desc:"Each shot hits harder."},
+ {id:"multishot",emoji:"💩",name:"Double Trouble",desc:"Add another projectile per shot."},
+ {id:"belly",emoji:"🍔",name:"Bottomless Belly",desc:"Food fills your belly faster."},
+ {id:"shield",emoji:"🛡️",name:"Bubble Shield",desc:"Gain 2 blocks against hits."},
+ {id:"heart",emoji:"❤️",name:"Extra Life",desc:"Increase maximum health and heal."},
+ {id:"magnet",emoji:"🧲",name:"Snack Magnet",desc:"Pull tasty food toward you."}
+];
+let W=innerWidth,H=innerHeight,dpr=1,playerY=H-110,groundY=H-65;
+let state="menu",returnState="eat",round=1,score=0,best=0,combo=0,topCombo=0,streakTimer=0,meter=0,goal=100,special=0,hearts=3,maxHearts=3,shield=0,invuln=0,elapsed=0,bossTime=0,spawnTimer=0,hazardTimer=0,shotTimer=0,bossShootTimer=0,shake=0,flash=0,magnetTime=0,frenzyTime=0,toastTime=0,toast="",fireHeld=false,pointerHeld=false,pointerId=null;
+let playerX=W/2,targetX=W/2,boss=null;
+let snacks=[],bullets=[],enemyShots=[],particles=[],texts=[],stars=[],clouds=[];
+let soundOn=true,audio=null,keys={},upgrades={legs:0,cannon:0,damage:0,multishot:0,belly:0,magnet:0},kills=0;
+try{best=Number(localStorage.getItem("apoo-frenzy-best"))||0;soundOn=localStorage.getItem("apoo-frenzy-sound")!=="off"}catch(e){}
+ui.sound.textContent=soundOn?"♫":"♪";
+function size(){
+ const oldW=W;W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);
+ canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);canvas.style.width=W+"px";canvas.style.height=H+"px";
+ ctx.setTransform(dpr,0,0,dpr,0,0);
+ playerY=H-clamp(H*.15,82,114);groundY=H-clamp(H*.095,52,75);
+ if(oldW>0){playerX=clamp(playerX*W/oldW,32,W-32);targetX=clamp(targetX*W/oldW,32,W-32)}
+ stars=Array.from({length:46},()=>({x:Math.random()*W,y:Math.random()*H*.77,s:rand(.6,2),a:rand(.2,.7)}));
+ clouds=Array.from({length:6},()=>({x:Math.random()*W,y:rand(H*.18,H*.65),s:rand(.7,1.8),v:rand(3,12)}));
+ if(boss){boss.y=clamp(H*.255,135,230);boss.x=clamp(boss.x,80,W-80)}
+}
+size();addEventListener("resize",size);
+function tone(f=440,d=.09,type="sine",vol=.035){
+ if(!soundOn)return;
+ try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+ if(!audio)audio=new AC();if(audio.state==="suspended")audio.resume();
+ const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime;
+ o.type=type;o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(Math.max(65,f*.73),t+d);
+ g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0005,t+d);
+ o.connect(g).connect(audio.destination);o.start(t);o.stop(t+d+.01);
+ }catch(e){}
+}
+function vibrate(ms){if(navigator.vibrate)navigator.vibrate(ms)}
+function pop(x,y,n,colors,force=1){
+ for(let i=0;i<n&&particles.length<240;i++){const a=rand(0,Math.PI*2),v=rand(40,220)*force;particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-25,life:rand(.25,.9),max:.9,r:rand(2,6),col:choose(colors),grav:rand(60,220)})}
+}
+function label(x,y,s,col="#fff",sz=18){if(texts.length>28)texts.shift();texts.push({x,y,s,col,sz,life:.9})}
+function message(s){toast=s;toastTime=1.75}
+function doFlash(alpha=.28){flash=Math.max(flash,alpha)}
+function startGame(){
+ round=1;score=0;combo=0;topCombo=0;special=0;hearts=3;maxHearts=3;shield=0;kills=0;
+ upgrades={legs:0,cannon:0,damage:0,multishot:0,belly:0,magnet:0};
+ playerX=W/2;targetX=playerX;particles=[];texts=[];snacks=[];bullets=[];enemyShots=[];
+ startEat();hidePanel();tone(600,.14);tone(760,.17);
+}
+function startEat(){
+ state="eat";meter=0;goal=90+round*13;spawnTimer=.15;hazardTimer=1.8;streakTimer=0;combo=0;snacks=[];bullets=[];enemyShots=[];boss=null;fireHeld=false;pointerHeld=false;magnetTime=0;frenzyTime=0;invuln=1;
+ message("ROUND "+round+" — FEAST TIME!");
+}
+function startBoss(){
+ state="boss";combo=0;snacks=[];bullets=[];enemyShots=[];bossTime=0;shotTimer=0;bossShootTimer=1.3;invuln=Math.max(invuln,.8);
+ const name=BOSSES[(round-1)%BOSSES.length];
+ const hp=115+(round-1)*76;
+ boss={x:W/2,y:clamp(H*.255,135,230),hp,max:hp,phase:rand(0,6),r:clamp(W*.14,47,66),name:name[0],color:name[1],hurt:0};
+ message("BOSS INCOMING — HOLD TO FIRE!");
+ shake=7;doFlash(.20);tone(210,.27,"sawtooth",.07);vibrate(65);
+}
+function clearBoss(){
+ if(state!=="boss")return;
+ const b=boss;state="upgrade";fireHeld=false;pointerHeld=false;kills++;
+ const prize=400+round*150;score+=prize;
+ if(hearts<maxHearts)hearts++;
+ shake=20;doFlash(.65);vibrate([70,50,130]);
+ pop(b.x,b.y,120,["#ffeb62","#fff","#ff7a6c","#ae8bff","#69eecb"],1.5);
+ label(b.x,b.y,"+"+prize+" BOSS BONUS","#fff8aa",26);
+ tone(780,.18);setTimeout(()=>tone(1100,.25),100);
+ checkBest();showUpgrade();
+}
+function showPanel(html){ui.panel.innerHTML=html;ui.overlay.classList.remove("hidden")}
+function hidePanel(){ui.overlay.classList.add("hidden")}
+function showUpgrade(){
+ const pool=UPGRADES.filter(u=>!(u.id==="multishot"&&upgrades.multishot>=3));
+ const selections=[];while(selections.length<3&&pool.length){const i=Math.floor(Math.random()*pool.length);selections.push(pool.splice(i,1)[0])}
+ let html='<div class="hero">🏆 🚽 💥</div><h2>TOILET DESTROYED!</h2><p>Round '+round+' cleared. +'+(400+round*150)+' points! Pick one upgrade before the next food storm.</p><div class="upgradeGrid">';
+ selections.forEach(u=>{html+='<button class="upgrade" data-upgrade="'+u.id+'"><span class="em">'+u.emoji+'</span><span><strong>'+u.name+'</strong><small>'+u.desc+'</small></span></button>'});
+ html+='</div><div class="sub">HEALTH RESTORED +1 · ROUND '+(round+1)+' AWAITS</div>';
+ showPanel(html);
+ ui.panel.querySelectorAll("[data-upgrade]").forEach(b=>b.addEventListener("click",()=>{
+  const id=b.dataset.upgrade;
+  if(id==="heart"){maxHearts=Math.min(maxHearts+1,8);hearts=Math.min(maxHearts,hearts+2)}
+  else if(id==="shield")shield+=2;
+  else upgrades[id]++;
+  round++;startEat();hidePanel();tone(680,.14);vibrate(20);
+ }));
+}
+function checkBest(){if(score>best){best=score;try{localStorage.setItem("apoo-frenzy-best",String(best))}catch(e){}}}
+function gameOver(){
+ if(state==="over")return;
+ state="over";pointerHeld=false;fireHeld=false;checkBest();tone(170,.45,"sawtooth",.055);vibrate([70,70,130]);
+ showPanel('<div class="hero">💀 💩</div><h2>YOU GOT FLUSHED!</h2><p>Score <b>'+score.toLocaleString()+'</b> · Survived <b>'+round+'</b> rounds<br>Bosses defeated <b>'+kills+'</b> · Best combo <b>x'+topCombo+'</b><br>All-time best <b>'+best.toLocaleString()+'</b></p><button class="action" id="primary">PLAY AGAIN!</button><div class="sub">THE TOILETS ARE LAUGHING AT YOU</div>');
+ document.getElementById("primary").addEventListener("click",startGame);
+}
+function pauseGame(){
+ if(state==="eat"||state==="boss"){
+  returnState=state;state="paused";fireHeld=false;pointerHeld=false;
+  showPanel('<div class="hero">⏸️</div><h2>PAUSED</h2><p>Round '+round+' · Score '+score.toLocaleString()+'</p><button class="action" id="primary">RESUME</button><div class="sub">PRESS P OR TAP RESUME</div>');
+  document.getElementById("primary").addEventListener("click",pauseGame);
+ }else if(state==="paused"){state=returnState;hidePanel();last=performance.now()}
+}
+ui.pause.addEventListener("click",pauseGame);
+ui.sound.addEventListener("click",()=>{soundOn=!soundOn;ui.sound.textContent=soundOn?"♫":"♪";try{localStorage.setItem("apoo-frenzy-sound",soundOn?"on":"off")}catch(e){}if(soundOn)tone(620,.08)});
+document.getElementById("primary").addEventListener("click",startGame);
+function damage(){
+ if(invuln>0||state==="upgrade")return;
+ if(shield>0){shield--;invuln=.85;pop(playerX,playerY,19,["#a2ecff","#fff"]);label(playerX,playerY-50,"BLOCK!","#7eeaff");tone(300,.12);return}
+ hearts--;combo=0;invuln=1.35;shake=10;doFlash(.3);pop(playerX,playerY,25,["#ffb1af","#ff4c86","#fff"]);label(playerX,playerY-45,"OUCH!","#ff789d");
+ tone(160,.23,"sawtooth",.06);vibrate(70);if(hearts<=0)gameOver();
+}
+function addSnack(){
+ const r=Math.random(),hazard=round===1?.10:Math.min(.12+round*.025,.25);
+ let type="food",emoji=choose(FOODS),value=10;
+ if(r<hazard){type="bad";emoji=choose(["💣","🪰","☠️","🦠"])}
+ else if(r> .975){type="heart";emoji="❤️"}
+ else if(r>.935){type="shield";emoji="🛡️"}
+ else if(r>.89){type="magnet";emoji="🧲"}
+ else if(r>.82){type="gold";emoji="⭐";value=28}
+ snacks.push({x:rand(26,Math.max(27,W-26)),y:-36,v:rand(145,215)+round*13,r:type==="bad"?22:23,type,emoji,value,spin:rand(0,7),sw:rand(1.3,3.5),age:0});
+}
+function catchSnack(f){
+ const c=combo;
+ if(f.type==="bad"){damage();pop(f.x,f.y,13,["#aaff91","#d76862"]);return}
+ if(f.type==="heart"){hearts=Math.min(maxHearts,hearts+1);label(f.x,f.y,"+1 HP","#ff8dad");tone(680,.12)}
+ else if(f.type==="shield"){shield+=1;label(f.x,f.y,"SHIELD!","#9ee9ff");tone(750,.12)}
+ else if(f.type==="magnet"){magnetTime=10;label(f.x,f.y,"MAGNET 10s","#edabff");tone(780,.15)}
+ else{
+  combo=streakTimer>0?combo+1:1;topCombo=Math.max(topCombo,combo);streakTimer=2.8;
+  const multi=clamp(1+Math.floor((combo-1)/4),1,8),gain=f.value+upgrades.belly*4;
+  meter=Math.min(goal,meter+gain);const pts=(f.type==="gold"?85:20)*multi;score+=pts;special=Math.min(100,special+(f.type==="gold"?22:7));
+  label(f.x,f.y,(f.type==="gold"?"GOLD! ":"+")+pts,f.type==="gold"?"#ffed63":"#fff",f.type==="gold"?24:18);
+  tone(380+Math.min(combo,14)*35,.07,"triangle",.035);
+  if(combo===10||combo===20||combo===35){message(combo+" SNACK COMBO!");tone(900,.2)}
+ }
+ if(c===0&&combo>0)toastTime=Math.min(toastTime,.4);
+ pop(f.x,f.y,f.type==="gold"?23:12,f.type==="gold"?["#ffed60","#ff9d52","#fff"]:["#ff8dac","#fdf0a8","#fff","#94ffb8"]);
+ if(meter>=goal&&state==="eat")startBoss();
+}
+function spawnEnemyShot(){
+ if(!boss)return;
+ const n=round>=5?3:round>=3?2:1;
+ for(let i=0;i<n;i++){
+  const ang=(n===1?0:(i-(n-1)/2)*.27);
+  const dx=playerX-boss.x,dy=playerY-boss.y;
+  const theta=Math.atan2(dy,dx)+ang;
+  const speed=rand(145,180)+round*10;
+  enemyShots.push({x:boss.x,y:boss.y+35,vx:Math.cos(theta)*speed,vy:Math.sin(theta)*speed,r:15,spin:rand(0,7)});
+ }
+ tone(190,.09,"square",.014);
+}
+function shoot(){
+ if(state!=="boss"||shotTimer>0||!boss)return;
+ const count=1+upgrades.multishot;
+ const cooldown=Math.max(.095,.29*Math.pow(.78,upgrades.cannon));
+ shotTimer=cooldown;
+ const px=playerX,py=playerY-30;
+ const travel=Math.max(.25,(py-boss.y)/650),predict=boss.x+Math.cos(bossTime*(1.45+Math.min(round*.08,.7))+boss.phase)*boss.speed*travel*.45;
+ const dx=clamp(predict,40,W-40)-px,dy=boss.y-py;
+ const ang=Math.atan2(dy,dx);
+ for(let i=0;i<count;i++){
+  const angle=ang+(i-(count-1)/2)*.115,speed=670;
+  bullets.push({x:px,y:py,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,r:12,life:1.35,damage:11+upgrades.damage*6,spin:rand(0,6)});
+ }
+ pop(px,py,3,["#9b6c48","#ffe1b2"],.45);
+ tone(155,.075,"triangle",.025);
+}
+function useSpecial(){
+ if(special<100||!(state==="eat"||state==="boss"))return;
+ special=0;shake=15;doFlash(.55);vibrate([60,40,90]);
+ tone(220,.25,"sawtooth",.08);setTimeout(()=>tone(580,.3),100);
+ if(state==="eat"){
+  snacks=snacks.filter(s=>{if(s.type==="bad"){pop(s.x,s.y,20,["#ffdc68","#f88"]);score+=15;return false}return true});
+  meter=Math.min(goal,meter+35);frenzyTime=7;magnetTime=8;
+  message("SNACK STORM! +35 BELLY");
+  for(let i=0;i<15;i++)snacks.push({x:rand(25,W-25),y:rand(-H*.6,30),v:rand(150,240),r:23,type:i%5===0?"gold":"food",emoji:i%5===0?"⭐":choose(FOODS),value:i%5===0?28:10,spin:rand(0,7),sw:2,age:0});
+  if(meter>=goal)startBoss();
+ }else{
+  message("MEGA POOP STORM!!!");
+  enemyShots=[];const b=boss;
+  for(let i=0;i<26;i++){
+   const ang=rand(0,Math.PI*2),r=rand(30,130);pop(b.x+Math.cos(ang)*r,b.y+Math.sin(ang)*r,5,["#ffeb78","#f8a775","#f8d"]);}
+  b.hp-=Math.max(70,b.max*.36);
+  b.hurt=.5;label(b.x,b.y,"MEGA FLUSH!","#fff66b",29);
+  if(b.hp<=0)clearBoss();
+ }
+}
+ui.special.addEventListener("pointerdown",e=>{e.stopPropagation();e.preventDefault();useSpecial()});
+function pointerX(e){return clamp(e.clientX,27,W-27)}
+canvas.addEventListener("pointerdown",e=>{
+ if(state!=="eat"&&state!=="boss")return;
+ e.preventDefault();pointerHeld=true;pointerId=e.pointerId;targetX=pointerX(e);
+ try{canvas.setPointerCapture(e.pointerId)}catch(err){}
+ if(state==="boss"){fireHeld=true;shotTimer=0;shoot()}
+});
+canvas.addEventListener("pointermove",e=>{
+ if(pointerHeld&&e.pointerId===pointerId){targetX=pointerX(e)}
+ else if(e.pointerType==="mouse"&&(state==="eat"||state==="boss"))targetX=pointerX(e);
+});
+function pointerEnd(e){if(e.pointerId===pointerId){pointerHeld=false;fireHeld=false;pointerId=null}}
+canvas.addEventListener("pointerup",pointerEnd);canvas.addEventListener("pointercancel",pointerEnd);
+addEventListener("keydown",e=>{
+ if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space"].includes(e.code))e.preventDefault();
+ keys[e.code]=true;
+ if((e.code==="KeyP"||e.code==="Escape")&&!e.repeat)pauseGame();
+ if((e.code==="Space"||e.code==="ArrowUp")&&state==="boss")fireHeld=true;
+ if(e.code==="KeyX"&&!e.repeat)useSpecial();
+ if(e.code==="Enter"&&!e.repeat&&state==="menu")startGame();
+});addEventListener("keyup",e=>{keys[e.code]=false;if(e.code==="Space"||e.code==="ArrowUp")fireHeld=false});
+addEventListener("blur",()=>{if(state==="eat"||state==="boss")pauseGame()});
+document.addEventListener("visibilitychange",()=>{if(document.hidden&&(state==="eat"||state==="boss"))pauseGame()});
+function update(dt){
+ elapsed+=dt;shake=Math.max(0,shake-36*dt);flash=Math.max(0,flash-dt*2.5);
+ invuln=Math.max(0,invuln-dt);magnetTime=Math.max(0,magnetTime-dt);frenzyTime=Math.max(0,frenzyTime-dt);
+ toastTime=Math.max(0,toastTime-dt);
+ const moving=(keys.ArrowRight||keys.KeyD?1:0)-(keys.ArrowLeft||keys.KeyA?1:0);
+ if(moving)targetX=clamp(targetX+moving*dt*(460+upgrades.legs*105),27,W-27);
+ const dx=targetX-playerX,maxStep=(680+upgrades.legs*155)*dt;playerX=clamp(playerX+clamp(dx,-maxStep,maxStep),27,W-27);
+ if(state==="eat"){
+  spawnTimer-=dt;
+  const interval=Math.max(.17,.44-round*.017)*(frenzyTime>0?.6:1);
+  while(spawnTimer<=0){spawnTimer+=interval;addSnack()}
+  if(streakTimer>0){streakTimer-=dt;if(streakTimer<=0)combo=0}
+  for(let i=snacks.length-1;i>=0;i--){
+   const s=snacks[i];s.age+=dt;s.y+=s.v*dt;s.x+=Math.sin(s.age*s.sw+s.spin)*16*dt;
+   if(magnetTime>0||upgrades.magnet>0){
+    const rr=(magnetTime>0?175:0)+upgrades.magnet*65;
+    const dst=Math.hypot(s.x-playerX,s.y-playerY);
+    if(s.type!=="bad"&&dst<rr&&dst>1){s.x+=(playerX-s.x)*dt*5;s.y+=(playerY-s.y)*dt*5}
+   }
+   if(Math.hypot(s.x-playerX,s.y-playerY)<s.r+31){
+    snacks.splice(i,1);catchSnack(s);if(state!=="eat")break;
+   }else if(s.y>H+42){snacks.splice(i,1)}
+  }
+ }else if(state==="boss"){
+  bossTime+=dt;shotTimer=Math.max(0,shotTimer-dt);bossShootTimer-=dt;
+  const b=boss;b.hurt=Math.max(0,b.hurt-dt);
+  b.speed=clamp(W*.32,80,230);
+  b.x=clamp(W/2+Math.sin(bossTime*(1.45+Math.min(round*.08,.7))+b.phase)*Math.max(35,W*.34),b.r+15,W-b.r-15);
+  b.y=clamp(H*.255,135,230)+Math.sin(bossTime*2.3)*10;
+  if(fireHeld)shoot();
+  if(bossShootTimer<=0){spawnEnemyShot();bossShootTimer=Math.max(.58,1.48-round*.085)*rand(.85,1.15)}
+  for(let i=bullets.length-1;i>=0;i--){
+   const p=bullets[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;
+   if(Math.hypot(p.x-b.x,p.y-(b.y+5))<b.r*.85+p.r){
+    bullets.splice(i,1);b.hp-=p.damage;b.hurt=.12;special=Math.min(100,special+3);
+    score+=6;pop(p.x,p.y,7,["#bb874f","#ffe98f","#fff"],.55);label(p.x,p.y-12,"+6","#ffdf8b",14);
+    if(b.hp<=0){clearBoss();break}
+   }else if(p.life<=0||p.x<-40||p.x>W+40||p.y<-40)bullets.splice(i,1);
+  }
+  if(state==="boss")for(let i=enemyShots.length-1;i>=0;i--){
+   const p=enemyShots[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.spin+=dt*4;
+   if(Math.hypot(p.x-playerX,p.y-playerY)<p.r+25){enemyShots.splice(i,1);damage();if(state==="over")break}
+   else if(p.y>H+30||p.x<-25||p.x>W+25)enemyShots.splice(i,1);
+  }
+ }
+}
+function updateEffects(dt){
+ for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=p.grav*dt;p.life-=dt;if(p.life<=0)particles.splice(i,1)}
+ for(let i=texts.length-1;i>=0;i--){const t=texts[i];t.y-=45*dt;t.life-=dt;if(t.life<=0)texts.splice(i,1)}
+}
+function rounded(x,y,w,h,r){const rr=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+rr,y);ctx.arcTo(x+w,y,x+w,y+h,rr);ctx.arcTo(x+w,y+h,x,y+h,rr);ctx.arcTo(x,y+h,x,y,rr);ctx.arcTo(x,y,x+w,y,rr);ctx.closePath()}
+function ellipse(x,y,rx,ry,col){ctx.fillStyle=col;ctx.beginPath();ctx.ellipse(x,y,Math.max(1,rx),Math.max(1,ry),0,0,Math.PI*2);ctx.fill()}
+function text(s,x,y,size=20,col="#fff",align="center",stroke=false){
+ ctx.save();ctx.textAlign=align;ctx.textBaseline="middle";ctx.font="1000 "+size+"px system-ui,-apple-system,sans-serif";if(stroke){ctx.strokeStyle="#1b143b";ctx.lineWidth=5;ctx.strokeText(s,x,y)}ctx.fillStyle=col;ctx.fillText(s,x,y);ctx.restore();
+}
+function emoji(s,x,y,size=33){ctx.save();ctx.textAlign="center";ctx.textBaseline="middle";ctx.font=size+"px Apple Color Emoji,Segoe UI Emoji,Noto Color Emoji,system-ui";ctx.fillText(s,x,y);ctx.restore()}
+function backdrop(){
+ const isBoss=state==="boss"||state==="upgrade",grad=ctx.createLinearGradient(0,0,0,H);
+ grad.addColorStop(0,isBoss?"#3c1747":"#311c67");grad.addColorStop(.56,isBoss?"#874264":"#724296");grad.addColorStop(1,isBoss?"#ed9b9c":"#d979ae");
+ ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+ ellipse(W*.77,H*.18,clamp(W*.25,85,150),clamp(W*.25,85,150),isBoss?"#fa9cb92a":"#ffcbed20");
+ ellipse(W*.77,H*.18,45,45,isBoss?"#ff8ea5":"#ffe2a7");
+ for(const s of stars){ctx.globalAlpha=s.a*(.85+.15*Math.sin(elapsed*2+s.x));ellipse(s.x,s.y,s.s,s.s,"#fff")}ctx.globalAlpha=1;
+ for(const c of clouds){
+  const x=(c.x+elapsed*c.v)%(W+210)-80,y=c.y,s=c.s;
+  ellipse(x,y,43*s,15*s,"#e8b0dc35");ellipse(x+28*s,y+2*s,34*s,15*s,"#e8b0dc35");ellipse(x-20*s,y+6*s,25*s,12*s,"#e8b0dc35");
+ }
+ ctx.fillStyle="#4224579c";ctx.beginPath();ctx.moveTo(0,H*.78);
+ for(let x=0;x<=W+30;x+=20)ctx.lineTo(x,H*.79+Math.sin(x*.013+elapsed*.1)*19);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.fill();
+ const floor=ctx.createLinearGradient(0,groundY,0,H);floor.addColorStop(0,"#34496b");floor.addColorStop(1,"#182546");
+ ctx.fillStyle=floor;ctx.fillRect(0,groundY,W,H-groundY);
+ ctx.fillStyle="#8ce6cf";ctx.fillRect(0,groundY,W,3);
+ ctx.strokeStyle="#fff2";ctx.lineWidth=1;
+ for(let x=0;x<W+50;x+=52){ctx.beginPath();ctx.moveTo(x,groundY);ctx.lineTo(x-20,H);ctx.stroke()}
+ for(let y=groundY+23;y<H;y+=23){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+}
+function drawSnack(s){
+ ctx.save();ctx.translate(s.x,s.y);ctx.rotate(Math.sin(s.age*3+s.spin)*.17);
+ if(s.type!=="food"){ellipse(0,0,27,27,s.type==="bad"?"#f63b6788":"#fff6a58a");ellipse(0,0,23,23,s.type==="gold"?"#fbd343":s.type==="bad"?"#ba3766":"#8d5fbf")}
+ emoji(s.emoji,0,-1,s.type==="gold"?35:34);
+ ctx.restore();
+}
+function drawPlayer(){
+ if(invuln>0&&Math.floor(invuln*12)%2===0)return;
+ const r=29+((state==="eat")?meter/goal*14:5);
+ const wobble=Math.sin(elapsed*7)*2;
+ ellipse(playerX,playerY+r+12,33,9,"#100a2470");
+ if(shield>0){ctx.save();ctx.strokeStyle="#a6f5ffe8";ctx.lineWidth=3;ctx.shadowColor="#a2f6ff";ctx.shadowBlur=16;ctx.beginPath();ctx.arc(playerX,playerY,45,0,Math.PI*2);ctx.stroke();ctx.restore();emoji("✦",playerX+37,playerY-31,15)}
+ ellipse(playerX-r*.52,playerY+r*.66,12,9,"#d7659c");ellipse(playerX+r*.52,playerY+r*.66,12,9,"#d7659c");
+ ellipse(playerX-r*.86,playerY+2+wobble,11,8,"#ffb8c1");ellipse(playerX+r*.86,playerY+2-wobble,11,8,"#ffb8c1");
+ const g=ctx.createRadialGradient(playerX-r*.3,playerY-r*.45,3,playerX,playerY,r*1.4);
+ g.addColorStop(0,"#fff2c4");g.addColorStop(.58,"#ffbf88");g.addColorStop(1,"#ec6c8b");
+ ellipse(playerX,playerY+wobble,r,r*1.02,g);
+ ellipse(playerX-r*.35,playerY+3,5,7,"#37243f");ellipse(playerX+r*.35,playerY+3,5,7,"#37243f");
+ ellipse(playerX-r*.34-1,playerY+1,1.8,2.2,"#fff");ellipse(playerX+r*.35-1,playerY+1,1.8,2.2,"#fff");
+ ellipse(playerX-r*.61,playerY+13,7,4,"#f57691bb");ellipse(playerX+r*.61,playerY+13,7,4,"#f57691bb");
+ ctx.strokeStyle="#512b4d";ctx.lineWidth=3;ctx.beginPath();ctx.arc(playerX,playerY+11,r*.22,0,Math.PI);ctx.stroke();
+ if(state==="boss"){emoji("🚀",playerX,playerY-r-12,27);if(fireHeld)ellipse(playerX,playerY-r-28,8,7,"#fbd36388")}
+ if(magnetTime>0)emoji("🧲",playerX-r-16,playerY-24,20);
+}
+function drawBoss(){
+ if(!boss)return;
+ const b=boss;
+ ctx.save();ctx.translate(b.x,b.y);ctx.rotate(Math.sin(bossTime*3)*.045);
+ const r=b.r;
+ ctx.shadowColor="#140e3f";ctx.shadowBlur=16;ellipse(0,r*.65,r*.9,r*.2,"#090c3370");ctx.shadowBlur=0;
+ ctx.fillStyle="#c6c2df";rounded(-r*.56,-r*.85,r*1.12,r*.63,15);ctx.fill();
+ ctx.fillStyle=b.hurt>0?"#fff1aa":"#fcf9fb";rounded(-r*.68,-r*.74,r*1.36,r*1.35,19);ctx.fill();
+ ellipse(0,r*.31,r*.65,r*.42,"#c9bed7");
+ ellipse(0,r*.25,r*.50,r*.29,"#3e2b62");
+ ellipse(0,r*.25,r*.35,r*.17,b.color);
+ ellipse(-r*.22,-r*.13,r*.13,r*.15,"#2b1b45");ellipse(r*.22,-r*.13,r*.13,r*.15,"#2b1b45");
+ ellipse(-r*.19,-r*.16,3,3,"#fff");ellipse(r*.25,-r*.16,3,3,"#fff");
+ ctx.strokeStyle="#48244e";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-r*.33,-r*.39);ctx.lineTo(-r*.12,-r*.32);ctx.moveTo(r*.12,-r*.32);ctx.lineTo(r*.33,-r*.39);ctx.stroke();
+ ctx.fillStyle="#fff";rounded(-r*.54,r*.52,r*1.08,r*.25,6);ctx.fill();
+ ctx.strokeStyle="#c0bcd0";ctx.lineWidth=3;ctx.stroke();
+ emoji(round%2?"👑":"⚡",0,-r*1.05,31);
+ ctx.restore();
+ const barW=Math.min(W-70,190),bx=clamp(b.x-barW/2,18,W-barW-18),by=b.y-r-48;
+ ctx.fillStyle="#130d28cc";rounded(bx,by,barW,10,5);ctx.fill();
+ if(b.hp>0){ctx.fillStyle="#ff638d";rounded(bx,by,Math.max(2,barW*(b.hp/b.max)),10,5);ctx.fill()}
+ ctx.strokeStyle="#fff9";ctx.lineWidth=1;rounded(bx,by,barW,10,5);ctx.stroke();
+ text(b.name,clamp(b.x,94,W-94),by-13,11,"#fff");
+}
+function drawProjectiles(){
+ for(const p of bullets){ctx.save();ctx.translate(p.x,p.y);ctx.rotate(Math.sin(p.spin+elapsed*13)*.2);ellipse(0,0,13,13,"#7b4a33");emoji("💩",0,0,24);ctx.restore()}
+ for(const p of enemyShots){ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.spin);emoji("🪠",0,0,32);ctx.restore()}
+}
+function drawEffects(){
+ for(const p of particles){ctx.globalAlpha=clamp(p.life/.6,0,1);ellipse(p.x,p.y,p.r,p.r,p.col)}ctx.globalAlpha=1;
+ for(const t of texts){ctx.globalAlpha=clamp(t.life/.5,0,1);text(t.s,t.x,t.y,t.sz,t.col,"center",true)}ctx.globalAlpha=1;
+ if(toastTime>0){const w=Math.min(W-20,365);ctx.fillStyle="#271336cd";rounded((W-w)/2,H*.41,w,56,18);ctx.fill();text(toast,W/2,H*.41+28,clamp(W*.045,15,21),"#ffed96","center",true)}
+ if(flash>0){ctx.fillStyle="rgba(255,255,255,"+(flash*.65)+")";ctx.fillRect(0,0,W,H)}
+}
+function drawMenuPreview(){
+ for(let i=0;i<9;i++){const x=(i*79+elapsed*24)%(W+80)-40,y=(i*89+elapsed*(35+i*4))%(H*.63);emoji(FOODS[(i*3)%FOODS.length],x,y,27)}
+ drawPlayer();
+}
+function render(){
+ ctx.save();if(shake>0)ctx.translate(rand(-shake,shake),rand(-shake,shake));
+ backdrop();
+ if(state==="eat"){for(const s of snacks)drawSnack(s);drawPlayer()}
+ else if(state==="boss"||state==="upgrade"){drawBoss();drawProjectiles();drawPlayer()}
+ else if(state==="paused"){if(returnState==="boss"){drawBoss();drawProjectiles()}else for(const s of snacks)drawSnack(s);drawPlayer()}
+ else if(state==="menu"||state==="over"){drawMenuPreview()}
+ drawEffects();ctx.restore();
+ const gameplay=state==="eat"||state==="boss";
+ ui.score.textContent="★ "+score.toLocaleString();
+ ui.round.textContent="ROUND "+round;
+ ui.hearts.textContent="♥".repeat(Math.max(0,hearts))+(shield>0?" 🛡"+shield:"");
+ ui.progress.style.width=(state==="boss"||state==="upgrade"?boss?Math.max(0,boss.hp/boss.max)*100:0:Math.min(100,meter/goal*100))+"%";
+ ui.progress.style.background=state==="boss"||state==="upgrade"?"linear-gradient(90deg,#ff518f,#ffa656)":"linear-gradient(90deg,#ffe56d,#75f5a7)";
+ ui.stage.textContent=state==="boss"?"🚽 "+(boss?boss.name:"BOSS")+" · HOLD TO FIRE!":state==="eat"?"🍔 CATCH SNACKS · FILL THE BELLY":"APOO! FOOD FIGHT FRENZY";
+ ui.combo.textContent=combo>1&&state==="eat"?"COMBO x"+combo+"  🔥":"";
+ ui.special.disabled=!gameplay||special<100;
+ ui.special.textContent=special>=100?"⚡ MEGA FLUSH!":"⚡ POWER "+Math.floor(special)+"%";
+ ui.help.textContent=state==="boss"?"DRAG TO DODGE · HOLD TO FIRE · AVOID PLUNGERS":state==="eat"?"DRAG TO MOVE · CATCH FOOD · DODGE BOMBS":"";
+ ui.special.style.display=gameplay?"block":"none";
+ ui.help.style.display=gameplay?"block":"none";
+}
+let last=performance.now();
+function frame(now){
+ const dt=clamp((now-last)/1000,0,.033);last=now;
+ if(state==="eat"||state==="boss")update(dt);
+ if(state!=="paused")updateEffects(dt);
+ render();requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
