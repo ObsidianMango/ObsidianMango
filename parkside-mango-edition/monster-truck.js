@@ -1,4 +1,4 @@
-import {detailKit} from './vehicle-detail-kit.js?v=street-27';
+import {detailKit} from './vehicle-detail-kit.js?v=mango-3';
 
 // A dedicated reward vehicle; the player's parking-car selection stays intact.
 export function buildMonsterTruck(T){

@@ -1,4 +1,4 @@
-import {detailKit} from './vehicle-detail-kit.js?v=street-27';
+import {detailKit} from './vehicle-detail-kit.js?v=mango-3';
 // Photo-reference fleet. Each skin has real wheel openings and independent wreck assemblies.
 export function buildReferenceVehicle(T,c){
  const k=detailKit(T),{mat,box,rounded,loft,pane,tube,cyl}=k,ss=c.id==='montecarlo',sedan=c.id==='impala',suv=c.id==='suburban',pickup=c.id==='colorado',truck=suv||pickup;

@@ -7,25 +7,25 @@ import {tunedConfig,vehicleKey,paintVehicle,disposeVehiclePaint} from './garage-
 import {createDemolitionContracts} from './demolition-contracts.js?v=street-27';
 import {createBikeDynamics} from './bike-dynamics.js?v=street-22';
 import {createWorldBoundary} from './world-boundary.js?v=street-20';
-import {createStreetLife} from './street-life.js?v=mango-2';
+import {createStreetLife} from './street-life.js?v=mango-3';
 import {createDestructionLoop} from './destruction-loop.js?v=street-17';
 import {createSky} from './scenery-detail.js?v=street-22';
 import {createXboxControls} from './xbox-controls.js?v=street-24';
 import {buildGoldenVehicle} from './golden-fleet.js?v=street-27';
-import {buildMonsterTruck} from './monster-truck.js?v=street-27';
-import {createVehicleMotion,motorForce} from './vehicle-motion.js?v=smooth-9';
+import {buildMonsterTruck} from './monster-truck.js?v=mango-3';
+import {createVehicleMotion,motorForce} from './vehicle-motion.js?v=mango-3';
 import {SECRET_LEVEL,DISTRICTS,buildSecretCity} from './secret-city.js?v=street-29';
 import {createDestructionObjective,createBarrelEffects} from './destruction-objective.js?v=street-22';
-import {buildDetailedVehicle} from './detailed-vehicles.js?v=street-29';
+import {buildDetailedVehicle} from './detailed-vehicles.js?v=mango-3';
 import {createRunScoring} from './run-scoring.js?v=endless-15';
 import {createVanFailures} from './van-failures.js?v=game-5';
-import {sizeChallengeVehicle} from './vehicle-sizing.js?v=game-5';
+import {sizeChallengeVehicle} from './vehicle-sizing.js?v=mango-3';
 import {createHitFeedback} from './hit-feedback.js?v=clarity-14';
 import {createParkedTraffic} from './parked-traffic.js?v=mango-2';
 import {createPedestrians} from './pedestrians.js?v=street-29';
 import * as C from './cannon-es.js';
 import {installTouchGuard} from './touch-guard.js?v=street-27';
-import {buildRoadster} from './roadster-model.js?v=gold-8';
+import {buildRoadster} from './roadster-model.js?v=mango-3';
 import {VEHICLES} from './garage-models.js?v=street-29';
 import {createCrashDirector} from './crash-replay.js?v=fleet-1';
 import {createDestructibleEnvironment} from './destructible-environment.js?v=street-27';
@@ -136,7 +136,7 @@ wheel.addEventListener('pointerup',releaseWheel);wheel.addEventListener('pointer
 function paintWheel(){const keyboard=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),angle=keyboard?keyboard*95:wheelPointer!==null?wheelAngle:padInput.active?padInput.steering*135:wheelAngle;$('wheelArt').style.transform='rotate('+angle+'deg)';wheel.setAttribute('aria-valuenow',String(Math.round(angle)));}
 function updateWheel(dt){if(wheelPointer===null)wheelAngle*=Math.exp(-dt*7);if(Math.abs(wheelAngle)<.05)wheelAngle=0;paintWheel();}
 function notify(message,seconds=2){$('notice').textContent=message;noticeUntil=clock+seconds;$('notice').style.opacity='1';}
-function syncCar(){car.root.position.copy(chassis.position);car.root.quaternion.copy(chassis.quaternion);car.root.position.add(new T.Vector3(0,-spec.offset,0).applyQuaternion(car.root.quaternion));if(spec.bike)car.root.rotateZ(bikeDynamics.lean);car.root.updateMatrixWorld(true);for(let i=0;i<vehicle.wheelInfos.length;i++){const p=wheelParts[i];if(!p.userData.attached)continue;const w=vehicle.wheelInfos[i],physicsRotation=w.rotation,contact=w.isInContact;w.rotation=visualWheelAngle[i];vehicle.updateWheelTransform(i);w.rotation=physicsRotation;w.isInContact=contact;const t=w.worldTransform;const local=new T.Vector3().copy(t.position);car.root.worldToLocal(local);p.position.copy(local);p.quaternion.copy(car.root.quaternion).invert().multiply(new T.Quaternion().copy(t.quaternion));}if(spec.bike){const rider=car.root.getObjectByName('rider');if(rider)rider.visible=streetLife?.mode==='vehicle'&&!firstPerson;const fork=car.root.getObjectByName('fork');if(fork)fork.rotation.y=steer;}}
+function syncCar(){const cockpitWheel=car.assemblies.find(p=>p.name==='steering-wheel');if(cockpitWheel?.userData.attached)cockpitWheel.rotation.z=steer/.69*Math.PI*.75;car.root.position.copy(chassis.position);car.root.quaternion.copy(chassis.quaternion);car.root.position.add(new T.Vector3(0,-spec.offset,0).applyQuaternion(car.root.quaternion));if(spec.bike)car.root.rotateZ(bikeDynamics.lean);car.root.updateMatrixWorld(true);for(let i=0;i<vehicle.wheelInfos.length;i++){const p=wheelParts[i];if(!p.userData.attached)continue;const w=vehicle.wheelInfos[i],physicsRotation=w.rotation,contact=w.isInContact;w.rotation=visualWheelAngle[i];vehicle.updateWheelTransform(i);w.rotation=physicsRotation;w.isInContact=contact;const t=w.worldTransform;const local=new T.Vector3().copy(t.position);car.root.worldToLocal(local);p.position.copy(local);p.quaternion.copy(car.root.quaternion).invert().multiply(new T.Quaternion().copy(t.quaternion));}if(spec.bike){const rider=car.root.getObjectByName('rider');if(rider)rider.visible=streetLife?.mode==='vehicle'&&!firstPerson;const fork=car.root.getObjectByName('fork');if(fork)fork.rotation.y=steer;}}
 // Integrate once per fixed step, even on displays rendering faster than physics.
 world.addEventListener('postStep',()=>updateVisualWheelSpin(world.dt));
 function resetVehicleMotion(){physicsAccumulator=0;syncCar();vehicleMotion.capture(car,true);}

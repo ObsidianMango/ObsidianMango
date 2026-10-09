@@ -3,7 +3,7 @@ export function createVehicleMotion(T){
  const pose=()=>({p:new T.Vector3(),q:new T.Quaternion()}),previous=[],current=[];
  let nodes=[];
  function capture(car,reset=false){
-  const next=[car.root,...car.assemblies.filter(p=>p.name.startsWith('wheel-'))];
+  const next=[car.root,...car.assemblies.filter(p=>p.name.startsWith('wheel-')||p.name==='steering-wheel')];
   if(reset||next.length!==nodes.length||next.some((n,i)=>n!==nodes[i])){
    nodes=next;previous.length=current.length=0;
    for(const node of nodes){const a=pose(),b=pose();a.p.copy(node.position);a.q.copy(node.quaternion);b.p.copy(a.p);b.q.copy(a.q);previous.push(a);current.push(b);}
