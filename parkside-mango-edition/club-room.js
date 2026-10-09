@@ -4,7 +4,7 @@ export function createClubRoom(T){
  function build({room,box,label}){dancers=[];lights=[];clock=0;label(room,'VELVET · ADULT CLUB',0,2.9,-6.82,6);box(room,9,.35,3.4,0,.175,-4.5,0x482b49,true);box(room,9,.06,.14,0,.38,-2.85,0xe2b658);
   for(const x of [-2.6,2.6]){
    box(room,.065,3.1,.065,x,1.9,-4.3,0xcbd4da);
-   const female=x<0,skin=female?0xbf967f:0x9c735d,costume=female?0x93426d:0x302a39,dancer=new T.Group();
+   const female=true,skin=female?0xbf967f:0x9c735d,costume=female?0x93426d:0x302a39,dancer=new T.Group();
    dancer.name='Adult stage performer';dancer.position.set(x+.42,.35,-4.3);dancer.rotation.y=Math.PI;room.add(dancer);
    dancer.userData.adult=true;dancer.userData.gender=female?'female':'male';dancer.userData.style='blocky-stage-costume';
    box(dancer,female?.32:.39,.52,.24,0,1.02,0,female?costume:skin);
