@@ -6,7 +6,7 @@ import {tunedConfig,vehicleKey,paintVehicle,disposeVehiclePaint} from './garage-
 import {createDemolitionContracts} from './demolition-contracts.js?v=street-27';
 import {createBikeDynamics} from './bike-dynamics.js?v=street-22';
 import {createWorldBoundary} from './world-boundary.js?v=street-20';
-import {createStreetLife} from './street-life.js?v=street-30';
+import {createStreetLife} from './street-life.js?v=street-31';
 import {createDestructionLoop} from './destruction-loop.js?v=street-17';
 import {createSky} from './scenery-detail.js?v=street-22';
 import {createXboxControls} from './xbox-controls.js?v=street-24';

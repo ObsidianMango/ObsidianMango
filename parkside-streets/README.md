@@ -218,7 +218,7 @@ The harness uses real Three.js geometry and Cannon physics with a DOM and render
 
 ### Sticky webs and blocky club performers
 
-- Web impacts now leave glossy thick strands, wet blobs and gravity drips. Splats follow target position and rotation, briefly stretch back toward their contact point, and slow loose objects for three seconds. Multiple splats do not stack the slowdown.
+- Web impacts now leave wet blobs and gravity drips without radial spokes or web rings. Glossy strands are used only for shooting, dripping and stretching. Splats follow target position and rotation, briefly stretch back toward their contact point, and slow loose objects for three seconds. Multiple splats do not stack the slowdown.
 - Twenty-four reusable marks share two instance batches, two low-detail geometries and one material; there are no additional physics bodies. Six-second expiry, room changes and resets release target references.
 - Velvet Club has two clearly adult, stylized blocky topless performers with lower costumes. The added simple chest forms reuse existing geometry/materials and add no physics or lights.
 - Validation: `node tests/sticky-webs.mjs` covers translation/rotation adhesion, stretching, non-stacking drag, 300-shot recycling, finite instance transforms, expiry/reset and 12 club visits with stable resources. `node tests/city-expansion.mjs` passes fleet handoffs, mobile ticket state, slot payouts, club interactions and pedestrian web hits. Tests use real Three/Cannon with a renderer/DOM stub; physical iPhone GPU performance remains unverified.
