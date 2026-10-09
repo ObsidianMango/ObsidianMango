@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createDuelRules,eligible,cleanPose} from '../duel-rules.js';
 import {decodeSignal,encodeSignal,PROTOCOL} from '../local-peer.js';
-assert(!eligible({complete:false,guns:['pistol']}));assert(!eligible({complete:true,guns:['web','hammer']}));assert(eligible({complete:true,guns:['pistol']}));
+assert(eligible({complete:false,guns:[]}));assert(!eligible({guns:null}));assert(eligible({complete:true,guns:['pistol']}));
 const offer={v:PROTOCOL,id:'test-abcdefgh',type:'offer',sdp:'v=0\r\na=candidate:1'};assert.deepEqual(decodeSignal('https://example.test/#duel='+encodeURIComponent(encodeSignal(offer))),offer);assert.throws(()=>decodeSignal('bogus'));assert.throws(()=>decodeSignal(encodeSignal({...offer,v:'wrong'})));assert(!cleanPose({seq:1,p:[NaN,0,0],mode:'foot',yaw:0}));
 let time=0,wall=Infinity,effects=[];const rules=createDuelRules({now:()=>time,blocked:()=>wall,onEffect:e=>effects.push(e)});rules.setGuns(0,['pistol','machine','grenade']);rules.setGuns(1,['pistol']);let seq=0,shotSeq=0;
 const pose=(i,extra={})=>rules.pose(i,{seq:++seq,p:i?[0,0,-10]:[0,0,0],yaw:0,mode:'foot',active:true,safe:false,weapon:'pistol',...extra});

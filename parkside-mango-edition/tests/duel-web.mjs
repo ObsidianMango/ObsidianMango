@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {createDuelRules,eligible} from '../duel-rules.js';
+assert(eligible({guns:[]}),'new players can join without guns or completion');
+let t=4,wall=Infinity,seq=0,shotSeq=0,effects=[];const r=createDuelRules({now:()=>t,blocked:()=>wall,onEffect:e=>effects.push(e)});r.setGuns(0,[]);r.setGuns(1,[]);t+=4;
+const pose=(i,extra={})=>r.pose(i,{seq:++seq,p:i?[0,0,-10]:[0,0,0],yaw:0,mode:'foot',active:true,safe:false,weapon:'web',...extra});const shoot=()=>r.shot(0,{seq:++shotSeq,weapon:'web',from:[0,1.47,0],dir:[0,0,-1]});
+pose(0);pose(1);assert(shoot());assert.equal(r.snapshot()[1].slow,3);assert.equal(r.players[1].hp,100);assert.equal(effects.at(-1).kind,'web');assert(effects.at(-1).hit);t+=.4;pose(0);pose(1);assert(shoot());assert.equal(r.snapshot()[1].slow,3,'refresh, no stacking duration');t+=3.01;assert.equal(r.snapshot()[1].slow,0,'expires');
+pose(0);pose(1,{mode:'vehicle'});assert(shoot());assert.equal(r.snapshot()[1].slow,3,'vehicle hit');assert.equal(r.players[1].hp,100);
+t+=3.1;pose(0);pose(1);wall=4;assert(shoot());assert.equal(r.snapshot()[1].slow,0,'walls block webs');wall=Infinity;t+=.4;pose(0);pose(1,{safe:true});assert(shoot());assert.equal(r.snapshot()[1].slow,0,'indoors protected');t+=.4;pose(0);pose(1,{active:false});assert(shoot());assert.equal(r.snapshot()[1].slow,0,'pause protected');
+t+=.4;pose(0);pose(1);r.players[1].shield=t+3;assert(shoot());assert.equal(r.snapshot()[1].slow,0,'shield protected');r.players[1].shield=0;t+=.4;pose(0);pose(1);assert(shoot());r.players[1].hp=0;r.players[1].respawn=t;r.tick(.05);assert.equal(r.snapshot()[1].slow,0,'respawn clears web');
+console.log('Web hits slow foot/vehicle targets for 3 seconds without damage or cumulative stacking; expiry, walls, pause/indoor/spawn safety, fresh-player access and respawn cleanup passed.');

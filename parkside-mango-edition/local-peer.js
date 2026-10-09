@@ -1,5 +1,5 @@
 // Server-free, explicit invite/reply pairing. One peer, one bounded data channel.
-export const PROTOCOL='mango-duel-1';
+export const PROTOCOL='mango-duel-2';
 const MAX_SIGNAL=48000,MAX_PACKET=4096;
 export function encodeSignal(value){return 'MANGO1.'+btoa(JSON.stringify(value));}
 export function decodeSignal(raw){

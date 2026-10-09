@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../../',import.meta.url));
-export async function bootGame(){
+export async function bootGame({progress=Array.from({length:24},()=>({stars:3,time:1}))}={}){
 const require=createRequire(import.meta.url),{parseHTML}=require('/tmp/parkside-test/node_modules/linkedom');
 const {window,document}=parseHTML(fs.readFileSync(root+'index.html','utf8'));
 const ctx2d=new Proxy({createRadialGradient:()=>({addColorStop(){}}),createLinearGradient:()=>({addColorStop(){}}),measureText:()=>({width:30}),getImageData:(x,y,w,h)=>({data:new Uint8ClampedArray(w*h*4)})},{get:(o,k)=>k in o?o[k]:()=>{},set:(o,k,v)=>{o[k]=v;return true;}});
+Object.defineProperty(window.HTMLSelectElement.prototype,'value',{configurable:true,get(){return this.querySelector('option[selected]')?.value||this.firstElementChild?.value||'';},set(value){for(const option of this.children){if(option.value===String(value))option.setAttribute('selected','');else option.removeAttribute('selected');}}});
 window.HTMLCanvasElement.prototype.getContext=()=>ctx2d;
 window.HTMLCanvasElement.prototype.toDataURL=()=> 'data:image/png;base64,';
 window.HTMLElement.prototype.getClientRects=function(){return this.closest('[hidden]')?[]:[{x:0,y:0,width:100,height:44}];};
@@ -19,7 +20,7 @@ window.HTMLElement.prototype.animate=()=>({});
 const storage=new Map(),raf=[];
 globalThis.document=document;globalThis.window=window;globalThis.Element=window.Element;
 globalThis.localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,String(v))};
-storage.set('parkside-chaos-saves-v1',JSON.stringify(Array.from({length:24},()=>({stars:3,time:1}))));
+storage.set('parkside-chaos-saves-v1',JSON.stringify(progress));
 const T=require(root+'three.min.js');
 class Renderer {
  constructor({canvas}){this.domElement=canvas;this.shadowMap={};this.info={render:{calls:0,triangles:0}};}
