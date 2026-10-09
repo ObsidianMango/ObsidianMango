@@ -9,7 +9,7 @@ import {createCasinoRoom,CASINO_STATIONS} from './casino-room.js?v=street-29';
 import {createShopEconomy,WEAPONS} from './shop-economy.js?v=street-29';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 // A single furnished room is reused for every doorway; no city-sized indoor scene.
-import {buildSteveAvatar} from './player-likeness.js?v=mango-1';
+import {buildSteveAvatar} from './player-likeness.js?v=mango-2';
 export function createStreetLife({T,C,scene,world,lots,chassis,crowd,groundMat,getView,getLevel,getCar,getState,getCamera,getAim,clearInput,notify,onCamera,onEnterCar,onExitCar,onHit,onBlast,getFleet,getRepair,onTune,onRepair,getContracts}){
  const $=id=>document.getElementById(id),economy=createShopEconomy(),avatar=new T.Group(),room=new T.Group();scene.add(avatar,room);avatar.visible=room.visible=false;
  const clubRoom=createClubRoom(T),webs=createWebShooter(T,scene);
@@ -29,7 +29,7 @@ export function createStreetLife({T,C,scene,world,lots,chassis,crowd,groundMat,g
  let mode='vehicle',inside=null,shopOpen=false,current=null,walkX=0,walkY=0,fireHeld=false,cooldown=0,anim=0,toolId='',firstToolId=null,swing=0,markers=[],markerLevel=-1,roomBuilt=0,seated=false,seatStation=null,standingPos=null,aim=new T.Vector3(),stickPointer=null;
  const roomExit={x:0,z:5.2},counter={x:0,z:-3.1};
  const normalSkin=mat(0xd5a88c),normalShirt=mat(0x17191d),hulkSkin=mat(0x70a850);
- function hulkVisual(active,held){likeness.detail.visible=!active;avatar.scale.setScalar(active?1.35:1);avatar.children[0].material=active?hulkSkin:normalShirt;avatar.children[0].scale.x=active?.82:.56;avatar.children[1].material=active?hulkSkin:normalSkin;for(const arm of arms){arm.material=active?hulkSkin:normalShirt;arm.scale.x=active?.28:.17;}for(const hand of firstHands.children.slice(0,2)){hand.material=active?hulkSkin:normalSkin;hand.scale.x=active?.19:.13;}firstHands.children.slice(2).forEach(m=>m.visible=!active);tool.visible=!active;}
+ function hulkVisual(active,held){likeness.setHulk(active);for(const hand of firstHands.children.slice(0,2)){hand.material=active?hulkSkin:normalSkin;hand.scale.x=active?.19:.13;}firstHands.children.slice(2).forEach(m=>m.visible=!active);tool.visible=!active;}
  const hulk=createHulkMode({T,C,scene,world,crowd,body,getCamera,allowed:()=>mode==='foot'&&!inside&&!shopOpen&&getState()==='running',notify,onVisual:hulkVisual});
 
  function label(parent,text,x,y,z,w=3){const cv=document.createElement('canvas');cv.width=512;cv.height=128;const c=cv.getContext('2d');c.fillStyle='#173c3a';c.fillRect(0,0,512,128);c.fillStyle='#ffe7a2';c.textAlign='center';c.font='bold 36px system-ui';c.fillText(text,256,77);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;labelTextures.push(tx);const material=new T.MeshBasicMaterial({map:tx,side:T.DoubleSide});const m=new T.Mesh(new T.PlaneGeometry(w,w/4),material);m.position.set(x,y,z);parent.add(m);return m;}
