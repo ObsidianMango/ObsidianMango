@@ -245,3 +245,8 @@ The club cast is now entirely adult female, using the existing costume and stage
 The two adult female performers now have balanced head/shoulder/waist proportions and modest fixed contours in their covered stage outfits. Jointed elbows and knees support a coordinated side-step dance, gentle head turns, and whole-body movement. Hair sections and costume hems smoothly follow the steps without deforming the body. Shared box geometry and the room material palette are retained; there are no new physics bodies, textures or lights.
 
 `tests/sticky-webs.mjs` verifies hair/hem/head motion, fixed outfit geometry, finite transforms after 1,200 animation steps, bounded angles and twelve repeated room visits with stable resources. Physical iPhone GPU performance remains unverified.
+
+
+### Clearer adult performer designs
+
+The two adult female performers now have distinct long side-part / auburn bob hairstyles and plum / teal covered stage dresses, with waist trim, sleeves, earrings, readable eyes and eyebrows, and a softer jaw outline. The covered chest contours retain their existing dimensions. Gentle cached emissive fill and bright stage framing improve visibility without adding light sources, physics bodies, or textures. Existing dance, hair and hem motion remain bounded. Checks cover fixed contours, finite animation, distinct designs, a bounded mesh/material budget, and stable resources across 12 visits. Physical iPhone GPU performance is unmeasured.

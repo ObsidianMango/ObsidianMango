@@ -1,4 +1,4 @@
-import {createClubRoom} from './club-room.js?v=mango-5';
+import {createClubRoom} from './club-room.js?v=mango-6';
 import {createWebShooter} from './web-shooter.js?v=street-31';
 import {createGarageUI} from './garage-ui.js?v=street-27';
 import {createInteriorBreakage} from './interior-breakage.js?v=street-25';
