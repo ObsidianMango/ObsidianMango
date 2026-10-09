@@ -1,0 +1,11 @@
+import {SLOT_ICONS} from './casino-games.js?v=casino-19';
+// Shared drum geometry and five symbol textures for all nine physical reels.
+export function createSlotReels(T){
+ const cylinder=new T.CylinderGeometry(.29,.29,.25,16),plane=new T.PlaneGeometry(.25,.22),ivory=new T.MeshStandardMaterial({color:0xe3d8bc,roughness:.4}),materials=[ivory];
+ const faces=SLOT_ICONS.map((icon,i)=>{const cv=document.createElement('canvas');cv.width=cv.height=128;const c=cv.getContext('2d');c.fillStyle='#fff3d1';c.fillRect(0,0,128,128);c.fillStyle=['#b93f52','#c09628','#459781','#b84251','#4f829e'][i];c.textAlign='center';c.textBaseline='middle';c.font='bold 74px Georgia';c.fillText(icon,64,67);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;const m=new T.MeshBasicMaterial({map:tx});materials.push(m);return m;});
+ let drums=[],clock=0,spinTime=0,lastBusy=false,activeZ=null,result=null;
+ function build(room,z){for(let col=0;col<3;col++){const root=new T.Group();root.position.set(-5.90,1.36,z-.31+col*.31);root.userData.casinoMotion='drum';room.add(root);const core=new T.Mesh(cylinder,ivory);core.rotation.x=Math.PI/2;root.add(core);const panels=[];for(let i=0;i<8;i++){const a=i*Math.PI/4,p=new T.Mesh(plane,faces[(i+col)%5]);p.position.set(Math.cos(a)*.298,Math.sin(a)*.298,0);p.rotation.set(0,Math.PI/2,a,'ZYX');root.add(p);panels.push(p);}drums.push({root,col,z,panels});}}
+ function settle(d,values){if(!values?.length)return;for(const [row,index]of [[0,1],[1,0],[2,7]])d.panels[index].material=faces[values[row*3+d.col]??0];}
+ function update(dt,next,busy,z){clock+=Math.min(dt,.05);if(busy&&!lastBusy){spinTime=0;activeZ=z;result=next;}if(busy)spinTime+=Math.min(dt,.05);if(next?.game==='slots')result=next;for(const d of drums){const active=activeZ===null||Math.abs(d.z-activeZ)<.01;if(active&&busy){const duration=1+d.col*.17,t=Math.min(1,spinTime/duration);d.root.rotation.z=-(1-Math.pow(1-t,3))*Math.PI*8;settle(d,result?.reels);}else if(active&&result?.game==='slots'){d.root.rotation.z=0;settle(d,result.reels);}}lastBusy=busy;}
+ return{build,update,clear(){drums=[];clock=spinTime=0;lastBusy=false;activeZ=null;result=null;},geometries:new Set([cylinder,plane]),materials:new Set(materials),getInfo:()=>({drums:drums.length,spinTime,spinning:lastBusy,angles:drums.map(d=>d.root.rotation.z),textures:5})};
+}

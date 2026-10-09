@@ -2,6 +2,7 @@ import {UPGRADES,TOOL_PRICES,PAINTS,cleanGarage} from './garage-upgrades.js?v=st
 import {SCRATCH_GAMES,createScratchBoard,CELLS_PER_ZONE} from './scratch-tickets.js?v=street-20';
 // Fictional game cash only. One saved ticket prevents rerolling by closing a shop.
 export const WEAPONS=[
+ {id:'web',name:'Web shooter',price:0,rounds:0,refill:0,rate:.32,range:45,power:0},
  {id:'hammer',name:'Hammer',price:40,rounds:0,refill:0,rate:.48,range:2.8,power:10},
  {id:'pistol',name:'Pistol',price:150,rounds:36,refill:25,rate:.27,range:65,power:4},
  {id:'machine',name:'Machine gun',price:450,rounds:180,refill:60,rate:.085,range:85,power:3},
@@ -30,6 +31,7 @@ export function createShopEconomy(storage=localStorage,random=Math.random){
 
   for(const key of ['ticket','lastTicket'])if(s[key]&&[0,10,25,100,500].includes(s[key].payout)&&Number.isSafeInteger(s[key].id)){const old=s[key],design=SCRATCH_GAMES.some(g=>g.id===old.design)?old.design:'numbers',ticket={id:old.id,payout:old.payout,design,seed:Number.isInteger(old.seed)?old.seed>>>0:Math.imul(old.id,7919)>>>0,scratched:[]},limit=createScratchBoard(ticket).zones.length*CELLS_PER_ZONE;ticket.scratched=[...new Set((Array.isArray(old.scratched)?old.scratched:[]).filter(c=>Number.isInteger(c)&&c>=0&&c<limit))];data[key]=ticket;data.serial=Math.max(data.serial,ticket.id);}
  }}catch{}
+ if(!data.owned.includes('web'))data.owned.push('web');
  const save=()=>{try{storage.setItem(key,JSON.stringify(data));}catch{}};
  const info=()=>({...data,garage:cleanGarage(data.garage),contractAwards:[...data.contractAwards],casinoStats:JSON.parse(JSON.stringify(data.casinoStats)),casinoHistory:data.casinoHistory.map(h=>({...h})),owned:[...data.owned],ammo:{...data.ammo},ticket:data.ticket?{...data.ticket,scratched:[...data.ticket.scratched]}:null,lastTicket:data.lastTicket?{...data.lastTicket,scratched:[...data.lastTicket.scratched]}:null,casinoRound:data.casinoRound?JSON.parse(JSON.stringify(data.casinoRound)):null,casinoResult:data.casinoResult?JSON.parse(JSON.stringify(data.casinoResult)):null});
  function earn(amount){data.cash=Math.min(9999999,data.cash+Math.max(0,Math.floor(amount)||0));save();}

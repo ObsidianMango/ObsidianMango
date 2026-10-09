@@ -1,6 +1,8 @@
+import {createSlotReels} from './slot-reels.js?v=street-29';
 import {WHEEL_ORDER,RED_NUMBERS} from './casino-games.js?v=casino-19';
 // Reusable geometry, emissive trims and painted table details; no expensive point lights.
 export function createCasinoRoom(T){
+ const slots=createSlotReels(T);
  const reducedMotion=typeof window!=='undefined'&&window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
  const cylinder=new T.CylinderGeometry(1,1,1,24),sphere=new T.IcosahedronGeometry(1,1),ring=new T.TorusGeometry(1,.07,6,32),mats=new Map();
  const material=color=>{if(!mats.has(color))mats.set(color,new T.MeshStandardMaterial({color,roughness:.55,metalness:color===0xccaa61?.55:.05}));return mats.get(color);};
@@ -9,7 +11,7 @@ export function createCasinoRoom(T){
  function mesh(parent,geo,color,x,y,z,sx,sy,sz){const m=new T.Mesh(geo,material(color));m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=m.receiveShadow=true;parent.add(m);return m;}
  function dynamic(m,kind){m.userData.casinoMotion=kind;movers.push(m);return m;}
  function batch(room){const groups=new Map();for(const m of [...room.children]){if(!m.isMesh||m.userData.casinoMotion||m.material.map)continue;const key=m.geometry.uuid+':'+m.material.uuid;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(m);}let instances=0,batches=0;for(const list of groups.values()){if(list.length<2)continue;const batch=new T.InstancedMesh(list[0].geometry,list[0].material,list.length);list.forEach((m,i)=>{m.updateMatrix();batch.setMatrixAt(i,m.matrix);room.remove(m);});batch.castShadow=false;batch.receiveShadow=true;batch.computeBoundingSphere();batch.instanceMatrix.needsUpdate=true;batch.userData.indoorParts=list.map(m=>({position:m.position.clone(),scale:m.scale.clone(),matrix:m.matrix.clone()}));batch.name='Casino shared detail';room.add(batch);instances+=list.length;batches++;}resources={batches:resources.batches+batches,instances:resources.instances+instances};}
- function build({room,box,label}){resources={batches:0,instances:0};movers=[];reelFaces=[];ball=null;clock=0;
+ function build({room,box,label}){slots.clear();resources={batches:0,instances:0};movers=[];reelFaces=[];ball=null;clock=0;
   box(room,15.8,.02,13.8,0,.012,0,0x563650);for(let x=-7;x<8;x+=2)for(let z=-6;z<7;z+=2)box(room,.9,.014,.9,x,.029,z,0x674563);
   for(const x of [-7.8,7.8]){box(room,.1,.18,13.8,x,.25,0,0xccaa61);box(room,.1,.12,13.8,x,2.8,0,0xccaa61);}
   box(room,15.7,.12,.12,0,2.8,-6.8,0xccaa61);label(room,'LUCKY MANGO',0,2.4,-6.78,6);
@@ -19,8 +21,8 @@ export function createCasinoRoom(T){
   for(const x of [-1.7,1.7]){mesh(room,cylinder,0x33263e,x,.43,-4.85,.12,.8,.12);mesh(room,cylinder,0x954766,x,.87,-4.85,.36,.14,.36);}
   // Slot cabinets with screens, button decks, coin slots, lights and separate painted reels.
   for(const z of [-2,.1,2.2]){
-   box(room,1.15,1.95,.85,-6.2,.98,z,0x282838,true);box(room,1.27,.14,.97,-6.2,1.98,z,0xccaa61);box(room,.03,.66,.96,-5.74,1.35,z,0x0d2832);
-   for(let i=0;i<3;i++){box(room,.03,.46,.23,-5.72,1.36,z-.31+i*.31,0xf3e5c6);const face=dynamic(mesh(room,sphere,[0xcf554d,0xe2bb5a,0x7bad88][i],-5.69,1.36,z-.31+i*.31,.035,.075,.075),'reel');reelFaces.push(face);}
+   box(room,1.15,.85,.85,-6.2,.425,z,0x282838,true);box(room,.55,1.95,.85,-6.5,.98,z,0x282838);for(const side of [-1,1])box(room,1.15,1.95,.08,-6.2,.98,z+side*.47,0x282838);box(room,1.27,.14,.97,-6.2,1.98,z,0xccaa61);box(room,.03,.66,.96,-5.74,1.35,z,0x0d2832);
+   slots.build(room,z);
    box(room,.65,.15,1.13,-5.94,.87,z,0x4b3c58);for(const offset of [-.28,0,.28])mesh(room,cylinder,0xe8bd6c,-5.68,.97,z+offset,.07,.04,.07);box(room,.015,.035,.3,-5.73,.62,z,0xccaa61);const sign=label(room,'SLOTS',-5.7,2.18,z,1.2);sign.rotation.y=Math.PI/2;
   }
   for(const z of [-2,.1,2.2]){mesh(room,cylinder,0x33263e,-4.65,.25,z,.12,.5,.12);mesh(room,cylinder,0x954766,-4.65,.52,z,.3,.12,.3);}
@@ -57,8 +59,8 @@ export function createCasinoRoom(T){
   // Repeated furnishing becomes GPU instances, with only animated parts kept separate.
   batch(room);
  }
- function update(dt,result){clock+=Math.min(dt,.05);if(result?.game==='roulette')lastNumber=result.number;const angle=WHEEL_ORDER.indexOf(lastNumber)*Math.PI*2/37;if(ball)ball.position.set(4+Math.sin(angle)*.72,1.15,1.6+Math.cos(angle)*.72);for(let i=0;i<movers.length;i++){const m=movers[i],kind=m.userData.casinoMotion;if(!reducedMotion&&kind==='head')m.rotation.y=Math.sin(clock*.7+i)*.12;else if(!reducedMotion&&kind==='arm')m.rotation.x=Math.sin(clock*.8+i)*.12;}if(result?.game==='slots')for(let i=0;i<reelFaces.length;i++)reelFaces[i].material=material([0xcf554d,0xe2bb5a,0x7bad88,0xf195d0,0xf4eacb][result.reels[i%result.reels.length]]);}
- return {build,update,clear(){movers=[];reelFaces=[];ceiling=null;ball=null;},setFirstPerson(value){if(ceiling)ceiling.visible=value;},geometries:new Set([cylinder,sphere,ring]),getInfo:()=>({sharedGeometries:3,materials:mats.size+2,...resources,animatedParts:movers.length})};
+ function update(dt,result,busy=false,stationZ=null){slots.update(dt,result,busy,stationZ);clock+=Math.min(dt,.05);if(result?.game==='roulette')lastNumber=result.number;const angle=WHEEL_ORDER.indexOf(lastNumber)*Math.PI*2/37;if(ball)ball.position.set(4+Math.sin(angle)*.72,1.15,1.6+Math.cos(angle)*.72);for(let i=0;i<movers.length;i++){const m=movers[i],kind=m.userData.casinoMotion;if(!reducedMotion&&kind==='head')m.rotation.y=Math.sin(clock*.7+i)*.12;else if(!reducedMotion&&kind==='arm')m.rotation.x=Math.sin(clock*.8+i)*.12;}if(result?.game==='slots')for(let i=0;i<reelFaces.length;i++)reelFaces[i].material=material([0xcf554d,0xe2bb5a,0x7bad88,0xf195d0,0xf4eacb][result.reels[i%result.reels.length]]);}
+ return {build,update,clear(){slots.clear();movers=[];reelFaces=[];ceiling=null;ball=null;},setFirstPerson(value){if(ceiling)ceiling.visible=value;},materials:slots.materials,geometries:new Set([cylinder,sphere,ring,...slots.geometries]),getInfo:()=>({slots:slots.getInfo(),sharedGeometries:5,materials:mats.size+2,...resources,animatedParts:movers.length})};
 }
 export const CASINO_STATIONS=[
  {game:'slots',x:-4.8,z:-2,seatX:-4.65,seatZ:-2,yaw:Math.PI/2,name:'Cherry slot'},
