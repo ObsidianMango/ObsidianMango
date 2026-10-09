@@ -1,9 +1,11 @@
+import {buildReferenceVehicle} from './reference-vehicles.js?v=street-29';
 import {detailKit} from './vehicle-detail-kit.js?v=street-27';
 import {buildNova} from './nova-model.js?v=nova-1';
 import {buildFleetVehicle} from './fleet-models.js?v=gold-8';
 import {buildWienermobile} from './wienermobile-model.js?v=gold-8';
 
 export function buildDetailedVehicle(T,c){
+ if(['montecarlo','suburban','impala','colorado'].includes(c.id))return buildReferenceVehicle(T,c);
  if(['santafe','newyorker','e250'].includes(c.id))return buildFleetVehicle(T,c);
  if(c.id==='wiener')return buildWienermobile(T,c);
  const coupe=c.id==='nova',k=detailKit(T,coupe?buildNova(T):null);
