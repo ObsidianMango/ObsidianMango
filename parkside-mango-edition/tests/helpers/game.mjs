@@ -17,7 +17,7 @@ window.HTMLElement.prototype.setPointerCapture=function(){};
 window.HTMLElement.prototype.getAnimations=()=>[];
 window.HTMLElement.prototype.animate=()=>({});
 const storage=new Map(),raf=[];
-globalThis.document=document;globalThis.window=window;
+globalThis.document=document;globalThis.window=window;globalThis.Element=window.Element;
 globalThis.localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,String(v))};
 storage.set('parkside-chaos-saves-v1',JSON.stringify(Array.from({length:24},()=>({stars:3,time:1}))));
 const T=require(root+'three.min.js');
@@ -28,8 +28,8 @@ class Renderer {
 }
 window.THREE={...T,WebGLRenderer:Renderer};
 let pads=[];
-const context={window,document,localStorage,Element:window.Element,navigator:{getGamepads:()=>pads},location:{hostname:'127.0.0.1'},innerWidth:393,innerHeight:852,devicePixelRatio:3,performance:{now:()=>0},requestAnimationFrame:f=>raf.push(f),setTimeout:()=>{},console};
-context.addEventListener=window.addEventListener.bind(window);Object.defineProperty(globalThis,'navigator',{value:context.navigator,configurable:true});
+const context={window,document,localStorage,Element:window.Element,navigator:{getGamepads:()=>pads},location:{hostname:'127.0.0.1',hash:'',href:'http://127.0.0.1/',pathname:'/',search:''},innerWidth:393,innerHeight:852,devicePixelRatio:3,performance:{now:()=>0},requestAnimationFrame:f=>raf.push(f),setTimeout:()=>{},console};
+context.addEventListener=window.addEventListener.bind(window);globalThis.location=context.location;globalThis.history={replaceState(){}};Object.defineProperty(globalThis,'navigator',{value:context.navigator,configurable:true});
 let source=fs.readFileSync(root+'drive.js','utf8');
 const imports=[...source.matchAll(/^import (.*?) from '(.*?)';$/gm)];
 for(const [,declaration,url] of imports){

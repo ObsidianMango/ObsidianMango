@@ -1,0 +1,47 @@
+import {createLocalPeer,PROTOCOL} from './local-peer.js?v=duel-1';
+import {eligible,cleanPose,vec,createDuelRules,GUNS} from './duel-rules.js?v=duel-1';
+export function createMultiplayer({T,scene,camera,profile,sample,onStart,onRespawn,onNotice=()=>{},onCombatEffect=()=>{},blocked=()=>Infinity,worldX=()=>0,RTC,now=()=>performance.now()/1000}){
+ let ready=false,remoteProfile=null,remotePose=null,lastRemote=0,seq=0,shotSeq=0,beat=0,healthSeq=0,remoteHealthSeq=-1,role='',rules=null,localLife=0,health=[fresh(),fresh()],status='Not connected',healthSignature='',remoteRoot=null,person=null,car=null,hpBar=null,traceMesh=null,traces=[];
+ const subscribers=new Set(),geometries=[],materials=[];
+ function fresh(){return {hp:100,score:0,deaths:0,life:0,respawn:0,shield:3};}
+ function change(s){status=s;for(const fn of subscribers)fn(info());}
+ const index=()=>role==='host'?0:1;
+ function info(){const i=index();return {ready,role:role||peer.getInfo().role,status,health:health[i],opponent:health[1-i],pose:remotePose,eligible:eligible(profile()),supported:peer.getInfo().supported,connected:peer.getInfo().open,resources:{players:remoteRoot?1:0,geometries:geometries.length,materials:materials.length,traces:traces.length,physicsBodies:0}};}
+ function canAct(){return !ready||health[index()].hp>0;}
+ function material(color){const m=new T.MeshStandardMaterial({color,roughness:.8});materials.push(m);return m;}
+ function buildVisual(){if(remoteRoot)return;remoteRoot=new T.Group();remoteRoot.name='Invited rival';scene.add(remoteRoot);const geo=new T.BoxGeometry(1,1,1);geometries.push(geo);const shirt=material(0x3d8591),skin=material(0xc39a80),dark=material(0x272727),glass=material(0x89b0b5),bodyMat=material(0xe0af4e),red=material(0xe1786c);
+  const box=(parent,size,pos,mat)=>{const m=new T.Mesh(geo,mat);m.scale.fromArray(size);m.position.fromArray(pos);parent.add(m);return m;};
+  person=new T.Group();remoteRoot.add(person);box(person,[.52,.64,.29],[0,1.06,0],shirt);box(person,[.3,.33,.3],[0,1.55,0],skin);box(person,[.33,.13,.32],[0,1.74,.025],dark);box(person,[.24,.1,.035],[0,1.42,-.16],dark);for(const side of [-1,1]){box(person,[.18,.61,.21],[side*.16,.4,0],dark);box(person,[.14,.55,.19],[side*.35,1.04,0],skin);}box(person,[.08,.11,.4],[.38,.99,-.31],dark);
+  car=new T.Group();remoteRoot.add(car);box(car,[2.6,.8,4.6],[0,.5,0],bodyMat);box(car,[2.15,.8,2.25],[0,1.2,.1],glass);box(car,[2.35,.13,2.5],[0,1.65,.1],bodyMat);for(const x of [-1.4,1.4])for(const z of [-1.5,1.5])box(car,[.35,.8,.8],[x,.35,z],dark);
+  const plate=box(remoteRoot,[1.1,.09,.055],[0,2.2,0],dark);hpBar=box(plate,[.95,.65,1.2],[0,0,-.01],red);plate.userData.billboard=true;
+  traceMesh=new T.InstancedMesh(geo,material(0xffec9c),8);traceMesh.frustumCulled=false;traceMesh.count=0;scene.add(traceMesh);remoteRoot.visible=false;
+ }
+ function effect(e,broadcast=false){if(e?.kind==='shot'&&vec(e.from)&&vec(e.to)){if(traces.length===8)traces.shift();traces.push({from:e.from,to:e.to,life:.14});}else if(e?.kind==='blast'&&vec(e.p)){onCombatEffect(e);}else return;if(broadcast)peer.send({t:'effect',e});}
+ function applyHealth(next){if(!Array.isArray(next)||next.length!==2||next.some(a=>!a||!['hp','score','deaths','life','respawn','shield'].every(k=>Number.isFinite(a[k])&&a[k]>=0)||a.hp>100||a.respawn>6||a.shield>4))return;const i=index(),was=health[i]?.hp;health=next.map(a=>({...a}));if(health[i].hp===0&&was>0)onNotice('Knocked out · respawn in 5 seconds',5);if(health[i].life>localLife){localLife=health[i].life;onRespawn(role);onNotice('Respawned · 3 second shield',2);}const signature=health.map(a=>[a.hp,a.score,a.deaths,a.life,Math.ceil(a.respawn),Math.ceil(a.shield)]).flat().join(',');if(signature!==healthSignature){healthSignature=signature;for(const fn of subscribers)fn(info());}}
+ function begin(){if(ready)return;ready=true;health=[fresh(),fresh()];localLife=0;buildVisual();onStart(role);change('Duel connected · both players opted in');}
+ function localPose(){const p=sample();return cleanPose({...p,seq:++seq});}
+ function welcome(){if(role!=='host'||!remoteProfile||ready||!peer.getInfo().open)return;rules=createDuelRules({now,blocked,onEffect:e=>effect(e,true)});rules.setGuns(0,profile().guns);rules.setGuns(1,remoteProfile.guns);if(peer.send({t:'welcome',v:PROTOCOL,profile:profile()}))begin();}
+ function packet(p){role=role||peer.getInfo().role;lastRemote=now();
+  if(p.t==='bye'){peer.close('Other player left');return;}
+  if(p.t==='hello'){if(ready)return;if(p.v!==PROTOCOL||!eligible(p.profile)){peer.close('Both players must finish 24 lots and own a gun.');return;}remoteProfile={complete:true,guns:p.profile.guns.filter(w=>Object.hasOwn(GUNS,w)).slice(0,3)};
+   welcome();return;}
+  if(p.t==='welcome'&&role==='guest'&&!ready&&p.v===PROTOCOL&&eligible(p.profile)){remoteProfile=p.profile;begin();return;}
+  if(!ready)return;
+  if(p.t==='pose'){const pose=cleanPose(p.pose);if(!pose||pose.seq<=(remotePose?.seq??-1))return;const changed=remotePose?.active!==pose.active||remotePose?.safe!==pose.safe;remotePose=pose;if(role==='host')rules.pose(1,pose);if(changed)for(const fn of subscribers)fn(info());}
+  else if(p.t==='shot'&&role==='host')rules.shot(1,p.shot);
+  else if(p.t==='health'&&role==='guest'&&Number.isSafeInteger(p.seq)&&p.seq>remoteHealthSeq){remoteHealthSeq=p.seq;applyHealth(p.players);}
+  else if(p.t==='effect'&&role==='guest')effect(p.e);
+ }
+ const peer=createLocalPeer({RTC,onStatus:change,onOpen:()=>{role=peer.getInfo().role;lastRemote=now();peer.send({t:'hello',v:PROTOCOL,profile:profile()});welcome();},onPacket:packet,onClose:s=>{ready=false;role='';remotePose=null;rules=null;health=[fresh(),fresh()];if(remoteRoot)remoteRoot.visible=false;traces=[];if(traceMesh)traceMesh.count=0;change(s);}});
+ function check(){if(!eligible(profile()))throw Error('Finish all 24 lots and buy a pistol, machine gun, or grenade launcher first.');}
+ async function host(){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;return peer.host();}
+ async function join(code){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;return peer.join(code);}
+ function shoot(weapon,from,dir){if(!ready||!canAct()||!Object.hasOwn(GUNS,weapon))return false;const p=localPose();if(!p)return false;const shot={seq:++shotSeq,weapon,from:[from.x-worldX(),from.y,from.z],dir:[dir.x,dir.y,dir.z]};if(role==='host'){rules.pose(0,p);return rules.shot(0,shot);}peer.send({t:'pose',pose:p});return peer.send({t:'shot',shot});}
+ function update(dt){if(!ready)return;if(now()-lastRemote>15){peer.close('Peer stopped responding. Create a fresh invite.');return;}dt=Math.min(.1,Math.max(0,dt));beat+=dt;const p=localPose();if(role==='host'&&p){rules.pose(0,p);rules.tick(dt);applyHealth(rules.snapshot());}
+  if(beat>=1/15){beat=0;if(p)peer.send({t:'pose',pose:p});if(role==='host')peer.send({t:'health',seq:++healthSeq,players:rules.snapshot()});}
+  const visible=remotePose&&remotePose.active&&!remotePose.safe&&sample()?.active&&!sample()?.safe&&health[1-index()].hp>0&&now()-lastRemote<1.5;remoteRoot.visible=!!visible;
+  if(visible){const goal=new T.Vector3(remotePose.p[0]+worldX(),remotePose.p[1],remotePose.p[2]);if(remoteRoot.position.distanceTo(goal)>20)remoteRoot.position.copy(goal);else remoteRoot.position.lerp(goal,1-Math.exp(-dt*18));remoteRoot.rotation.y=remotePose.yaw;person.visible=remotePose.mode==='foot';car.visible=!person.visible;hpBar.scale.x=.95*health[1-index()].hp/100;const plate=hpBar.parent;plate.position.y=person.visible?2.2:2.5;plate.lookAt(camera.position);}
+  for(let i=traces.length-1;i>=0;i--){traces[i].life-=dt;if(traces[i].life<=0)traces.splice(i,1);}const dummy=new T.Object3D();for(let i=0;i<traces.length;i++){const e=traces[i],from=new T.Vector3(e.from[0]+worldX(),e.from[1],e.from[2]),to=new T.Vector3(e.to[0]+worldX(),e.to[1],e.to[2]),direction=to.clone().sub(from);dummy.position.copy(from).add(to).multiplyScalar(.5);dummy.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),direction.normalize());dummy.scale.set(.025,.025,from.distanceTo(to));dummy.updateMatrix();traceMesh.setMatrixAt(i,dummy.matrix);}traceMesh.count=traces.length;traceMesh.instanceMatrix.needsUpdate=true;
+ }
+ return {host,join,accept:code=>peer.accept(code),shoot,update,canAct,info,subscribe(fn){subscribers.add(fn);return ()=>subscribers.delete(fn);},leave(){peer.send({t:'bye'});peer.close('Left duel · solo mode');},get role(){return role;}};
+}
