@@ -58,5 +58,7 @@ export function buildSteveAvatar(T,avatar,firstHands){
  ball.dispose();box.dispose();
  const green=new T.Color(0x70a850);let powered=false;
  function setHulk(active){if(powered===active)return;powered=active;avatar.scale.setScalar(active?1.35:1);parts[0].scale.x=active?1.35:1;parts[4].scale.x=parts[5].scale.x=active?1.5:1;for(const data of skinVertices){const attr=data.geo.attributes.color;if(active){for(const i of data.indices)attr.setXYZ(i,green.r,green.g,green.b);}else attr.array.set(data.original);attr.needsUpdate=true;}}
- return{setHulk,meshCount:6,shapes,geometries,material};
+ let applied={};
+ function setPalette(next){const keys=['skin','cheek','black','seam','jeans','denim','hair','hairHi','beard','beardHi'],pairs=keys.map(k=>({from:new T.Color(applied[k]??palette[k]),to:new T.Color(next[k]??palette[k])}));for(const data of skinVertices){const original=data.original;for(let i=0;i<original.length;i+=3){const pair=pairs.find(p=>Math.abs(original[i]-p.from.r)<.00001&&Math.abs(original[i+1]-p.from.g)<.00001&&Math.abs(original[i+2]-p.from.b)<.00001);if(pair){original[i]=pair.to.r;original[i+1]=pair.to.g;original[i+2]=pair.to.b;}}if(!powered){data.geo.attributes.color.array.set(original);data.geo.attributes.color.needsUpdate=true;}}applied={...next};}
+ return{setHulk,setPalette,meshCount:6,shapes,geometries,material};
 }
