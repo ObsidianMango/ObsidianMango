@@ -239,3 +239,9 @@ Validation: `node tests/player-edition.mjs` checks finite model geometry, one ma
 - Validation: `tests/steering-club.mjs` passes left/right/centering in all twelve cars and gold variants, touch gestures, Xbox axes, detachment/recovery, the monster truck, borrowed cars and twelve stable club visits. `tests/player-edition.mjs` passes portrait, first-person/Hulk and Maybach wreck/pause/replay regressions. Physical iPhone GPU and Bluetooth testing remains unverified.
 
 The club cast is now entirely adult female, using the existing costume and stage animation. `tests/sticky-webs.mjs` verifies both performers and stable resources across repeated room visits.
+
+### Natural performer proportions and stage animation
+
+The two adult female performers now have balanced head/shoulder/waist proportions and modest fixed contours in their covered stage outfits. Jointed elbows and knees support a coordinated side-step dance, gentle head turns, and whole-body movement. Hair sections and costume hems smoothly follow the steps without deforming the body. Shared box geometry and the room material palette are retained; there are no new physics bodies, textures or lights.
+
+`tests/sticky-webs.mjs` verifies hair/hem/head motion, fixed outfit geometry, finite transforms after 1,200 animation steps, bounded angles and twelve repeated room visits with stable resources. Physical iPhone GPU performance remains unverified.
