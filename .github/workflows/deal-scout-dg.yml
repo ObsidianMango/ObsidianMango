@@ -1,0 +1,31 @@
+name: Refresh Deal Scout DG offers
+on:
+  schedule:
+    - cron: '23 */4 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'deal-scout/scripts/refresh_dg.py'
+      - '.github/workflows/deal-scout-dg.yml'
+permissions:
+  contents: write
+concurrency:
+  group: deal-scout-dg-refresh
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch public promotions
+        run: python3 deal-scout/scripts/refresh_dg.py
+      - name: Commit refreshed feed
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add deal-scout/dg-promotions.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Refresh public Dollar General offers'
+          git pull --rebase origin main
+          git push origin HEAD:main
