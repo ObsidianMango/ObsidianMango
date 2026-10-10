@@ -11,7 +11,7 @@ export const PAINTS=[{id:'factory',name:'Factory',color:null},{id:'red',name:'Ch
 export const vehicleKey=car=>(car.config.baseId||car.config.id).replace(/-gold$/,'');
 export function cleanGarage(value){const result={vehicles:{},tools:0};result.tools=tier(value?.tools);for(const [id,r]of Object.entries(value?.vehicles||{}).slice(0,24)){if(!/^[a-z0-9-]{1,40}$/.test(id)||!r||typeof r!=='object')continue;const record={paint:PAINTS.some(p=>p.id===r.paint)?r.paint:'factory'};for(const u of UPGRADES)record[u.id]=tier(r[u.id]);result.vehicles[id]=record;}return result;}
 const tier=v=>Math.min(3,Math.max(0,Math.floor(Number(v)||0)));
-export function tunedConfig(base,r={}){return {...base,power:base.power*(1+.15*(r.engine||0)),maxSpeed:base.maxSpeed?base.maxSpeed*(1+.05*(r.engine||0)):base.maxSpeed,noBrakes:base.noBrakes&&!r.brakes,gripMultiplier:(base.gripMultiplier||1)*(1+.1*(r.tires||0)),brakeMultiplier:(base.brakeMultiplier||1)*(1+.2*(r.brakes||0)),springMultiplier:1+.1*(r.suspension||0),travelMultiplier:1+.08*(r.suspension||0),armorMultiplier:1+.3*(r.armor||0),ramMultiplier:1+.2*(r.ram||0),ramTier:r.ram||0};}
+export function tunedConfig(base,r={}){return {...base,power:base.power*(1+.15*(r.engine||0)),maxSpeed:base.maxSpeed?base.maxSpeed*(1+.05*(r.engine||0)):base.maxSpeed,noBrakes:base.noBrakes&&!r.brakes,gripMultiplier:1+.1*(r.tires||0),brakeMultiplier:1+.2*(r.brakes||0),springMultiplier:1+.1*(r.suspension||0),travelMultiplier:1+.08*(r.suspension||0),armorMultiplier:1+.3*(r.armor||0),ramMultiplier:1+.2*(r.ram||0),ramTier:r.ram||0};}
 // Each asset owns at most one replacement per body paint material. Factory,
 // glass, lamps, chrome and rubber remain available without making new clones.
 const paintCache=new WeakMap();
