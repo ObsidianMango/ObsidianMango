@@ -8,10 +8,10 @@ export const VEHICLES=[
  {id:'nova',name:'Chevy Nova',detail:'1,200 HP · Supercharged',mass:1270,radius:.41,track:.94,front:-1.48,rear:1.43,offset:.663,power:9500,maxSpeed:27,halfWidth:1.16,halfLength:2.38,box:[1.00,.30,2.24],center:.17},
  {id:'newyorker',name:'Chrysler New Yorker',detail:'Sage green · chrome & whitewalls',mass:1920,radius:.41,track:.98,front:-1.65,rear:1.65,offset:.663,power:2950,halfWidth:1.20,halfLength:2.89,box:[1.07,.34,2.76],center:.21},
  {id:'e250',name:'Ford E250',detail:'Full-size cargo van',mass:2450,radius:.44,track:1.04,front:-1.69,rear:1.64,offset:.693,power:3350,halfWidth:1.35,halfLength:2.83,box:[1.10,.65,2.70],center:.47},
- {id:'montecarlo',name:'Monte Carlo SS',detail:'Black · orange pinstripes',mass:1550,radius:.41,track:1.0,front:-1.50,rear:1.48,offset:.663,power:3100,halfWidth:1.20,halfLength:2.52,box:[1.01,.31,2.38],center:.17},
- {id:'suburban',name:'Lifted Suburban',detail:'Teal · long-body 4×4',mass:2700,radius:.62,track:1.10,front:-1.64,rear:1.78,offset:.873,power:4400,halfWidth:1.30,halfLength:2.94,box:[1.08,.62,2.78],center:.53,suspension:.38},
- {id:'impala',name:'Impala SS',detail:'Blue-gray · V8 sedan',mass:1830,radius:.42,track:1.02,front:-1.61,rear:1.61,offset:.673,power:3400,halfWidth:1.22,halfLength:2.70,box:[1.04,.32,2.53],center:.18},
- {id:'colorado',name:'Colorado Z71',detail:'Orange · extended-cab pickup',mass:1950,radius:.50,track:1.06,front:-1.53,rear:1.65,offset:.753,power:3300,halfWidth:1.28,halfLength:2.72,box:[1.06,.42,2.57],center:.36,suspension:.34},
+ {id:'montecarlo',name:'Monte Carlo SS',detail:'Black · orange pinstripes',mass:1550,radius:.41,track:1.0,front:-1.50,rear:1.48,offset:.663,power:4200,gripMultiplier:1.08,brakeMultiplier:1.10,halfWidth:1.20,halfLength:2.52,box:[1.01,.31,2.38],center:.17},
+ {id:'suburban',name:'Lifted Suburban',detail:'Teal · long-body 4×4',mass:2700,radius:.62,track:1.10,front:-1.64,rear:1.78,offset:.873,power:5900,gripMultiplier:1.14,brakeMultiplier:1.15,halfWidth:1.30,halfLength:2.94,box:[1.08,.62,2.78],center:.53,suspension:.38},
+ {id:'impala',name:'Impala SS',detail:'Blue-gray · V8 sedan',mass:1830,radius:.42,track:1.02,front:-1.61,rear:1.61,offset:.673,power:4600,gripMultiplier:1.10,brakeMultiplier:1.12,halfWidth:1.22,halfLength:2.70,box:[1.04,.32,2.53],center:.18},
+ {id:'colorado',name:'Colorado Z71',detail:'Orange · extended-cab pickup',mass:1950,radius:.50,track:1.06,front:-1.53,rear:1.65,offset:.753,power:4500,gripMultiplier:1.12,brakeMultiplier:1.12,halfWidth:1.28,halfLength:2.72,box:[1.06,.42,2.57],center:.36,suspension:.34},
 ];
 export function buildSUV(T,kind){
  const jeep=kind==='jeep',root=new T.Group(),groups=new Map();
