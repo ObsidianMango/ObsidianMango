@@ -1,5 +1,5 @@
 import {characterById} from './characters.js?v=duel-2';
-import {createMultiplayer} from './multiplayer.js?v=details-1';
+import {createMultiplayer} from './multiplayer.js?v=details-2';
 import {createMultiplayerUI} from './multiplayer-ui.js?v=online-1';
 import {createMaybachEjection} from './maybach-ejection.js?v=mango-2';
 import {createTrafficLOD} from './traffic-lod.js?v=street-28';
