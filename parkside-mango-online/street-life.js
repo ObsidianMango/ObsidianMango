@@ -1,6 +1,6 @@
 import {characterById} from './characters.js?v=duel-2';
 import {createClubRoom} from './club-room.js?v=mango-6';
-import {createWebShooter} from './web-shooter.js?v=street-31';
+import {createWebShooter} from './web-shooter.js?v=fps-1';
 import {createGarageUI} from './garage-ui.js?v=street-27';
 import {createInteriorBreakage} from './interior-breakage.js?v=street-25';
 import {createHulkMode} from './hulk-mode.js?v=street-24';
