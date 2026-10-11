@@ -13,7 +13,7 @@ export function createWebShooter(T,scene){
  function point(mark,x,y,z,out){return out.set(x*mark.size,y*mark.size,z*mark.size).applyQuaternion(mark.q).add(mark.p);}
  function attach(mark,target){mark.body=target;bodyQ.copy(target.quaternion);inverse.copy(bodyQ).invert();mark.local.copy(mark.p).sub(target.position).applyQuaternion(inverse);mark.localQ.copy(inverse).multiply(mark.q);}
  function shoot(from,to,hitNormal,target){beamFrom.copy(from);beamTo.copy(to);beamLife=.20;if(hitNormal){const m=marks[cursor++%LIMIT];m.life=lifeTime;m.age=0;m.body=null;m.size=target?.userData?.person ? .6 : .72;normal.copy(hitNormal).normalize();m.p.copy(to).addScaledVector(normal,.045);m.anchor.copy(m.p);m.q.setFromUnitVectors(forward,normal);if(target)attach(m,target);}render();}
- function render(){strands.count=beads.count=stretching=0;
+ function render(){if(beamLife<=0&&!marks.some(m=>m.life>0)&&strands.count===0&&beads.count===0)return;strands.count=beads.count=stretching=0;
   for(const m of marks){if(m.life<=0)continue;const fade=Math.min(1,m.life),r=.025*fade;
    // Wet impact blob and irregular drips, with no spokes or web rings.
    point(m,0,0,.045,a);bead(a,.115*m.size*fade,.67);
@@ -29,7 +29,7 @@ export function createWebShooter(T,scene){
  function update(dt){if(!Number.isFinite(dt)||dt<=0)return;beamLife=Math.max(0,beamLife-dt);dragged.clear();for(const m of marks){if(m.life<=0)continue;m.life=Math.max(0,m.life-dt);m.age+=dt;if(!m.life){m.body=null;continue;}if(m.body){const person=m.body.userData?.person;if(person?.bodies?.[0]&&person.bodies[0]!==m.body)attach(m,person.bodies[0]);bodyQ.copy(m.body.quaternion);m.p.copy(m.local).applyQuaternion(bodyQ).add(m.body.position);m.q.copy(bodyQ).multiply(m.localQ);
     // Apply viscosity once per target, regardless of how many splats cover it.
     if(m.age<3&&m.body.mass>0&&!person&&!dragged.has(m.body)){dragged.add(m.body);m.body.velocity.scale(Math.exp(-2.8*dt),m.body.velocity);m.body.angularVelocity.scale(Math.exp(-3.2*dt),m.body.angularVelocity);}
-   }}render();}
+   }}}
  function clear(){beamLife=0;for(const m of marks){m.life=0;m.body=null;}strands.count=beads.count=stretching=0;dragged.clear();}
- return{shoot,update,clear,getInfo:()=>({active:marks.filter(m=>m.life>0).length,capacity:LIMIT,physicsBodies:0,batches:2,geometries:2,strands:strands.count,beads:beads.count,stretching,attached:marks.filter(m=>m.life>0&&m.body).length,viscousTargets:dragged.size})};
+ return{shoot,update,render,clear,getInfo:()=>({active:marks.filter(m=>m.life>0).length,capacity:LIMIT,physicsBodies:0,batches:2,geometries:2,strands:strands.count,beads:beads.count,stretching,attached:marks.filter(m=>m.life>0&&m.body).length,viscousTargets:dragged.size})};
 }
