@@ -1,5 +1,6 @@
 import {characterById} from './characters.js?v=duel-2';
 import {createLocalPeer,PROTOCOL} from './local-peer.js?v=duel-2';
+import {createRoomPeer} from './room-peer.js?v=online-1';
 import {eligible,cleanPose,vec,createDuelRules,GUNS,COMBAT,validLevel} from './duel-rules.js?v=duel-3';
 export function createMultiplayer({T,scene,camera,profile,sample,onStart,onRespawn,onNotice=()=>{},onCombatEffect=()=>{},blocked=()=>Infinity,worldX=()=>0,RTC,now=()=>performance.now()/1000}){
  let ready=false,remoteProfile=null,matchLevel=0,sessionProfile=null,remotePose=null,lastRemote=0,seq=0,shotSeq=0,beat=0,healthSeq=0,remoteHealthSeq=-1,role='',rules=null,localLife=0,health=[fresh(),fresh()],status='Not connected',healthSignature='',remoteRoot=null,person=null,car=null,hpBar=null,traceMesh=null,traces=[];
@@ -34,10 +35,13 @@ export function createMultiplayer({T,scene,camera,profile,sample,onStart,onRespa
   else if(p.t==='health'&&role==='guest'&&Number.isSafeInteger(p.seq)&&p.seq>remoteHealthSeq){remoteHealthSeq=p.seq;applyHealth(p.players);}
   else if(p.t==='effect'&&role==='guest')effect(p.e);
  }
- const peer=createLocalPeer({RTC,onStatus:change,onOpen:()=>{role=peer.getInfo().role;lastRemote=now();peer.send({t:'hello',v:PROTOCOL,profile:sessionProfile});welcome();},onPacket:packet,onClose:s=>{ready=false;role='';remotePose=null;rules=null;health=[fresh(),fresh()];if(remoteRoot)remoteRoot.visible=false;traces=[];if(traceMesh)traceMesh.count=0;change(s);}});
+ let peer;const callbacks={RTC,onStatus:change,onOpen:()=>{role=peer.getInfo().role;lastRemote=now();peer.send({t:'hello',v:PROTOCOL,profile:sessionProfile});welcome();},onPacket:packet,onClose:s=>{ready=false;role='';remotePose=null;rules=null;health=[fresh(),fresh()];if(remoteRoot)remoteRoot.visible=false;traces=[];if(traceMesh)traceMesh.count=0;change(s);}};
+ const manualPeer=createLocalPeer(callbacks),onlinePeer=createRoomPeer(callbacks);peer=manualPeer;
  function check(){const p=profile();if(!eligible(p))throw Error('Player profile is unavailable. Reload the game.');sessionProfile={guns:p.guns.filter(w=>Object.hasOwn(GUNS,w)).slice(0,3),level:validLevel(p.level)?p.level:0,character:characterById(p.character).id};matchLevel=sessionProfile.level;}
- async function host(){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;return peer.host();}
- async function join(code){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;return peer.join(code);}
+ async function host(){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;if(peer!==manualPeer)peer.close('Switching to local pairing');peer=manualPeer;return peer.host();}
+ async function join(code){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;if(peer!==manualPeer)peer.close('Switching to local pairing');peer=manualPeer;return peer.join(code);}
+ async function hostRoom(){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;if(peer!==onlinePeer)peer.close('Switching to online rooms');peer=onlinePeer;return peer.host();}
+ async function joinRoom(code){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;if(peer!==onlinePeer)peer.close('Switching to online rooms');peer=onlinePeer;return peer.join(code);}
  function shoot(weapon,from,dir){if(!ready||!canAct()||!Object.hasOwn(COMBAT,weapon))return false;const p=localPose();if(!p)return false;const shot={seq:++shotSeq,weapon,from:[from.x-worldX(),from.y,from.z],dir:[dir.x,dir.y,dir.z]};if(role==='host'){rules.pose(0,p);return rules.shot(0,shot);}peer.send({t:'pose',pose:p});return peer.send({t:'shot',shot});}
  function update(dt){if(!ready)return;if(now()-lastRemote>15){peer.close('Peer stopped responding. Create a fresh invite.');return;}dt=Math.min(.1,Math.max(0,dt));beat+=dt;const p=localPose();if(role==='host'&&p){rules.pose(0,p);rules.tick(dt);applyHealth(rules.snapshot());}
   if(beat>=1/15){beat=0;if(p)peer.send({t:'pose',pose:p});if(role==='host')peer.send({t:'health',seq:++healthSeq,players:rules.snapshot()});}
@@ -45,5 +49,5 @@ export function createMultiplayer({T,scene,camera,profile,sample,onStart,onRespa
   if(visible){const goal=new T.Vector3(remotePose.p[0]+worldX(),remotePose.p[1],remotePose.p[2]);if(remoteRoot.position.distanceTo(goal)>20)remoteRoot.position.copy(goal);else remoteRoot.position.lerp(goal,1-Math.exp(-dt*18));remoteRoot.rotation.y=remotePose.yaw;person.visible=remotePose.mode==='foot';car.visible=!person.visible;car.scale.set(remotePose.size[0]/1.6,remotePose.size[1]/1.2,remotePose.size[2]/2.6);hpBar.scale.x=.95*health[1-index()].hp/100;const plate=hpBar.parent;plate.position.y=person.visible?2.2:remotePose.size[1]*2+.3;plate.lookAt(camera.position);}
   for(let i=traces.length-1;i>=0;i--){traces[i].life-=dt;if(traces[i].life<=0)traces.splice(i,1);}const dummy=new T.Object3D();for(let i=0;i<traces.length;i++){const e=traces[i],from=new T.Vector3(e.from[0]+worldX(),e.from[1],e.from[2]),to=new T.Vector3(e.to[0]+worldX(),e.to[1],e.to[2]),direction=to.clone().sub(from);dummy.position.copy(from).add(to).multiplyScalar(.5);dummy.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),direction.normalize());dummy.scale.set(.025,.025,from.distanceTo(to));dummy.updateMatrix();traceMesh.setMatrixAt(i,dummy.matrix);}traceMesh.count=traces.length;traceMesh.instanceMatrix.needsUpdate=true;
  }
- return {host,join,accept:code=>peer.accept(code),shoot,update,canAct,movementScale,info,subscribe(fn){subscribers.add(fn);return ()=>subscribers.delete(fn);},leave(){peer.send({t:'bye'});peer.close('Left duel · solo mode');},get role(){return role;}};
+ return {host,join,hostRoom,joinRoom,accept:code=>manualPeer.accept(code),shoot,update,canAct,movementScale,info,subscribe(fn){subscribers.add(fn);return ()=>subscribers.delete(fn);},leave(){peer.send({t:'bye'});peer.close('Left duel · solo mode');},get role(){return role;}};
 }
