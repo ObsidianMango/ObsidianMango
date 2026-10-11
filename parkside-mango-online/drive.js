@@ -1,5 +1,5 @@
 import {characterById} from './characters.js?v=duel-2';
-import {createMultiplayer} from './multiplayer.js?v=fleet-3';
+import {createMultiplayer} from './multiplayer.js?v=tires-2';
 import {prepareBorrowedCar} from './borrowed-vehicle-parts.js?v=borrowed-wreck-1';
 import {createMultiplayerUI} from './multiplayer-ui.js?v=online-1';
 import {createMaybachEjection} from './maybach-ejection.js?v=mango-2';
