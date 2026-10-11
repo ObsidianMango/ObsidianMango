@@ -2,17 +2,10 @@
 import {createCrushContact} from './crush-contact.js?v=crush-12';
 import {setDamageAppearance} from './damage-appearance.js?v=wreck-16';
 export function createParkedTraffic({T,C,scene,world,lots,garage,onWreck}){
- const LIMIT=128,activeDebris=[],pool=[],boxGeo=new T.BoxGeometry(1,1,1),wheelGeo=new T.CylinderGeometry(.35,.35,.22,12),metal=new T.MeshStandardMaterial({color:0x687173,roughness:.7}),rubber=new T.MeshStandardMaterial({color:0x252928,roughness:.95}),glass=new T.MeshStandardMaterial({color:0x45616a,roughness:.25,metalness:.15});
+ const LIMIT=128,activeDebris=[],pool=[];
  let active=[],clock=0;const pending=new Map(),v=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3(),turn=new T.Quaternion(),axis=new T.Vector3(1,0,0),crushedCarMat=new C.Material({friction:.5,restitution:.05}),contact=createCrushContact(C);
  function prepare(item){if(item.prepared)return;item.prepared=true;item.homePosition=item.body.position.clone();item.homeQuaternion=item.body.quaternion.clone();item.physicsMaterial=item.body.material;item.collisionSize=item.body.shapes[0].halfExtents.clone();item.damage=0;item.charred=0;item.exploded=false;item.lastHit=-10;item.detached=new Set();item.frozen=new Map();
   item.body.addEventListener('collide',e=>{if(item.exploded||item.occupied)return;const force=Math.abs(e.contact.getImpactVelocityAlongNormal());if(force>1.3)pending.set(item,Math.max(pending.get(item)||0,force));});
- }
- function standardModel(item){const paint=new T.MeshStandardMaterial({name:'paint',userData:{garagePaint:true},color:item.mesh.children[0]?.material?.color||0x8d9b99,roughness:.55});item.mesh.clear();
-  const part=(name,x,y,z,w,h,d,material=paint,geo=boxGeo)=>{const m=new T.Mesh(geo,material);m.name=name;m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=m.receiveShadow=true;item.mesh.add(m);return m;};
-  part('chassis',0,.48,0,1.8,.24,3.9,metal);part('hood',0,.88,-1.38,1.88,.28,1.25);part('trunk',0,.88,1.5,1.88,.30,1.0);part('roof',0,1.57,.15,1.52,.16,1.85);
-  for(const side of [-1,1])for(const end of [-1,1]){part((side<0?'left':'right')+'-door-'+end,side*.94,.95,end*.52,.12,.75,.94);const wheel=part('wheel-'+side+'-'+end,side*.98,.4,end*1.36,1,1,1,rubber,wheelGeo);wheel.rotation.z=Math.PI/2;}
-  for(const end of [-1,1]){part('bumper-'+end,0,.57,end*2.02,1.96,.18,.18,metal);const wind=part('glass-'+end,0,1.28,.15+end*.88,1.47,.46,.08,glass);wind.rotation.x=end*-.27;}
-  for(const side of [-1,1])part('glass-side-'+side,side*.80,1.29,.15,.06,.43,1.62,glass);
  }
  function setupParts(item){item.parts=[...item.mesh.children];item.rest=item.parts.map(p=>({p:p.position.clone(),q:p.quaternion.clone(),s:p.scale.clone(),visible:p.visible}));item.materials=[];
   const cloned=new Map();item.parts.forEach((p,i)=>{if(!p.name)p.name='detail-'+i;p.traverse(n=>{if(n.isMesh&&!Array.isArray(n.material)){if(!cloned.has(n.material)){const material=n.material.clone();cloned.set(n.material,material);item.materials.push({material,color:material.color.clone(),roughness:material.roughness,metalness:material.metalness,emissive:material.emissive?.clone()});setDamageAppearance(T,material,0,0);}n.material=cloned.get(n.material);}});});
@@ -27,7 +20,7 @@ export function createParkedTraffic({T,C,scene,world,lots,garage,onWreck}){
   active.forEach((item,i)=>{prepare(item);if(!item.parts){
    const featured=level===24?garage.find(g=>g.config.id===['montecarlo','suburban','impala','colorado','maybach'][i%5]):null;
    if(garage.length){const model=featured||garage[(i*5+level)%garage.length],copy=model.root.clone(true);copy.visible=true;copy.position.set(0,0,0);copy.quaternion.identity();copy.traverse(n=>{if(n.userData.home){n.position.copy(n.userData.home);n.quaternion.identity();}});copy.updateMatrixWorld(true);const bounds=new T.Box3().setFromObject(copy),size=bounds.getSize(new T.Vector3()),factor=Math.min(2/size.x,4.25/size.z,1);item.mesh.clear();for(const child of [...copy.children]){child.position.multiplyScalar(factor);child.scale.multiplyScalar(factor);item.mesh.add(child);}item.model=model.config.id;item.name=model.config.name;specials++;}
-   else{throw Error('Parkside fleet is unavailable');}setupParts(item);
+   else throw Error('No authored fleet model available');setupParts(item);
   }else if(item.model!=='standard')specials++;restoreItem(item);});
  }
  function setTint(item,damage){item.damage=damage;for(const m of item.materials||[]){m.material.color.copy(m.color).multiplyScalar(1-damage*.4);if(m.roughness!==undefined)m.material.roughness=m.roughness+(1-m.roughness)*Math.max(damage,item.charred);if(m.metalness!==undefined)m.material.metalness=m.metalness*(1-item.charred);if(m.emissive)m.material.emissive.copy(m.emissive).multiplyScalar(1-item.charred);setDamageAppearance(T,m.material,damage,item.charred);}}
