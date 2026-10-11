@@ -47,7 +47,12 @@ export function createParkedTraffic({T,C,scene,world,lots,garage,onWreck}){
   for(const item of active){if(item.occupied)continue;item.mesh.quaternion.copy(item.body.quaternion);item.mesh.position.copy(item.body.position);v.set(0,item.exploded?-.48:-.8*(item.level===24?1-item.damage*.45:1),0).applyQuaternion(item.mesh.quaternion);item.mesh.position.add(v);item.mesh.updateMatrixWorld(true);for(const [p,pose]of item.frozen)localPose(item,p,pose.p,pose.q);}
   for(const d of [...activeDebris]){d.age+=dt;localPose(d.item,d.part,d.body.position,d.body.quaternion);if(d.age>16||d.age>3&&d.body.sleepState===C.Body.SLEEPING)freeze(d);}
  }
- function snapshot(){const data=[];for(const item of active){data.push(...item.mesh.position.toArray(),...item.mesh.quaternion.toArray(),item.damage,item.charred,item.exploded?1:0);for(const p of item.parts)data.push(...p.position.toArray(),...p.quaternion.toArray(),...p.scale.toArray(),p.visible?1:0);}return new Float32Array(data);}
+ function snapshot(){let count=0;for(const item of active)count+=10+11*item.parts.length;const data=new Float32Array(count);let k=0;
+  const point=v=>{data[k++]=v.x;data[k++]=v.y;data[k++]=v.z;};
+  const rotation=q=>{data[k++]=q.x;data[k++]=q.y;data[k++]=q.z;data[k++]=q.w;};
+  for(const item of active){point(item.mesh.position);rotation(item.mesh.quaternion);data[k++]=item.damage;data[k++]=item.charred;data[k++]=item.exploded?1:0;
+   for(const p of item.parts){point(p.position);rotation(p.quaternion);point(p.scale);data[k++]=p.visible?1:0;}}
+  return data;}
  function apply(a,b,u){if(!a||!b)return;let k=0;const vec=o=>{o.set(a[k]+(b[k]-a[k])*u,a[k+1]+(b[k+1]-a[k+1])*u,a[k+2]+(b[k+2]-a[k+2])*u);k+=3;},rot=o=>{o.fromArray(a,k).slerp(q.fromArray(b,k),u);k+=4;};for(const item of active){vec(item.mesh.position);rot(item.mesh.quaternion);const amount=a[k]+(b[k]-a[k])*u;item.charred=a[k+1]+(b[k+1]-a[k+1])*u;item.exploded=(u<.5?a:b)[k+2]>.5;setTint(item,amount);k+=3;for(const p of item.parts){vec(p.position);rot(p.quaternion);vec(p.scale);p.visible=(u<.5?a:b)[k++]>.5;}}}
  function strike(body,point,power){const item=active.find(p=>p.body===body);if(item)damage(item,power*.045,{x:(body.position.x-point.x)*.2,z:(body.position.z-point.z)*.2},Math.min(3,power*.2));}
  return{strike,reset,resetDistrict,blast,ram,update,snapshot,apply,get active(){return active;},get debris(){return activeDebris;},getInfo:()=>({count:active.length,damaged:active.filter(p=>p.damage>0).length,exploded:active.filter(p=>p.exploded).length,charred:active.filter(p=>p.charred>.1).length,moving:active.filter(p=>p.body.mass>0).length,models:active.map(p=>p.model),debris:activeDebris.length,debrisPool:pool.length,debrisLimit:LIMIT,frozenParts:active.reduce((n,p)=>n+p.frozen.size,0)})};
