@@ -1,16 +1,74 @@
-// Distant traffic uses three shared batches. Nearby cars retain their full
-// detailed bodies, damage, char, break-off parts and vehicle-entry behavior.
+// Far vehicles retain the geometry of the player's authored cars.
+// Merge each detailed fleet model into one instanced vertex-colored mesh for performance.
+// A damaged/exploded car always falls back to its full destructible model.
 export function createTrafficLOD(T,view){
- const cars=view.targets.filter(t=>t.kind==='car').map(t=>t.car),box=new T.BoxGeometry(1,1,1),tire=new T.CylinderGeometry(.5,.5,1,8),material=new T.MeshStandardMaterial({color:0xffffff,roughness:.85});
- const body=new T.InstancedMesh(box,material,cars.length),cabin=new T.InstancedMesh(box,material,cars.length),wheels=new T.InstancedMesh(tire,material,cars.length*4),object=new T.Object3D(),position=new T.Vector3(),turn=new T.Quaternion(),wheelTurn=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2),tint=new T.Color(),zero=new T.Matrix4().makeScale(0,0,0);
- for(const mesh of [body,cabin,wheels]){mesh.name='Distant street cars';mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.frustumCulled=false;mesh.castShadow=false;view.group.add(mesh);}let distant=0;
- function place(mesh,index,item,offset,size){position.set(...offset).applyQuaternion(turn).add(object.position.copy(item.body.position));object.position.copy(position);object.quaternion.copy(turn);object.scale.set(...size);object.updateMatrix();mesh.setMatrixAt(index,object.matrix);}
- function update(x,z){distant=0;cars.forEach((item,i)=>{const near=Math.hypot(item.body.position.x-view.ox-x,item.body.position.z-z)<75;item.mesh.visible=near&&!item.occupied;
-   if(near||item.occupied){body.setMatrixAt(i,zero);cabin.setMatrixAt(i,zero);for(let n=0;n<4;n++)wheels.setMatrixAt(i*4+n,zero);return;}distant++;const size=item.collisionSize||{x:1.04,y:.75,z:2.18};turn.copy(item.body.quaternion);const shrink=item.exploded?.35:1-(item.damage||0)*.28;
-   place(body,i,item,[0,-.1,0],[size.x*1.9,.65*shrink,size.z*1.9]);place(cabin,i,item,[0,.5*shrink,0],[size.x*1.5,.65*shrink,size.z]);const paint=item.materials?.find(m=>m.material.userData.garagePaint||m.material.name==='paint');(paint?tint.copy(paint.color):tint.setHex(0x8d9b99)).multiplyScalar(item.exploded?.22:1-(item.damage||0)*.4);body.setColorAt(i,tint);cabin.setColorAt(i,tint.setHex(item.exploded?0x292d2c:0x405b68));
-   for(let n=0;n<4;n++){turn.copy(item.body.quaternion);position.set(n%2?size.x:-size.x,-.4,n<2?-size.z*.62:size.z*.62).applyQuaternion(turn).add(item.body.position);object.position.copy(position);object.quaternion.copy(turn).multiply(wheelTurn);object.scale.set(.7,.22,.7);object.updateMatrix();wheels.setMatrixAt(i*4+n,object.matrix);wheels.setColorAt(i*4+n,tint.setHex(0x272d2f));}
-  });for(const mesh of [body,cabin,wheels]){mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}}
- function originals(){distant=0;for(const item of cars)item.mesh.visible=!item.occupied;for(const mesh of [body,cabin,wheels]){mesh.count=0;}}
- const updateLOD=update;function refresh(x,z){originals();}
- refresh(0,0);return {update:refresh,originals,getInfo:()=>({batches:3,capacity:cars.length,distant})};
+ const cars=view.targets.filter(t=>t.kind==='car').map(t=>t.car);
+ const byModel=new Map(),identity=new T.Matrix4(),inverse=new T.Matrix4(),relative=new T.Matrix4(),point=new T.Vector3(),normal=new T.Vector3(),nm=new T.Matrix3();
+ const hidden=new T.Matrix4().makeScale(0,0,0);
+ function merge(item){
+  const positions=[],normals=[],colors=[];
+  item.mesh.updateWorldMatrix(true,true);
+  inverse.copy(item.mesh.matrixWorld).invert();
+  item.mesh.traverse(mesh=>{
+   if(!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
+   const a=mesh.geometry.attributes.position,n=mesh.geometry.attributes.normal,index=mesh.geometry.index;
+   const material=Array.isArray(mesh.material)?mesh.material[0]:mesh.material;
+   if(!material)return;
+   const tint=material.color||new T.Color(0xffffff),base=material.emissive||new T.Color(0);
+   relative.multiplyMatrices(inverse,mesh.matrixWorld);nm.getNormalMatrix(relative);
+   const count=index?index.count:a.count;
+   for(let k=0;k<count;k++){
+    const j=index?index.getX(k):k;
+    point.fromBufferAttribute(a,j).applyMatrix4(relative);
+    if(n)normal.fromBufferAttribute(n,j).applyMatrix3(nm).normalize();else normal.set(0,1,0);
+    positions.push(point.x,point.y,point.z);
+    normals.push(normal.x,normal.y,normal.z);
+    colors.push(Math.min(1,tint.r+base.r*.25),Math.min(1,tint.g+base.g*.25),Math.min(1,tint.b+base.b*.25));
+   }
+  });
+  const geometry=new T.BufferGeometry();
+  geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));
+  geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));
+  geometry.computeBoundingSphere();
+  return geometry;
+ }
+ for(const item of cars){
+  const key=item.model||'roadster';
+  if(!byModel.has(key))byModel.set(key,{items:[],mesh:null});
+  byModel.get(key).items.push(item);
+ }
+ for(const [name,group] of byModel){
+  const geometry=merge(group.items[0]);
+  const material=new T.MeshStandardMaterial({vertexColors:true,metalness:.18,roughness:.65,side:T.DoubleSide});
+  const mesh=new T.InstancedMesh(geometry,material,group.items.length);
+  mesh.name='Fleet model LOD: '+name;mesh.count=0;mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;
+  mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
+  view.group.add(mesh);group.mesh=mesh;
+ }
+ let distant=0,drawBatches=0;
+ function update(x,z){
+  distant=0;drawBatches=0;
+  for(const group of byModel.values()){
+   const mesh=group.mesh;let count=0;
+   for(const item of group.items){
+    const distance=Math.hypot(item.body.position.x-view.ox-x,item.body.position.z-z);
+    const far=distance>80&&!item.exploded&&(item.damage||0)<.02&&!item.occupied;
+    item.mesh.visible=!far&&!item.occupied;
+    if(!far)continue;
+    item.mesh.updateWorldMatrix(true,false);
+    mesh.setMatrixAt(count++,item.mesh.matrixWorld);
+    distant++;
+   }
+   mesh.count=count;
+   if(count){mesh.instanceMatrix.needsUpdate=true;drawBatches++;}
+  }
+ }
+ function originals(){
+  distant=0;drawBatches=0;
+  for(const item of cars)item.mesh.visible=!item.occupied;
+  for(const group of byModel.values())group.mesh.count=0;
+ }
+ update(0,0);
+ return {update,originals,getInfo:()=>({batches:drawBatches,capacity:cars.length,distant,authoredModels:byModel.size})};
 }
