@@ -11,6 +11,6 @@ export function createTrafficLOD(T,view){
    for(let n=0;n<4;n++){turn.copy(item.body.quaternion);position.set(n%2?size.x:-size.x,-.4,n<2?-size.z*.62:size.z*.62).applyQuaternion(turn).add(item.body.position);object.position.copy(position);object.quaternion.copy(turn).multiply(wheelTurn);object.scale.set(.7,.22,.7);object.updateMatrix();wheels.setMatrixAt(i*4+n,object.matrix);wheels.setColorAt(i*4+n,tint.setHex(0x272d2f));}
   });for(const mesh of [body,cabin,wheels]){mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}}
  function originals(){distant=0;for(const item of cars)item.mesh.visible=!item.occupied;for(const mesh of [body,cabin,wheels]){mesh.count=0;}}
- const updateLOD=update;function refresh(x,z){body.count=cabin.count=cars.length;wheels.count=cars.length*4;updateLOD(x,z);}
+ const updateLOD=update;function refresh(x,z){originals();}
  refresh(0,0);return {update:refresh,originals,getInfo:()=>({batches:3,capacity:cars.length,distant})};
 }
