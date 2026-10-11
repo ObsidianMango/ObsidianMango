@@ -51,7 +51,7 @@ export function createRivalVisual({T,scene,makeVehicle,worldX=()=>0}){
   if(!result?.root)return;
   model=result.root;modelId=id;model.position.set(0,0,0);model.quaternion.identity();model.scale.set(1,1,1);
   model.visible=true;carSlot.add(model);
-  assemblies=(result.assemblies||[]).map(name=>model.getObjectByName(name)).filter(Boolean);
+  assemblies=(result.assemblies||[]).map(part=>model.getObjectByName(part.name)).filter(Boolean);
   wheelNodes=wheelNames.map(name=>model.getObjectByName(name));
   if(!wheelNodes[0]&&!wheelNodes[1])wheelNodes=[model.getObjectByName('wheel-front'),model.getObjectByName('wheel-rear')];
   last.set(0,0,0);
