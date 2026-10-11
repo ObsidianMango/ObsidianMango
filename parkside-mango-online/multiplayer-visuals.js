@@ -53,6 +53,8 @@ export function createRivalVisual({T,scene,makeVehicle,worldX=()=>0}){
   model.visible=true;carSlot.add(model);
   assemblies=(result.assemblies||[]).map(part=>model.getObjectByName(part.name)).filter(Boolean);
   wheelNodes=wheelNames.map(name=>model.getObjectByName(name));
+  // The remote model must retain its four original wheel assemblies.
+  for(const wheel of wheelNodes)if(wheel?.userData.attached!==false){wheel.visible=true;if(wheel.scale.lengthSq()<.001)wheel.scale.set(1,1,1);}
   if(!wheelNodes[0]&&!wheelNodes[1])wheelNodes=[model.getObjectByName('wheel-front'),model.getObjectByName('wheel-rear')];
   last.set(0,0,0);
  }
@@ -114,7 +116,7 @@ export function createRivalVisual({T,scene,makeVehicle,worldX=()=>0}){
    model.visible=true;
    if(Array.isArray(p.wheels))for(let i=0;i<Math.min(wheelNodes.length,p.wheels.length);i++){
     const wheel=wheelNodes[i],values=p.wheels[i];if(!wheel||!Array.isArray(values)||values.length!==7)continue;
-    wheel.position.fromArray(values.slice(0,3));wheel.quaternion.fromArray(values.slice(3,7));
+    wheel.position.set(values[0],values[1],values[2]);wheel.quaternion.set(values[3],values[4],values[5],values[6]);wheel.visible=true;if(wheel.scale.lengthSq()<.001)wheel.scale.copy(wheel.userData.homeScale||new T.Vector3(1,1,1));
    }
   }
   if(person.visible){
