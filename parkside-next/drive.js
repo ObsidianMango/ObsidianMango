@@ -34,7 +34,7 @@ import {VEHICLES} from './garage-models.js?v=street-33';
 import {createCrashDirector} from './crash-replay.js?v=fps-1';
 import {createDestructibleEnvironment} from './destructible-environment.js?v=fps-1';
 import {createDestructibleTerrain} from './destructible-terrain.js?v=clarity-14';
-import {LOTS,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=fleet-3';
+import {LOTS,ORIGINAL_LOT_COUNT,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=fleet-3';
 const T=window.THREE,$=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 installTouchGuard();
 try{boot()}catch(e){console.error(e);$('fatal').hidden=false;$('errorText').textContent=e.message;}
@@ -64,7 +64,7 @@ const failures=createVanFailures({random:rand,onLoosePart:()=>{syncCar();const p
 let seed=842,totalLost=0,levelIndex=0,parkingHold=0,parkingState=null,bumps=0,lastDirection=0,reverseTravel=0,selectedGear=1;
 let saves=[];try{saves=JSON.parse(localStorage.getItem('parkside-chaos-saves-v1')||'[]');if(!Array.isArray(saves))saves=[];}catch{}
 function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
-const baseComplete=()=>completedThrough(saves,8),goldUnlocked=()=>completedThrough(saves,LOTS.length),unlocked=i=>i===LOTS.length?goldUnlocked():isLotUnlocked(i,saves),isSecret=()=>levelIndex===LOTS.length;
+const baseComplete=()=>completedThrough(saves,8),goldUnlocked=()=>completedThrough(saves,ORIGINAL_LOT_COUNT),unlocked=i=>i===LOTS.length?goldUnlocked():isLotUnlocked(i,saves),isSecret=()=>levelIndex===LOTS.length;
 let completionNext=null;
 const lot=()=>isSecret()?SECRET_LEVEL:LOTS[levelIndex],view=()=>lots.views[levelIndex];
 const garage=VEHICLES.map(config=>sizeChallengeVehicle(T,config.id==='roadster'?buildRoadster(T):buildDetailedVehicle(T,config),config));
@@ -201,7 +201,7 @@ function finish(){
  if(newChapter){$('finishTag').textContent='LOTS '+(previouslyOpen+1)+'–'+nowOpen+' UNLOCKED';$('best').textContent='Eight new parking challenges are open.';}
  else if(!wasGoldUnlocked&&goldUnlocked()){$('finishTag').textContent='GOLD FLEET UNLOCKED';$('finishTitle').textContent='Go for gold.';$('best').textContent='Golden fleet and Golden Grounds unlocked.';}
  else if(spec.golden){$('finishTag').textContent='GOLDEN RUN COMPLETE';$('best').textContent='No penalties · original challenge ratings preserved.';}
- else if(goldUnlocked()){$('finishTag').textContent='ALL '+LOTS.length+' LOTS COMPLETE';$('finishTitle').textContent='Parking mastered.';$('best').textContent='Your golden fleet is unlocked in the garage.';}
+ else if(goldUnlocked()){$('finishTag').textContent='ALL '+ORIGINAL_LOT_COUNT+' ORIGINAL LOTS COMPLETE';$('finishTitle').textContent='Parking mastered.';$('best').textContent='Your golden fleet is unlocked in the garage.';}
  $('nextLot').textContent=!wasGoldUnlocked&&goldUnlocked()?'Try the golden fleet →':completionNext===null?'Choose a lot':newChapter?'Enter new lots →':'Next lot →';renderLots();renderGarage();
 }
 function finishDestruction(){if(!['running','paused'].includes(state)||!isSecret())return;$('pausePanel').hidden=true;state='ended';document.body.classList.remove('playing');clearInput();$('touch').hidden=true;$('cameraTools').hidden=true;$('finish').hidden=false;const progress=destructionLoop.getInfo();destructionLoop.save(spec.id,time);const result=scoring.bank({parked:true,endless:true,stars:3,elapsed:time,lot:LOTS.length,vehicle:spec.id});runScore=result.total;renderScoreResults('finishScoring',result);secretClear={time:Math.round(time),score:result.total,vehicle:spec.id};try{localStorage.setItem('parkside-streets-secret-clear-v1',JSON.stringify(secretClear));}catch{}$('finishTag').textContent='GOLDEN GROUNDS / RUN BANKED';$('finishTitle').textContent='Demolition payday.';$('resultDistance').textContent=progress.jobs;$('resultDistance').parentElement.querySelector('small').textContent='JOBS';$('resultTime').textContent=Math.round(time);$('resultParts').textContent=progress.total;$('resultParts').parentElement.querySelector('small').textContent='TARGETS';$('best').textContent='Best chain: '+progress.record.chain+' · Destroyed: '+progress.total+' · Restart for another run.';completionNext=null;$('nextLot').textContent='Back to garage →';renderLots();}
@@ -233,9 +233,9 @@ function vehicleThumbnail(item){
 }
 function setGoldenMode(value){if(state!=='menu'||value&&!goldUnlocked())return;if(!value&&isSecret())loadLevel(0);goldenMode=!!value;selectVehicle(vehicleIndex);}
 function renderGarage(){
- const unlockedGold=goldUnlocked(),done=saves.filter(s=>s?.stars>=1).slice(0,LOTS.length).length;
+ const unlockedGold=goldUnlocked(),done=saves.filter(s=>s?.stars>=1).slice(0,ORIGINAL_LOT_COUNT).length;
  $('goldFleet').disabled=!unlockedGold;for(const button of document.querySelectorAll('[data-fleet]')){const selected=(button.dataset.fleet==='gold')===goldenMode;button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));}
- $('fleetStatus').textContent=isSecret()?'Monster truck · invincible ram':goldenMode?'Invincible · no penalties':unlockedGold?'Gold fleet unlocked':done+' / '+LOTS.length+' lots to unlock gold';
+ $('fleetStatus').textContent=isSecret()?'Monster truck · invincible ram':goldenMode?'Invincible · no penalties':unlockedGold?'Gold fleet unlocked':done+' / '+ORIGINAL_LOT_COUNT+' lots to unlock gold';
  if(isSecret()){const wrap=$('garage'),b=document.createElement('button');wrap.replaceChildren();b.className='car-card selected golden';b.setAttribute('aria-pressed','true');b.setAttribute('aria-label','Golden Monster Truck');const img=document.createElement('img');img.src=vehicleThumbnail(monsterItem());img.alt='';b.append(img);const name=document.createElement('b');name.textContent='Golden Monster Truck';b.append(name);const badge=document.createElement('span');badge.className='vehicle-multiplier';badge.textContent='INVINCIBLE RAM';b.append(badge);wrap.append(b);return;}
  const wrap=$('garage');wrap.replaceChildren();garage.forEach((base,i)=>{const item=goldenMode?goldenItem(i):base,b=document.createElement('button');b.className='car-card'+(i===vehicleIndex?' selected':'')+(goldenMode?' golden':'');b.setAttribute('aria-pressed',String(i===vehicleIndex));b.setAttribute('aria-label','Choose '+item.config.name);const img=document.createElement('img');img.src=vehicleThumbnail(item);img.alt='';b.append(img);const name=document.createElement('b');name.textContent=item.config.name;b.append(name);const badge=document.createElement('span');badge.className='vehicle-multiplier';badge.textContent=goldenMode?'INVINCIBLE':'×'+item.config.scoreMultiplier;b.append(badge);b.onclick=()=>selectVehicle(i);wrap.append(b);});
 }
@@ -246,12 +246,12 @@ function renderLots(){
  const wrap=$('lotList');wrap.replaceChildren();
  LOTS.forEach((l,i)=>{
   if(i%8===0){const d=document.createElement('div'),open=unlocked(i),done=saves.slice(i,i+8).filter(s=>s?.stars>=1).length;d.className='bonus-divider'+(open?' open':'');
-   const title=['FOUNDATIONS','BONUS CHALLENGES','MASTER CHALLENGES'][Math.floor(i/8)];
-   d.innerHTML='<b>'+title+' · '+(i+1)+'–'+Math.min(i+8,LOTS.length)+'</b><span>'+(open?done+' / 8 complete':'Complete lots 1–'+i)+'</span>';wrap.append(d);}
+   const title=l.realWorld?'REAL LOCATIONS':['FOUNDATIONS','BONUS CHALLENGES','MASTER CHALLENGES'][Math.floor(i/8)];
+   d.innerHTML=l.realWorld?'<b>REAL LOCATIONS · RED BANK</b><span>Available from the start</span>':'<b>'+title+' · '+(i+1)+'–'+Math.min(i+8,ORIGINAL_LOT_COUNT)+'</b><span>'+(open?done+' / 8 complete':'Complete lots 1–'+i)+'</span>';if(l.realWorld)wrap.prepend(d);else wrap.append(d);}
   const locked=!unlocked(i),b=document.createElement('button');b.className='lot-card'+(i===levelIndex?' selected':'')+(locked?' locked':'');b.disabled=locked;
   b.setAttribute('aria-label','Lot '+(i+1)+': '+l.name+(locked?', locked':''));b.setAttribute('aria-pressed',String(i===levelIndex));
   b.innerHTML='<span class="lot-num">'+String(i+1).padStart(2,'0')+'</span><span><b>'+l.name+'</b><small>'+(locked?'Finish lots 1–'+(Math.floor(i/8)*8):l.kind+(scoring.best(i,spec.id)?' · BEST '+scoring.best(i,spec.id).toLocaleString():''))+'</small></span><em>'+(locked?'🔒':('★'.repeat(saves[i]?.stars||0)||'—'))+'</em>';
-  b.onclick=()=>loadLevel(i);wrap.append(b);
+  b.onclick=()=>loadLevel(i);if(l.realWorld)wrap.firstElementChild?.after(b);else wrap.append(b);
  });const secretButton=document.createElement('button');secretButton.id='secretLot';secretButton.className='lot-card secret-lot'+(isSecret()?' selected':'')+(!goldUnlocked()?' locked':'');secretButton.disabled=!goldUnlocked();secretButton.setAttribute('aria-pressed',String(isSecret()));secretButton.innerHTML='<span class="lot-num">✦</span><span><b>Golden Grounds</b><small>'+(goldUnlocked()?'City · suburbs · harbor · forest':'Unlock the golden fleet')+'</small></span><em>'+(goldUnlocked()?(secretClear?'ENDLESS':'SECRET'):'🔒')+'</em>';secretButton.onclick=()=>loadLevel(LOTS.length);wrap.prepend(secretButton);$('start').disabled=!unlocked(levelIndex);$('start').textContent=unlocked(levelIndex)?(isSecret()?'Enter Golden Grounds →':'Drive '+lot().name+' →'):'Complete the previous chapters';if($('introGoal'))$('introGoal').textContent=isSecret()?'Finish demolition jobs. Chain hits for ×3 scoring. Jobs bank automatically; cleared districts rebuild when you leave.':'Clear gates 1 → 2 → 3, then park in the green bay.';
 }
 function openMenu(){duel?.leave();duelUI?.hide();if(isSecret()&&['running','paused','ended'].includes(state))destructionLoop.save(spec.id,time);$('intro').querySelector('.panel').prepend(document.querySelector('.top'));const freshGold=state==='ended'&&$('finishTag').textContent==='GOLD FLEET UNLOCKED';document.body.classList.remove('playing');state='menu';clearInput();$('finish').hidden=true;$('pausePanel').hidden=true;$('intro').hidden=false;$('hud').hidden=true;$('touch').hidden=true;$('cameraTools').hidden=true;recover(true);if(freshGold)setGoldenMode(true);renderGarage();renderLots();}

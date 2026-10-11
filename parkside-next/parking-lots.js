@@ -1,5 +1,6 @@
 import {addBuildingContents} from './building-contents.js?v=street-26';
 import {createSceneryDetail} from './scenery-detail.js?v=street-22';
+import {buildMarinePark} from './real-marine-park.js?v=marine-1';
 const BASE_LOTS=[
  {name:'Market Square',kind:'Head-in',hint:'Drive around the island and park in A3.',code:'A3',theme:0xb6bca3,spawn:[-13,17,0],target:{x:4,z:-15,yaw:0,w:3.8,d:6.6},par:45,style:'market'},
  {name:'Sunset Diner',kind:'Angled bay',hint:'Follow the diagonal row. Stop inside D4.',code:'D4',theme:0xc7ab88,spawn:[-15,17,0],target:{x:7,z:-10,yaw:-Math.PI/4,w:3.7,d:6.6},par:55,style:'diner'},
@@ -24,15 +25,17 @@ const BASE_LOTS=[
  {name:'Quarry Yard',kind:'Parallel reverse',hint:'Take the wide route around the stone piles, then reverse between the trucks.',code:'Q21',theme:0xc3b394,spawn:[-15,18,0],target:{x:15,z:0,yaw:0,w:3.7,d:8,reverse:true},par:130,style:'quarry'},
  {name:'Marina Service',kind:'Dry-dock reverse',hint:'Thread the boat cradles and back into the service bay.',code:'M22',theme:0xabc3c5,spawn:[15,18,0],target:{x:-14,z:-15,yaw:Math.PI,w:3.8,d:7.5,reverse:true},par:130,style:'marina'},
  {name:'Mountain Lodge',kind:'Angled arrival',hint:'Wind past the snow islands. Approach L23 on the diagonal.',code:'L23',theme:0xcad4d4,spawn:[-15,18,0],target:{x:0,z:-16,yaw:Math.PI/8,w:3.8,d:7.5},par:125,style:'lodge'},
- {name:'The Final Test',kind:'Precision reverse',hint:'Clear both staggered walls, turn in the upper court, then back into T24.',code:'T24',theme:0xb9c2b4,spawn:[-15,18,0],target:{x:13,z:-17,yaw:Math.PI,w:3.65,d:7.4,reverse:true},par:150,style:'academy'}
+ {name:'The Final Test',kind:'Precision reverse',hint:'Clear both staggered walls, turn in the upper court, then back into T24.',code:'T24',theme:0xb9c2b4,spawn:[-15,18,0],target:{x:13,z:-17,yaw:Math.PI,w:3.65,d:7.4,reverse:true},par:150,style:'academy'},
+ {name:'Marine Park · Red Bank',kind:'Real marina',hint:'Enter from Union St, circle the island, reverse into the waterfront bay.',code:'RB25',theme:0x96bdc5,spawn:[12,44,0],target:{x:6,z:-31,yaw:Math.PI,w:3.2,d:6,reverse:true},par:170,style:'redbankMarina',realWorld:true}
 ];
-export const LOTS=BASE_LOTS.map((l,i)=>{const t={...l.target,x:l.target.x*2,z:l.target.z*2},side=l.spawn[0]<0?-1:1;
+export const ORIGINAL_LOT_COUNT=24;
+export const LOTS=BASE_LOTS.map((l,i)=>{if(l.realWorld)return {...l,target:{...l.target},spawn:[...l.spawn],gates:[{x:12,z:22,yaw:0},{x:12,z:-8,yaw:0},{x:6,z:-22,yaw:Math.PI,reverse:true}],gateWidth:5.2};const t={...l.target,x:l.target.x*2,z:l.target.z*2},side=l.spawn[0]<0?-1:1;
  const gates=[{x:side*38,z:24,yaw:0},{x:-side*38,z:24,yaw:side<0?-Math.PI/2:Math.PI/2},{x:t.x+Math.sin(t.yaw)*9*(t.reverse?-1:1),z:t.z+Math.cos(t.yaw)*9*(t.reverse?-1:1),yaw:t.yaw,reverse:!!t.reverse}];
  return {...l,target:t,spawn:[side*38,40,0],par:Math.round(l.par*1.8),gates,gateWidth:6-Math.floor(i/8)*.55,hint:'Clear the three numbered gates, then '+(t.reverse?'reverse into ':'park in ')+l.code+'.'};
 });
 export const CHAPTER_SIZE=8;
 export function completedThrough(saves,count){return Array.from({length:count},(_,i)=>saves[i]?.stars>=1).every(Boolean);}
-export function isLotUnlocked(index,saves){return Number.isInteger(index)&&index>=0&&index<LOTS.length&&completedThrough(saves,Math.floor(index/CHAPTER_SIZE)*CHAPTER_SIZE);}
+export function isLotUnlocked(index,saves){return Number.isInteger(index)&&index>=0&&index<LOTS.length&&(LOTS[index].realWorld||completedThrough(saves,Math.floor(index/CHAPTER_SIZE)*CHAPTER_SIZE));}
 export function nextLotIndex(index,saves){
  const next=index+1;if(next<LOTS.length&&isLotUnlocked(next,saves))return next;
  for(let i=0;i<LOTS.length;i++)if(isLotUnlocked(i,saves)&&!(saves[i]?.stars>=1))return i;
@@ -74,12 +77,15 @@ export function buildLots({T,C,scene,world,groundMat}){
  function cone(x,z){const m=new T.Mesh(new T.ConeGeometry(.32,.8,12),mat(0xec9d4f));m.position.set(ox+x*2,.4,z*2);g.add(m);box(.5,.08,.5,x,.04,z,0x393e37,0,true);}
  function parked(x,z,yaw,color=0x688d9b){x*=2;z*=2;const car=new T.Group();car.position.set(ox+x,0,z);car.rotation.y=yaw;g.add(car);const body=new C.Body({mass:0,material:groundMat,shape:new C.Box(new C.Vec3(1.04,.75,2.18)),position:new C.Vec3(ox+x,.8,z)});body.quaternion.setFromEuler(0,yaw,0);body.userData={kind:'parked car'};parkedCars.push({mesh:car,body,level:index});body.updateAABB();world.addBody(body);phys.push(body);mini.push({x,z,w:2.1,d:4.4,yaw,color:'#677e89'});}
  function bay(x,z,yaw=0,w=3.6,d=6.4,target=false){x*=2;z*=2;if(!target&&Math.hypot(x-level.target.x,z-level.target.z)<.1)return null;const group=new T.Group();group.position.set(ox+x,.035,z);group.rotation.y=yaw;group.userData.guide=true;g.add(group);for(const side of [-1,1]){const line=new T.Mesh(boxGeo,mat(target?0x83f0b0:0xcfd4bd));line.scale.set(.11,.025,d);line.position.x=side*w/2;group.add(line);}for(const end of [-1,1]){const line=new T.Mesh(boxGeo,mat(target?0x83f0b0:0xcfd4bd));line.scale.set(w,.025,.11);line.position.z=end*d/2;group.add(line);}if(target){const fill=new T.Mesh(new T.PlaneGeometry(w,d),new T.MeshBasicMaterial({color:0x74e6ab,transparent:true,opacity:.22,depthWrite:false,side:T.DoubleSide}));fill.rotation.x=-Math.PI/2;fill.position.y=.01;group.add(fill);const shape=new T.Shape();shape.moveTo(0,-1);shape.lineTo(-.55,-.2);shape.lineTo(-.17,-.2);shape.lineTo(-.17,.65);shape.lineTo(.17,.65);shape.lineTo(.17,-.2);shape.lineTo(.55,-.2);shape.closePath();const arrow=new T.Mesh(new T.ShapeGeometry(shape),new T.MeshBasicMaterial({color:0xc9ffd9,side:T.DoubleSide}));arrow.rotation.x=Math.PI/2;arrow.position.y=.08;group.add(arrow);return {group,fill};}}
+ if(!level.realWorld){
  // A bounded lot with a generous internal entrance and no endless road.
  box(110,.1,105,0,-.13,0,0x8d9e81);box(96,.08,96,0,-.01,0,0x566260);
  box(47,.32,.45,0,.16,-23.3,0xbdc5b5,0,true);box(.45,.32,47,-23.3,.16,0,0xbdc5b5,0,true);box(.45,.32,47,23.3,.16,0,0xbdc5b5,0,true);box(18,.32,.45,-14.5,.16,23.3,0xbdc5b5,0,true);box(18,.32,.45,14.5,.16,23.3,0xbdc5b5,0,true);
  for(let x=-18;x<=18;x+=9)tree(x,-28);for(let z=-12;z<=18;z+=12)tree(-28,z);
  text(level.name.toUpperCase(),0,3.7,-25,13);box(17,1.3,.2,0,3.7,-25,0x244339);box(.18,4,.18,-6,2,-25,0x626b60);box(.18,4,.18,6,2,-25,0x626b60);
+ }
  const colors=[0x9b6359,0x698a97,0xcbc7b0,0x676977,0xa69667];
+ if(level.realWorld)buildMarinePark({T,group:g,ox,piece,bay,parked,text,mini,mat});
  if(level.style==='market'){box(29,5,8,3,2.5,-34,0xc3c3ab);text('MARKET',3,3,-29.9,8);for(let x of [-12,-8,-4,0,4,8,12,16]){bay(x,-15);if(x!==4)parked(x,-15,0,colors[(x+12)/4%5]);}island(-1,2,12,3);cone(-8,6);cone(7,6);}
  if(level.style==='diner'){box(19,4,9,0,2,-32,0xbf7866);text('SUNSET DINER',0,2.8,-27.4,11);for(let x of [-12,-6,0,7,13]){bay(x,-10,-Math.PI/4);if(x!==7)parked(x,-10,-Math.PI/4,colors[Math.abs(x)%5]);}island(1,8,12,2.5);box(8,.5,1,-12,.25,-19,0xbdc4b2,0,true);}
  if(level.style==='office'){box(25,12,9,2,6,-32,0x829c9b);for(let x of [-14,-10,-6,-2,2,6,10,14,18]){bay(x,-15);parked(x,-15,0,colors[Math.abs(x)%5]);}for(let x of [-7,-3,1,5,9,13,17]){bay(x,14);if(x!==5)parked(x,14,Math.PI,colors[Math.abs(x)%5]);}island(-4,-1,13,2.6);}
@@ -160,6 +166,7 @@ export function buildLots({T,C,scene,world,groundMat}){
   const label=text(String(i+1)+(gate.reverse?' · R':''),gate.x/2,3.2,gate.z/2,2.2);label.userData.guide=true;label.material.depthTest=false;label.material.depthWrite=false;label.renderOrder=4;
   for(const side of [-1,1])piece(.35,1,.35,gate.x+Math.cos(gate.yaw)*side*(width/2+.3),.5,gate.z-Math.sin(gate.yaw)*side*(width/2+.3),0xe7b05b);
   return{...gate,group,label,line};});
+ if(!level.realWorld){
  // Alternating barriers force an S-turn through the cross aisle, away from bay approaches.
  const clear=(x,z,r)=>Math.hypot(x-t.x,z-t.z)>r&&level.gates.every(a=>Math.hypot(a.x-x,a.z-z)>6);
  for(const [x,z]of [[-22,20],[0,28],[22,20]])if(clear(x,z,11)){box(7,.85,1,x/2,.425,z/2,0xe2bb68,0,true);cone((x-4)/2,z/2);cone((x+4)/2,z/2);}
@@ -168,6 +175,7 @@ export function buildLots({T,C,scene,world,groundMat}){
  for(const side of [-1,1]){const offset=t.w/2+1.25,x=t.x+Math.cos(t.yaw)*offset*side,z=t.z-Math.sin(t.yaw)*offset*side;
   const occupied=parkedCars.some(p=>p.level===index&&Math.hypot(p.body.position.x-ox-x,p.body.position.z-z)<4.8);
   if(!occupied)parked(x/2,z/2,t.yaw,colors[(index+(side>0?1:0))%5]);}
+ }
  for(const building of buildings){addBuildingContents(building,(size,dx,y,dz,color)=>{const c=Math.cos(building.yaw),s=Math.sin(building.yaw);piece(...size,building.x-ox+c*dx+s*dz,y,building.z-s*dx+c*dz,color,building.yaw,building.id);return breakables.at(-1);},(e,parts)=>{const colors={metal:0x657679,glass:0x486e79,fabric:0x657d6f,wood:0x95744e,paper:0xd4c8ad},obj=new T.Object3D();for(const key of new Set(parts.map(p=>p.key))){const list=parts.filter(p=>p.key===key),batch=new T.InstancedMesh(boxGeo,mat(colors[key]),list.length);batch.castShadow=false;batch.receiveShadow=true;batch.frustumCulled=false;e.mesh.add(batch);list.forEach((p,index)=>{obj.position.set(p.x/e.size[0],p.y/e.size[1],p.z/e.size[2]);obj.scale.set(p.w/e.size[0],p.h/e.size[1],p.d/e.size[2]);obj.updateMatrix();batch.setMatrixAt(index,obj.matrix);batch.setColorAt(index,new T.Color(0xffffff));p.batch=batch;p.instance=index;p.matrix=obj.matrix.clone();});batch.instanceMatrix.needsUpdate=true;batch.instanceColor.needsUpdate=true;}});}
  // Every remaining physical prop gets a body. Decorations ride with their support.
  g.updateMatrixWorld(true);for(const m of [...g.children]){if(!m.isMesh||m.userData.guide||m.userData.body)continue;
