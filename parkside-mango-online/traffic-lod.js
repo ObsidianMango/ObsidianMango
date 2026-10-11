@@ -3,6 +3,33 @@
 // Cars within 80 m (and any damaged or moving car) use their complete original meshes.
 export function createTrafficLOD(T,view){
  const cars=view.targets.filter(t=>t.kind==='car').map(t=>t.car);
+ const wheelOverlays=new Map(),wheelInverse=new T.Matrix4(),wheelMatrix=new T.Matrix4();
+ // A wheel clone shares the full original geometry and materials. Never bake the
+ // rubber, spokes, rim or whitewall details into the distant body impostor.
+ function overlayWheels(item){
+  if(wheelOverlays.has(item))return wheelOverlays.get(item);
+  const parts=item.mesh.children.filter(part=>part.name?.startsWith('wheel-')&&part.children.length);
+  const groups=parts.map(original=>{
+   const copy=original.clone(true);copy.name='Original detailed tire · '+original.name;
+   copy.visible=false;copy.matrixAutoUpdate=false;copy.frustumCulled=true;
+   view.group.add(copy);
+   return {original,copy};
+  });
+  wheelOverlays.set(item,groups);return groups;
+ }
+ function showTires(item,visible,refresh=false){
+  const groups=overlayWheels(item);
+  if(visible&&(refresh||groups.some(({copy})=>!copy.visible))){
+   view.group.updateWorldMatrix(true,false);wheelInverse.copy(view.group.matrixWorld).invert();
+   item.mesh.updateWorldMatrix(true,true);
+   for(const {original,copy} of groups){
+    wheelMatrix.multiplyMatrices(wheelInverse,original.matrixWorld);
+    copy.matrix.copy(wheelMatrix);copy.matrixWorldNeedsUpdate=true;
+   }
+  }
+  for(const {copy} of groups)copy.visible=visible;
+ }
+
  const byModel=new Map(),inverse=new T.Matrix4(),relative=new T.Matrix4(),
   point=new T.Vector3(),normal=new T.Vector3(),normalMatrix=new T.Matrix3();
  const categories={
@@ -28,6 +55,8 @@ export function createTrafficLOD(T,view){
   inverse.copy(item.mesh.matrixWorld).invert();
   item.mesh.traverse(mesh=>{
    if(!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
+   // Detailed wheels are rendered separately using their actual mesh objects.
+   for(let parent=mesh.parent;parent&&parent!==item.mesh;parent=parent.parent)if(parent.name?.startsWith('wheel-'))return;
    const geometry=mesh.geometry,material=Array.isArray(mesh.material)?mesh.material[0]:mesh.material;
    if(!material)return;
    const key=surfaceKey(material);
@@ -85,6 +114,7 @@ export function createTrafficLOD(T,view){
      (item.damage||0)<.02&&item.body.mass===0;
     item.mesh.visible=!far&&!item.occupied;
     if(far)farCars.push(item);
+    showTires(item,far);
    }
    distant+=farCars.length;
    if(!farCars.length){for(const mesh of group.batches)mesh.count=0;group.current=[];continue;}
@@ -108,7 +138,7 @@ export function createTrafficLOD(T,view){
  }
  function originals(){
   distant=0;drawBatches=0;
-  for(const item of cars)item.mesh.visible=!item.occupied;
+  for(const item of cars){item.mesh.visible=!item.occupied;showTires(item,false);}
   for(const group of byModel.values()){
    group.current=[];
    for(const mesh of group.batches)mesh.count=0;
