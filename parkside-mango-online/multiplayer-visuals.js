@@ -21,20 +21,27 @@ export function createRivalVisual({T,scene,makeVehicle,worldX=()=>0}){
  const hpBg=new T.Mesh(new T.BoxGeometry(1.05,.11,.065),new T.MeshBasicMaterial({color:0x142229,depthTest:false}));
  const hpFill=new T.Mesh(new T.BoxGeometry(.99,.08,.07),new T.MeshBasicMaterial({color:0xf07365,depthTest:false}));
  hpFill.position.z=-.042;hp.add(hpBg,hpFill);
- let model=null,modelId='',assemblies=[],wheelNodes=[],wrecked=false,debris=[],wreckAge=0,animation=0;
- const identity=new T.Quaternion(),tempQ=new T.Quaternion(),target=new T.Vector3(),last=new T.Vector3();
+ let model=null,modelId='',assemblies=[],wheelNodes=[],wrecked=false,debris=[],retired=[],wreckAge=0,animation=0;
+ const last=new T.Vector3();
  const wheelNames=['wheel-front-right','wheel-front-left','wheel-rear-right','wheel-rear-left'];
  function chooseCharacter(id){
   const c=characterById(id);
   appearance.setPalette({black:c.shirt,seam:c.seam,jeans:c.pants,denim:c.denim,hair:c.hair,hairHi:c.hairHi,beard:c.beard,beardHi:c.beardHi,skin:c.skin,cheek:c.cheek});
  }
  function clearDebris(){
-  for(const d of debris)scene.remove(d.mesh);
+  for(const d of debris){scene.remove(d.mesh);retired.push(d.mesh);}
   debris=[];wrecked=false;wreckAge=0;
  }
  function removeModel(){
   clearDebris();
+  const geometries=new Set(),materials=new Set();
+  for(const object of [model,...retired]){
+   object?.traverse(node=>{if(!node.isMesh)return;if(node.geometry)geometries.add(node.geometry);if(Array.isArray(node.material))node.material.forEach(m=>materials.add(m));else if(node.material)materials.add(node.material);});
+  }
   if(model)carSlot.remove(model);
+  retired.length=0;
+  for(const g of geometries)g.dispose?.();
+  for(const m of materials)m.dispose?.();
   model=null;assemblies=[];wheelNodes=[];modelId='';
  }
  function ensureVehicle(id,force=false){
@@ -94,7 +101,7 @@ export function createRivalVisual({T,scene,makeVehicle,worldX=()=>0}){
  }
  function update(p,opponentHealth,dt,canSee){
   if(wrecked){
-   if(p?.active&&p?.mode==='vehicle'&&wreckAge>.8){ensureVehicle(p.vehicleId||modelId,true);}
+   if(p?.active&&p?.mode==='vehicle'&&!p.wreck&&wreckAge>.8){ensureVehicle(p.vehicleId||modelId,true);}
    else{updateDebris(dt);return;}
   }
   if(!p||!canSee){root.visible=false;return;}
@@ -122,6 +129,6 @@ export function createRivalVisual({T,scene,makeVehicle,worldX=()=>0}){
   hpFill.scale.x=Math.max(.0001,Math.min(1,(opponentHealth?.hp??100)/100));hpFill.position.x=-(1-hpFill.scale.x)*.495;
   // World-space billboard toward local camera is handled by caller.
  }
- function faceHealth(camera){hp.getWorldQuaternion(tempQ);hp.quaternion.copy(root.quaternion).invert().multiply(camera.quaternion);}
+ function faceHealth(camera){hp.quaternion.copy(root.quaternion).invert().multiply(camera.quaternion);}
  return {root,person,carSlot,chooseCharacter,ensureVehicle,explode,reset,update,updateDebris,faceHealth,get modelId(){return modelId;},get wrecked(){return wrecked;},get partCount(){return assemblies.length;},get debrisCount(){return debris.length;}};
 }
