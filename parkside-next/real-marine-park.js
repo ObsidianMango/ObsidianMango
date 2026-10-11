@@ -6,7 +6,7 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat}){
   const m=new T.Mesh(cube,mat(c));m.position.set(ox+x,y,z);m.scale.set(w,h,d);m.rotation.y=yaw;
   m.castShadow=h>2;m.receiveShadow=true;m.userData.guide=true;group.add(m);return m;
  }
- function plane(w,d,x,z,c,y=.024){
+ function plane(w,d,x,z,c,y=.037){
   const m=new T.Mesh(new T.PlaneGeometry(w,d),mat(c));m.rotation.x=-Math.PI/2;
   m.position.set(ox+x,y,z);m.userData.guide=true;m.receiveShadow=true;group.add(m);return m;
  }
@@ -39,8 +39,8 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat}){
   }
  }
  // Union St is south (+z), waterfront to north (-z), Oakley Lane east (+x).
- plane(44,77,0,0,0x343b3e);
- plane(46,17,0,45,0x474e50);
+ plane(44,77,0,0,0x343b3e,.037);
+ plane(46,17,0,45,0x474e50,.037);
  plane(115,72,-5,-87,0x4a919f,.015);
  plane(32,66,-37,-11,0x598f9b,.015);
  plane(10,88,30,0,0x575c5a,.02);
@@ -53,22 +53,41 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat}){
  planter(2.6,39.2,0,-.5);
  for(const z of [-19,-7,6,18])shrub(0,z,.67);
  for(const [x,z] of [[-18.7,35],[19,34],[-20,-33],[20,-33]])shrub(x,z,.8);
- // North waterfront row, western row, both sides of central median, Oakley Ln row.
+ // Occupied bays use the existing authored garage fleet (not generic box cars).
+ // Keep the waterfront target RB25 vacant, and make the gate and traffic aisles drivable.
+ const palette=[0xd8d9d1,0x758d9b,0x965f54,0x555b66,0xabb7b4,0x967e59,0x73886b];
+ let carNumber=0;
+ function parkAt(x,z,yaw){
+  // The actual detailed vehicle model is selected by parked-traffic.js.
+  parked(x/2,z/2,yaw,palette[carNumber++%palette.length]);
+ }
+ // The nine spaces against the marina waterfront building.
  for(let x=-12;x<=12;x+=3){
   bay(x/2,-31/2,Math.PI,2.9,5.9);
-  if(x!==6&&[-12,-3,12].includes(x))parked(x/2,-31/2,Math.PI,0xb5c6cc);
+  if([-12,-6,-3,0,9,12].includes(x))parkAt(x,-31,Math.PI);
  }
- for(let z=-22;z<27;z+=3.25){
+ // Long west row by the boat yard. Keep an empty space or two for maneuvering.
+ for(let k=0;k<16;k++){
+  const z=-22+k*3.25;
   bay(-16/2,z/2,Math.PI/2,2.98,5.8);
-  bay(17/2,z/2,-Math.PI/2,2.98,5.8);
+  if([0,2,4,6,8,10,12,14].includes(k))parkAt(-16,z,Math.PI/2);
  }
- for(let z=-18;z<20;z+=3.25){
+ // Oakley Lane-side stalls. Leave the approaches to gates 1 and 2 free.
+ for(let k=0;k<16;k++){
+  const z=-22+k*3.25;
+  bay(17/2,z/2,-Math.PI/2,2.98,5.8);
+  if([0,2,5,7,9,11,12].includes(k))parkAt(17,z,-Math.PI/2);
+ }
+ // Both banks of the central landscaped median have tight parking.
+ for(let k=0;k<12;k++){
+  const z=-18+k*3.25;
   bay(-5.8/2,z/2,Math.PI/2,2.96,5.7);
   bay(5.8/2,z/2,-Math.PI/2,2.96,5.7);
+  if([0,2,4,6,8,10].includes(k))parkAt(-5.8,z,Math.PI/2);
+  if([1,3,5,7,9].includes(k))parkAt(5.8,z,-Math.PI/2);
  }
- parked(-16/2,16/2,Math.PI/2,0x9aa7a6);
- parked(17/2,15/2,-Math.PI/2,0x9aa7a6);
- parked(17/2,-15/2,-Math.PI/2,0xe4e5dd);
+ // 32 parked cars total. Physical colliders remain destructible and pushable.
+
  // Entry crosswalk and STOP on asphalt; physical lane is left unobstructed.
  text('STOP',11.5,.061,44,7,Math.PI,true,'#40494c');
  for(let i=0;i<6;i++)deco(1.25,.024,4,6.9+i*1.65,.064,32.9,0xf3f2e8);
