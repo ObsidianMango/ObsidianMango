@@ -1,7 +1,7 @@
 // A rolling transform recorder: playback uses the actual simulated crash, not a second explosion.
 export function createCrashDirector({T,scene,camera,parts,obstacles,extras,onComplete}){
  const nodes=[...parts,...obstacles.map(o=>o.mesh)],frames=[];
- const pos=new T.Vector3(),quat=new T.Quaternion(),qa=new T.Quaternion(),qb=new T.Quaternion(),parentQuat=new T.Quaternion();
+ const pos=new T.Vector3(),quat=new T.Quaternion(),qa=new T.Quaternion(),qb=new T.Quaternion(),parentQuat=new T.Quaternion(),worldScale=new T.Vector3();
  let impact=null,capturing=false,lastRecord=-Infinity,playing=false,shot=0,cursor=0,shots=[],elapsed=0,totalDuration=1,oldFov=54;
  const effects=new T.Group();scene.add(effects);effects.visible=false;
  const fireGeo=new T.IcosahedronGeometry(1,1),smokeGeo=new T.IcosahedronGeometry(1,0),puffs=[];
@@ -14,7 +14,7 @@ export function createCrashDirector({T,scene,camera,parts,obstacles,extras,onCom
   for(const p of puffs){const t=age-p.delay;p.m.visible=t>0&&t<(p.fire?1.05:4.7);if(!p.m.visible)continue;p.m.position.copy(p.v).multiplyScalar(p.fire?t*.85:Math.sqrt(t)*.65);p.m.position.y+=p.fire?.2:t*.6;const scale=p.size*(p.fire?Math.sin(Math.min(1,t)*Math.PI)*2.4:.5+t*.9);p.m.scale.setScalar(Math.max(.01,scale));p.m.rotation.set(t*.5,t*.2,t*.15);p.m.material.opacity=p.fire?Math.max(0,.88-t*.85):Math.max(0,.48-t*.10);if(p.fire)p.m.material.color.setHSL(.08-t*.045,1,.6-t*.19);}
   for(let i=0;i<count;i++){const v=velocities[i],t=Math.min(age,3);positions[i*3]=v.x*t;positions[i*3+1]=Math.max(-impact.point.y+.07,v.y*t-4.91*t*t);positions[i*3+2]=v.z*t;}pointGeo.attributes.position.needsUpdate=true;embers.material.opacity=Math.max(0,1-age/2.8);ring.position.y=-impact.point.y+.08;ring.scale.setScalar(.7+age*16);ring.material.opacity=Math.max(0,.6-age*1.2);
  }
- function record(t,force=false){if(playing||(!force&&t-lastRecord<1/30))return;lastRecord=t;scene.updateMatrixWorld(true);const values=new Float32Array(nodes.length*8);nodes.forEach((n,i)=>{n.getWorldPosition(pos);n.getWorldQuaternion(quat);const k=i*8;values.set([pos.x,pos.y,pos.z,quat.x,quat.y,quat.z,quat.w,n.visible?1:0],k)});frames.push({t,values,extra:extras?.snapshot()});if(!capturing)while(frames.length>1&&frames[0].t<t-1.5)frames.shift();while(frames.length>210)frames.shift();}
+ function record(t,force=false){if(playing||(!force&&t-lastRecord<1/30))return;lastRecord=t;const values=new Float32Array(nodes.length*8);nodes.forEach((n,i)=>{n.updateWorldMatrix(true,false);n.matrixWorld.decompose(pos,quat,worldScale);const k=i*8;values[k]=pos.x;values[k+1]=pos.y;values[k+2]=pos.z;values[k+3]=quat.x;values[k+4]=quat.y;values[k+5]=quat.z;values[k+6]=quat.w;values[k+7]=n.visible?1:0;});frames.push({t,values,extra:extras?.snapshot()});if(!capturing)while(frames.length>1&&frames[0].t<t-1.5)frames.shift();while(frames.length>210)frames.shift();}
  function mark(info,t){impact={...info,t,point:info.point.clone(),forward:info.forward.clone()};capturing=true;record(t,true);}
  function apply(t){if(!frames.length)return;let lo=0,hi=frames.length-1;while(lo+1<hi){let mid=(lo+hi)>>1;if(frames[mid].t<t)lo=mid;else hi=mid;}const a=frames[lo],b=frames[hi],u=Math.max(0,Math.min(1,(t-a.t)/Math.max(.00001,b.t-a.t)));
   scene.updateMatrixWorld(true);
