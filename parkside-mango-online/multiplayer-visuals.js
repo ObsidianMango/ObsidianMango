@@ -105,7 +105,7 @@ export function createRivalVisual({T,scene,makeVehicle,worldX=()=>0}){
    else{updateDebris(dt);return;}
   }
   if(!p||!canSee){root.visible=false;return;}
-  if(p.vehicleId)ensureVehicle(p.vehicleId);
+  if(p.mode==='vehicle')ensureVehicle(p.vehicleId||modelId||'roadster',retired.length>0);
   root.visible=true;root.position.set(p.p[0]+worldX(),p.p[1],p.p[2]);
   if(p.mode==='vehicle'&&Array.isArray(p.q)&&p.q.length===4)root.quaternion.fromArray(p.q);
   else root.quaternion.setFromAxisAngle(new T.Vector3(0,1,0),p.yaw);
