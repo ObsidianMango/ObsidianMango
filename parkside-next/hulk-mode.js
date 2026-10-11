@@ -1,0 +1,19 @@
+// One carried pedestrian, the existing ragdoll budget, and a fixed eight-mesh puff.
+export function createHulkMode({T,C,scene,world,crowd,body,getCamera,allowed,notify,onVisual}){
+ let active=false,cooldown=0,useWasDown=false,puffAge=1;
+ const anchor=new C.Vec3(),from=new C.Vec3(),ray=new C.RaycastResult(),puff=new T.Group(),geometry=new T.IcosahedronGeometry(.12,0),material=new T.MeshBasicMaterial({color:0xc8efb6,transparent:true,depthWrite:false});
+ for(let i=0;i<8;i++){const m=new T.Mesh(geometry,material);m.userData.direction=new T.Vector3(Math.cos(i*Math.PI/4),i%2?.65:-.25,Math.sin(i*Math.PI/4));puff.add(m);}puff.visible=false;scene.add(puff);
+ function nearest(){if(!active||!allowed()||crowd.held)return null;const yaw=getCamera().yaw,fx=-Math.sin(yaw),fz=-Math.cos(yaw);let best=null,distance=2.7;
+  for(const p of crowd.people){if(p.split||p.held)continue;const pos=p.pose[0].p,dx=pos.x-body.position.x,dz=pos.z-body.position.z,d=Math.hypot(dx,dz);if(d>=distance||Math.abs(pos.y-body.position.y)>2.8||(dx*fx+dz*fz)/Math.max(.01,d)<-.1)continue;from.set(body.position.x,body.position.y+.6,body.position.z);anchor.set(pos.x,pos.y,pos.z);ray.reset();if(world.raycastClosest(from,anchor,{collisionFilterMask:1|8,skipBackfaces:true},ray)&&ray.distance<from.distanceTo(anchor)-.2)continue;best=p;distance=d;}return best;
+ }
+ function follow(){if(!crowd.held)return;const yaw=getCamera().yaw;from.set(body.position.x,body.position.y+.65,body.position.z);anchor.set(body.position.x-Math.sin(yaw)*1.15,body.position.y+1.5,body.position.z-Math.cos(yaw)*1.15);ray.reset();if(world.raycastClosest(from,anchor,{collisionFilterMask:1|8,skipBackfaces:true},ray)){const distance=from.distanceTo(anchor),fraction=Math.max(.08,(ray.distance-.45)/distance);anchor.set(from.x+(anchor.x-from.x)*fraction,from.y+(anchor.y-from.y)*fraction,from.z+(anchor.z-from.z)*fraction);}crowd.carry(anchor,yaw);
+ }
+ function toggle(){if(!allowed())return false;if(active){drop();active=false;}else active=true;useWasDown=true;onVisual(active,!!crowd.held);notify(active?'Hulk mode · grab, carry & throw':'Back to normal',1.5);return true;}
+ function use(){if(!active||!allowed()||cooldown>0)return false;if(crowd.held){follow();const cam=getCamera(),c=Math.cos(cam.pitch),velocity=new C.Vec3(-Math.sin(cam.yaw)*c*25,Math.max(-4,Math.min(18,-Math.sin(cam.pitch)*25+6)),-Math.cos(cam.yaw)*c*25);velocity.x+=body.velocity.x*.5;velocity.z+=body.velocity.z*.5;crowd.releaseHeld(velocity);notify('Toss!',.8);}else{const p=nearest();if(!p||!crowd.grab(p))return false;follow();notify('RT throw · LT split · X drop',1.5);}cooldown=.35;useWasDown=true;onVisual(active,!!crowd.held);return true;}
+ function split(){if(!active||!allowed()||!crowd.held||cooldown>0)return false;follow();puff.position.copy(anchor);puffAge=0;puff.visible=true;const yaw=getCamera().yaw;crowd.releaseHeld(new C.Vec3(-Math.sin(yaw)*7,5,-Math.cos(yaw)*7),true);cooldown=.45;useWasDown=true;onVisual(active,false);notify('Split!',.8);return true;}
+ function drop(){if(!crowd.held)return false;follow();crowd.releaseHeld(new C.Vec3());onVisual(active,false);return true;}
+ function stop(){drop();active=false;useWasDown=true;onVisual(false,false);}
+ function update(dt){cooldown=Math.max(0,cooldown-dt);if(crowd.held)follow();puffAge+=dt;puff.visible=puffAge<.48;if(puff.visible){material.opacity=1-puffAge/.48;for(const m of puff.children){m.position.copy(m.userData.direction).multiplyScalar(puffAge*4);m.scale.setScalar(.5+puffAge*3);}}}
+ function pollUse(pressed){if(pressed&&!useWasDown)use();useWasDown=pressed;}
+ return{toggle,use,split,drop,stop,update,follow,nearest,pollUse,resetInput(){useWasDown=true;},latch(){useWasDown=true;},get active(){return active;},get held(){return crowd.held;},getInfo:()=>({active,carrying:crowd.held?.i??null,cooldown,puffVisible:puff.visible,puffMeshes:8})};
+}

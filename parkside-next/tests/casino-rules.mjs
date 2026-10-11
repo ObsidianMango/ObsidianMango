@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {createShopEconomy} from '../shop-economy.js';
+import {createCasinoGames,slotOutcome,roulettePayout,blackjackValue} from '../casino-games.js';
+const card=(r,s=0)=>s*13+r-2;
+function wallet(cash=100){const data=new Map(),store={getItem:k=>data.get(k),setItem:(k,v)=>data.set(k,v)},economy=createShopEconomy(store);economy.earn(cash-100);return {economy,store,games:createCasinoGames(economy,()=>.41)};}
+function hand(player,dealer,draws,cash=100){const w=wallet(cash),used=[...player,...dealer,...draws];assert.equal(new Set(used).size,used.length);const deck=Array.from({length:52},(_,i)=>i).filter(c=>!used.includes(c)).concat([...draws].reverse());w.economy.beginRound('blackjack',10,{player,dealer,deck});return w;}
+// Double stakes debit atomically, draw exactly one card, and resolve once.
+let w=hand([card(5),card(6)],[card(10,1),card(7,1)],[card(10,2)]);assert(w.games.double());assert.equal(w.economy.info().casinoResult.bet,20);assert.equal(w.economy.info().casinoResult.payout,40);assert.equal(w.economy.info().cash,120);assert(!w.games.double());
+w=hand([card(5),card(6)],[card(10,1),card(7,1)],[card(10,2)],100);const cash=w.economy.info().cash;w.games.hit();assert(!w.games.double());assert(w.economy.info().cash>=cash);
+// Splitting plays each hand, forbids resplitting, and survives a reload mid-round.
+w=hand([card(8),card(8,1)],[card(10,1),card(7,1)],[card(10,2),card(3,2),card(10,3)]);assert(w.games.split());assert.equal(w.economy.info().cash,80);assert(!w.games.split());assert(w.games.stand());let r=w.economy.info().casinoRound;assert.equal(r.active,1);let restored=createShopEconomy(w.store),resumed=createCasinoGames(restored);assert.deepEqual(restored.info().casinoRound,r);assert(resumed.double());assert.equal(restored.info().casinoResult.payout,60);assert.equal(restored.info().cash,130);assert.equal(restored.info().casinoStats.rounds,1);
+// Split aces receive one card and split 21 pays ordinary 1:1, not a natural bonus.
+w=hand([card(14),card(14,1)],[card(10,1),card(7,1)],[card(10,2),card(9,2)]);assert(w.games.split());assert.equal(w.economy.info().casinoResult.payout,40);assert.equal(w.economy.info().casinoResult.hands.length,2);assert(!w.games.hit());
+w=hand([card(8),card(7,1)],[card(10,1),card(7,2)],[card(4,2)]);assert(!w.games.split());
+w=hand([card(8),card(8,1)],[card(10,1),card(7,1)],[card(10,2),card(3,2)],100);w.economy.buy('hammer');w.economy.buyTicket(); // still enough for another hand
+// A player with no cash cannot split or double; the saved hand stays exactly intact.
+const poor=wallet();poor.economy.beginRound('blackjack',100,{player:[card(8),card(8,1)],dealer:[card(10,1),card(7,1)],deck:Array.from({length:52},(_,i)=>i).filter(c=>![card(8),card(8,1),card(10,1),card(7,1)].includes(c))});const before=poor.economy.info();assert(!poor.games.split());assert(!poor.games.double());assert.deepEqual(poor.economy.info(),before);
+// Crash after the atomic double debit, before advancing the active hand, resumes correctly.
+w=hand([card(8),card(8,1)],[card(10,1),card(7,1)],[card(3,2),card(4,2),card(2,2)]);w.games.split();r=w.economy.info().casinoRound;r.hands[0].cards.push(r.deck.pop());r.hands[0].done=true;r.hands[0].doubled=true;r.hands[0].bet*=2;r.bet+=10;assert(w.economy.commitRound(r,10));restored=createShopEconomy(w.store);resumed=createCasinoGames(restored);assert.equal(restored.info().casinoRound.active,1);assert.equal(restored.info().cash,70);resumed.stand();assert.equal(restored.info().casinoRound,null);
+// Mixed roulette bets all settle against the same outcome, once, with transparent net cash.
+w=wallet(500);w.games=createCasinoGames(w.economy,()=>1/37+.00001);const bets=[{choice:1,amount:10},{choice:'red',amount:20},{choice:'col1',amount:10},{choice:'first',amount:10}];assert(w.games.play('roulette',10,bets));assert.equal(w.economy.info().casinoResult.payout,460);assert.equal(w.economy.info().cash,910);assert.equal(w.economy.info().casinoStats.wagered,50);assert.equal(w.economy.info().casinoStats.best,410);assert(!w.economy.settleRound(w.economy.info().casinoResult.id,460,{}));assert(!w.games.play('roulette',10,[{choice:99,amount:10}]));assert(!w.games.play('roulette',10,[{choice:'red',amount:1010}]));assert.equal(roulettePayout(0,'col1',10),0);
+// Every payline pays independently; legacy spins keep their old payout on migration.
+const all=slotOutcome(Array(9).fill(4),10);assert.equal(all.payout,500);assert.equal(all.wins.length,5);assert.equal(slotOutcome([4,4,4],10).payout,500);assert.equal(slotOutcome([0,0,1,2,1,3,3,4,1],10).wins[0].amount,2);
+// Long sessions bound history, and saved player statistics cannot be mutated by a UI snapshot.
+w=wallet(100000);for(let i=0;i<100;i++)assert(w.games.play('slots',10));assert.equal(w.economy.info().casinoHistory.length,12);assert.equal(w.economy.info().casinoStats.rounds,100);const snapshot=w.economy.info();snapshot.casinoStats.played.slots=0;snapshot.casinoHistory[0].payout=123456;assert.equal(w.economy.info().casinoStats.played.slots,100);restored=createShopEconomy(w.store);assert.deepEqual(restored.info(),w.economy.info());
+console.log('Casino rules passed: double, split, aces, both-hand settlement, reload/interrupted debit, insufficient cash, multi-bet roulette, independent paylines, bounded history and immutable saved stats.');
