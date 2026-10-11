@@ -1,7 +1,7 @@
 // A rolling transform recorder: playback uses the actual simulated crash, not a second explosion.
 export function createCrashDirector({T,scene,camera,parts,obstacles,extras,onComplete}){
  const nodes=[...parts,...obstacles.map(o=>o.mesh)],frames=[];
- const pos=new T.Vector3(),quat=new T.Quaternion(),qa=new T.Quaternion(),qb=new T.Quaternion();
+ const pos=new T.Vector3(),quat=new T.Quaternion(),qa=new T.Quaternion(),qb=new T.Quaternion(),parentQuat=new T.Quaternion();
  let impact=null,capturing=false,lastRecord=-Infinity,playing=false,shot=0,cursor=0,shots=[],elapsed=0,totalDuration=1,oldFov=54;
  const effects=new T.Group();scene.add(effects);effects.visible=false;
  const fireGeo=new T.IcosahedronGeometry(1,1),smokeGeo=new T.IcosahedronGeometry(1,0),puffs=[];
@@ -17,7 +17,26 @@ export function createCrashDirector({T,scene,camera,parts,obstacles,extras,onCom
  function record(t,force=false){if(playing||(!force&&t-lastRecord<1/30))return;lastRecord=t;scene.updateMatrixWorld(true);const values=new Float32Array(nodes.length*8);nodes.forEach((n,i)=>{n.getWorldPosition(pos);n.getWorldQuaternion(quat);const k=i*8;values.set([pos.x,pos.y,pos.z,quat.x,quat.y,quat.z,quat.w,n.visible?1:0],k)});frames.push({t,values,extra:extras?.snapshot()});if(!capturing)while(frames.length>1&&frames[0].t<t-1.5)frames.shift();while(frames.length>210)frames.shift();}
  function mark(info,t){impact={...info,t,point:info.point.clone(),forward:info.forward.clone()};capturing=true;record(t,true);}
  function apply(t){if(!frames.length)return;let lo=0,hi=frames.length-1;while(lo+1<hi){let mid=(lo+hi)>>1;if(frames[mid].t<t)lo=mid;else hi=mid;}const a=frames[lo],b=frames[hi],u=Math.max(0,Math.min(1,(t-a.t)/Math.max(.00001,b.t-a.t)));
-  nodes.forEach((n,i)=>{const k=i*8;n.position.set(a.values[k]+(b.values[k]-a.values[k])*u,a.values[k+1]+(b.values[k+1]-a.values[k+1])*u,a.values[k+2]+(b.values[k+2]-a.values[k+2])*u);qa.fromArray(a.values,k+3);qb.fromArray(b.values,k+3);n.quaternion.copy(qa).slerp(qb,u);n.visible=(u<.5?a:b).values[k+7]>.5;});extras?.apply(a.extra,b.extra,u);renderEffects(t-impact.t);}
+  scene.updateMatrixWorld(true);
+  nodes.forEach((n,i)=>{
+   const k=i*8;
+   n.position.set(
+    a.values[k]+(b.values[k]-a.values[k])*u,
+    a.values[k+1]+(b.values[k+1]-a.values[k+1])*u,
+    a.values[k+2]+(b.values[k+2]-a.values[k+2])*u
+   );
+   qa.fromArray(a.values,k+3);qb.fromArray(b.values,k+3);
+   n.quaternion.copy(qa).slerp(qb,u);
+   // Captured transforms are world-space. Convert when a panel is still
+   // attached to the car, or an obstacle belongs to a transformed group.
+   if(n.parent){
+    n.parent.updateWorldMatrix(true,false);
+    n.parent.worldToLocal(n.position);
+    n.parent.getWorldQuaternion(parentQuat);
+    n.quaternion.premultiply(parentQuat.invert());
+   }
+   n.visible=(u<.5?a:b).values[k+7]>.5;
+  });extras?.apply(a.extra,b.extra,u);renderEffects(t-impact.t);}
  const center=new T.Vector3(),right=new T.Vector3(),offset=new T.Vector3();
  function aim(angle,progress=0){center.set(0,0,0);parts.forEach(p=>center.add(p.position));center.multiplyScalar(1/parts.length);center.y=Math.max(.8,center.y);let spread=0;for(const p of parts)spread=Math.max(spread,p.position.distanceTo(center));const distance=Math.max(11,8+Math.min(spread,30)*.85)*(camera.aspect<1?1.65:1.05);right.set(-impact.forward.z,0,impact.forward.x).normalize();
   if(angle===0){offset.copy(right).multiplyScalar(distance).addScaledVector(impact.forward,distance*.2);offset.y=4.4+spread*.12;}else{offset.copy(right).multiplyScalar(-distance*.7).addScaledVector(impact.forward,-distance*.6);offset.applyAxisAngle(new T.Vector3(0,1,0),progress*.35);offset.y=distance*.7;}
