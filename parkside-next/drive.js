@@ -33,8 +33,8 @@ import {buildRoadster} from './roadster-model.js?v=mango-3';
 import {VEHICLES} from './garage-models.js?v=street-33';
 import {createCrashDirector} from './crash-replay.js?v=fps-1';
 import {createDestructibleEnvironment} from './destructible-environment.js?v=fps-1';
-import {createDestructibleTerrain} from './destructible-terrain.js?v=clarity-14';
-import {LOTS,ORIGINAL_LOT_COUNT,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=fleet-3';
+import {createDestructibleTerrain} from './destructible-terrain.js?v=marine-2';
+import {LOTS,ORIGINAL_LOT_COUNT,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=marine-2';
 const T=window.THREE,$=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 installTouchGuard();
 try{boot()}catch(e){console.error(e);$('fatal').hidden=false;$('errorText').textContent=e.message;}

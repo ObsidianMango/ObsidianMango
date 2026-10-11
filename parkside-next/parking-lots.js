@@ -1,6 +1,6 @@
 import {addBuildingContents} from './building-contents.js?v=street-26';
 import {createSceneryDetail} from './scenery-detail.js?v=street-22';
-import {buildMarinePark} from './real-marine-park.js?v=marine-1';
+import {buildMarinePark} from './real-marine-park.js?v=marine-2';
 const BASE_LOTS=[
  {name:'Market Square',kind:'Head-in',hint:'Drive around the island and park in A3.',code:'A3',theme:0xb6bca3,spawn:[-13,17,0],target:{x:4,z:-15,yaw:0,w:3.8,d:6.6},par:45,style:'market'},
  {name:'Sunset Diner',kind:'Angled bay',hint:'Follow the diagonal row. Stop inside D4.',code:'D4',theme:0xc7ab88,spawn:[-15,17,0],target:{x:7,z:-10,yaw:-Math.PI/4,w:3.7,d:6.6},par:55,style:'diner'},
