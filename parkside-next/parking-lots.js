@@ -1,6 +1,6 @@
 import {addBuildingContents} from './building-contents.js?v=street-26';
 import {createSceneryDetail} from './scenery-detail.js?v=street-22';
-import {buildMarinePark} from './real-marine-park.js?v=marine-2';
+import {buildMarinePark} from './real-marine-park.js?v=marine-3';
 const BASE_LOTS=[
  {name:'Market Square',kind:'Head-in',hint:'Drive around the island and park in A3.',code:'A3',theme:0xb6bca3,spawn:[-13,17,0],target:{x:4,z:-15,yaw:0,w:3.8,d:6.6},par:45,style:'market'},
  {name:'Sunset Diner',kind:'Angled bay',hint:'Follow the diagonal row. Stop inside D4.',code:'D4',theme:0xc7ab88,spawn:[-15,17,0],target:{x:7,z:-10,yaw:-Math.PI/4,w:3.7,d:6.6},par:55,style:'diner'},
@@ -85,7 +85,7 @@ export function buildLots({T,C,scene,world,groundMat}){
  text(level.name.toUpperCase(),0,3.7,-25,13);box(17,1.3,.2,0,3.7,-25,0x244339);box(.18,4,.18,-6,2,-25,0x626b60);box(.18,4,.18,6,2,-25,0x626b60);
  }
  const colors=[0x9b6359,0x698a97,0xcbc7b0,0x676977,0xa69667];
- if(level.realWorld)buildMarinePark({T,group:g,ox,piece,bay,parked,text,mini,mat});
+ if(level.realWorld)buildMarinePark({T,group:g,ox,piece,bay,parked,text,mini,mat,breakables});
  if(level.style==='market'){box(29,5,8,3,2.5,-34,0xc3c3ab);text('MARKET',3,3,-29.9,8);for(let x of [-12,-8,-4,0,4,8,12,16]){bay(x,-15);if(x!==4)parked(x,-15,0,colors[(x+12)/4%5]);}island(-1,2,12,3);cone(-8,6);cone(7,6);}
  if(level.style==='diner'){box(19,4,9,0,2,-32,0xbf7866);text('SUNSET DINER',0,2.8,-27.4,11);for(let x of [-12,-6,0,7,13]){bay(x,-10,-Math.PI/4);if(x!==7)parked(x,-10,-Math.PI/4,colors[Math.abs(x)%5]);}island(1,8,12,2.5);box(8,.5,1,-12,.25,-19,0xbdc4b2,0,true);}
  if(level.style==='office'){box(25,12,9,2,6,-32,0x829c9b);for(let x of [-14,-10,-6,-2,2,6,10,14,18]){bay(x,-15);parked(x,-15,0,colors[Math.abs(x)%5]);}for(let x of [-7,-3,1,5,9,13,17]){bay(x,14);if(x!==5)parked(x,14,Math.PI,colors[Math.abs(x)%5]);}island(-4,-1,13,2.6);}
@@ -160,7 +160,7 @@ export function buildLots({T,C,scene,world,groundMat}){
  // Beacon stays low enough to avoid blocking orbit cameras.
  const beacon=text('P · '+level.code,t.x/2,2.8,t.z/2,2.8);beacon.userData.guide=true;beacon.material.depthTest=false;beacon.renderOrder=2;
  // Precision gates create a staged route; paint cannot be bypassed by blowing up posts.
- const gates=level.gates.map((gate,i)=>{const width=level.gateWidth,group=new T.Group();group.position.set(ox+gate.x,.06,gate.z);group.rotation.y=gate.yaw;group.userData.guide=true;g.add(group);
+ const gates=level.gates.map((gate,i)=>{const width=level.gateWidth,group=new T.Group();group.position.set(ox+gate.x,level.realWorld?.15:.06,gate.z);group.rotation.y=gate.yaw;group.userData.guide=true;g.add(group);
   const line=new T.Mesh(boxGeo,new T.MeshBasicMaterial({color:0xffcf72,transparent:true,opacity:.9,side:T.DoubleSide}));line.scale.set(width,.035,.35);group.add(line);
   const arrowShape=new T.Shape();arrowShape.moveTo(0,-1.5);arrowShape.lineTo(-.65,-.5);arrowShape.lineTo(-.2,-.5);arrowShape.lineTo(-.2,1);arrowShape.lineTo(.2,1);arrowShape.lineTo(.2,-.5);arrowShape.lineTo(.65,-.5);arrowShape.closePath();const arrow=new T.Mesh(new T.ShapeGeometry(arrowShape),line.material);arrow.rotation.x=Math.PI/2;arrow.rotation.z=gate.reverse?Math.PI:0;arrow.position.set(0,.04,gate.reverse?-2.2:2.2);group.add(arrow);
   const label=text(String(i+1)+(gate.reverse?' · R':''),gate.x/2,3.2,gate.z/2,2.2);label.userData.guide=true;label.material.depthTest=false;label.material.depthWrite=false;label.renderOrder=4;

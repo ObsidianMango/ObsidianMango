@@ -12,7 +12,7 @@ import {createDemolitionContracts} from './demolition-contracts.js?v=street-27';
 import {createBikeDynamics} from './bike-dynamics.js?v=street-22';
 import {createWorldBoundary} from './world-boundary.js?v=street-20';
 import {createStreetLife} from './street-life.js?v=fps-1';
-import {createDestructionLoop} from './destruction-loop.js?v=street-17';
+import {createDestructionLoop} from './destruction-loop.js?v=marine-3';
 import {createSky} from './scenery-detail.js?v=street-22';
 import {createXboxControls} from './xbox-controls.js?v=street-24';
 import {buildGoldenVehicle} from './golden-fleet.js?v=street-27';
@@ -25,16 +25,16 @@ import {createRunScoring} from './run-scoring.js?v=endless-15';
 import {createVanFailures} from './van-failures.js?v=game-5';
 import {sizeChallengeVehicle} from './vehicle-sizing.js?v=mango-4';
 import {createHitFeedback} from './hit-feedback.js?v=clarity-14';
-import {createParkedTraffic} from './parked-traffic.js?v=fps-1';
+import {createParkedTraffic} from './parked-traffic.js?v=marine-3';
 import {createPedestrians} from './pedestrians.js?v=fps-1';
 import * as C from './cannon-es.js';
 import {installTouchGuard} from './touch-guard.js?v=duel-2';
 import {buildRoadster} from './roadster-model.js?v=mango-3';
 import {VEHICLES} from './garage-models.js?v=street-33';
 import {createCrashDirector} from './crash-replay.js?v=fps-1';
-import {createDestructibleEnvironment} from './destructible-environment.js?v=fps-1';
+import {createDestructibleEnvironment} from './destructible-environment.js?v=marine-3';
 import {createDestructibleTerrain} from './destructible-terrain.js?v=marine-2';
-import {LOTS,ORIGINAL_LOT_COUNT,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=marine-2';
+import {LOTS,ORIGINAL_LOT_COUNT,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=marine-3';
 const T=window.THREE,$=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 installTouchGuard();
 try{boot()}catch(e){console.error(e);$('fatal').hidden=false;$('errorText').textContent=e.message;}
@@ -56,7 +56,7 @@ function boxBody(w,h,d,mass,x,y,z,quaternion=null){const b=new C.Body({mass,mate
 scene.add(camera);const boundary=createWorldBoundary({T,C,world,groundMat});
 const lots=buildLots({T,C,scene,world,groundMat}),obstacles=lots.obstacles,loose=[],sparks=[],sparkPool=[],sparkMaterials=[new T.MeshBasicMaterial({color:0xffba56}),new T.MeshBasicMaterial({color:0xfff4c5})];
 const barrelEffects=createBarrelEffects(T,scene);let trafficLOD=null;let cityShells=null;let contracts=null;let secretView=null,objective=null,destructionLoop=null,objectiveClock=0,secretClear=null;try{secretClear=JSON.parse(localStorage.getItem('parkside-streets-secret-clear-v1')||'null');}catch{}
-const environment=createDestructibleEnvironment({T,C,world,lots,onContact:(entry,body,speed,impactBody)=>contracts?.contact(entry,body,speed,impactBody),onExplode:(point,strength)=>{barrelEffects.show(point);traffic.blast(point,strength);crowd.blast(point,strength);burst(point,18);crashSound(32);}}),terrain=createDestructibleTerrain({T,C,scene,world,ground});
+const environment=createDestructibleEnvironment({T,C,world,lots,onContact:(entry,body,speed,impactBody)=>contracts?.contact(entry,body,speed,impactBody),onExplode:(point,strength)=>{barrelEffects.show(point);traffic.blast(point,strength);crowd.blast(point,strength);terrain.blast(point,strength);burst(point,18);crashSound(32);}}),terrain=createDestructibleTerrain({T,C,scene,world,ground});
 let gateProgress=0;let duel=null,duelUI=null,resumeAfterDuelPanel=false,duelLevel=null,duelCharacter='mango';try{duelCharacter=characterById(localStorage.getItem('parkside-duel-character-v1')).id;}catch{}
 let runScore=0;
 const scoring=createRunScoring();

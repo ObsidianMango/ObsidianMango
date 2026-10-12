@@ -6,7 +6,7 @@ export const DISTRICTS=[{name:'City',x:-120,z:-120,color:0x899b9c},{name:'Suburb
 
 // Built only after the reward unlock: normal parking lots carry no city overhead.
 export function buildSecretCity({T,C,scene,lots,groundMat,rampMat=groundMat}){
- const index=24,ox=6000,group=new T.Group(),phys=[],entries=[],targets=[],mini=[],buildings=[],materials=new Map(),box=new T.BoxGeometry(1,1,1),cylinder=new T.CylinderGeometry(.5,.5,1,16),canopy=new T.IcosahedronGeometry(1,1),facades=new Map();
+ const index=lots.views.length,ox=index*240,group=new T.Group(),phys=[],entries=[],targets=[],mini=[],buildings=[],materials=new Map(),box=new T.BoxGeometry(1,1,1),cylinder=new T.CylinderGeometry(.5,.5,1,16),canopy=new T.IcosahedronGeometry(1,1),facades=new Map();
  group.visible=false;scene.add(group);
  const material=(color)=>{if(!materials.has(color))materials.set(color,new T.MeshStandardMaterial({color,roughness:.78}));return materials.get(color);};
  const target=(name,district,kind,x,z)=>{const t={id:targets.length,name,district,kind,x,z,entries:[]};targets.push(t);return t;};
@@ -80,7 +80,7 @@ export function buildSecretCity({T,C,scene,lots,groundMat,rampMat=groundMat}){
  const marker=new T.Mesh(new T.TorusGeometry(2,.09,6,32),new T.MeshBasicMaterial({color:0xffdf76,depthTest:false}));marker.rotation.x=-Math.PI/2;marker.position.set(ox,.12,0);marker.renderOrder=4;group.add(marker);
  const beacon=new T.Mesh(new T.ConeGeometry(.7,1.4,8),marker.material);beacon.rotation.x=Math.PI;group.add(beacon);
  const routes=DISTRICTS.map((d,district)=>({district,x0:d.x<0?-210:20,x1:d.x<0?-20:210,z0:d.z<0?-210:20,z1:d.z<0?-20:210}));
- const view={group,ox,phys,mini,gates:[],marker:{fill:marker},beacon,targets,routes,buildings,rideables};lots.views.push(view);lots.breakables.push(...entries);view.detail=createSecretDetail(T,view);
+ const view={group,ox,levelIndex:index,phys,mini,gates:[],marker:{fill:marker},beacon,targets,routes,buildings,rideables};lots.views.push(view);lots.breakables.push(...entries);view.detail=createSecretDetail(T,view);
  return view;
 }
 

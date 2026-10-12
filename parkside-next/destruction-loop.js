@@ -21,7 +21,7 @@ export function createDestructionLoop({view,objective,environment,traffic,scorin
  function select(x,z){const district=order[jobs%4],types=['any','barrels','buildings','props'],type=types[(Math.floor(jobs/4)+jobs%4)%4],tier=Math.min(6,Math.floor(jobs/8));
   job={number:jobs+1,district,type,quota:type==='buildings'?2+Math.min(2,tier):type==='barrels'?4+Math.min(4,tier):type==='props'?8+tier:10+tier,done:0,started:now,bonusTime:90+tier*10};completedAt=-1;prepare(x,z);
  }
- function checkpoint(vehicle,elapsed){return scoring.checkpoint({lot:24,vehicle,elapsed});}
+ function checkpoint(vehicle,elapsed){return scoring.checkpoint({lot:view.levelIndex,vehicle,elapsed});}
  function clear(t){if(t.kind==='person')return;chain=now<=chainUntil?chain+1:1;chainUntil=now+10;total++;const points=scoring.destroy(t.kind,boost());
   onAward?.(points,chain,boost());record.chain=Math.max(record.chain,chain);
   if(!waiting&&completedAt<0&&t.district===job.district&&matches(t,job.type)){job.done++;if(job.done>=job.quota)completedAt=now;}
