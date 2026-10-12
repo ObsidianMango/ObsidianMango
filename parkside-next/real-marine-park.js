@@ -1,6 +1,6 @@
 // Procedural Red Bank Marine Park approximation from supplied visual references.
 // No Google imagery, tiles or screenshots are embedded in the game.
-export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat}){
+export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat,breakables}){
  const cube=new T.BoxGeometry(1,1,1);
  function deco(w,h,d,x,y,z,c,yaw=0){
   const m=new T.Mesh(cube,mat(c));m.position.set(ox+x,y,z);m.scale.set(w,h,d);m.rotation.y=yaw;
@@ -11,6 +11,11 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat}){
   m.position.set(ox+x,y,z);m.userData.guide=true;m.receiveShadow=true;group.add(m);return m;
  }
  function collision(w,h,d,x,y,z,c){return piece(w,h,d,x,y,z,c);}
+ function marking(w,d,x,z,c=0xf2efe3){
+  const material=new T.MeshBasicMaterial({color:c,side:T.DoubleSide,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-5});
+  const m=new T.Mesh(new T.PlaneGeometry(w,d),material);
+  m.rotation.x=-Math.PI/2;m.position.set(ox+x,.112,z);m.userData.guide=true;m.renderOrder=11;group.add(m);return m;
+ }
  function curb(w,d,x,z){collision(w,.28,d,x,.16,z,0xd0d1c9);deco(w,.04,d,x,.31,z,0xe9e8db);}
  function planter(w,d,x,z){curb(w,d,x,z);deco(w-.5,.07,d-.5,x,.37,z,0x779066);}
  function shrub(x,z,k=1){
@@ -39,12 +44,12 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat}){
   }
  }
  // Union St is south (+z), waterfront to north (-z), Oakley Lane east (+x).
- plane(44,77,0,0,0x343b3e,.037);
- plane(46,17,0,45,0x474e50,.037);
+ // Continuous pavement prevents the intersecting coplanar asphalt slabs.
+ plane(46,96,0,9,0x343b3e,.037);
  plane(115,72,-5,-87,0x4a919f,.015);
  plane(32,66,-37,-11,0x598f9b,.015);
  plane(10,88,30,0,0x575c5a,.02);
- plane(4,82,23.8,0,0xb2b4a8,.04);
+ plane(4,82,23.8,0,0xb2b4a8,.092);
  // Painted parking lot rectangle and vehicle-collidable borders.
  curb(.6,72,-22,-1);curb(.6,72,22,-1);curb(43,.6,0,-37);
  curb(26,.6,-9,38);curb(4,.6,20,38);
@@ -89,10 +94,10 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat}){
  // 32 parked cars total. Physical colliders remain destructible and pushable.
 
  // Entry crosswalk and STOP on asphalt; physical lane is left unobstructed.
- text('STOP',11.5,.061,44,7,Math.PI,true,'#40494c');
- for(let i=0;i<6;i++)deco(1.25,.024,4,6.9+i*1.65,.064,32.9,0xf3f2e8);
- deco(11.6,.025,.22,11.4,.065,29.6,0xe3e5df);
- for(let z=-25;z<=26;z+=12)deco(.12,.027,2.5,25,.07,z,0xe0e2d8);
+ text('STOP',11.5,.132,44,7,Math.PI,true,'#40494c');
+ for(let i=0;i<6;i++)marking(1.25,4,6.9+i*1.65,32.9);
+ marking(11.6,.22,11.4,29.6);
+ for(let z=-25;z<=26;z+=12)marking(.12,2.5,25,z,0xe0e2d8);
  // Historic brown marina office at northwest end, slate roof and white-framed windows.
  collision(18,9.1,12,-14,4.55,-49,0x5e4c3f);
  deco(18.4,.4,12.4,-14,9.3,-49,0x626d6d);
@@ -107,8 +112,8 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat}){
  // Docks, fence, sailboats and marina waterline.
  plane(35,4,-29,-46.3,0xb8b4a8,.06);
  for(const x of [-39,-34,-29,-24,-19])for(const z of [-59,-53])deco(.35,2.5,.35,x,1.25,z,0x555f57);
- for(let x=-37;x<20;x+=2.5)deco(.13,1.3,.13,x,.68,-57,0x313a3d);
- deco(57,.12,.12,-8,.94,-57,0x303a3d);
+ for(let x=-37;x<20;x+=2.5)collision(.13,1.3,.13,x,.68,-57,0x313a3d);
+ for(let x=-34.5;x<=17.5;x+=6.5)collision(6.5,.14,.15,x,.94,-57,0x303a3d);
  for(const [x,z]of [[-39,-22],[-37,-7],[-38,9],[-32,-46],[-29,-62]]){
   const hull=new T.Mesh(new T.SphereGeometry(1,12,8),mat(0xd7ddd8));
   hull.scale.set(2.9,.66,1.1);hull.position.set(ox+x,.7,z);hull.userData.guide=true;group.add(hull);
@@ -117,6 +122,19 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat}){
  // Black twin-arm lamps, landscaped waterfront, fall-colored trees on Oakley Lane.
  for(const [x,z,col]of [[33,-30,0x64845b],[35,-10,0xb08853],[35,9,0xa56b49],[33,26,0x9c624d]])tree(x,z,col,7);
  for(const [x,z]of [[-20,-22],[21,-16],[21,22],[-20,30]])lamp(x,z);
+ // Impact-sensitive and weapon-detonated barrels with knock-on explosions.
+ for(const [x,z]of [[-20,-28],[20,-28],[-20,26],[20,26],[0,-23.5],[0,23.5]]){
+  const barrel=collision(1.05,1.35,1.05,x,.70,z,0xb7452c);
+  const e=breakables.at(-1);e.explosive=true;e.body.userData.kind='explosive barrel';
+  for(const y of [-.31,.31]){
+   const band=new T.Mesh(new T.CylinderGeometry(.49,.49,.10,12),mat(0x2c3131));
+   band.position.set(0,y,0);barrel.add(band);
+  }
+  const cap=new T.Mesh(new T.CylinderGeometry(.44,.44,.11,12),mat(0x394042));
+  cap.position.y=.48;barrel.add(cap);
+  const fuse=new T.Mesh(new T.SphereGeometry(.23,8,6),new T.MeshStandardMaterial({color:0xffc35e,emissive:0xff6600,emissiveIntensity:2}));
+  fuse.position.y=.57;fuse.visible=false;barrel.add(fuse);e.fuseMesh=fuse;
+ }
  // Background opposite-shore architecture, original simple procedural silhouettes.
  for(let i=0;i<9;i++){
   const x=-49+i*10,z=-117+(i%3)*4,h=3+(i%3)*1.4;
