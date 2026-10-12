@@ -64,13 +64,15 @@ export function createPedestrians({T,C,scene,world,chassis,groundMat,onHit,onThr
   if(!p.throwTime||p.held||!p.bodies||p.throwHit||!p.lastFlight)return 0;
   const a=p.lastFlight,b=p.bodies[0].position,vx=b.x-a.x,vy=b.y-a.y,vz=b.z-a.z;
   const len2=vx*vx+vy*vy+vz*vz;
-  if(len2<.01||p.bodies[0].velocity.length()<4)return 0;
+  if(len2<1e-8||p.bodies[0].velocity.length()<4)return 0;
   let hitCount=0;
-  const closest=[];
+  const closest=[],wallHit=new C.RaycastResult();
+  const wall=world.raycastClosest(a,b,{collisionFilterMask:1|8,skipBackfaces:true},wallHit)?Math.max(0,wallHit.distance/Math.sqrt(len2)):1;
   for(const person of people){
    if(person===p||person.down||person.held||!person.sensor||p.bowlingVictims?.has(person.i))continue;
    const center=person.pose[0].p,dx=center.x-a.x,dy=center.y-a.y,dz=center.z-a.z;
    const t=Math.max(0,Math.min(1,(dx*vx+dy*vy+dz*vz)/len2));
+   if(t>wall)continue;
    const x=a.x+t*vx,y=a.y+t*vy,z=a.z+t*vz;
    if((center.x-x)**2+(center.y-y)**2+(center.z-z)**2<(.88*person.scale)**2)closest.push({person,t,x,y,z});
   }
@@ -81,7 +83,7 @@ export function createPedestrians({T,C,scene,world,chassis,groundMat,onHit,onThr
    const sensor=other.sensor,velocity=p.bodies[0].velocity.clone();
    const force=Math.max(7,Math.min(20,velocity.length()*.6));
    p.bowlingVictims.add(other.i);
-   knockDown(other,velocity);
+   p.impacting=true;try{knockDown(other,velocity);}finally{p.impacting=false;}
    onThrownImpact(sensor,new T.Vector3(hit.x,hit.y,hit.z),force,velocity);
    hitCount++;
   }

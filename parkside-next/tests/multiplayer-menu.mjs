@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {Peer} from './room-peer.mjs';
+import {bootGame} from './helpers/game.mjs';
+import {createMultiplayer} from '../multiplayer.js';
+import {SECRET_LEVEL_INDEX} from '../level-catalog.js';
+globalThis.Peer=Peer;globalThis.RTCPeerConnection=class{};
+const {app,get,T}=await bootGame({progress:[]}),t=app.test;
+t.duelUI.show();assert(!get('duelRoomHost').disabled);assert.equal(get('duelLeave').closest('details'),null,'cancel is outside the collapsed backup section');
+get('duelRoomInput').value='wrong';await get('duelRoomJoin').onclick();assert.match(get('duelStatus').textContent,/Invalid room code/);assert(!get('duelRoomJoin').disabled);
+const remote=createMultiplayer({T,scene:new T.Scene(),camera:new T.PerspectiveCamera(),profile:()=>({guns:[],level:SECRET_LEVEL_INDEX,character:'mechanic'}),sample:()=>({p:[0,0,190],mode:'foot',yaw:0,active:true,safe:false,weapon:'web'}),onStart(){},onRespawn(){}});
+const code=await remote.hostRoom();get('duelRoomInput').value=code;await get('duelRoomJoin').onclick();await new Promise(r=>setTimeout(r,0));assert(t.duel.info().ready&&remote.info().ready);assert.equal(app.getState().level,SECRET_LEVEL_INDEX);assert(get('duelPanel').hidden,'mobile Join closes the dialog and starts the negotiated city');
+t.duelUI.show();assert(!get('duelLeave').hidden);get('duelLeave').click();assert(!t.duel.info().ready);assert(!get('duelRoomJoin').disabled);assert(get('duelLeave').hidden);
+await get('duelRoomHost').onclick();assert(!get('duelRoomDisplay').hidden);assert(!get('duelLeave').hidden);get('duelLeave').click();assert(get('duelRoomDisplay').hidden);assert.equal(t.duel.info().role,'');remote.leave();delete globalThis.Peer;delete globalThis.RTCPeerConnection;
+console.log('Menu join starts Secret City on a fresh profile; invalid codes recover; visible Leave/Cancel works without opening backup controls; host code and buttons reset.');
