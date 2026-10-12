@@ -1,8 +1,8 @@
 // Host-authoritative combat. No real-world money, save edits, or client-supplied damage.
 export const GUNS={pistol:{damage:25,range:72,rate:.3},machine:{damage:9,range:90,rate:.09},grenade:{damage:65,range:60,rate:.85}};
-export const COMBAT={...GUNS,web:{damage:0,range:45,rate:.32}};
+export const COMBAT={...GUNS,hammer:{damage:35,range:3,rate:.55},web:{damage:0,range:45,rate:.32}};
 export const eligible=p=>!!p&&Array.isArray(p.guns);
-export const validLevel=n=>Number.isInteger(n)&&n>=0&&n<=24;
+export {validLevel} from './level-catalog.js?v=multiplayer-4';
 export const vec=v=>Array.isArray(v)&&v.length===3&&v.every(n=>Number.isFinite(n)&&Math.abs(n)<600);
 export function cleanPose(p){if(!p||!Number.isSafeInteger(p.seq)||p.seq<0||!vec(p.p)||p.p[1]<-5||p.p[1]>100||Math.abs(p.p[0])>260||Math.abs(p.p[2])>260||!Number.isFinite(p.yaw)||!['foot','vehicle'].includes(p.mode))return null;return {seq:p.seq,p:[...p.p],yaw:p.yaw%(Math.PI*2),mode:p.mode,active:p.active===true,safe:p.safe===true,weapon:Object.hasOwn(COMBAT,p.weapon)?p.weapon:null,vehicleId:typeof p.vehicleId==='string'&&/^[a-z0-9-]{1,32}$/.test(p.vehicleId)?p.vehicleId:'roadster',q:Array.isArray(p.q)&&p.q.length===4&&p.q.every(v=>Number.isFinite(v)&&Math.abs(v)<=1.01)?[...p.q]:null,wheels:Array.isArray(p.wheels)&&p.wheels.length<=4?p.wheels.map(w=>Array.isArray(w)&&w.length===7&&w.every(n=>Number.isFinite(n)&&Math.abs(n)<100)?[...w]:null):[],wreck:p.wreck===true,size:vec(p.size)&&p.size[0]>=.8&&p.size[0]<=2.6&&p.size[1]>=.8&&p.size[1]<=3&&p.size[2]>=1.2&&p.size[2]<=4?[...p.size]:[1.6,1.2,2.6]};}
 export function raySphere(from,dir,center,radius,max){const o=from.map((v,i)=>v-center[i]),b=o.reduce((v,n,i)=>v+n*dir[i],0),c=o.reduce((v,n)=>v+n*n,0)-radius*radius,h=b*b-c;if(h<0)return null;const t=-b-Math.sqrt(h),exit=-b+Math.sqrt(h);return exit<0||t>max?null:Math.max(0,t);}
@@ -10,7 +10,7 @@ export function rayVehicle(from,dir,pose,max){const c=Math.cos(pose.yaw),s=Math.
 const distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
 export function createDuelRules({now=()=>performance.now()/1000,blocked=()=>Infinity,onEffect=()=>{}}={}){
  const players=[0,1].map(()=>({hp:100,score:0,deaths:0,life:0,shield:now()+3,respawn:0,slowUntil:0,pose:null,seen:0,guns:[],shotSeq:-1,lastShot:-Infinity}));let shells=[];
- function setGuns(i,guns){players[i].guns=[...guns.filter(w=>Object.hasOwn(GUNS,w)).slice(0,3),'web'];}
+ function setGuns(i,guns){players[i].guns=[...guns.filter(w=>Object.hasOwn(COMBAT,w)&&w!=='web').slice(0,4),'web'];}
  function pose(i,p){const v=cleanPose(p),a=players[i];if(!v||v.seq<=(a.pose?.seq??-1))return false;a.pose=v;a.seen=now();return true;}
  const vulnerable=a=>a.hp>0&&a.pose?.active&&!a.pose.safe&&now()-a.seen<1.5&&a.shield<=now();
  function hurt(target,source,damage){const a=players[target];if(!vulnerable(a))return false;a.hp=Math.max(0,a.hp-damage);if(!a.hp){a.slowUntil=0;a.deaths++;a.respawn=now()+5;if(source!==target)players[source].score++;}return true;}
@@ -22,7 +22,24 @@ export function createDuelRules({now=()=>performance.now()/1000,blocked=()=>Infi
   if(hit!==null){if(s.weapon==='web')b.slowUntil=Math.max(b.slowUntil,t+4);else hurt(1-i,i,w.damage);}onEffect({kind:s.weapon==='web'?'web':'shot',target:1-i,from:[...s.from],to:s.from.map((v,j)=>v+dir[j]*(hit??max)),hit:hit!==null});return true;
  }
  function tick(dt){dt=Math.min(.1,Math.max(0,dt));for(const a of players)if(a.hp===0&&a.respawn<=now()){a.hp=100;a.life++;a.shield=now()+3;a.respawn=0;a.slowUntil=0;a.pose=null;a.lastShot=-Infinity;}
-  for(let n=shells.length-1;n>=0;n--){const s=shells[n];s.life-=dt;s.v[1]-=9.82*dt;const length=Math.hypot(...s.v)*dt,dir=s.v.map(v=>v/(Math.hypot(...s.v)||1)),wall=blocked(s.p,dir,length),travel=Math.min(length,Math.max(0,wall));s.p=s.p.map((v,i)=>v+dir[i]*travel);if(s.life<=0||wall<length){onEffect({kind:'blast',p:s.p});for(let i=0;i<2;i++){const a=players[i];if(!a.pose)continue;const d=distance(s.p,[a.pose.p[0],a.pose.p[1]+.8,a.pose.p[2]]);if(d<7&&blocked(s.p,a.pose.p.map((v,j)=>(v+(j===1?.8:0)-s.p[j])/(d||1)),d)>=d-.4)hurt(i,s.source,Math.round(65*(1-d/9)));}shells.splice(n,1);}}
+  for(let n=shells.length-1;n>=0;n--){
+   const s=shells[n];s.life-=dt;s.v[1]-=9.82*dt;
+   const speed=Math.hypot(...s.v),length=speed*dt,dir=s.v.map(v=>v/(speed||1)),wall=blocked(s.p,dir,length);
+   let contact=Math.min(length,Math.max(0,wall)),hitPlayer=false;
+   const rival=players[1-s.source];
+   if(vulnerable(rival)){const pose=rival.pose,hit=pose.mode==='vehicle'?rayVehicle(s.p,dir,pose,contact):raySphere(s.p,dir,[pose.p[0],pose.p[1]+.95,pose.p[2]],.55,contact);if(hit!==null){contact=hit;hitPlayer=true;}}
+   s.p=s.p.map((v,i)=>v+dir[i]*contact);
+   if(s.life<=0||wall<length||hitPlayer){
+    onEffect({kind:'blast',p:s.p});
+    for(let i=0;i<2;i++){
+     const a=players[i];if(!a.pose)continue;
+     const center=[a.pose.p[0],a.pose.p[1]+(a.pose.mode==='vehicle'?a.pose.size[1]:.95),a.pose.p[2]],d=distance(s.p,center),toward=center.map((v,j)=>(v-s.p[j])/(d||1));
+     const surface=a.pose.mode==='vehicle'?rayVehicle(s.p,toward,a.pose,d):raySphere(s.p,toward,center,.55,d);
+     if(d<7&&surface!==null&&blocked(s.p,toward,d)>=surface-.4)hurt(i,s.source,Math.round(65*(1-d/9)));
+    }
+    shells.splice(n,1);
+   }
+  }
  }
  function snapshot(){return players.map(a=>({hp:a.hp,score:a.score,deaths:a.deaths,life:a.life,respawn:Math.max(0,a.respawn-now()),shield:Math.max(0,a.shield-now()),slow:Math.max(0,a.slowUntil-now())}));}
  return {players,setGuns,pose,shot,tick,snapshot,getInfo:()=>({shells:shells.length,players:snapshot()})};

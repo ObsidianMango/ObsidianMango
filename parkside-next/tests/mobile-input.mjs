@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {bootGame} from './helpers/game.mjs';
 const {app,window,document,get,frame}=await bootGame(),t=app.test,life=t.streetLife;
 globalThis.Element=window.Element;
-t.loadLevel(24);app.start();t.setState('running');t.teleport(0,190);assert(life.exitVehicle());life.refreshDoors();const mart=t.secretView.buildings.find(b=>b.type==='convenience');life.body.position.set(mart.door.x+mart.door.nx*.6,1.05,mart.door.z+mart.door.nz*.6);assert(life.enterBuilding(mart));assert(life.openShop());assert(document.body.classList.contains('menu-open'));
+t.loadLevel(25);app.start();t.setState('running');t.teleport(0,190);assert(life.exitVehicle());life.refreshDoors();const mart=t.secretView.buildings.find(b=>b.type==='convenience');life.body.position.set(mart.door.x+mart.door.nx*.6,1.05,mart.door.z+mart.door.nz*.6);assert(life.enterBuilding(mart));assert(life.openShop());assert(document.body.classList.contains('menu-open'));
 function touch(target,type,x=12,y=12){const e=new window.Event(type,{bubbles:true,cancelable:true});Object.assign(e,{touches:type==='touchend'?[]:[{clientX:x,clientY:y}],changedTouches:[{clientX:x,clientY:y}]});target.dispatchEvent(e);return e;}
 for(const id of ['shopContent','scratchGame-numbers','shopClose']){touch(get(id),'touchstart');assert(!touch(get(id),'touchmove',12,70).defaultPrevented,id+' must permit scrolling');touch(get(id),'touchend');}
 let clicks=0;get('scratchGame-numbers').addEventListener('click',()=>clicks++);for(let i=0;i<3;i++){touch(get('scratchGame-numbers'),'touchstart');assert(!touch(get('scratchGame-numbers'),'touchend').defaultPrevented);}assert.equal(clicks,0,'touch guard must not synthesize duplicate menu clicks');

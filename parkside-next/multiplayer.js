@@ -1,15 +1,16 @@
+import {LEVEL_SIGNATURE} from './level-catalog.js?v=multiplayer-4';
 import {characterById} from './characters.js?v=duel-2';
-import {createLocalPeer,PROTOCOL} from './local-peer.js?v=duel-2';
-import {createRoomPeer} from './room-peer.js?v=online-1';
+import {createLocalPeer,PROTOCOL} from './local-peer.js?v=multiplayer-4';
+import {createRoomPeer} from './room-peer.js?v=multiplayer-4';
 import {createRivalVisual} from './multiplayer-visuals.js?v=tires-2';
-import {eligible,cleanPose,vec,createDuelRules,GUNS,COMBAT,validLevel} from './duel-rules.js?v=fleet-3';
+import {eligible,cleanPose,vec,createDuelRules,COMBAT,validLevel,raySphere,rayVehicle} from './duel-rules.js?v=multiplayer-4';
 export function createMultiplayer({T,scene,camera,profile,sample,onStart,onRespawn,onNotice=()=>{},onCombatEffect=()=>{},makeVehicle=()=>null,blocked=()=>Infinity,worldX=()=>0,RTC,now=()=>performance.now()/1000}){
  let ready=false,remoteProfile=null,matchLevel=0,sessionProfile=null,remotePose=null,lastRemote=0,seq=0,shotSeq=0,beat=0,healthSeq=0,remoteHealthSeq=-1,role='',rules=null,localLife=0,health=[fresh(),fresh()],status='Not connected',healthSignature='',remoteRoot=null,visual=null,traceMesh=null,traces=[],wreckSeq=0,lastWreckSeq=-1;
  const subscribers=new Set(),geometries=[],materials=[];
  function fresh(){return {hp:100,score:0,deaths:0,life:0,respawn:0,shield:3,slow:0};}
  function change(s){status=s;for(const fn of subscribers)fn(info());}
  const index=()=>role==='host'?0:1;
- function info(){const i=index();return {ready,level:matchLevel,character:sessionProfile?.character||profile().character||'mango',opponentCharacter:remoteProfile?.character||'mango',role:role||peer.getInfo().role,status,health:health[i],opponent:health[1-i],pose:remotePose,eligible:eligible(profile()),supported:peer.getInfo().supported,connected:peer.getInfo().open,resources:{players:remoteRoot?1:0,vehicleParts:visual?.partCount||0,debris:visual?.debrisCount||0,geometries:geometries.length,materials:materials.length,traces:traces.length,physicsBodies:0}};}
+ function info(){const i=index();return {ready,transport:peer===onlinePeer?'room':'manual',level:matchLevel,character:sessionProfile?.character||profile().character||'mango',opponentCharacter:remoteProfile?.character||'mango',role:role||peer.getInfo().role,status,health:health[i],opponent:health[1-i],pose:remotePose,eligible:eligible(profile()),supported:peer.getInfo().supported,connected:peer.getInfo().open,resources:{players:remoteRoot?1:0,vehicleParts:visual?.partCount||0,debris:visual?.debrisCount||0,geometries:geometries.length,materials:materials.length,traces:traces.length,physicsBodies:0}};}
  function canAct(){return !ready||health[index()].hp>0;}
  function movementScale(){return ready&&health[index()].slow>0?.27:1;}
  function material(color){const m=new T.MeshStandardMaterial({color,roughness:.8});materials.push(m);return m;}
@@ -39,11 +40,12 @@ export function createMultiplayer({T,scene,camera,profile,sample,onStart,onRespa
  function welcome(){if(role!=='host'||!remoteProfile||ready||!peer.getInfo().open)return;rules=createDuelRules({now,blocked,onEffect:e=>effect(e,true)});rules.setGuns(0,sessionProfile.guns);rules.setGuns(1,remoteProfile.guns);if(peer.send({t:'welcome',v:PROTOCOL,profile:sessionProfile,level:matchLevel}))begin();}
  function packet(p){role=role||peer.getInfo().role;lastRemote=now();
   if(p.t==='bye'){peer.close('Other player left');return;}
-  if(p.t==='hello'){if(ready)return;if(p.v!==PROTOCOL||!eligible(p.profile)||!validLevel(p.profile.level)){peer.close('This player has an incompatible game version.');return;}remoteProfile={level:p.profile.level,character:characterById(p.profile.character).id,guns:p.profile.guns.filter(w=>Object.hasOwn(GUNS,w)).slice(0,3)};
+  if(p.t==='hello'){if(ready)return;if(p.v!==PROTOCOL||p.profile?.catalog!==LEVEL_SIGNATURE||!eligible(p.profile)||!validLevel(p.profile.level)){peer.close('Different level catalog or game version. Both players must open the latest Parkside Next link.');return;}remoteProfile={level:p.profile.level,character:characterById(p.profile.character).id,guns:p.profile.guns.filter(w=>Object.hasOwn(COMBAT,w)&&w!=='web').slice(0,4)};
    welcome();return;}
-  if(p.t==='welcome'&&role==='guest'&&!ready&&p.v===PROTOCOL&&eligible(p.profile)&&validLevel(p.level)){remoteProfile=p.profile;matchLevel=p.level;begin();return;}
+  if(p.t==='welcome'&&role==='guest'&&!ready){if(p.v!==PROTOCOL||p.profile?.catalog!==LEVEL_SIGNATURE||!eligible(p.profile)||!validLevel(p.level)){peer.close('Different level catalog or game version. Both players must open the latest Parkside Next link.');return;}remoteProfile=p.profile;matchLevel=p.level;begin();return;}
   if(!ready)return;
   if(p.t==='pose'){const pose=cleanPose(p.pose);if(!pose||pose.seq<=(remotePose?.seq??-1))return;const changed=remotePose?.active!==pose.active||remotePose?.safe!==pose.safe;remotePose=pose;if(role==='host')rules.pose(1,pose);if(changed)for(const fn of subscribers)fn(info());}
+  else if(p.t==='loadout'&&Array.isArray(p.guns)&&p.guns.length<=4&&p.guns.every(w=>typeof w==='string'&&w!=='web'&&Object.hasOwn(COMBAT,w))){remoteProfile.guns=[...new Set(p.guns)];if(role==='host')rules.setGuns(1,remoteProfile.guns);}
   else if(p.t==='shot'&&role==='host')rules.shot(1,p.shot);
   else if(p.t==='health'&&role==='guest'&&Number.isSafeInteger(p.seq)&&p.seq>remoteHealthSeq){remoteHealthSeq=p.seq;applyHealth(p.players);}
   else if(p.t==='effect'&&role==='guest')effect(p.e);
@@ -51,18 +53,30 @@ export function createMultiplayer({T,scene,camera,profile,sample,onStart,onRespa
  }
  let peer;const callbacks={RTC,onStatus:change,onOpen:()=>{role=peer.getInfo().role;lastRemote=now();peer.send({t:'hello',v:PROTOCOL,profile:sessionProfile});welcome();},onPacket:packet,onClose:s=>{ready=false;role='';remotePose=null;rules=null;health=[fresh(),fresh()];if(visual)visual.reset();traces=[];if(traceMesh)traceMesh.count=0;change(s);}};
  const manualPeer=createLocalPeer(callbacks),onlinePeer=createRoomPeer(callbacks);peer=manualPeer;
- function check(){const p=profile();if(!eligible(p))throw Error('Player profile is unavailable. Reload the game.');sessionProfile={guns:p.guns.filter(w=>Object.hasOwn(GUNS,w)).slice(0,3),level:validLevel(p.level)?p.level:0,character:characterById(p.character).id};matchLevel=sessionProfile.level;}
+ function check(){const p=profile();if(!eligible(p))throw Error('Player profile is unavailable. Reload the game.');sessionProfile={catalog:LEVEL_SIGNATURE,guns:p.guns.filter(w=>Object.hasOwn(COMBAT,w)&&w!=='web').slice(0,4),level:validLevel(p.level)?p.level:0,character:characterById(p.character).id};matchLevel=sessionProfile.level;}
  async function host(){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;if(peer!==manualPeer)peer.close('Switching to local pairing');peer=manualPeer;return peer.host();}
  async function join(code){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;if(peer!==manualPeer)peer.close('Switching to local pairing');peer=manualPeer;return peer.join(code);}
  async function hostRoom(){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;if(peer!==onlinePeer)peer.close('Switching to online rooms');peer=onlinePeer;return peer.host();}
  async function joinRoom(code){check();remoteProfile=null;remotePose=null;remoteHealthSeq=-1;if(peer!==onlinePeer)peer.close('Switching to online rooms');peer=onlinePeer;return peer.join(code);}
- function shoot(weapon,from,dir){if(!ready||!canAct()||!Object.hasOwn(COMBAT,weapon))return false;const p=localPose();if(!p)return false;const shot={seq:++shotSeq,weapon,from:[from.x-worldX(),from.y,from.z],dir:[dir.x,dir.y,dir.z]};if(role==='host'){rules.pose(0,p);return rules.shot(0,shot);}peer.send({t:'pose',pose:p});return peer.send({t:'shot',shot});}
+ function refreshLoadout(){
+  const guns=[...new Set(profile().guns.filter(w=>Object.hasOwn(COMBAT,w)&&w!=='web'))].slice(0,4);
+  if(guns.join(',')===sessionProfile.guns.join(','))return;
+  if(!peer.send({t:'loadout',guns}))return;sessionProfile.guns=guns;if(role==='host')rules.setGuns(0,guns);
+ }
+ function aimTarget(from,dir,range=100){
+  if(!ready||!remotePose||!remotePose.active||remotePose.safe||health[1-index()].hp<=0||now()-lastRemote>=1.5)return null;
+  const a=[from.x-worldX(),from.y,from.z],d=[dir.x,dir.y,dir.z],max=Math.min(range,blocked(a,d,range));
+  let hit=remotePose.mode==='vehicle'?rayVehicle(a,d,remotePose,max):raySphere(a,d,[remotePose.p[0],remotePose.p[1]+.95,remotePose.p[2]],.55,max);
+  if(remotePose.mode==='foot'){const head=raySphere(a,d,[remotePose.p[0],remotePose.p[1]+1.5,remotePose.p[2]],.24,max);if(head!==null&&(hit===null||head<hit))hit=head;}
+  return hit===null?null:new T.Vector3(from.x+dir.x*hit,from.y+dir.y*hit,from.z+dir.z*hit);
+ }
+ function shoot(weapon,from,dir){if(!ready||!canAct()||!Object.hasOwn(COMBAT,weapon))return false;refreshLoadout();const p=localPose();if(!p)return false;const shot={seq:++shotSeq,weapon,from:[from.x-worldX(),from.y,from.z],dir:[dir.x,dir.y,dir.z]};if(role==='host'){rules.pose(0,p);return rules.shot(0,shot);}peer.send({t:'pose',pose:p});return peer.send({t:'shot',shot});}
  function update(dt){if(!ready)return;if(now()-lastRemote>15){peer.close('Peer stopped responding. Create a fresh invite.');return;}dt=Math.min(.1,Math.max(0,dt));beat+=dt;const p=localPose();if(role==='host'&&p){rules.pose(0,p);rules.tick(dt);applyHealth(rules.snapshot());}
-  if(beat>=1/15){beat=0;if(p)peer.send({t:'pose',pose:p});if(role==='host')peer.send({t:'health',seq:++healthSeq,players:rules.snapshot()});}
+  if(beat>=1/15){beat=0;refreshLoadout();if(p)peer.send({t:'pose',pose:p});if(role==='host')peer.send({t:'health',seq:++healthSeq,players:rules.snapshot()});}
   const visible=remotePose&&remotePose.active&&!remotePose.safe&&sample()?.active&&!sample()?.safe&&health[1-index()].hp>0&&now()-lastRemote<1.5;
   visual.update(remotePose,health[1-index()],dt,!!visible);
   visual.faceHealth(camera);
   for(let i=traces.length-1;i>=0;i--){traces[i].life-=dt;if(traces[i].life<=0)traces.splice(i,1);}const dummy=new T.Object3D();for(let i=0;i<traces.length;i++){const e=traces[i],from=new T.Vector3(e.from[0]+worldX(),e.from[1],e.from[2]),to=new T.Vector3(e.to[0]+worldX(),e.to[1],e.to[2]),direction=to.clone().sub(from);dummy.position.copy(from).add(to).multiplyScalar(.5);dummy.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),direction.normalize());dummy.scale.set(.025,.025,from.distanceTo(to));dummy.updateMatrix();traceMesh.setMatrixAt(i,dummy.matrix);}traceMesh.count=traces.length;traceMesh.instanceMatrix.needsUpdate=true;
  }
- return {host,join,hostRoom,joinRoom,accept:code=>manualPeer.accept(code),shoot,wreck,update,canAct,movementScale,info,subscribe(fn){subscribers.add(fn);return ()=>subscribers.delete(fn);},leave(){peer.send({t:'bye'});peer.close('Left duel · solo mode');},get role(){return role;}};
+ return {host,join,hostRoom,joinRoom,accept:code=>manualPeer.accept(code),aimTarget,shoot,wreck,update,canAct,movementScale,info,subscribe(fn){subscribers.add(fn);return ()=>subscribers.delete(fn);},leave(){peer.send({t:'bye'});peer.close('Left duel · solo mode');},get role(){return role;}};
 }
