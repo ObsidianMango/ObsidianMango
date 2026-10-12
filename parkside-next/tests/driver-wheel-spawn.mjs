@@ -26,5 +26,5 @@ assert(!drive.includes('tireVisibility.render('),'No secondary wheel renderer sh
 assert(!drive.includes('createTireVisibility('),'Old duplicate wheel rendering must be disabled');
 assert(drive.includes('revealWheelMeshes(car);for(const w of vehicle.wheelInfos)'),'Recovery must restore tires');
 assert(drive.includes('const wheelCount=revealWheelMeshes(car);'),'Every selected car must reveal tires at configuration');
-assert(reader.includes('drive.js?v=multiplayer-4'),'Browser must load new code instead of stale script');
+assert(reader.includes('drive.js?v=fps-30-1'),'Browser must load new code instead of stale script');
 console.log('Driver wheel spawn, respawn and layer-zero visibility checks passed.');

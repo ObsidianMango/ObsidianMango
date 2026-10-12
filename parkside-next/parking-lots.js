@@ -158,6 +158,6 @@ export function buildLots({T,C,scene,world,groundMat}){
  views.push({group:g,ox,marker,beacon,mini,phys,gates,buildings});
 
  });
- return {views,obstacles,breakables,parked:parkedCars,show(index){views.forEach((v,i)=>{v.group.visible=i===index;for(const body of v.phys){const present=world.bodies.includes(body);if(i===index&&LOTS[i]&&!v.detail){v.detail=detail.dress({group:v.group,ox:v.ox,index:i,style:LOTS[i].style,structures:breakables.filter(e=>e.level===i)});}if(i===index&&!present)world.addBody(body);else if(i!==index&&present)world.removeBody(body);}});}};
+ return {views,obstacles,breakables,parked:parkedCars,show(index){views.forEach((v,i)=>{v.group.visible=i===index;if(i===index){if(v.group.parent!==scene)scene.add(v.group);}else if(v.group.parent===scene)scene.remove(v.group);for(const body of v.phys){const present=world.bodies.includes(body);if(i===index&&LOTS[i]&&!v.detail){v.detail=detail.dress({group:v.group,ox:v.ox,index:i,style:LOTS[i].style,structures:breakables.filter(e=>e.level===i)});}if(i===index&&!present)world.addBody(body);else if(i!==index&&present)world.removeBody(body);}});}};
 }
 
