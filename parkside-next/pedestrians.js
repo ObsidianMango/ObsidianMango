@@ -53,10 +53,40 @@ export function createPedestrians({T,C,scene,world,chassis,groundMat,onHit,onThr
  function grab(p){if(heldPerson||!people.includes(p)||p.split)return false;if(!p.bodies)knockDown(p,new C.Vec3());heldPerson=p;p.held=true;p.carryConfigured=false;p.windshield=0;p.age=0;p.throwTime=0;for(const b of p.bodies){b.type=C.Body.KINEMATIC;b.collisionFilterMask=0;b.collisionResponse=false;b.velocity.setZero();b.angularVelocity.setZero();b.force.setZero();b.torque.setZero();b.updateMassProperties();b.wakeUp();}return true;}
  const carryTurn=new T.Quaternion(),carryTilt=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2),carryOffset=new T.Vector3();
  function carry(position,yaw){const p=heldPerson;if(!p?.bodies)return false;carryTurn.setFromAxisAngle(yAxis,yaw).multiply(carryTilt);for(let i=0;i<7;i++){const b=p.bodies[i];carryOffset.set(...defs[i].p).sub(v.set(...defs[0].p)).multiplyScalar(p.scale).applyQuaternion(carryTurn);b.position.set(position.x+carryOffset.x,position.y+carryOffset.y,position.z+carryOffset.z);b.quaternion.copy(carryTurn);b.velocity.setZero();b.angularVelocity.setZero();b.aabbNeedsUpdate=true;p.pose[i].p.copy(b.position);p.pose[i].q.copy(b.quaternion);}if(!p.carryConfigured){const links=[[0,1,[0,.83,0]],[0,2,[0,1.38,0]],[0,3,[-.24,1.29,0]],[0,4,[.24,1.29,0]],[1,5,[-.105,.76,0]],[1,6,[.105,.76,0]]];links.forEach(([a,b,pt],i)=>{carryOffset.set(...pt).sub(v.set(...defs[0].p)).multiplyScalar(p.scale).applyQuaternion(carryTurn);const joint=new C.Vec3(position.x+carryOffset.x,position.y+carryOffset.y,position.z+carryOffset.z),c=p.constraints[i];p.bodies[a].pointToLocalFrame(joint,c.pivotA);p.bodies[b].pointToLocalFrame(joint,c.pivotB);});p.carryConfigured=true;}p.age=0;renderPerson(p);for(const m of meshes)m.instanceMatrix.needsUpdate=true;return true;}
- function releaseHeld(velocity=new C.Vec3(),split=false){const p=heldPerson;if(!p?.bodies)return false;heldPerson=null;p.held=false;p.age=0;p.throwTime=velocity.length()>5?3:0;p.throwHit=false;p.lastFlight=p.bodies[0].position.clone();if(split){p.split=true;const waist=p.constraints.shift();if(waist)world.removeConstraint(waist);}
+ function releaseHeld(velocity=new C.Vec3(),split=false){const p=heldPerson;if(!p?.bodies)return false;heldPerson=null;p.held=false;p.age=0;p.throwTime=velocity.length()>5?3:0;p.throwHit=false;p.bowlingVictims=new Set();p.lastFlight=p.bodies[0].position.clone();if(split){p.split=true;const waist=p.constraints.shift();if(waist)world.removeConstraint(waist);}
   const right=p.bodies[0].quaternion.vmult(new C.Vec3(0,1,0));for(let i=0;i<7;i++){const b=p.bodies[i],side=i===1||i>=5?1:-1;b.type=C.Body.DYNAMIC;b.collisionFilterMask=1|2|4|8;b.collisionResponse=true;b.updateMassProperties();b.velocity.copy(velocity);if(split){b.velocity.x+=right.x*side*5;b.velocity.z+=right.z*side*5;b.velocity.y+=side*2;}b.angularVelocity.set(split?side*3:2,1,.7);b.aabbNeedsUpdate=true;b.wakeUp();}return true;
  }
  function thrownImpact(p,target,point,velocity){if(p.throwHit||target?.userData?.person===p||target?.userData?.kind==='walker'||!target?.shapes||[C.Shape.types.PLANE,C.Shape.types.HEIGHTFIELD].includes(target.shapes[0]?.type))return;p.throwHit=true;p.throwTime=0;const power=Math.max(5,Math.min(16,velocity.length()*.7));p.impacting=true;try{strike(target,point,power,'throw',velocity);}finally{p.impacting=false;}onThrownImpact(target,new T.Vector3().copy(point),power,velocity);}
+ // Swept torso collision against existing animated bystanders. Sensors only listen
+ // to vehicles, so thrown ragdolls previously passed straight through people.
+ // At most four targets per throw: no extra persistent bodies or constraints.
+ function thrownIntoPeople(p){
+  if(!p.throwTime||p.held||!p.bodies||p.throwHit||!p.lastFlight)return 0;
+  const a=p.lastFlight,b=p.bodies[0].position,vx=b.x-a.x,vy=b.y-a.y,vz=b.z-a.z;
+  const len2=vx*vx+vy*vy+vz*vz;
+  if(len2<.01||p.bodies[0].velocity.length()<4)return 0;
+  let hitCount=0;
+  const closest=[];
+  for(const person of people){
+   if(person===p||person.down||person.held||!person.sensor||p.bowlingVictims?.has(person.i))continue;
+   const center=person.pose[0].p,dx=center.x-a.x,dy=center.y-a.y,dz=center.z-a.z;
+   const t=Math.max(0,Math.min(1,(dx*vx+dy*vy+dz*vz)/len2));
+   const x=a.x+t*vx,y=a.y+t*vy,z=a.z+t*vz;
+   if((center.x-x)**2+(center.y-y)**2+(center.z-z)**2<(.88*person.scale)**2)closest.push({person,t,x,y,z});
+  }
+  closest.sort((a,b)=>a.t-b.t);
+  for(const hit of closest){
+   if(p.bowlingVictims.size>=4)break;
+   const other=hit.person;if(other.down)continue;
+   const sensor=other.sensor,velocity=p.bodies[0].velocity.clone();
+   const force=Math.max(7,Math.min(20,velocity.length()*.6));
+   p.bowlingVictims.add(other.i);
+   knockDown(other,velocity);
+   onThrownImpact(sensor,new T.Vector3(hit.x,hit.y,hit.z),force,velocity);
+   hitCount++;
+  }
+  return hitCount;
+ }
  function sweptThrow(p){if(!p.lastFlight||p.throwTime<=0||p.throwHit||p.held)return;const to=p.bodies[0].position,from=p.lastFlight;if(from.distanceTo(to)<.001)return;let target=null,point=null,nearest=Infinity;world.raycastAll(from,to,{collisionFilterMask:1|4|8,checkCollisionResponse:false,skipBackfaces:true},hit=>{const b=hit.body;if(b.userData?.person===p||b.userData?.kind==='walker'||[C.Shape.types.PLANE,C.Shape.types.HEIGHTFIELD].includes(b.shapes[0]?.type))return;if(hit.distance<nearest){nearest=hit.distance;target=b;point=hit.hitPointWorld.clone();}});if(target)thrownImpact(p,target,point,p.bodies[0].velocity);p.lastFlight.copy(to);}
  function flash(p,value){for(const i of [0,3,4]){meshes[i].setColorAt(p.i,new T.Color(value));meshes[i].instanceColor.needsUpdate=true;}}
  function takeCash(p){if(!people.includes(p)||p.robbed)return null;p.robbed=true;if(!p.down){p.robPose=.8;p.flee=5;}return p.cash;}
@@ -75,7 +105,7 @@ export function createPedestrians({T,C,scene,world,chassis,groundMat,onHit,onThr
   p.windshield=t+.22;lastWindshield=elapsed;windshieldHits++;return true;
  }
  function beforeStep(dt,walking){elapsed+=dt;for(const p of people){p.webbed=Math.max(0,(p.webbed||0)-dt);p.robPose=Math.max(0,p.robPose-dt);p.flee=Math.max(0,p.flee-dt);if(p.hurt>0){p.hurt=Math.max(0,p.hurt-dt);if(!p.hurt)flash(p,p.shirtColor);}if(p.down||p.held)continue;if(walking&&p.robPose===0&&p.hurt===0&&!p.webbed){const pace=p.speed*(p.flee>0?2.2:1);p.distance+=pace*p.direction*dt;p.phase+=dt*pace*7;}walkingPose(p);}}
- function afterStep(dt,active){if(active)for(const p of pending)knockDown(p,null,true);pending.clear();for(const [p,hit] of pendingThrows)if(p.bodies&&!p.held)thrownImpact(p,hit.target,hit.point,hit.velocity);pendingThrows.clear();const live=people.filter(p=>p.bodies);for(const p of live){if(!p.bodies||p.held)continue;p.age+=dt;sweptThrow(p);p.throwTime=Math.max(0,p.throwTime-dt);if(p.windshield>0){p.windshield=Math.max(0,p.windshield-dt);if(!p.windshield)for(const b of p.bodies)b.collisionFilterMask=3;}for(let i=0;i<7;i++){p.pose[i].p.copy(p.bodies[i].position);p.pose[i].q.copy(p.bodies[i].quaternion);}const settled=p.bodies.every(b=>b.sleepState===C.Body.SLEEPING||b.velocity.length()<.22);if(p.age>9||p.age>2&&settled)freeze(p);}while(people.filter(p=>p.bodies).length>16){const oldest=people.filter(p=>p.bodies&&!p.held).sort((a,b)=>b.age-a.age)[0];freeze(oldest);}}
+ function afterStep(dt,active){if(active)for(const p of pending)knockDown(p,null,true);pending.clear();for(const p of people)if(p.bodies&&!p.held&&p.throwTime>0)thrownIntoPeople(p);for(const [p,hit] of pendingThrows)if(p.bodies&&!p.held)thrownImpact(p,hit.target,hit.point,hit.velocity);pendingThrows.clear();const live=people.filter(p=>p.bodies);for(const p of live){if(!p.bodies||p.held)continue;p.age+=dt;sweptThrow(p);p.throwTime=Math.max(0,p.throwTime-dt);if(p.windshield>0){p.windshield=Math.max(0,p.windshield-dt);if(!p.windshield)for(const b of p.bodies)b.collisionFilterMask=3;}for(let i=0;i<7;i++){p.pose[i].p.copy(p.bodies[i].position);p.pose[i].q.copy(p.bodies[i].quaternion);}const settled=p.bodies.every(b=>b.sleepState===C.Body.SLEEPING||b.velocity.length()<.22);if(p.age>9||p.age>2&&settled)freeze(p);}while(people.filter(p=>p.bodies).length>16){const oldest=people.filter(p=>p.bodies&&!p.held).sort((a,b)=>b.age-a.age)[0];freeze(oldest);}}
  function blast(point,strength=1){for(const p of people){if(p.down)continue;const dx=p.pose[0].p.x-point.x,dy=p.pose[0].p.y-point.y,dz=p.pose[0].p.z-point.z,d=Math.hypot(dx,dy,dz);if(d<18)strike(p.sensor,point,strength*12*(1-d/18),'grenade',new C.Vec3(dx,Math.max(1,dy),dz));}}
  function renderPerson(p){defs.forEach((d,j)=>{const pose=p.pose[d.parent??j];obj.position.copy(pose.p);obj.quaternion.copy(pose.q);if(d.parent!==undefined)obj.position.add(v.set(...d.offset).multiplyScalar(p.scale).applyQuaternion(obj.quaternion));obj.scale.set(...d.s).multiplyScalar(p.scale);obj.updateMatrix();meshes[j].setMatrixAt(p.i,obj.matrix);});}
  function render(){for(const p of people)renderPerson(p);for(const m of meshes)m.instanceMatrix.needsUpdate=true;}
