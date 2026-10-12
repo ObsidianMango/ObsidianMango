@@ -32,7 +32,7 @@ import {installTouchGuard} from './touch-guard.js?v=duel-2';
 import {buildRoadster} from './roadster-model.js?v=mango-3';
 import {VEHICLES} from './garage-models.js?v=street-33';
 import {createCrashDirector} from './crash-replay.js?v=fps-1';
-import {createDestructibleEnvironment} from './destructible-environment.js?v=marine-3';
+import {createDestructibleEnvironment} from './destructible-environment.js?v=fracture-restore-1';
 import {createDestructibleTerrain} from './destructible-terrain.js?v=marine-2';
 import {LOTS,ORIGINAL_LOT_COUNT,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=marine-3';
 const T=window.THREE,$=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));

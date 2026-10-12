@@ -33,7 +33,7 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode,onContac
  }
  const pieceMass=e=>e.explosive?55:clamp(e.size[0]*e.size[1]*e.size[2]*90,12,650);
  function fracture(e){
-  if(e.level!==24||e.explosive||e.shattered||Math.max(...e.size)<=6)return;
+  if(!isDestructionLevel(e.level)||e.explosive||e.shattered||Math.max(...e.size)<=6)return;
   e.shattered=true;const size=e.size.slice(),axes=[0,1,2].filter(i=>size[i]>6).sort((a,b)=>size[b]-size[a]),splits=[1,1,1];splits[axes[0]]=Math.min(4,Math.ceil(size[axes[0]]/2.8));if(axes.length>1)splits[axes[1]]=2;if(size[1]>2.4&&Math.min(size[0],size[2])<1)splits[1]=Math.min(3,Math.ceil(size[1]/1.4));
   const chunk=size.map((n,i)=>n/splits[i]),count=splits[0]*splits[1]*splits[2],mass=e.body.mass/count,origin=e.body.position.clone(),turn=e.body.quaternion.clone();let index=0;
   for(let x=0;x<splits[0];x++)for(let y=0;y<splits[1];y++)for(let z=0;z<splits[2];z++){
