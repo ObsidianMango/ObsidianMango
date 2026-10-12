@@ -1,152 +1,40 @@
-// Full-geometry instancing for distant fleet cars. Keep the original detailed
-// wheel/tire/chrome/glass surfaces rather than flattening them into one material.
-// Cars within 80 m (and any damaged or moving car) use their complete original meshes.
+// Batch complete intact fleet geometry, including authored tires and UVs.
+// Nearby, occupied, moving or damaged cars always return to their original parts.
 export function createTrafficLOD(T,view){
- const cars=view.targets.filter(t=>t.kind==='car').map(t=>t.car);
- const wheelOverlays=new Map(),wheelInverse=new T.Matrix4(),wheelMatrix=new T.Matrix4();
- // A wheel clone shares the full original geometry and materials. Never bake the
- // rubber, spokes, rim or whitewall details into the distant body impostor.
- function overlayWheels(item){
-  if(wheelOverlays.has(item))return wheelOverlays.get(item);
-  const parts=item.mesh.children.filter(part=>part.name?.startsWith('wheel-')&&part.children.length);
-  const groups=parts.map(original=>{
-   const copy=original.clone(true);copy.name='Original detailed tire · '+original.name;
-   copy.visible=false;copy.matrixAutoUpdate=false;copy.frustumCulled=true;
-   view.group.add(copy);
-   return {original,copy};
-  });
-  wheelOverlays.set(item,groups);return groups;
- }
- function showTires(item,visible,refresh=false){
-  const groups=overlayWheels(item);
-  if(visible&&(refresh||groups.some(({copy})=>!copy.visible))){
-   view.group.updateWorldMatrix(true,false);wheelInverse.copy(view.group.matrixWorld).invert();
-   item.mesh.updateWorldMatrix(true,true);
-   for(const {original,copy} of groups){
-    wheelMatrix.multiplyMatrices(wheelInverse,original.matrixWorld);
-    copy.matrix.copy(wheelMatrix);copy.matrixWorldNeedsUpdate=true;
-   }
-  }
-  for(const {copy} of groups)copy.visible=visible;
- }
-
- const byModel=new Map(),inverse=new T.Matrix4(),relative=new T.Matrix4(),
-  point=new T.Vector3(),normal=new T.Vector3(),normalMatrix=new T.Matrix3();
- const categories={
-  rubber:{metalness:0,roughness:.94},
-  chrome:{metalness:.80,roughness:.23},
-  glass:{metalness:.10,roughness:.17,transparent:true,opacity:.35,depthWrite:false},
-  paint:{metalness:.18,roughness:.52},
-  matte:{metalness:0,roughness:.85},
-  light:{metalness:0,roughness:.35,emissive:0x777777,emissiveIntensity:.3}
- };
- function surfaceKey(material){
-  const name=(material.name||'').toLowerCase();
-  if(material.transparent||material.opacity<.98)return 'glass';
-  if(/rubber|tire|tyre|tread/.test(name))return 'rubber';
-  if(/chrome|polish|alloy|rim|wire/.test(name)||material.metalness>=.55&&material.roughness<.55)return 'chrome';
-  if(/lamp|light|emissive|glow/.test(name)||material.emissiveIntensity>0.4&&material.emissive?.getHex?.()!==0)return 'light';
-  if(material.roughness>.74&&material.metalness<.2)return 'matte';
-  return 'paint';
- }
- function mergedSurfaces(item){
-  const buffers=new Map();
-  item.mesh.updateWorldMatrix(true,true);
-  inverse.copy(item.mesh.matrixWorld).invert();
-  item.mesh.traverse(mesh=>{
-   if(!mesh.isMesh||!mesh.geometry?.attributes?.position)return;
-   // Detailed wheels are rendered separately using their actual mesh objects.
-   for(let parent=mesh.parent;parent&&parent!==item.mesh;parent=parent.parent)if(parent.name?.startsWith('wheel-'))return;
-   const geometry=mesh.geometry,material=Array.isArray(mesh.material)?mesh.material[0]:mesh.material;
-   if(!material)return;
-   const key=surfaceKey(material);
-   let record=buffers.get(key);
-   if(!record){record={positions:[],normals:[],colors:[]};buffers.set(key,record);}
-   const positionAttr=geometry.attributes.position,normalAttr=geometry.attributes.normal,index=geometry.index;
-   const count=index?index.count:positionAttr.count;
+ const cars=view.targets.filter(t=>t.kind==='car').map(t=>t.car),models=new Map();
+ const inverse=new T.Matrix4(),relative=new T.Matrix4(),normalMatrix=new T.Matrix3(),point=new T.Vector3(),normal=new T.Vector3(),groupInverse=new T.Matrix4(),frustum=new T.Frustum(),projection=new T.Matrix4(),sphere=new T.Sphere(),center=new T.Vector3();
+ for(const car of cars){const key=car.model||'roadster';if(!models.has(key))models.set(key,{cars:[],batches:[],current:[]});models.get(key).cars.push(car);}
+ for(const group of models.values()){
+  const exemplar=group.cars[0],surfaces=new Map();exemplar.mesh.updateWorldMatrix(true,true);inverse.copy(exemplar.mesh.matrixWorld).invert();
+  exemplar.mesh.traverse(mesh=>{
+   if(!mesh.isMesh||!mesh.visible||!mesh.geometry?.attributes.position)return;
+   for(let p=mesh.parent;p&&p!==exemplar.mesh;p=p.parent)if(!p.visible)return;
+   const g=mesh.geometry,a=g.attributes,index=g.index,total=index?index.count:a.position.count;
    relative.multiplyMatrices(inverse,mesh.matrixWorld);normalMatrix.getNormalMatrix(relative);
-   const tint=material.color||{r:1,g:1,b:1},glow=material.emissive;
-   const cr=Math.min(1,tint.r+(glow?.r||0)*.12),
-    cg=Math.min(1,tint.g+(glow?.g||0)*.12),
-    cb=Math.min(1,tint.b+(glow?.b||0)*.12);
-   for(let k=0;k<count;k++){
-    const vertex=index?index.getX(k):k;
-    point.fromBufferAttribute(positionAttr,vertex).applyMatrix4(relative);
-    if(normalAttr)normal.fromBufferAttribute(normalAttr,vertex).applyMatrix3(normalMatrix).normalize();
-    else normal.set(0,1,0);
-    record.positions.push(point.x,point.y,point.z);
-    record.normals.push(normal.x,normal.y,normal.z);
-    record.colors.push(cr,cg,cb);
+   const ranges=Array.isArray(mesh.material)?g.groups:[{start:0,count:total,materialIndex:0}];
+   for(const range of ranges){const material=Array.isArray(mesh.material)?mesh.material[range.materialIndex]:mesh.material;if(!material)continue;
+    let record=surfaces.get(material);if(!record){record={position:[],normal:[],uv:[],color:[]};surfaces.set(material,record);}
+    for(let k=range.start;k<Math.min(total,range.start+range.count);k++){
+     const i=index?index.getX(k):k;point.fromBufferAttribute(a.position,i).applyMatrix4(relative);normal.set(0,1,0);if(a.normal)normal.fromBufferAttribute(a.normal,i).applyMatrix3(normalMatrix).normalize();
+     record.position.push(point.x,point.y,point.z);record.normal.push(normal.x,normal.y,normal.z);record.uv.push(a.uv?a.uv.getX(i):0,a.uv?a.uv.getY(i):0);record.color.push(a.color?a.color.getX(i):1,a.color?a.color.getY(i):1,a.color?a.color.getZ(i):1);
+    }
    }
   });
-  return buffers;
- }
- for(const item of cars){
-  const key=item.model||'roadster';
-  if(!byModel.has(key))byModel.set(key,{items:[],batches:[],current:[]});
-  byModel.get(key).items.push(item);
- }
- for(const [model,group] of byModel){
-  const surfaces=mergedSurfaces(group.items[0]);
-  for(const [kind,values] of surfaces){
-   if(!values.positions.length)continue;
-   const geometry=new T.BufferGeometry();
-   geometry.setAttribute('position',new T.Float32BufferAttribute(values.positions,3));
-   geometry.setAttribute('normal',new T.Float32BufferAttribute(values.normals,3));
-   geometry.setAttribute('color',new T.Float32BufferAttribute(values.colors,3));
-   geometry.computeBoundingSphere();
-   const material=new T.MeshStandardMaterial({...categories[kind],vertexColors:true,side:T.DoubleSide});
-   const mesh=new T.InstancedMesh(geometry,material,group.items.length);
-   mesh.name='Full-detail fleet '+model+' / '+kind;
-   mesh.count=0;mesh.frustumCulled=false;mesh.castShadow=false;mesh.receiveShadow=false;
-   mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
-   view.group.add(mesh);group.batches.push(mesh);
+  for(const [source,record] of surfaces){if(!record.position.length)continue;const geometry=new T.BufferGeometry();for(const [name,data] of Object.entries(record)){if(name==='color'&&!source.vertexColors)continue;geometry.setAttribute(name,new T.Float32BufferAttribute(data,name==='uv'?2:3));}geometry.computeBoundingSphere();
+   // Own the intact material so damage to the exemplar cannot tint every instance.
+   const metadata=source.userData;let material;try{source.userData={};material=source.clone();}finally{source.userData=metadata;}const batch=new T.InstancedMesh(geometry,material,group.cars.length);batch.name='Full-detail fleet batch';batch.count=0;batch.frustumCulled=true;batch.castShadow=false;batch.receiveShadow=false;batch.instanceMatrix.setUsage(T.DynamicDrawUsage);view.group.add(batch);group.batches.push(batch);
   }
  }
  let distant=0,drawBatches=0;
- function update(x,z){
-  distant=0;drawBatches=0;
-  for(const group of byModel.values()){
-   const farCars=[];
-   for(const item of group.items){
-    const dx=item.body.position.x-view.ox-x,dz=item.body.position.z-z;
-    const far=dx*dx+dz*dz>80*80&&!item.occupied&&!item.exploded&&
-     (item.damage||0)<.02&&item.body.mass===0;
-    item.mesh.visible=!far&&!item.occupied;
-    if(far)farCars.push(item);
-    showTires(item,far);
-   }
-   distant+=farCars.length;
-   if(!farCars.length){for(const mesh of group.batches)mesh.count=0;group.current=[];continue;}
-   drawBatches+=group.batches.length;
-   const last=group.current;
-   if(last.length===farCars.length&&farCars.every((item,i)=>item===last[i])){
-    for(const mesh of group.batches)mesh.count=farCars.length;
-    continue;
-   }
-   group.current=farCars;
-   for(let i=0;i<farCars.length;i++){
-    const item=farCars[i];
-    item.mesh.updateWorldMatrix(true,false);
-    for(const mesh of group.batches)mesh.setMatrixAt(i,item.mesh.matrixWorld);
-   }
-   for(const mesh of group.batches){
-    mesh.count=farCars.length;
-    mesh.instanceMatrix.needsUpdate=true;
-   }
+ function update(x,z,camera=null){distant=drawBatches=0;if(camera){camera.updateMatrixWorld();projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);}view.group.updateWorldMatrix(true,false);groupInverse.copy(view.group.matrixWorld).invert();
+  for(const group of models.values()){
+   const far=[];for(const car of group.cars){const dx=car.body.position.x-view.ox-x,dz=car.body.position.z-z,eligible=dx*dx+dz*dz>80*80&&!car.occupied&&!car.exploded&&(car.damage||0)===0&&car.body.mass===0;car.mesh.visible=!eligible&&!car.occupied;if(eligible){center.set(car.body.position.x,car.body.position.y+1,car.body.position.z);sphere.set(center,5);if(!camera||frustum.intersectsSphere(sphere))far.push(car);}}
+   distant+=far.length;drawBatches+=far.length?group.batches.length:0;
+   if(far.length===group.current.length&&far.every((car,i)=>car===group.current[i]))continue;group.current=far;
+   for(let i=0;i<far.length;i++){far[i].mesh.updateWorldMatrix(true,false);relative.multiplyMatrices(groupInverse,far[i].mesh.matrixWorld);for(const batch of group.batches)batch.setMatrixAt(i,relative);}
+   for(const batch of group.batches){batch.count=far.length;batch.instanceMatrix.needsUpdate=true;if(far.length)batch.computeBoundingSphere();}
   }
  }
- function originals(){
-  distant=0;drawBatches=0;
-  for(const item of cars){item.mesh.visible=!item.occupied;showTires(item,false);}
-  for(const group of byModel.values()){
-   group.current=[];
-   for(const mesh of group.batches)mesh.count=0;
-  }
- }
- update(0,0);
- return {update,originals,getInfo:()=>({
-  batches:drawBatches,capacity:cars.length,distant,authoredModels:byModel.size,
-  materialSurfaces:[...byModel.values()].reduce((n,g)=>n+g.batches.length,0)
- })};
+ function originals(){distant=drawBatches=0;for(const car of cars)car.mesh.visible=!car.occupied;for(const group of models.values()){group.current=[];for(const batch of group.batches)batch.count=0;}}
+ update(0,0);return {update,originals,getInfo:()=>({batches:drawBatches,capacity:cars.length,distant,authoredModels:models.size,materialSurfaces:[...models.values()].reduce((n,g)=>n+g.batches.length,0),includesAuthoredTires:true})};
 }
