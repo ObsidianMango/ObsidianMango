@@ -12,7 +12,7 @@ const impact=panel.getWorldPosition(new T.Vector3()),before=panel.scale.clone();
 t.handleHit({impact:3.3,kind:'scenery',point:impact,velocity:new T.Vector3()});
 assert(t.car.assemblies.some(p=>p.userData.panelDent>0),'collision must dent at least one attached body panel');
 assert.equal(a.app.getState().state,'running','modest dent should not wreck the whole car');
-t.restore();
+t.loadLevel(0);t.setState('menu');t.selectVehicle(0);
 assert.equal(t.car.assemblies.filter(p=>p.userData.panelDent>0).length,0,'reset must remove cumulative dents');
 
 // Regression: thrown ragdolls collide with existing pedestrian positions.

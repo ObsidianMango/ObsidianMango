@@ -2,7 +2,7 @@ import {createContentsDebris} from './contents-debris.js?v=street-26';
 import {setDamageAppearance} from './damage-appearance.js?v=wreck-16';
 // Damageable scenery uses the same bodies during driving, wrecks and recorded replays.
 import {createCrushContact} from './crush-contact.js?v=crush-12';
-export function createDestructibleEnvironment({T,C,world,lots,onExplode,onContact}){
+export function createDestructibleEnvironment({T,C,scene,world,lots,onExplode,onContact}){
  let active=[],pending=new Map(),elapsed=0,explosionCount=0,launchedBarrels=0;const FRAGMENT_LIMIT=96,AWAKE_LIMIT=144;const structures=new Map(),dirtyStructures=new Set();const explosions=[],fragments=[],fragmentPool=[],fragmentBox=new T.BoxGeometry(1,1,1),rubbleMat=new C.Material({friction:.55,restitution:.04}),registered=new Set(),q=new T.Quaternion(),v=new T.Vector3(),contact=createCrushContact(C);
  const contentsDebris=createContentsDebris(T,fragmentBox);
   // Small shards are instanced: hundreds of chips are one draw call, not hundreds of bodies.
