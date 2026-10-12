@@ -5,6 +5,40 @@ import {createCrushContact} from './crush-contact.js?v=crush-12';
 export function createDestructibleEnvironment({T,C,world,lots,onExplode,onContact}){
  let active=[],pending=new Map(),elapsed=0,explosionCount=0,launchedBarrels=0;const FRAGMENT_LIMIT=96,AWAKE_LIMIT=144;const structures=new Map(),dirtyStructures=new Set();const explosions=[],fragments=[],fragmentPool=[],fragmentBox=new T.BoxGeometry(1,1,1),rubbleMat=new C.Material({friction:.55,restitution:.04}),registered=new Set(),q=new T.Quaternion(),v=new T.Vector3(),contact=createCrushContact(C);
  const contentsDebris=createContentsDebris(T,fragmentBox);
+  // Small shards are instanced: hundreds of chips are one draw call, not hundreds of bodies.
+  // The larger, collidable rubble keeps its existing 96-body physics budget.
+  const CHIP_LIMIT=typeof navigator!=='undefined'&&/iPhone|iPad|Android/i.test(navigator.userAgent||'')?192:360;
+  const chipMesh=new T.InstancedMesh(fragmentBox,new T.MeshStandardMaterial({color:0xaaa397,roughness:1,metalness:0}),CHIP_LIMIT);
+  chipMesh.count=0;chipMesh.castShadow=false;chipMesh.receiveShadow=false;chipMesh.frustumCulled=false;
+  chipMesh.instanceMatrix.setUsage(T.DynamicDrawUsage);scene.add(chipMesh);
+  const chips=[],chipObject=new T.Object3D(),chipTint=new T.Color();
+  function clearChips(){chips.length=0;chipMesh.count=0;}
+  function spawnChips(e,center){
+   if(!isDestructionLevel(e.level))return;
+   const span=e.originalSize||e.size,quantity=Math.min(42,12+Math.ceil((span[0]*span[1]+span[1]*span[2]+span[0]*span[2])*.20));
+   for(let i=0;i<quantity;i++){
+    if(chips.length>=CHIP_LIMIT)chips.shift();
+    const size=.12+Math.random()*.49,angle=Math.random()*Math.PI*2,speed=1.8+Math.random()*8;
+    chips.push({x:center.x+(Math.random()-.5)*span[0]*.75,y:center.y+(Math.random()-.5)*span[1]*.6,z:center.z+(Math.random()-.5)*span[2]*.75,
+     vx:Math.cos(angle)*speed,vy:2+Math.random()*7,vz:Math.sin(angle)*speed,
+     rx:Math.random()*3,ry:Math.random()*3,rz:0,spin:(Math.random()-.5)*9,size,life:2.5+Math.random()*3,
+     color:e.charred>.15?0x48433b:[0xaaa397,0x8a8175,0xc0b7a5,0x675e55][i%4]});
+   }
+  }
+  function updateChips(dt,focus){
+   let k=0;
+   for(let i=chips.length-1;i>=0;i--){
+    const b=chips[i];b.life-=dt;if(b.life<=0||(focus&&Math.hypot(b.x-focus.x,b.z-focus.z)>115)){chips.splice(i,1);continue;}
+    b.x+=b.vx*dt;b.z+=b.vz*dt;b.y+=b.vy*dt;b.vy-=14*dt;
+    if(b.y<b.size*.5){b.y=b.size*.5;b.vy=Math.abs(b.vy)*.23;b.vx*=.86;b.vz*=.86;}
+    b.rx+=b.spin*dt;b.ry+=b.spin*.56*dt;
+    chipObject.position.set(b.x,b.y,b.z);chipObject.rotation.set(b.rx,b.ry,b.rz);
+    chipObject.scale.set(b.size,b.size*(.4+(i%3)*.25),b.size);
+    chipObject.updateMatrix();chipMesh.setMatrixAt(k,chipObject.matrix);
+    chipMesh.setColorAt(k,chipTint.setHex(b.color));k++;
+   }
+   chipMesh.count=k;if(k){chipMesh.instanceMatrix.needsUpdate=true;chipMesh.instanceColor.needsUpdate=true;}
+  }
  const crackedRubble=new T.MeshStandardMaterial({color:0x9b978d,roughness:1}),burnedRubble=new T.MeshStandardMaterial({color:0x34312b,roughness:1});setDamageAppearance(T,crackedRubble,.85,0);setDamageAppearance(T,burnedRubble,1,1);
  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
  const isDestructionLevel=level=>!!lots.views[level]?.routes;
@@ -34,8 +68,11 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode,onContac
  const pieceMass=e=>e.explosive?55:clamp(e.size[0]*e.size[1]*e.size[2]*90,12,650);
  function fracture(e){
   if(!isDestructionLevel(e.level)||e.explosive||e.shattered||Math.max(...e.size)<=6)return;
-  e.shattered=true;const size=e.size.slice(),axes=[0,1,2].filter(i=>size[i]>6).sort((a,b)=>size[b]-size[a]),splits=[1,1,1];splits[axes[0]]=Math.min(4,Math.ceil(size[axes[0]]/2.8));if(axes.length>1)splits[axes[1]]=2;if(size[1]>2.4&&Math.min(size[0],size[2])<1)splits[1]=Math.min(3,Math.ceil(size[1]/1.4));
-  const chunk=size.map((n,i)=>n/splits[i]),count=splits[0]*splits[1]*splits[2],mass=e.body.mass/count,origin=e.body.position.clone(),turn=e.body.quaternion.clone();let index=0;
+  e.shattered=true;const size=e.size.slice(),axes=[0,1,2].filter(i=>size[i]>2).sort((a,b)=>size[b]-size[a]),splits=[1,1,1];
+   splits[axes[0]]=Math.min(7,Math.max(2,Math.ceil(size[axes[0]]/2.15)));
+   if(axes.length>1)splits[axes[1]]=Math.min(3,Math.max(2,Math.ceil(size[axes[1]]/2)));
+   if(size[1]>2.4&&Math.min(size[0],size[2])<1)splits[1]=Math.min(3,Math.ceil(size[1]/1.2));
+  const chunk=size.map((n,i)=>n/splits[i]),count=splits[0]*splits[1]*splits[2],mass=e.body.mass/count,origin=e.body.position.clone(),turn=e.body.quaternion.clone();let index=0;spawnChips(e,origin);
   for(let x=0;x<splits[0];x++)for(let y=0;y<splits[1];y++)for(let z=0;z<splits[2];z++){
    const offset=new C.Vec3((x+.5)*chunk[0]-size[0]/2,(y+.5)*chunk[1]-size[1]/2,(z+.5)*chunk[2]-size[2]/2),position=turn.vmult(offset).vadd(origin);
    if(index++===0){e.size=chunk.slice();e.body.removeShape(e.body.shapes[0]);e.body.addShape(new C.Box(new C.Vec3(...chunk.map(n=>n/2))));e.body.mass=mass;e.body.position.copy(position);e.body.updateMassProperties();e.body.updateBoundingRadius();e.body.aabbNeedsUpdate=true;e.mesh.scale.set(e.originalScale.x/splits[0],e.originalScale.y/splits[1],e.originalScale.z/splits[2]);e.mesh.position.copy(position);continue;}
@@ -75,7 +112,7 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode,onContac
  }
  function recycleFragment(f){world.removeBody(f.body);f.mesh.removeFromParent();f.mesh.visible=false;f.active=false;f.source=null;const i=fragments.indexOf(f);if(i>=0)fragments.splice(i,1);}
  function restoreEntry(e){pending.delete(e);e.size=e.originalSize.slice();e.mesh.scale.copy(e.originalScale);if(e.shattered){e.body.removeShape(e.body.shapes[0]);e.body.addShape(e.originalShape);e.body.updateBoundingRadius();e.shattered=false;}e.body.type=C.Body.STATIC;e.body.mass=0;e.body.material=e.originalPhysicsMaterial;e.body.collisionFilterGroup=e.filterGroup;e.body.linearDamping=.16;e.body.angularDamping=.26;e.body.updateMassProperties();e.body.position.copy(e.home);e.body.quaternion.copy(e.turn);e.body.velocity.setZero();e.body.angularVelocity.setZero();e.body.force.setZero();e.body.torque.setZero();e.body.aabbNeedsUpdate=true;e.body.wakeUp();e.mesh.position.copy(e.home);e.mesh.quaternion.copy(e.turn);e.mesh.visible=true;e.damage=0;e.charred=0;e.broken=false;e.detonated=false;e.armed=false;e.age=0;if(e.fuseMesh)e.fuseMesh.visible=false;deform(e,0);e.baseVertices=null;e.last=e.lastRam=-10;contentsDebris.restore(e);}
- function reset(level){contentsDebris.clear();pending.clear();explosions.length=0;dirtyStructures.clear();explosionCount=0;launchedBarrels=0;elapsed=0;for(const f of [...fragments])recycleFragment(f);for(const e of active)restoreEntry(e);active=lots.breakables.filter(e=>e.level===level);}
+ function reset(level){clearChips();contentsDebris.clear();pending.clear();explosions.length=0;dirtyStructures.clear();explosionCount=0;launchedBarrels=0;elapsed=0;for(const f of [...fragments])recycleFragment(f);for(const e of active)restoreEntry(e);active=lots.breakables.filter(e=>e.level===level);}
  function resetDistrict(d){contentsDebris.clear(d);for(const [id,g]of structures)if(g.entries[0]?.target?.district===d)dirtyStructures.delete(id);for(const f of [...fragments])if(f.source.target?.district===d)recycleFragment(f);for(const e of active)if(e.target?.district===d)restoreEntry(e);}
 
  function blast(point,strength=1){for(const e of active){const dx=e.body.position.x-point.x,dz=e.body.position.z-point.z,dy=e.body.position.y-point.y,distance=Math.hypot(dx,dz,dy),radius=18;if(distance>radius)continue;const force=(1-distance/radius)*strength;
@@ -92,7 +129,7 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode,onContac
   if(elapsed-e.lastRam>.24&&speed>1.2){e.lastRam=elapsed;hit(e,speed,point,chassis.velocity,'ram');}
   if(e.damage>=(e.structure?.72:.58))release(e,chassis.velocity,point,true);
  }for(const f of fragments)if(contact(chassis,f.body,f.size))f.body.wakeUp();}
- function update(dt,focus=null){elapsed+=dt;contentsDebris.update(dt,focus);for(const [e,h]of pending)hit(e,h.speed,h.point,h.velocity,h.monster?'ram':'collision',h.target);pending.clear();for(const e of active)if(e.armed&&!e.detonated){if(elapsed-e.armedAt>3)detonate(e);else if(e.fuseMesh)e.fuseMesh.material.emissiveIntensity=1.8+Math.sin(elapsed*30);}
+ function update(dt,focus=null){elapsed+=dt;updateChips(dt,focus);contentsDebris.update(dt,focus);for(const [e,h]of pending)hit(e,h.speed,h.point,h.velocity,h.monster?'ram':'collision',h.target);pending.clear();for(const e of active)if(e.armed&&!e.detonated){if(elapsed-e.armedAt>3)detonate(e);else if(e.fuseMesh)e.fuseMesh.material.emissiveIntensity=1.8+Math.sin(elapsed*30);}
   for(let i=0;i<3&&explosions.length;i++){const point=explosions.shift();explosionCount++;blast(point,2);onExplode?.(point,2);}collapseUnsupported();const moving=active.filter(e=>e.broken&&e.body.type===C.Body.DYNAMIC);for(const e of moving){e.age+=dt;e.mesh.position.copy(e.body.position);e.mesh.quaternion.copy(e.body.quaternion);const resting=e.body.sleepState===C.Body.SLEEPING||e.body.velocity.length()<.25&&e.body.angularVelocity.length()<.25;if(!e.armed&&resting&&(e.age>12||moving.length>72&&e.age>3)){if(isDestructionLevel(e.level))e.body.sleep();else{e.body.type=C.Body.STATIC;e.body.mass=0;e.body.updateMassProperties();e.body.velocity.setZero();e.body.angularVelocity.setZero();}}}for(const f of [...fragments]){f.age+=dt;if(f.age>18||f.age>3&&focus&&f.body.position.distanceTo(focus)>100){recycleFragment(f);continue;}f.mesh.position.copy(f.body.position);f.mesh.quaternion.copy(f.body.quaternion);}
   if(isDestructionLevel(active[0]?.level)){const awake=moving.filter(e=>!e.armed&&e.body.sleepState!==C.Body.SLEEPING);awake.sort((a,b)=>b.age-a.age);let excess=Math.max(0,awake.length-AWAKE_LIMIT);for(const e of awake){if(!excess)break;if(e.age>2&&e.body.velocity.length()<.35&&e.body.angularVelocity.length()<.35){e.body.sleep();excess--;}}if(focus)for(const e of moving)if(!e.armed&&e.age>3&&e.body.position.distanceTo(focus)>120&&e.body.velocity.length()<.35&&e.body.angularVelocity.length()<.35)e.body.sleep();}
  }
@@ -100,8 +137,8 @@ export function createDestructibleEnvironment({T,C,world,lots,onExplode,onContac
    a[k]=p.x;a[k+1]=p.y;a[k+2]=p.z;a[k+3]=q.x;a[k+4]=q.y;a[k+5]=q.z;a[k+6]=q.w;a[k+7]=e.damage;
    for(let j=0;j<6;j++)a[k+8+j]=e.dent[j];a[k+14]=e.broken?1:0;a[k+15]=e.charred;}
   return a;}
- function apply(a,b,u){if(!a||!b)return;contentsDebris.hide();active.forEach((e,i)=>{const n=i*16;if(b.length<=n)return;e.charred=a[n+15]+(b[n+15]-a[n+15])*u;e.mesh.position.fromArray(a,n).lerp(v.fromArray(b,n),u);e.mesh.quaternion.fromArray(a,n+3).slerp(q.fromArray(b,n+3),u);deform(e,a[n+7]+(b[n+7]-a[n+7])*u,Array.from(u<.5?a.slice(n+8,n+14):b.slice(n+8,n+14)));});}
+ function apply(a,b,u){if(!a||!b)return;clearChips();contentsDebris.hide();active.forEach((e,i)=>{const n=i*16;if(b.length<=n)return;e.charred=a[n+15]+(b[n+15]-a[n+15])*u;e.mesh.position.fromArray(a,n).lerp(v.fromArray(b,n),u);e.mesh.quaternion.fromArray(a,n+3).slerp(q.fromArray(b,n+3),u);deform(e,a[n+7]+(b[n+7]-a[n+7])*u,Array.from(u<.5?a.slice(n+8,n+14):b.slice(n+8,n+14)));});}
  function strike(body,point,power){const e=active.find(e=>e.body===body);if(e)hit(e,power,point,new C.Vec3(0,.3,0),'weapon',!!e.explosive);}
- return{strike,register,reset,resetDistrict,update,blast,ram,snapshot,apply,get entries(){return active;},get fragments(){return fragments;},getInfo:()=>({...contentsDebris.getInfo(),contentsObjects:active.filter(e=>e.role==='contents').reduce((n,e)=>n+(e.contentsObjects||1),0),props:active.length,unsupportedRoofs:active.filter(e=>e.roof&&!e.broken&&!(structures.get(e.structure)?.supports.get(e)||[]).some(o=>!o.broken)).length,charred:active.filter(e=>e.charred>.1).length,dented:active.filter(e=>e.damage>0).length,broken:active.filter(e=>e.broken).length,moving:active.filter(e=>e.broken&&e.body.type===C.Body.DYNAMIC&&e.body.sleepState!==C.Body.SLEEPING).length,rubbleFragments:fragments.length,rubblePool:fragmentPool.length,rubbleLimit:FRAGMENT_LIMIT,awakeBudget:AWAKE_LIMIT,explosions:explosionCount,queuedExplosions:explosions.length,rollingBarrels:active.filter(e=>e.armed&&!e.detonated).length,launchedBarrels})};
+ return{strike,register,reset,resetDistrict,update,blast,ram,snapshot,apply,get entries(){return active;},get fragments(){return fragments;},getInfo:()=>({...contentsDebris.getInfo(),contentsObjects:active.filter(e=>e.role==='contents').reduce((n,e)=>n+(e.contentsObjects||1),0),props:active.length,unsupportedRoofs:active.filter(e=>e.roof&&!e.broken&&!(structures.get(e.structure)?.supports.get(e)||[]).some(o=>!o.broken)).length,charred:active.filter(e=>e.charred>.1).length,dented:active.filter(e=>e.damage>0).length,broken:active.filter(e=>e.broken).length,moving:active.filter(e=>e.broken&&e.body.type===C.Body.DYNAMIC&&e.body.sleepState!==C.Body.SLEEPING).length,rubbleFragments:fragments.length,rubblePool:fragmentPool.length,visualChips:chips.length,visualChipLimit:CHIP_LIMIT,chipDrawCalls:1,rubbleLimit:FRAGMENT_LIMIT,awakeBudget:AWAKE_LIMIT,explosions:explosionCount,queuedExplosions:explosions.length,rollingBarrels:active.filter(e=>e.armed&&!e.detonated).length,launchedBarrels})};
 }
 
