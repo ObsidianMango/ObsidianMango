@@ -1,9 +1,9 @@
-import {LEVEL_SIGNATURE} from './level-catalog.js?v=multiplayer-4';
+import {LEVEL_SIGNATURE} from './level-catalog.js?v=riverview-1';
 import {characterById} from './characters.js?v=duel-2';
 import {createLocalPeer,PROTOCOL} from './local-peer.js?v=multiplayer-4';
 import {createRoomPeer} from './room-peer.js?v=multiplayer-4';
 import {createRivalVisual} from './multiplayer-visuals.js?v=tires-2';
-import {eligible,cleanPose,vec,createDuelRules,COMBAT,validLevel,raySphere,rayVehicle} from './duel-rules.js?v=multiplayer-4';
+import {eligible,cleanPose,vec,createDuelRules,COMBAT,validLevel,raySphere,rayVehicle} from './duel-rules.js?v=riverview-1';
 export function createMultiplayer({T,scene,camera,profile,sample,onStart,onRespawn,onNotice=()=>{},onCombatEffect=()=>{},makeVehicle=()=>null,blocked=()=>Infinity,worldX=()=>0,RTC,now=()=>performance.now()/1000}){
  let ready=false,remoteProfile=null,matchLevel=0,sessionProfile=null,remotePose=null,lastRemote=0,seq=0,shotSeq=0,beat=0,healthSeq=0,remoteHealthSeq=-1,role='',rules=null,localLife=0,health=[fresh(),fresh()],status='Not connected',healthSignature='',remoteRoot=null,visual=null,traceMesh=null,traces=[],wreckSeq=0,lastWreckSeq=-1;
  const subscribers=new Set(),geometries=[],materials=[];

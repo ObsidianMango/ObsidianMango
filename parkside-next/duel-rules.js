@@ -2,7 +2,7 @@
 export const GUNS={pistol:{damage:25,range:72,rate:.3},machine:{damage:9,range:90,rate:.09},grenade:{damage:65,range:60,rate:.85}};
 export const COMBAT={...GUNS,hammer:{damage:35,range:3,rate:.55},web:{damage:0,range:45,rate:.32}};
 export const eligible=p=>!!p&&Array.isArray(p.guns);
-export {validLevel} from './level-catalog.js?v=multiplayer-4';
+export {validLevel} from './level-catalog.js?v=riverview-1';
 export const vec=v=>Array.isArray(v)&&v.length===3&&v.every(n=>Number.isFinite(n)&&Math.abs(n)<600);
 export function cleanPose(p){if(!p||!Number.isSafeInteger(p.seq)||p.seq<0||!vec(p.p)||p.p[1]<-5||p.p[1]>100||Math.abs(p.p[0])>260||Math.abs(p.p[2])>260||!Number.isFinite(p.yaw)||!['foot','vehicle'].includes(p.mode))return null;return {seq:p.seq,p:[...p.p],yaw:p.yaw%(Math.PI*2),mode:p.mode,active:p.active===true,safe:p.safe===true,weapon:Object.hasOwn(COMBAT,p.weapon)?p.weapon:null,vehicleId:typeof p.vehicleId==='string'&&/^[a-z0-9-]{1,32}$/.test(p.vehicleId)?p.vehicleId:'roadster',q:Array.isArray(p.q)&&p.q.length===4&&p.q.every(v=>Number.isFinite(v)&&Math.abs(v)<=1.01)?[...p.q]:null,wheels:Array.isArray(p.wheels)&&p.wheels.length<=4?p.wheels.map(w=>Array.isArray(w)&&w.length===7&&w.every(n=>Number.isFinite(n)&&Math.abs(n)<100)?[...w]:null):[],wreck:p.wreck===true,size:vec(p.size)&&p.size[0]>=.8&&p.size[0]<=2.6&&p.size[1]>=.8&&p.size[1]<=3&&p.size[2]>=1.2&&p.size[2]<=4?[...p.size]:[1.6,1.2,2.6]};}
 export function raySphere(from,dir,center,radius,max){const o=from.map((v,i)=>v-center[i]),b=o.reduce((v,n,i)=>v+n*dir[i],0),c=o.reduce((v,n)=>v+n*n,0)-radius*radius,h=b*b-c;if(h<0)return null;const t=-b-Math.sqrt(h),exit=-b+Math.sqrt(h);return exit<0||t>max?null:Math.max(0,t);}
