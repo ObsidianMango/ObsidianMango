@@ -1,10 +1,10 @@
 // Procedural Red Bank Marine Park approximation from supplied visual references.
 // No Google imagery, tiles or screenshots are embedded in the game.
-export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat,breakables}){
+export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat,breakables,buildings,index}){
  const cube=new T.BoxGeometry(1,1,1);
  function deco(w,h,d,x,y,z,c,yaw=0){
   const m=new T.Mesh(cube,mat(c));m.position.set(ox+x,y,z);m.scale.set(w,h,d);m.rotation.y=yaw;
-  m.castShadow=h>2;m.receiveShadow=true;m.userData.guide=true;group.add(m);return m;
+  m.castShadow=h>2;m.receiveShadow=true;group.add(m);return m;
  }
  function plane(w,d,x,z,c,y=.037){
   const m=new T.Mesh(new T.PlaneGeometry(w,d),mat(c));m.rotation.x=-Math.PI/2;
@@ -19,19 +19,19 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat,break
  function curb(w,d,x,z){collision(w,.28,d,x,.16,z,0xd0d1c9);deco(w,.04,d,x,.31,z,0xe9e8db);}
  function planter(w,d,x,z){curb(w,d,x,z);deco(w-.5,.07,d-.5,x,.37,z,0x779066);}
  function shrub(x,z,k=1){
-  deco(.16,.96,.16,x,.85,z,0x786648);
+  const trunk=collision(.22,1.25,.22,x,.72,z,0x786648);trunk.name="Shrub trunk";
   for(let j=0;j<4;j++){
    const m=new T.Mesh(new T.IcosahedronGeometry(.6,1),mat(j%2?0x5e854e:0x8c9c63));
    m.position.set(ox+x+Math.cos(j*1.57)*.42*k,1.58+(j%2)*.12,z+Math.sin(j*1.57)*.42*k);
-   m.scale.set(k,k*1.1,k);m.castShadow=true;m.userData.guide=true;group.add(m);
+   m.scale.set(k,k*1.1,k);m.castShadow=true;group.add(m);group.updateMatrixWorld(true);trunk.attach(m);
   }
  }
  function tree(x,z,c=0x587b4b,h=6){
-  collision(.42,h,.42,x,h/2,z,0x675842);
+  const trunk=collision(.42,h,.42,x,h/2,z,0x675842);trunk.name="Tree trunk";
   for(let j=0;j<6;j++){
    const m=new T.Mesh(new T.IcosahedronGeometry(1,1),mat(j%3?c:0x697c51)),q=j*Math.PI/3;
    m.position.set(ox+x+Math.cos(q)*1.25,h*.82+(j%2)*.55,z+Math.sin(q)*1.1);
-   m.scale.set(1.55,1.8,1.35);m.castShadow=true;m.userData.guide=true;group.add(m);
+   m.scale.set(1.55,1.8,1.35);m.castShadow=true;group.add(m);group.updateMatrixWorld(true);trunk.attach(m);
   }
  }
  function lamp(x,z){
@@ -99,10 +99,17 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat,break
  marking(11.6,.22,11.4,29.6);
  for(let z=-25;z<=26;z+=12)marking(.12,2.5,25,z,0xe0e2d8);
  // Historic brown marina office at northwest end, slate roof and white-framed windows.
- collision(18,9.1,12,-14,4.55,-49,0x5e4c3f);
- deco(18.4,.4,12.4,-14,9.3,-49,0x626d6d);
- const roof=new T.Mesh(new T.ConeGeometry(1,1,4),mat(0x788080));roof.rotation.y=Math.PI/4;
- roof.scale.set(13,5.6,10);roof.position.set(ox-14,12.1,-49);roof.castShadow=true;roof.userData.guide=true;group.add(roof);
+ const officeId=index+':marina-office';
+ buildings.push({id:officeId,level:index,x:ox-14,z:-49,w:18,d:12,h:9.1,yaw:0,name:'Marina office',type:'office'});
+ for(let row=0;row<3;row++)for(const side of [-1,1]){
+  for(let col=0;col<6;col++)piece(3,9.1/3,.5,-21.5+col*3,(row+.5)*9.1/3,-49+side*6,0x5e4c3f,0,officeId);
+  for(let col=0;col<4;col++)piece(.5,9.1/3,3,-14+side*9,(row+.5)*9.1/3,-53.5+col*3,0x5e4c3f,0,officeId);
+ }
+ // Independent roof panels keep the pitched silhouette and collapse with support loss.
+ for(let col=0;col<6;col++)for(const side of [-1,1]){
+  const roof=piece(3.06,.35,6.8,-21.5+col*3,10.6,-49+side*3,0x788080,0,officeId),e=breakables.at(-1);
+  roof.rotation.x=side*.43;e.body.quaternion.copy(roof.quaternion);e.body.aabbNeedsUpdate=true;e.role='roof';
+ }
  for(const x of [-21,-16.5,-12,-7.5])for(const y of [2.5,6.2]){
   deco(1.35,1.95,.12,x,y,-42.89,0xe8e4d8);
   deco(1.01,1.60,.13,x,y,-42.81,0x537e8a);
@@ -116,7 +123,7 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat,break
  for(let x=-34.5;x<=17.5;x+=6.5)collision(6.5,.14,.15,x,.94,-57,0x303a3d);
  for(const [x,z]of [[-39,-22],[-37,-7],[-38,9],[-32,-46],[-29,-62]]){
   const hull=new T.Mesh(new T.SphereGeometry(1,12,8),mat(0xd7ddd8));
-  hull.scale.set(2.9,.66,1.1);hull.position.set(ox+x,.7,z);hull.userData.guide=true;group.add(hull);
+  hull.scale.set(2.9,.66,1.1);hull.position.set(ox+x,.7,z);group.add(hull);
   deco(.1,11,.1,x,6.2,z,0xbfc5c2);deco(3.4,.12,.12,x,6.0,z,0xe2e7e3);
  }
  // Black twin-arm lamps, landscaped waterfront, fall-colored trees on Oakley Lane.
@@ -138,7 +145,7 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat,break
  // Background opposite-shore architecture, original simple procedural silhouettes.
  for(let i=0;i<9;i++){
   const x=-49+i*10,z=-117+(i%3)*4,h=3+(i%3)*1.4;
-  deco(6,h,5,x,h/2,z,[0xc9d1c7,0xdfded5,0xaebbbd][i%3]);
+  deco(6,h,5,x,h/2,z,[0xc9d1c7,0xdfded5,0xaebbbd][i%3]).userData.guide=true;
   const r=new T.Mesh(new T.ConeGeometry(1,1,4),mat(0x788688));r.rotation.y=Math.PI/4;
   r.scale.set(4,2.4,4);r.position.set(ox+x,h+1,z);r.userData.guide=true;group.add(r);
  }

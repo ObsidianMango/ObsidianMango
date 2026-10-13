@@ -14,7 +14,6 @@ export function createDestructibleEnvironment({T,C,scene,world,lots,onExplode,on
   const chips=[],chipObject=new T.Object3D(),chipTint=new T.Color();
   function clearChips(){chips.length=0;chipMesh.count=0;}
   function spawnChips(e,center){
-   if(!isDestructionLevel(e.level))return;
    const span=e.originalSize||e.size,quantity=Math.min(42,12+Math.ceil((span[0]*span[1]+span[1]*span[2]+span[0]*span[2])*.20));
    for(let i=0;i<quantity;i++){
     if(chips.length>=CHIP_LIMIT)chips.shift();
@@ -43,9 +42,10 @@ export function createDestructibleEnvironment({T,C,scene,world,lots,onExplode,on
  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
  const isDestructionLevel=level=>!!lots.views[level]?.routes;
  function register(entries){for(const e of entries){if(registered.has(e))continue;registered.add(e);
-  e.body.updateAABB();e.supportWidth=e.body.aabb.upperBound.x-e.body.aabb.lowerBound.x;e.supportDepth=e.body.aabb.upperBound.z-e.body.aabb.lowerBound.z;e.home=e.body.position.clone();e.turn=e.body.quaternion.clone();e.originalPhysicsMaterial=e.body.material;e.originalShape=e.body.shapes[0];e.originalScale=e.mesh.scale.clone();e.originalSize=e.size.slice();e.filterGroup=e.body.collisionFilterGroup;e.geometry=e.mesh.geometry;e.color=e.mesh.material.color.clone();e.damage=0;e.charred=0;e.broken=false;e.childMaterials=[];e.last=-10;e.lastRam=-10;e.dent=[0,0,0,0,0,1];e.visualDamage=-1;
+  e.body.updateAABB();e.homeBottom=e.body.aabb.lowerBound.y;e.supportWidth=e.body.aabb.upperBound.x-e.body.aabb.lowerBound.x;e.supportDepth=e.body.aabb.upperBound.z-e.body.aabb.lowerBound.z;e.home=e.body.position.clone();e.turn=e.body.quaternion.clone();e.originalPhysicsMaterial=e.body.material;e.originalShape=e.body.shapes[0];e.originalScale=e.mesh.scale.clone();e.originalSize=e.size.slice();e.filterGroup=e.body.collisionFilterGroup;e.geometry=e.mesh.geometry;e.color=e.mesh.material.color.clone();e.damage=0;e.charred=0;e.broken=false;e.childMaterials=[];e.last=-10;e.lastRam=-10;e.dent=[0,0,0,0,0,1];e.visualDamage=-1;
   if(e.structure){if(!structures.has(e.structure))structures.set(e.structure,{entries:[],ordered:[],supports:new Map()});structures.get(e.structure).entries.push(e);}
   e.body.addEventListener('collide',event=>{
+   if(e.body.userData?.kind==='ramp'&&Math.abs(event.contact.ni.y)>.6)return;
    if(activeSet.has(e))onContact?.(e,event.body,Math.abs(event.contact.getImpactVelocityAlongNormal()));
    if(e.broken&&!e.explosive){if(activeSet.has(e)&&(event.body.collisionFilterGroup&32))settledWake.add(e);return;}
    const kind=event.body.userData?.kind,target=!!kind&&kind!=='pedestrian',armedTarget=e.explosive&&e.armed&&target&&elapsed-e.armedAt>.08&&e.body.position.distanceTo(e.launchPosition)>1.5;
@@ -55,7 +55,7 @@ export function createDestructibleEnvironment({T,C,scene,world,lots,onExplode,on
    const point=e.body.position.vadd(relative),velocity=event.contact.ni.scale(event.contact.bi===e.body?-speed:speed);
    if(!pending.has(e)||pending.get(e).speed<speed)pending.set(e,{speed,point,velocity,target:armedTarget,monster:!!event.body.userData?.monster});
   });
- }for(const group of structures.values()){group.ordered=group.entries.slice().sort((a,b)=>a.home.y-b.home.y);for(const e of group.ordered){const bottom=e.home.y-e.originalSize[1]/2;e.foundation=e.role!=='contents'&&bottom<=.65;e.roof=e.role==='roof'||!e.role&&e.originalSize[1]<1&&Math.max(e.originalSize[0],e.originalSize[2])>6;group.supports.set(e,e.floorOwner?[e.floorOwner]:group.ordered.filter(o=>o.role!=='contents'&&o!==e&&o.home.y<e.home.y-.2&&bottom<=o.home.y+o.originalSize[1]/2+1&&Math.abs(o.home.x-e.home.x)<(o.supportWidth+e.supportWidth)/2+.6&&Math.abs(o.home.z-e.home.z)<(o.supportDepth+e.supportDepth)/2+.6));}}}register(lots.breakables);
+ }for(const group of structures.values()){group.ordered=group.entries.slice().sort((a,b)=>a.home.y-b.home.y);for(const e of group.ordered){const bottom=e.homeBottom;e.foundation=e.role!=='contents'&&bottom<=.65;e.roof=e.role==='roof'||!e.role&&e.originalSize[1]<1&&Math.max(e.originalSize[0],e.originalSize[2])>6;group.supports.set(e,e.floorOwner?[e.floorOwner]:group.ordered.filter(o=>o.role!=='contents'&&o!==e&&o.home.y<e.home.y-.2&&bottom<=o.home.y+o.originalSize[1]/2+1&&Math.abs(o.home.x-e.home.x)<(o.supportWidth+e.supportWidth)/2+.6&&Math.abs(o.home.z-e.home.z)<(o.supportDepth+e.supportDepth)/2+.6));}}}register(lots.breakables);
  function deform(e,amount,dent=e.dent){
   contentsDebris.sync(e,amount);
   if(Math.abs(e.visualDamage-amount)<.012&&e.visualChar===e.charred)return;e.visualChar=e.charred;e.mesh.userData.damage=amount;e.mesh.userData.charred=e.charred;e.visualDamage=amount;
@@ -68,7 +68,8 @@ export function createDestructibleEnvironment({T,C,scene,world,lots,onExplode,on
  }
  const pieceMass=e=>e.explosive?55:clamp(e.size[0]*e.size[1]*e.size[2]*90,12,650);
  function fracture(e){
-  if(!isDestructionLevel(e.level)||e.explosive||e.shattered||Math.max(...e.size)<=3.6)return;
+  const pointForFracture=e.body.position.clone();
+  if(e.unfragmented||e.explosive||e.shattered||Math.max(...e.size)<=3.6||!e.structure&&e.size[0]<1&&e.size[2]<1)return;
   e.shattered=true;const size=e.size.slice(),axes=[0,1,2].filter(i=>size[i]>2).sort((a,b)=>size[b]-size[a]),splits=[1,1,1];
    splits[axes[0]]=Math.min(7,Math.max(2,Math.ceil(size[axes[0]]/2.15)));
    if(axes.length>1)splits[axes[1]]=Math.min(3,Math.max(2,Math.ceil(size[axes[1]]/2)));
@@ -81,17 +82,17 @@ export function createDestructibleEnvironment({T,C,scene,world,lots,onExplode,on
    if(!f&&fragmentPool.length<FRAGMENT_LIMIT){const mesh=new T.Mesh(fragmentBox,e.charred>.15?burnedRubble:crackedRubble),body=new C.Body({mass:1,material:rubbleMat,shape:new C.Box(new C.Vec3(1,1,1)),collisionFilterGroup:8,collisionFilterMask:1|32|16,linearDamping:.28,angularDamping:.32,allowSleep:true,sleepSpeedLimit:.3,sleepTimeLimit:1.5});body.userData={kind:'building rubble'};f={mesh,body,size:[1,1,1],active:false};body.addEventListener('collide',event=>{if(f.active&&f.source)onContact?.(f.source,event.body,Math.abs(event.contact.getImpactVelocityAlongNormal()),f.body);});fragmentPool.push(f);}
    // Keep existing near-impact rubble when the pool is full; omit extra chips.
    if(!f)continue;const {mesh,body}=f;mesh.material=e.charred>.15?burnedRubble:crackedRubble;mesh.scale.set(...chunk);mesh.position.copy(position);mesh.quaternion.copy(turn);mesh.visible=true;mesh.castShadow=mesh.receiveShadow=true;e.mesh.parent.add(mesh);
-   body.removeShape(body.shapes[0]);body.addShape(new C.Box(new C.Vec3(...chunk.map(n=>n/2))));body.type=C.Body.DYNAMIC;body.mass=mass;f.restMass=mass;body.position.copy(position);body.quaternion.copy(turn);body.velocity.copy(e.body.velocity);body.angularVelocity.copy(e.body.angularVelocity);body.force.setZero();body.torque.setZero();body.updateMassProperties();body.updateBoundingRadius();body.aabbNeedsUpdate=true;body.wakeUp();world.addBody(body);Object.assign(f,{size:chunk.slice(),source:e,age:0,active:true});fragments.push(f);
+   body.removeShape(body.shapes[0]);body.addShape(new C.Box(new C.Vec3(...chunk.map(n=>n/2))));body.type=C.Body.DYNAMIC;body.mass=mass;f.restMass=mass;body.position.copy(position);body.quaternion.copy(turn);body.velocity.copy(e.body.velocity);const away=position.vsub(pointForFracture),len=Math.max(1,away.length());body.velocity.x+=away.x/len*3;body.velocity.y+=1.2+Math.abs(away.y/len);body.velocity.z+=away.z/len*3;body.angularVelocity.set((y+1)*.7,(x-z)*.8,(z+1)*-.6);body.force.setZero();body.torque.setZero();body.updateMassProperties();body.updateBoundingRadius();body.aabbNeedsUpdate=true;body.wakeUp();world.addBody(body);Object.assign(f,{size:chunk.slice(),source:e,age:0,restTime:0,active:true});fragments.push(f);
   }
  }
  function release(e,velocity,point,physical=false){
-  if(e.broken)return;e.broken=true;e.age=0;e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.linearDamping=.16;e.body.angularDamping=.26;e.body.allowSleep=true;if(isDestructionLevel(e.level)){e.body.collisionFilterGroup=8;e.body.material=rubbleMat;}e.body.updateMassProperties();e.body.wakeUp();
-  if(physical){e.body.velocity.setZero();e.body.angularVelocity.setZero();}else{e.body.velocity.set(clamp(velocity.x*.38,-9,9),Math.min(4,1+velocity.length()*.12),clamp(velocity.z*.38,-9,9));e.body.angularVelocity.set((e.home.z-point.z)*.16,.5,(point.x-e.home.x)*.16);}e.body.aabbNeedsUpdate=true;
+  if(e.broken)return;e.broken=true;e.age=0;e.restTime=0;e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.linearDamping=.16;e.body.angularDamping=.26;e.body.allowSleep=true;e.body.collisionFilterGroup=8;e.body.material=rubbleMat;e.body.updateMassProperties();e.body.wakeUp();
+  if(physical&&velocity.length()<1){e.body.velocity.set(0,-.4,0);e.body.angularVelocity.set(.18,.08,-.15);}else{const speed=velocity.length();e.body.velocity.set(clamp(velocity.x*.65,-18,18),Math.min(6,.8+speed*.24),clamp(velocity.z*.65,-18,18));e.body.angularVelocity.set(clamp((e.home.z-point.z)*.5,-4,4),.7,clamp((point.x-e.home.x)*.5,-4,4));}if(!e.structure&&e.size[0]<1&&e.size[2]<1){e.body.angularVelocity.x+=1.3+velocity.z*.12;e.body.angularVelocity.z-=velocity.x*.12;}e.body.aabbNeedsUpdate=true;
   // Local support failure pulls the facade and roof above it down, not the whole city.
   if(e.structure)dirtyStructures.add(e.structure);
-  contentsDebris.scatter(e);fracture(e);
+  contentsDebris.scatter(e);if(Math.max(...e.size)<=3.6)spawnChips(e,point);fracture(e);
  }
- function collapseUnsupported(){for(const id of dirtyStructures){const group=structures.get(id);if(!group)continue;const supported=new Set();for(const e of group.ordered){if(e.broken)continue;const below=group.supports.get(e).filter(o=>supported.has(o)&&!o.broken),valid=e.foundation||below.length>=(e.roof||e.role==='floor'?2:1);if(valid){supported.add(e);continue;}e.damage=Math.max(e.damage,.9);deform(e,e.damage);release(e,new C.Vec3(),e.body.position,true);e.body.sleepTimeLimit=2;e.body.wakeUp();}}dirtyStructures.clear();}
+ function collapseUnsupported(){for(const id of dirtyStructures){const group=structures.get(id);if(!group)continue;const supported=new Set();for(const e of group.ordered){if(e.broken)continue;const below=group.supports.get(e).filter(o=>supported.has(o)&&!o.broken),required=e.floorOwner?1:e.roof||e.role==='floor'?Math.max(1,Math.ceil(group.supports.get(e).length*.5)):1,valid=e.foundation||below.length>=required;if(valid){supported.add(e);continue;}e.damage=Math.max(e.damage,.9);deform(e,e.damage);release(e,new C.Vec3(),e.body.position,true);e.body.sleepTimeLimit=2;e.body.wakeUp();}}dirtyStructures.clear();}
  function throwPiece(e,velocity,point){
   release(e,velocity,point);e.age=0;e.age=0;e.body.type=C.Body.DYNAMIC;if(!e.body.mass)e.body.mass=pieceMass(e);e.body.updateMassProperties();e.body.wakeUp();
   const speed=Math.hypot(velocity.x,velocity.z),dx=e.body.position.x-point.x,dz=e.body.position.z-point.z,d=Math.max(1,Math.hypot(dx,dz));
@@ -110,7 +111,7 @@ export function createDestructibleEnvironment({T,C,scene,world,lots,onExplode,on
   e.last=elapsed;if(source==='blast')e.charred=Math.max(e.charred,Math.min(1,speed/20));const lp=e.mesh.worldToLocal(new T.Vector3(point.x,point.y,point.z)),dir=new T.Vector3(velocity.x,velocity.y,velocity.z).normalize().applyQuaternion(q.copy(e.mesh.quaternion).invert());
   e.dent=[clamp(lp.x,-.5,.5),clamp(lp.y,-.5,.5),clamp(lp.z,-.5,.5),dir.x,dir.y,dir.z];e.damage=clamp(e.damage+speed/(e.structure?15:9),0,1);deform(e,e.damage);
   if(e.damage>=(e.structure ? .72 : .58))release(e,velocity,point,source==='ram');
-  if(isDestructionLevel(e.level)&&source==='blast')throwPiece(e,velocity,point);
+  if(source==='blast')throwPiece(e,velocity,point);
  }
  function wakeEntry(e){if(e.body.type!==C.Body.DYNAMIC){e.age=0;e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.updateMassProperties();}e.body.wakeUp();}
  function wakeFragment(f){if(f.body.type!==C.Body.DYNAMIC){f.body.type=C.Body.DYNAMIC;f.body.mass=f.restMass||12;f.body.updateMassProperties();}f.age=0;f.body.wakeUp();}
@@ -124,18 +125,18 @@ export function createDestructibleEnvironment({T,C,scene,world,lots,onExplode,on
   for(const f of fragments){const d=f.body.position.vsub(point),length=d.length(),power=Math.max(0,1-length/18)*strength;if(power<.08)continue;wakeFragment(f);f.body.applyImpulse(new C.Vec3(d.x/Math.max(1,length)*power*f.body.mass*12,power*f.body.mass*4,d.z/Math.max(1,length)*power*f.body.mass*12));}
  }
  // Only actual collider contact can crush a piece. Held throttle continues to
- // stress an intact wall while it resists; released pieces start at rest, so their
- // mass and the solver's impulses give the truck a real slowdown and suspension jolt.
- function ram(chassis,dt,driveForce=0,multiplier=1){const speed=Math.hypot(chassis.velocity.x,chassis.velocity.z);if(speed<.15&&driveForce<1)return;for(const e of active){const point=contact(chassis,e.body,e.size);if(!point)continue;
+ // stress an intact wall while it resists. Broken chunks receive a bounded impact
+ // kick while the existing physical contact still slows and jolts the vehicle.
+ function ram(chassis,dt,driveForce=0,multiplier=1){const speed=Math.hypot(chassis.velocity.x,chassis.velocity.z);if(speed<.15&&driveForce<1)return;for(const e of active){if(e.body.userData?.kind==='ramp')continue;const point=contact(chassis,e.body,e.size);if(!point)continue;
   if(e.explosive){if(speed>8)detonate(e);else if(!e.armed)launchBarrel(e,chassis.velocity,point);continue;}
   if(e.broken){if(e.body.type!==C.Body.DYNAMIC||!e.body.mass){e.age=0;e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.updateMassProperties();}e.body.wakeUp();continue;}
   const pushing=clamp(driveForce/88000,0,1);e.damage=clamp(e.damage+pushing*(e.structure?.95:1.5)*dt*multiplier,0,1);deform(e,e.damage);
   if(elapsed-e.lastRam>.24&&speed>1.2){e.lastRam=elapsed;hit(e,speed,point,chassis.velocity,'ram');}
   if(e.damage>=(e.structure?.72:.58))release(e,chassis.velocity,point,true);
  }for(const f of fragments)if(contact(chassis,f.body,f.size))wakeFragment(f);}
- function update(dt,focus=null){elapsed+=dt;for(const e of settledWake)if(activeSet.has(e))wakeEntry(e);settledWake.clear();for(const [e,h]of pending)hit(e,h.speed,h.point,h.velocity,h.monster?'ram':'collision',h.target);pending.clear();for(const e of active)if(e.armed&&!e.detonated){if(elapsed-e.armedAt>3)detonate(e);else if(e.fuseMesh)e.fuseMesh.material.emissiveIntensity=1.8+Math.sin(elapsed*30);}
-  for(let i=0;i<3&&explosions.length;i++){const point=explosions.shift();explosionCount++;blast(point,2);onExplode?.(point,2);}collapseUnsupported();const moving=active.filter(e=>e.broken&&e.body.type===C.Body.DYNAMIC);for(const e of moving){e.age+=dt;e.mesh.position.copy(e.body.position);e.mesh.quaternion.copy(e.body.quaternion);const resting=e.body.sleepState===C.Body.SLEEPING||e.body.velocity.lengthSquared()<.36&&e.body.angularVelocity.lengthSquared()<.36;if(!e.armed&&resting&&e.age>2){e.body.type=C.Body.STATIC;e.body.mass=0;e.body.updateMassProperties();e.body.velocity.setZero();e.body.angularVelocity.setZero();e.body.aabbNeedsUpdate=true;}}for(const f of [...fragments]){f.age+=dt;if(f.age>18||f.age>3&&focus&&f.body.position.distanceTo(focus)>100){recycleFragment(f);continue;}if(f.body.type===C.Body.DYNAMIC){f.mesh.position.copy(f.body.position);f.mesh.quaternion.copy(f.body.quaternion);if(f.age>2&&(f.body.sleepState===C.Body.SLEEPING||f.body.velocity.lengthSquared()<.36&&f.body.angularVelocity.lengthSquared()<.36)){f.restMass=f.body.mass;f.body.type=C.Body.STATIC;f.body.mass=0;f.body.updateMassProperties();f.body.velocity.setZero();f.body.angularVelocity.setZero();f.body.aabbNeedsUpdate=true;}}}
-  if(isDestructionLevel(active[0]?.level)){const awake=moving.filter(e=>!e.armed&&e.body.sleepState!==C.Body.SLEEPING);awake.sort((a,b)=>b.age-a.age);let excess=Math.max(0,awake.length-AWAKE_LIMIT);for(const e of awake){if(!excess)break;if(e.age>2&&e.body.velocity.length()<.35&&e.body.angularVelocity.length()<.35){e.body.sleep();excess--;}}if(focus)for(const e of moving)if(!e.armed&&e.age>3&&e.body.position.distanceTo(focus)>120&&e.body.velocity.length()<.35&&e.body.angularVelocity.length()<.35)e.body.sleep();}
+ function update(dt,focus=null){elapsed+=dt;const supportedBodies=new Set();for(const c of world.contacts){if(c.ni.y<-.45)supportedBodies.add(c.bi);if(c.ni.y>.45)supportedBodies.add(c.bj);}for(const e of settledWake)if(activeSet.has(e))wakeEntry(e);settledWake.clear();for(const [e,h]of pending)hit(e,h.speed,h.point,h.velocity,h.monster?'ram':'collision',h.target);pending.clear();for(const e of active)if(e.armed&&!e.detonated){if(elapsed-e.armedAt>3)detonate(e);else if(e.fuseMesh)e.fuseMesh.material.emissiveIntensity=1.8+Math.sin(elapsed*30);}
+  for(let i=0;i<3&&explosions.length;i++){const point=explosions.shift();explosionCount++;blast(point,2);onExplode?.(point,2);}collapseUnsupported();const moving=active.filter(e=>e.broken&&e.body.type===C.Body.DYNAMIC);for(const e of moving){e.age+=dt;e.mesh.position.copy(e.body.position);e.mesh.quaternion.copy(e.body.quaternion);const resting=e.body.sleepState===C.Body.SLEEPING||e.body.velocity.lengthSquared()<.36&&e.body.angularVelocity.lengthSquared()<.36;e.restTime=resting&&supportedBodies.has(e.body)?(e.restTime||0)+dt:0;if(!e.armed&&e.restTime>.45&&e.age>2){e.body.type=C.Body.STATIC;e.body.mass=0;e.body.updateMassProperties();e.body.velocity.setZero();e.body.angularVelocity.setZero();e.body.aabbNeedsUpdate=true;}}for(const f of [...fragments]){f.age+=dt;if(f.age>18||f.age>3&&focus&&f.body.position.distanceTo(focus)>100){recycleFragment(f);continue;}if(f.body.type===C.Body.DYNAMIC){f.mesh.position.copy(f.body.position);f.mesh.quaternion.copy(f.body.quaternion);const resting=f.body.sleepState===C.Body.SLEEPING||f.body.velocity.lengthSquared()<.36&&f.body.angularVelocity.lengthSquared()<.36;f.restTime=resting&&supportedBodies.has(f.body)?(f.restTime||0)+dt:0;if(f.age>2&&f.restTime>.45){f.restMass=f.body.mass;f.body.type=C.Body.STATIC;f.body.mass=0;f.body.updateMassProperties();f.body.velocity.setZero();f.body.angularVelocity.setZero();f.body.aabbNeedsUpdate=true;}}}
+  if(isDestructionLevel(active[0]?.level)){const awake=moving.filter(e=>!e.armed&&e.body.sleepState!==C.Body.SLEEPING);awake.sort((a,b)=>b.age-a.age);let excess=Math.max(0,awake.length-AWAKE_LIMIT);for(const e of awake){if(!excess)break;if(e.age>2&&e.restTime>.45&&e.body.velocity.length()<.35&&e.body.angularVelocity.length()<.35){e.body.sleep();excess--;}}if(focus)for(const e of moving)if(!e.armed&&e.age>3&&e.restTime>.45&&e.body.position.distanceTo(focus)>120&&e.body.velocity.length()<.35&&e.body.angularVelocity.length()<.35)e.body.sleep();}
  }
  function snapshot(){const a=new Float32Array(active.length*16);for(let i=0;i<active.length;i++){const e=active[i],p=e.mesh.position,q=e.mesh.quaternion,k=i*16;
    a[k]=p.x;a[k+1]=p.y;a[k+2]=p.z;a[k+3]=q.x;a[k+4]=q.y;a[k+5]=q.z;a[k+6]=q.w;a[k+7]=e.damage;

@@ -1,6 +1,6 @@
 import {addBuildingContents} from './building-contents.js?v=street-26';
 import {createSceneryDetail} from './scenery-detail.js?v=street-22';
-import {buildMarinePark} from './real-marine-park.js?v=marine-3';
+import {buildMarinePark} from './real-marine-park.js?v=all-breakable-1';
 import {LOTS,ORIGINAL_LOT_COUNT} from './level-catalog.js?v=multiplayer-4';
 export {LOTS,ORIGINAL_LOT_COUNT} from './level-catalog.js?v=multiplayer-4';
 const LEVEL_BUILDERS={redbankMarina:buildMarinePark};
@@ -32,10 +32,10 @@ export function buildLots({T,C,scene,world,groundMat}){
  function box(w,h,d,x,y,z,color,yaw=0,solid=false){x*=2;z*=2;
  // Ground is supplied by the deformable heightfield; markings remain logical guides.
  if(y<0&&w>40&&d>40)return null;
- const building=h>=4&&w>=7&&d>=5;
+ const building=h>=2.6&&w>=5&&d>=5;
  if(building){w*=2;d*=2;const id=index+':'+structureSerial++;buildings.push({id,level:index,x:ox+x,z,w,d,h,yaw,name:level.style.replace(/^./,c=>c.toUpperCase()),type:level.style});const rows=Math.ceil(h/4),hx=w/2,hz=d/2;
   const wall=(length,axis,side)=>{const cols=Math.ceil(length/6);for(let row=0;row<rows;row++)for(let c=0;c<cols;c++){const offset=-length/2+(c+.5)*length/cols;piece(axis===0?length/cols:.55,h/rows,axis===0?.55:length/cols,x+(axis===0?offset:side*hx),y-h/2+(row+.5)*h/rows,z+(axis===0?side*hz:offset),color,yaw,id);}};
-  for(const side of [-1,1]){wall(w,0,side);wall(d,1,side);}const nx=Math.ceil(w/6),nz=Math.ceil(d/6);for(let i=0;i<nx;i++)for(let j=0;j<nz;j++)piece(w/nx,.35,d/nz,x-w/2+(i+.5)*w/nx,y+h/2+.18,z-d/2+(j+.5)*d/nz,0x7b8277,yaw,id);mini.push({x,z,w,d,yaw,color:'#677b75'});return null;
+  for(const side of [-1,1]){wall(w,0,side);wall(d,1,side);}const nx=Math.ceil(w/6),nz=Math.ceil(d/6);for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){piece(w/nx,.35,d/nz,x-w/2+(i+.5)*w/nx,y+h/2+.18,z-d/2+(j+.5)*d/nz,0x7b8277,yaw,id);breakables.at(-1).role="roof";}mini.push({x,z,w,d,yaw,color:'#677b75'});return null;
  }
  // Stretch architecture and boundary walls, while preserving full-size vehicles and bays.
  if(Math.abs(x)>44||Math.abs(z)>44){w*=2;d*=2;}
@@ -56,7 +56,7 @@ export function buildLots({T,C,scene,world,groundMat}){
  text(level.name.toUpperCase(),0,3.7,-25,13);box(17,1.3,.2,0,3.7,-25,0x244339);box(.18,4,.18,-6,2,-25,0x626b60);box(.18,4,.18,6,2,-25,0x626b60);
  }
  const colors=[0x9b6359,0x698a97,0xcbc7b0,0x676977,0xa69667];
- if(LEVEL_BUILDERS[level.style])LEVEL_BUILDERS[level.style]({T,group:g,ox,piece,bay,parked,text,mini,mat,breakables});
+ if(LEVEL_BUILDERS[level.style])LEVEL_BUILDERS[level.style]({T,group:g,ox,piece,bay,parked,text,mini,mat,breakables,buildings,index});
  if(level.style==='market'){box(29,5,8,3,2.5,-34,0xc3c3ab);text('MARKET',3,3,-29.9,8);for(let x of [-12,-8,-4,0,4,8,12,16]){bay(x,-15);if(x!==4)parked(x,-15,0,colors[(x+12)/4%5]);}island(-1,2,12,3);cone(-8,6);cone(7,6);}
  if(level.style==='diner'){box(19,4,9,0,2,-32,0xbf7866);text('SUNSET DINER',0,2.8,-27.4,11);for(let x of [-12,-6,0,7,13]){bay(x,-10,-Math.PI/4);if(x!==7)parked(x,-10,-Math.PI/4,colors[Math.abs(x)%5]);}island(1,8,12,2.5);box(8,.5,1,-12,.25,-19,0xbdc4b2,0,true);}
  if(level.style==='office'){box(25,12,9,2,6,-32,0x829c9b);for(let x of [-14,-10,-6,-2,2,6,10,14,18]){bay(x,-15);parked(x,-15,0,colors[Math.abs(x)%5]);}for(let x of [-7,-3,1,5,9,13,17]){bay(x,14);if(x!==5)parked(x,14,Math.PI,colors[Math.abs(x)%5]);}island(-4,-1,13,2.6);}
