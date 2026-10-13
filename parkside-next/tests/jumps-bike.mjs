@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {bootGame} from './helpers/game.mjs';
+import {SECRET_LEVEL_INDEX} from '../level-catalog.js';
 const {app,context,frame,get,setPads,window}=await bootGame(),t=app.test,life=t.streetLife,C=context.C;
-t.loadLevel(24);app.start();const rideable=t.secretView.rideables[0];assert(rideable&&rideable.asset.config.bike);assert.equal(t.world.bodies.filter(b=>b.userData?.kind==='racer bike').length,1);assert.equal(t.traffic.active.length,20);
+t.loadLevel(SECRET_LEVEL_INDEX);app.start();const rideable=t.secretView.rideables[0];assert(rideable&&rideable.asset.config.bike);assert.equal(t.world.bodies.filter(b=>b.userData?.kind==='racer bike').length,1);assert.equal(t.traffic.active.length,20);
 // The detailed parked model is reused: it gains a rider only when mounted.
 assert(!rideable.mesh.getObjectByName('rider').visible);const geometry=new Set();rideable.mesh.traverse(n=>{if(n.geometry)geometry.add(n.geometry);});const truck=t.car,truckP=t.chassis.position.clone();t.teleport(0,190);assert(life.exitVehicle());const beforeBodies=t.world.bodies.length;life.body.position.set(rideable.body.position.x+2,1.05,rideable.body.position.z);assert(life.interact());frame();assert.equal(t.car.config.id,'racer-bike');assert.equal(t.vehicle.wheelInfos.length,2);assert(t.car.root.getObjectByName('rider').visible);assert(!t.world.bodies.includes(rideable.body));assert(rideable.occupied);t.car.root.traverse(n=>{if(n.geometry)assert(geometry.has(n.geometry));});
 // Real physics acceleration / steering, front steering only and rear drive only.

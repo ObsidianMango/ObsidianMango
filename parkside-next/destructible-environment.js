@@ -52,7 +52,7 @@ export function createDestructibleEnvironment({T,C,scene,world,lots,onExplode,on
    if(!activeSet.has(e)||event.body.mass<=0&&!armedTarget||kind==='pedestrian'||elapsed-e.last<.24&&!armedTarget)return;
    const speed=Math.abs(event.contact.getImpactVelocityAlongNormal());if(speed<1.4)return;
    const relative=event.contact.bi===e.body?event.contact.ri:event.contact.rj;
-   const point=e.body.position.vadd(relative),velocity=event.body.velocity.clone();
+   const point=e.body.position.vadd(relative),velocity=event.contact.ni.scale(event.contact.bi===e.body?-speed:speed);
    if(!pending.has(e)||pending.get(e).speed<speed)pending.set(e,{speed,point,velocity,target:armedTarget,monster:!!event.body.userData?.monster});
   });
  }for(const group of structures.values()){group.ordered=group.entries.slice().sort((a,b)=>a.home.y-b.home.y);for(const e of group.ordered){const bottom=e.home.y-e.originalSize[1]/2;e.foundation=e.role!=='contents'&&bottom<=.65;e.roof=e.role==='roof'||!e.role&&e.originalSize[1]<1&&Math.max(e.originalSize[0],e.originalSize[2])>6;group.supports.set(e,e.floorOwner?[e.floorOwner]:group.ordered.filter(o=>o.role!=='contents'&&o!==e&&o.home.y<e.home.y-.2&&bottom<=o.home.y+o.originalSize[1]/2+1&&Math.abs(o.home.x-e.home.x)<(o.supportWidth+e.supportWidth)/2+.6&&Math.abs(o.home.z-e.home.z)<(o.supportDepth+e.supportDepth)/2+.6));}}}register(lots.breakables);
