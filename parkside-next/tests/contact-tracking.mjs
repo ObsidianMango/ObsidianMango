@@ -1,0 +1,7 @@
+import assert from 'node:assert/strict';
+import * as C from '../cannon-es.js';
+import {installSparseContactTracking} from '../contact-tracking.js';
+const w=new C.World({gravity:new C.Vec3(0,0,0)});installSparseContactTracking(C,w);
+const a=new C.Body({mass:1,shape:new C.Sphere(1)}),b=new C.Body({mass:0,shape:new C.Sphere(1),position:new C.Vec3(1.5,0,0)}),extra=new C.Body({mass:0,shape:new C.Sphere(1),position:new C.Vec3(50,0,0)});w.addBody(extra);w.addBody(a);w.addBody(b);let hits=0;a.addEventListener('collide',()=>hits++);w.step(1/60);assert(hits>0);assert.equal(w.bodyOverlapKeeper.current.length,0,'unused world overlap events have no tracking work');assert(w.collisionMatrix.get(a,b));w.removeBody(extra);assert(w.collisionMatrix.get(a,b),'body removals cannot corrupt contact identity');
+let begins=0,ends=0,shapes=0;w.addEventListener('beginContact',()=>begins++);w.addEventListener('endContact',()=>ends++);w.addEventListener('beginShapeContact',()=>shapes++);a.position.set(0,0,0);a.velocity.setZero();w.step(1/60);assert(begins>0);assert(shapes>0);a.position.set(-20,0,0);a.aabbNeedsUpdate=true;w.step(1/60);assert(ends>0);
+for(let i=0;i<2000;i++)w.collisionMatrix.setNumObjects(i);assert(Object.keys(w.collisionMatrix.matrix).length<10,'contact storage does not scale with squared body count');console.log('Sparse contact identity, per-body collide events, opt-in world begin/end/shape events and bounded storage pass.');

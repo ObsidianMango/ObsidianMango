@@ -48,5 +48,5 @@ assert(!extractFunction(web,'update').includes('render();'),'Goo mesh buffers mu
 assert(drive.includes('crowd.render();streetLife.webs.render();'),'Frame loop must render full-detail crowd and goo');
 assert(drive.includes('world.step(dt)'),'Full collision simulation must be retained');
 assert(drive.includes('Math.max(64,car.assemblies.length)'),'Full borrowed-vehicle debris must be retained');
-assert(read('index.html').includes('drive.js?v=fps-30-1'),'Published game should use fresh optimized bundle');
+assert(read('index.html').includes('drive.js?v=debris-fps-1'),'Published game should use fresh optimized bundle');
 console.log('FPS performance invariants and bit-identical replay snapshots passed.');
