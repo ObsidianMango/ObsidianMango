@@ -34,8 +34,8 @@ import {installTouchGuard} from './touch-guard.js?v=duel-2';
 import {buildRoadster} from './roadster-model.js?v=mango-3';
 import {VEHICLES} from './garage-models.js?v=street-33';
 import {createCrashDirector} from './crash-replay.js?v=fps-1';
-import {createDestructibleEnvironment} from './destructible-environment.js?v=debris-fps-1';
-import {createDestructibleTerrain} from './destructible-terrain.js?v=marine-2';
+import {createDestructibleEnvironment} from './destructible-environment.js?v=collision-2';
+import {createDestructibleTerrain} from './destructible-terrain.js?v=collision-2';
 import {LOTS,ORIGINAL_LOT_COUNT,buildLots,assessParking,completedThrough,isLotUnlocked,nextLotIndex} from './parking-lots.js?v=fps-30-1';
 const T=window.THREE,$=id=>document.getElementById(id),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 installTouchGuard();
@@ -172,12 +172,12 @@ function burst(point,strength){for(let i=0;i<Math.min(18,5+strength);i++){let p=
 
 // Defer all body mutations until after the physics solver finishes its step.
 chassis.addEventListener('collide',event=>{if(state!=='running'||streetLife?.mode==='foot'||physicsTime-lastImpact<.7)return;const impact=Math.abs(event.contact.getImpactVelocityAlongNormal());if(impact<.8||event.body.collisionFilterGroup===2)return;const kind=event.body.userData?.kind;if(kind==='pedestrian'||kind==='ramp')return;if(event.body===ground&&impact<8)return;const cp=event.contact.bi===chassis?event.contact.ri:event.contact.rj;const point=new T.Vector3(chassis.position.x+cp.x,chassis.position.y+cp.y,chassis.position.z+cp.z);if(!pendingHit||impact>pendingHit.impact)pendingHit={impact,kind:event.body===ground?'ground':kind,point,velocity:new T.Vector3().copy(chassis.velocity)};});
-function goldenImpact(hit){lastImpact=physicsTime;health=100;parkingHold=0;if(hit.kind==='ground')return;if(spec.monster){burst(hit.point,Math.min(12,hit.impact));crashSound(Math.min(18,hit.impact));return;}const strength=clamp(hit.impact/8,.8,1.8);environment.blast(hit.point,strength);traffic.blast(hit.point,strength);burst(hit.point,Math.min(12,hit.impact));crashSound(Math.min(10,hit.impact));if(hit.velocity.length()>1){chassis.velocity.x=hit.velocity.x*.8;chassis.velocity.z=hit.velocity.z*.8;chassis.wakeUp();}}
+function goldenImpact(hit){lastImpact=physicsTime;health=100;parkingHold=0;if(hit.kind==='ground')return;dentCarPanels(hit);if(hit.impact<8){burst(hit.point,Math.min(8,hit.impact));crashSound(hit.impact);return;}if(spec.monster){burst(hit.point,Math.min(12,hit.impact));crashSound(Math.min(18,hit.impact));return;}const strength=clamp(hit.impact/8,.8,1.8);environment.blast(hit.point,strength);traffic.blast(hit.point,strength);burst(hit.point,Math.min(12,hit.impact));crashSound(Math.min(10,hit.impact));if(hit.velocity.length()>1){chassis.velocity.x=hit.velocity.x*.8;chassis.velocity.z=hit.velocity.z*.8;chassis.wakeUp();}}
 // Cumulative panel crushing uses the car's existing assemblies: no extra draw calls.
  // The original home transforms are restored exactly on recovery and replay restart.
  const panelPosition=new T.Vector3(),panelRotation=new T.Quaternion();
  function dentCarPanels(hit){
-  if(spec.golden||!hit?.point||hit.impact<2.3)return;
+  if(!hit?.point||hit.impact<1.4||hit.kind==='ground')return;
   syncCar();
   const eligible=car.assemblies.filter(p=>p.userData.attached&&/fender|panel|hood|bonnet|door|roof|trunk|boot|bumper|tailgate|grille|light|quarter|body|cabin|side|front|rear/i.test(p.name)&&!/wheel|tire|axle|steering|chassis|tub|rider|engine|glass|window/i.test(p.name));
   eligible.sort((a,b)=>a.getWorldPosition(panelPosition).distanceToSquared(hit.point)-b.getWorldPosition(new T.Vector3()).distanceToSquared(hit.point));
@@ -195,12 +195,12 @@ function goldenImpact(hit){lastImpact=physicsTime;health=100;parkingHold=0;if(hi
  function handleHit(hit){if(spec.golden){goldenImpact(hit);return;}lastImpact=physicsTime;bumps++;parkingHold=0;
   const damage=clamp((hit.impact-2.7)*(hit.kind==='hay'?1.1:1.8)/(spec.armorMultiplier||1),1,60);
   health=Math.max(0,health-damage);
-  if(hit.impact>=10.5*(spec.armorMultiplier||1)||health<=17){beginWreck(hit);return;}
+  if((hit.kind!=='ground'&&hit.impact>=16*(spec.armorMultiplier||1))||health<=17){beginWreck(hit);return;}
   dentCarPanels(hit);burst(hit.point,hit.impact);crashSound(hit.impact);
   const candidates=car.assemblies.filter(p=>p.userData.attached&&/fender|pipes|grille|bumper|mirror|headlight|tail.?light|hood|bonnet|door|tailgate|spoiler/i.test(p.name)&&!/wheel|chassis|tub|glass|engine/i.test(p.name));
   candidates.sort((a,b)=>a.getWorldPosition(new T.Vector3()).distanceToSquared(hit.point)-b.getWorldPosition(new T.Vector3()).distanceToSquared(hit.point));
-  if(hit.impact>4.5&&candidates.length)detach(candidates[0],1+hit.impact*.35);
-  notify(hit.impact>4.5?'Bodywork damaged · pieces lost':'Bodywork dented',1.3);
+  if(hit.kind!=='ground'&&hit.impact>4.5&&candidates.length)detach(candidates[0],1+hit.impact*.35);
+  notify(hit.kind==='ground'?'Hard landing':hit.impact>4.5&&candidates.length?'Bodywork damaged · pieces lost':hit.impact>=1.4?'Bodywork dented':'Small bump',1.3);
  }
 function beginWreck(hit){if(spec.golden){goldenImpact(hit);return;}if(state==='wreck'||state==='replay'||state==='wreckReview')return;syncCar();duel?.wreck({vehicleId:spec.id,p:[car.root.position.x-view().ox,car.root.position.y,car.root.position.z],q:car.root.quaternion.toArray(),strength:Math.min(30,Math.max(8,hit.impact))});if(spec.id==='maybach'||vehicleKey(car)==='maybach'||(spec.name||'').includes('Maybach'))maybachDummy.launch(new T.Vector3().copy(chassis.position),new T.Vector3().copy(chassis.velocity),new T.Vector3(0,0,-1).applyQuaternion(chassis.quaternion));director.record(physicsTime,true);const forward=hit.velocity.clone();forward.y=0;if(forward.length()<1)forward.set(0,0,-1).applyQuaternion(car.root.quaternion);forward.normalize();director.mark({point:hit.point,forward,speed:Math.max(hit.impact,hit.velocity.length())},physicsTime);scoring.bank({parked:false,lot:levelIndex,vehicle:spec.id});state='wreck';const blastStrength=Math.max(.8,hit.impact/16);traffic.blast(hit.point,blastStrength);environment.blast(hit.point,blastStrength);terrain.blast(hit.point,blastStrength);wreckTime=0;clearInput();health=0;const kick=clamp(hit.impact*.42,6,13);for(const part of car.assemblies)detach(part,kick,true);chassis.collisionResponse=false;chassis.collisionFilterMask=0;document.body.classList.add('cinematic');$('replayHUD').hidden=false;$('replayTitle').textContent='WRECKED';$('replayAngle').textContent='REPLAY INCOMING';$('replayProgress').style.width='0%';$('impactStats').textContent=Math.round(Math.max(hit.impact,hit.velocity.length())*2.237)+' MPH / '+car.assemblies.length+' PARTS SCATTERED';$('skipReplay').textContent='Skip →';flash=.85;crashSound(35);}
 function explode(){if(state!=='running')return;beginWreck({impact:25,point:new T.Vector3().copy(chassis.position),velocity:new T.Vector3().copy(chassis.velocity)});}
