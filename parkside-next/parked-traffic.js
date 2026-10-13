@@ -19,7 +19,7 @@ export function createParkedTraffic({T,C,scene,world,lots,garage,onWreck}){
  function resetDistrict(d){for(const item of active)if(item.district===d&&!item.occupied){pending.delete(item);restoreItem(item);}}
  function reset(level){for(const d of [...activeDebris])freeze(d,false);pending.clear();for(const item of active)restoreItem(item);active=lots.parked.filter(p=>p.level===level);clock=0;let specials=0;
   active.forEach((item,i)=>{prepare(item);if(!item.parts){
-   const featured=isDestructionLevel(level)?garage.find(g=>g.config.id===['montecarlo','suburban','impala','colorado','maybach'][i%5]):null;
+   const dense=!!lots.views[level]?.group.userData.riverview,featured=isDestructionLevel(level)||dense?garage.find(g=>g.config.id===(dense?['montecarlo','suburban','impala','colorado','montecarlo']:['montecarlo','suburban','impala','colorado','maybach'])[i%5]):null;
    if(garage.length){const model=featured||garage[(i*5+level)%garage.length],copy=model.root.clone(true);copy.visible=true;copy.position.set(0,0,0);copy.quaternion.identity();copy.traverse(n=>{if(n.userData.home){n.position.copy(n.userData.home);n.quaternion.identity();}});copy.updateMatrixWorld(true);const bounds=new T.Box3().setFromObject(copy),size=bounds.getSize(new T.Vector3()),factor=Math.min(2/size.x,4.25/size.z,1);item.mesh.clear();for(const child of [...copy.children]){child.position.multiplyScalar(factor);child.scale.multiplyScalar(factor);item.mesh.add(child);}item.model=model.config.id;item.name=model.config.name;specials++;}
    else throw Error('No authored fleet model available');setupParts(item);
   }else if(item.model!=='standard')specials++;restoreItem(item);});

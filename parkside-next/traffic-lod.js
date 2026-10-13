@@ -1,7 +1,7 @@
 // Batch complete intact fleet geometry, including authored tires and UVs.
 // Nearby, occupied, moving or damaged cars always return to their original parts.
-export function createTrafficLOD(T,view){
- const cars=view.targets.filter(t=>t.kind==='car').map(t=>t.car),models=new Map();
+export function createTrafficLOD(T,view,nearDistance=80){
+ const cars=view.parked||view.targets.filter(t=>t.kind==='car').map(t=>t.car),models=new Map();
  const inverse=new T.Matrix4(),relative=new T.Matrix4(),normalMatrix=new T.Matrix3(),point=new T.Vector3(),normal=new T.Vector3(),groupInverse=new T.Matrix4(),frustum=new T.Frustum(),projection=new T.Matrix4(),sphere=new T.Sphere(),center=new T.Vector3();
  for(const car of cars){const key=car.model||'roadster';if(!models.has(key))models.set(key,{cars:[],batches:[],current:[]});models.get(key).cars.push(car);}
  for(const group of models.values()){
@@ -28,7 +28,7 @@ export function createTrafficLOD(T,view){
  let distant=0,drawBatches=0;
  function update(x,z,camera=null){distant=drawBatches=0;if(camera){camera.updateMatrixWorld();projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);}view.group.updateWorldMatrix(true,false);groupInverse.copy(view.group.matrixWorld).invert();
   for(const group of models.values()){
-   const far=[];for(const car of group.cars){const dx=car.body.position.x-view.ox-x,dz=car.body.position.z-z,eligible=dx*dx+dz*dz>80*80&&!car.occupied&&!car.exploded&&(car.damage||0)===0&&car.body.mass===0;car.mesh.visible=!eligible&&!car.occupied;if(eligible){center.set(car.body.position.x,car.body.position.y+1,car.body.position.z);sphere.set(center,5);if(!camera||frustum.intersectsSphere(sphere))far.push(car);}}
+   const far=[];for(const car of group.cars){const dx=car.body.position.x-view.ox-x,dz=car.body.position.z-z,eligible=dx*dx+dz*dz>nearDistance*nearDistance&&!car.occupied&&!car.exploded&&(car.damage||0)===0&&car.body.mass===0;car.mesh.visible=!eligible&&!car.occupied;if(eligible){center.set(car.body.position.x,car.body.position.y+1,car.body.position.z);sphere.set(center,5);if(!camera||frustum.intersectsSphere(sphere))far.push(car);}}
    distant+=far.length;drawBatches+=far.length?group.batches.length:0;
    if(far.length===group.current.length&&far.every((car,i)=>car===group.current[i]))continue;group.current=far;
    for(let i=0;i<far.length;i++){far[i].mesh.updateWorldMatrix(true,false);relative.multiplyMatrices(groupInverse,far[i].mesh.matrixWorld);for(const batch of group.batches)batch.setMatrixAt(i,relative);}

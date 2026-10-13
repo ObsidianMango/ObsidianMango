@@ -41,4 +41,4 @@ const front=t.environment.entries.filter(e=>e.structure&&!e.role&&e.size[2]<1).s
 t.teleport(front.home.x,front.home.z+10,0,14);let peakFragments=0;
 for(let i=0;i<80;i++){t.step(1/60);peakFragments=Math.max(peakFragments,t.environment.fragments.length);}
 assert(front.broken);assert(peakFragments>0&&peakFragments<=96);assert.equal(app.getState().state,'running');
-console.log('All 25 lots: destructible trees/scenery, impact fracture, flying chunks, marine foliage, segmented office collapse, reset, secret truck ram, actual roadster crash and bounded debris pass.');
+console.log('All parking lots: destructible trees/scenery, impact fracture, flying chunks, marine foliage, segmented office collapse, reset, secret truck ram, actual roadster crash and bounded debris pass.');

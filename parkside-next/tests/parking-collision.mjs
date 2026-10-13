@@ -1,7 +1,8 @@
+import {SECRET_LEVEL_INDEX} from '../level-catalog.js';
 import assert from 'node:assert/strict';
 import {bootGame} from './helpers/game.mjs';
 const {app,T,context}=await bootGame(),t=app.test,C=context.C;
-for(const level of [0,12,24,25]){
+for(const level of [0,12,24,25,SECRET_LEVEL_INDEX]){
  assert(t.loadLevel(level));app.start();t.setState('running');t.teleport(0,0);
  const origin=t.chassis.position.x;
  for(let i=0;i<20;i++)t.terrain.blast(new T.Vector3(origin+i*.1,0,0),2);
