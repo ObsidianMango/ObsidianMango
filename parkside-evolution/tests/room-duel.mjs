@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {Peer} from './room-peer.mjs';
+import {createMultiplayer} from '../multiplayer.js';
+import {SECRET_LEVEL_INDEX} from '../level-catalog.js';
+const T=createRequire(import.meta.url)('../three.min.js');globalThis.Peer=Peer;globalThis.RTCPeerConnection=class{};
+let time=0,wall=Infinity;const positions=[[0,0,0],[0,0,-10]],modes=['foot','foot'],weapons=['pistol','web'],owned=[[],[]],starts=[];
+const create=i=>createMultiplayer({T,scene:new T.Scene(),camera:new T.PerspectiveCamera(),now:()=>time,profile:()=>({guns:owned[i],level:i?0:SECRET_LEVEL_INDEX,character:'mango'}),sample:()=>({p:positions[i],yaw:0,mode:modes[i],weapon:weapons[i],active:true,safe:false,size:[1.6,1.1,2.6]}),onStart:(role,level)=>starts.push({role,level}),onRespawn(){},blocked:()=>wall});
+const a=create(0),b=create(1);const code=await a.hostRoom();await b.joinRoom(code);await new Promise(r=>setTimeout(r,0));assert(a.info().ready&&b.info().ready);assert(starts.every(s=>s.level===SECRET_LEVEL_INDEX));
+const step=()=>{time+=.1;a.update(.1);b.update(.1);};for(let i=0;i<45;i++)step();
+owned[0].push('pistol');const cameraFrom=new T.Vector3(4,4,8),dir=new T.Vector3(0,.95,-10).sub(cameraFrom).normalize(),target=a.aimTarget(cameraFrom,dir);assert(target,'third-person camera can target detailed remote avatar');const muzzle=new T.Vector3(0,1.47,0),shotDir=target.clone().sub(muzzle).normalize();assert(a.shoot('pistol',muzzle,shotDir));step();assert.equal(b.info().health.hp,75);
+wall=2;assert.equal(a.aimTarget(cameraFrom,dir),null,'walls hide remote targets');wall=Infinity;
+assert(b.shoot('web',new T.Vector3(0,1.47,-10),new T.Vector3(0,0,1)));step();assert.equal(a.movementScale(),.27);assert.equal(a.info().health.hp,100);
+modes[0]='vehicle';for(let i=0;i<5;i++)step();assert(b.shoot('web',new T.Vector3(0,1.47,-10),new T.Vector3(0,0,1)));step();assert(a.info().health.slow>3.8);for(let i=0;i<45;i++)step();assert.equal(a.movementScale(),1);
+owned[1].push('pistol');weapons[1]='pistol';assert(b.shoot('pistol',new T.Vector3(0,1.47,-10),new T.Vector3(0,0,1)));step();assert.equal(a.info().health.hp,75,'guest can use a weapon purchased after joining');
+a.leave();b.leave();delete globalThis.Peer;delete globalThis.RTCPeerConnection;
+console.log('Room transport completes full Secret City handshake; camera-to-avatar aim causes authoritative damage; webs slow foot and vehicle opponents and expire.');
