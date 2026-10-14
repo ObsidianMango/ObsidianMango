@@ -53,3 +53,7 @@ Serve the repository over HTTP to play locally. On `localhost` the existing `win
 | Integration, camera, input and game states | `drive.js`, with `xbox-controls.js` and UI modules |
 
 See [ADDING-LEVELS.md](ADDING-LEVELS.md) for data-driven level creation and [ROADMAP.md](ROADMAP.md) for remaining work. See [VALIDATION.md](VALIDATION.md) for measured results and test limits.
+
+### Small module-cleanup checkpoint (2026-10-14)
+
+Touch steering-wheel gesture handling, keyboard/controller visual priority, and pointer lifecycle now live in `steering-control.js`. `drive.js` uses a small steering adapter rather than owning the DOM listeners. One new self-contained steering regression test covers drag, clamp, pointer cancellation, recenter, keyboard and controller display. The original physics, destruction, multiplayer, and 26 parking challenges are unchanged in this pass; this is a deliberate stabilization checkpoint, not the completed engine refactor.
