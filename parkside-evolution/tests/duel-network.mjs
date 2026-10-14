@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {createMultiplayer} from '../multiplayer.js';
-const require=createRequire(import.meta.url),T=require('../three.min.js'),{RTCPeerConnection}=require('/tmp/parkside-network/node_modules/werift');
+const require=createRequire(import.meta.url),T=require('../three.min.js'),{RTCPeerConnection}=require('werift');
 // The container blocks interface enumeration; advertise loopback for real UDP ICE.
 require('node:os').networkInterfaces=()=>({lo:[{address:'127.0.0.1',family:'IPv4',internal:true}]});
 class LocalRTC extends RTCPeerConnection{constructor(config){super({...config,iceAdditionalHostAddresses:['127.0.0.1'],iceUseIpv6:false});}}

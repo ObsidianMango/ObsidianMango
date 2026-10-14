@@ -4,6 +4,7 @@ let html=fs.readFileSync(path.join(root,'index.html'),'utf8').replace(/releases\
 const names=fs.readdirSync(root).filter(n=>/\.(js|css|webmanifest)$/.test(n)&&n!=='release.js').sort();
 const digest=hash(names.map(n=>n+'\0'+hash(fs.readFileSync(path.join(root,n)))).join('\n')+'\n'+html).slice(0,12),dir=path.join(root,'releases',digest);fs.mkdirSync(dir,{recursive:true});
 for(const n of names)fs.copyFileSync(path.join(root,n),path.join(dir,n));
+const webmanifest=JSON.parse(fs.readFileSync(path.join(dir,'manifest.webmanifest'),'utf8'));webmanifest.start_url='../../';webmanifest.scope='../../';fs.writeFileSync(path.join(dir,'manifest.webmanifest'),JSON.stringify(webmanifest,null,2));
 fs.writeFileSync(path.join(dir,'release.js'),`export const BUILD_ID='${digest}';\nexport const EDITION='parkside-evolution-1';\n`);fs.writeFileSync(path.join(dir,'index.html'),html);
 const files=Object.fromEntries([...names,'release.js','index.html'].map(n=>[n,{sha256:hash(fs.readFileSync(path.join(dir,n))),bytes:fs.statSync(path.join(dir,n)).size}]));
 fs.writeFileSync(path.join(dir,'build-manifest.json'),JSON.stringify({build:digest,files},null,2));

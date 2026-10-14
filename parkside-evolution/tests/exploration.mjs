@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
-const require=createRequire(import.meta.url),{parseHTML}=require('/tmp/parkside-test/node_modules/linkedom');
+const require=createRequire(import.meta.url),{parseHTML}=require('linkedom');
 const {window,document}=parseHTML(fs.readFileSync(root+'index.html','utf8'));
 const ctx2d=new Proxy({createRadialGradient:()=>({addColorStop(){}}),createLinearGradient:()=>({addColorStop(){}}),measureText:()=>({width:30}),getImageData:(x,y,w,h)=>({data:new Uint8ClampedArray(w*h*4)})},{get:(o,k)=>k in o?o[k]:()=>{},set:(o,k,v)=>{o[k]=v;return true;}});
 Object.defineProperty(window.HTMLSelectElement.prototype,'value',{configurable:true,get(){return this.querySelector('option[selected]')?.value||this.firstElementChild?.value||'';},set(value){for(const option of this.children){if(option.value===String(value))option.setAttribute('selected','');else option.removeAttribute('selected');}}});
@@ -29,7 +29,7 @@ class Renderer {
 }
 window.THREE={...T,WebGLRenderer:Renderer};
 let pads=[];
-const context={window,document,localStorage,Element:window.Element,navigator:{getGamepads:()=>pads},location:{hostname:'127.0.0.1'},innerWidth:393,innerHeight:852,devicePixelRatio:3,performance:{now:()=>0},requestAnimationFrame:f=>raf.push(f),setTimeout:()=>{},console};
+const context={window,document,localStorage,Element:window.Element,navigator:{getGamepads:()=>pads},location:{hostname:'127.0.0.1',hash:'',href:'http://127.0.0.1/',pathname:'/',search:''},innerWidth:393,innerHeight:852,devicePixelRatio:3,performance:{now:()=>0},requestAnimationFrame:f=>raf.push(f),setTimeout:()=>{},console};
 context.addEventListener=window.addEventListener.bind(window);Object.defineProperty(globalThis,'navigator',{value:context.navigator,configurable:true});
 globalThis.location=context.location;globalThis.history={replaceState(){}};globalThis.requestAnimationFrame=context.requestAnimationFrame;globalThis.localStorage=localStorage;
 let source=fs.readFileSync(root+'drive.js','utf8');
@@ -61,11 +61,11 @@ get('scratchGame-numbers').click();get('buyScratch').click();assert(life.economy
 report.push({check:'Walking, zero vehicle throttle on foot, convenience-store entry, persistent single scratch-off purchase and exactly-once payout',roomObjects});
 atDoor(gun);assert(life.enterBuilding(gun));life.body.position.set(-6000,.83,-3.1);assert(life.openShop());life.economy.earn(2000);life.closeShop();life.openShop();
 for(const name of ['Hammer','Pistol','Machine gun','Grenade launcher']){const row=[...get('shopStock').children].find(r=>r.firstElementChild.textContent.startsWith(name));assert(row);row.querySelector('button').click();}
-assert.equal(life.economy.info().owned.length,4);assert(life.economy.info().cash>=0);assert.equal(life.economy.buy('grenade'),false);assert(life.economy.refill('pistol'));assert.equal(life.economy.info().ammo.pistol,72);life.closeShop();assert(life.leaveBuilding());
+assert.deepEqual([...life.economy.info().owned].sort(),['grenade','hammer','machine','pistol','web']);assert(life.economy.info().cash>=0);assert.equal(life.economy.buy('grenade'),false);assert(life.economy.refill('pistol'));assert.equal(life.economy.info().ammo.pistol,72);life.closeShop();assert(life.leaveBuilding());
 report.push({check:'All four requested weapons can be purchased and equipped; ammo refills charge cash and duplicate purchases are rejected'});
 // Revisit every building. No accumulating interior scenes, geometry, lights, or physics.
-let peak=0;for(let round=0;round<3;round++)for(const b of view.buildings){atDoor(b);assert(life.enterBuilding(b),b.name);peak=Math.max(peak,life.room.children.length);assert.equal(life.getInfo().interiorRooms,1);assert(!app.test.world.bodies.includes(life.body));assert(life.leaveBuilding(),b.name);}
-assert(peak<400);assert(life.getInfo().materials<80);
+let peak=0,materialPlateau=0;for(let round=0;round<3;round++)for(const b of view.buildings){atDoor(b);assert(life.enterBuilding(b),b.name);peak=Math.max(peak,life.room.children.length);assert.equal(life.getInfo().interiorRooms,1);assert(!app.test.world.bodies.includes(life.body));assert(life.leaveBuilding(),b.name);if(round===0)materialPlateau=life.getInfo().materials;else assert.equal(life.getInfo().materials,materialPlateau); }
+assert(peak<400);
 report.push({check:'Every one of the 23 city buildings is enterable; 69 repeat visits retain one room and a bounded shared material palette',peakObjects:peak,materials:life.getInfo().materials});
 // Intact walls block the rigid-body walker, with no scripted bypass.
 const wallBuilding=view.buildings.find(b=>b.type==='office'),wall=wallBuilding.target.entries.find(e=>e.foundation&&e.body.shapes[0].halfExtents.z<1);const z=wall.body.position.z;life.body.position.set(wall.body.position.x,1.05,z-1);life.body.velocity.setZero();life.body.aabbNeedsUpdate=true;

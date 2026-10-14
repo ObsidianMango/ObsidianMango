@@ -22,7 +22,7 @@ export function createRivalVisual({T,scene,makeVehicle,worldX=()=>0}){
  const hpFill=new T.Mesh(new T.BoxGeometry(.99,.08,.07),new T.MeshBasicMaterial({color:0xf07365,depthTest:false}));
  hpFill.position.z=-.042;hp.add(hpBg,hpFill);
  let model=null,modelId='',assemblies=[],wheelNodes=[],wrecked=false,debris=[],retired=[],wreckAge=0,animation=0;
- const last=new T.Vector3();
+ const last=new T.Vector3(),targetPosition=new T.Vector3(),targetRotation=new T.Quaternion(),up=new T.Vector3(0,1,0);let poseReady=false,poseMode='',poseVehicle='';
  const wheelNames=['wheel-front-right','wheel-front-left','wheel-rear-right','wheel-rear-left'];
  function chooseCharacter(id){
   const c=characterById(id);
@@ -59,7 +59,7 @@ export function createRivalVisual({T,scene,makeVehicle,worldX=()=>0}){
   last.set(0,0,0);
  }
  function reset(){
-  removeModel();root.visible=false;person.visible=false;hp.visible=false;
+  removeModel();poseReady=false;root.visible=false;person.visible=false;hp.visible=false;
  }
  function explode(event){
   if(wrecked)return;
@@ -108,9 +108,12 @@ export function createRivalVisual({T,scene,makeVehicle,worldX=()=>0}){
   }
   if(!p||!canSee){root.visible=false;return;}
   if(p.mode==='vehicle')ensureVehicle(p.vehicleId||modelId||'roadster',retired.length>0);
-  root.visible=true;root.position.set(p.p[0]+worldX(),p.p[1],p.p[2]);
-  if(p.mode==='vehicle'&&Array.isArray(p.q)&&p.q.length===4)root.quaternion.fromArray(p.q);
-  else root.quaternion.setFromAxisAngle(new T.Vector3(0,1,0),p.yaw);
+  targetPosition.set(p.p[0]+worldX(),p.p[1],p.p[2]);
+  if(p.mode==='vehicle'&&Array.isArray(p.q)&&p.q.length===4)targetRotation.fromArray(p.q).normalize();
+  else targetRotation.setFromAxisAngle(up,p.yaw);
+  const snap=!poseReady||!root.visible||poseMode!==p.mode||poseVehicle!==p.vehicleId||root.position.distanceToSquared(targetPosition)>144;
+  const blend=snap?1:1-Math.exp(-18*Math.max(0,Math.min(.1,dt)));
+  root.position.lerp(targetPosition,blend);root.quaternion.slerp(targetRotation,blend);root.visible=true;poseReady=true;poseMode=p.mode;poseVehicle=p.vehicleId;
   person.visible=p.mode==='foot';carSlot.visible=!person.visible;
   if(!person.visible&&model){
    model.visible=true;
