@@ -1,4 +1,4 @@
-# Adding a level to Parkside Next
+# Adding a level to Parkside Evolution
 
 All level definitions live in `level-catalog.js`. Append entries to `LEVEL_DEFINITIONS`; do not reorder existing entries, because saved parking results use their indexes. The original 24 challenges still determine the gold unlock.
 
@@ -22,6 +22,6 @@ For a new custom environment, create its renderer module and register it by styl
 
 Appending the definition automatically updates Garage, multiplayer level choices, accepted network level IDs, and the Secret City index. No fixed multiplayer level count needs editing. The catalog signature rejects peers with different layouts; both players must open the same published update. Keep existing level codes unique.
 
-When publishing, refresh the `level-catalog.js` import version in both `parking-lots.js` and `multiplayer.js` / `drive.js` (and `duel-rules.js`), then refresh the entry-page script version so cached devices load the new catalog.
+When publishing, run `npm run prepublish:check`. The content-addressed release builder versions the complete runtime graph together; never add manual import query strings. Commit the resulting launcher, manifest and new release directory while retaining old releases.
 
 Run `node tests/level-catalog.mjs`, `node tests/duel-game.mjs`, and the new map's parking/physics checks. Test physical iPhone/iPad performance and two-device joining before treating a new large environment as verified on hardware.
