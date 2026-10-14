@@ -1,0 +1,14 @@
+import {SECRET_LEVEL_INDEX} from '../level-catalog.js';
+import assert from 'node:assert/strict';
+import {bootGame} from './helpers/game.mjs';
+const {app,frame}=await bootGame(),t=app.test;t.loadLevel(SECRET_LEVEL_INDEX);app.start();t.setState('running');for(let i=0;i<3;i++)frame();const view=t.secretView;
+assert(t.trafficLOD.getInfo().includesAuthoredTires);assert(t.trafficLOD.getInfo().distant>0);assert(t.lots.views.every(v=>v===view?v.group.parent===app.scene:v.group.parent===null),'inactive levels leave scene traversal');
+const batches=view.group.children.filter(o=>o.name==='Full-detail fleet batch'),models=new Map();for(const car of t.traffic.active)if(!models.has(car.model))models.set(car.model,car);
+let originals=0,wheelVertices=0;for(const car of models.values())car.mesh.traverse(mesh=>{if(!mesh.isMesh)return;const n=mesh.geometry.index?.count||mesh.geometry.attributes.position.count;originals+=n;let p=mesh;while(p&&p!==car.mesh){if(p.name.startsWith('wheel-')){wheelVertices+=n;break;}p=p.parent;}});
+const batchBytes=batches.reduce((sum,b)=>sum+(b.geometry.index?.array.byteLength||0)+Object.values(b.geometry.attributes).reduce((n,a)=>n+a.array.byteLength,0),0);assert(batchBytes<24*1024*1024,'batch geometry memory stays bounded');console.log(JSON.stringify({fullModelTriangles:originals/3,wheelTriangles:wheelVertices/3,batchGeometryMB:+(batchBytes/1048576).toFixed(2)}));
+assert(wheelVertices>1000);assert.equal(batches.reduce((sum,b)=>sum+(b.geometry.index?.count||b.geometry.attributes.position.count),0),originals,'all body and wheel triangles survive batching');
+assert(batches.every(b=>b.geometry.attributes.uv&&b.geometry.attributes.normal));assert(batches.every(b=>b.frustumCulled));
+const car=t.traffic.active[0];t.trafficLOD.update(-1000,210);assert(!car.mesh.visible);const colors=batches.map(b=>b.material.color.getHex());t.traffic.strike(car.body,car.body.position,3);t.trafficLOD.update(-1000,210);assert(car.mesh.visible,'any damage restores original surfaces');assert.deepEqual(batches.map(b=>b.material.color.getHex()),colors,'damage does not recolor other cars in a shared batch');
+const camera=new app.camera.constructor(45,1,.1,500);camera.position.set(view.ox,10,210);camera.lookAt(view.ox,2,500);t.trafficLOD.update(0,210,camera);assert.equal(t.trafficLOD.getInfo().distant,0,'off-camera distant cars do not enter the GPU batches');
+t.trafficLOD.originals();assert(t.traffic.active.every(c=>c.mesh.visible&&!c.occupied));t.trafficLOD.update(0,210);const bodies=t.world.bodies.length;t.loadLevel(0);app.start();frame();assert.equal(view.group.parent,null);assert(t.lots.views[0].group.parent===app.scene);assert(t.car.root.parent===app.scene);assert(t.world.bodies.length<bodies);
+console.log('Exact authored body/tire triangle counts and UVs retained; any damage restores originals; shared material isolation, frustum culling, replay visibility and inactive level detachment pass.');
