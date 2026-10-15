@@ -294,7 +294,7 @@ function cockpitSeat(){return seatSettings.get(spec);}
 const seatPanel=document.createElement('div');
 seatPanel.id='seatAdjustPanel';seatPanel.hidden=true;
 seatPanel.style.cssText='position:fixed;right:max(12px,env(safe-area-inset-right));top:min(290px,35vh);z-index:40;padding:10px;background:#142d2fef;color:#fff;border:1px solid #819c90;border-radius:14px;display:grid;grid-template-columns:repeat(2,1fr);gap:7px;width:min(204px,calc(100vw - 24px));max-height:calc(100dvh - 100px);overflow-y:auto;overscroll-behavior:contain;box-shadow:0 5px 20px #0005';
-seatPanel.innerHTML='<strong style="grid-column:span 2;font-size:12px">Adjust seat</strong><button data-seat="up">↑ Up</button><button data-seat="forward">Forward →</button><button data-seat="down">↓ Down</button><button data-seat="back">← Back</button><button data-seat="reset" style="grid-column:span 2">Reset seat</button>';
+seatPanel.innerHTML='<strong style="grid-column:span 2;font-size:12px">Adjust seat</strong><button data-seat="up">↑ Up</button><button data-seat="forward">Forward →</button><button data-seat="down">↓ Down</button><button data-seat="back">← Back</button><button data-seat="reset" style="grid-column:span 2">Reset seat</button><button data-seat="done" style="grid-column:span 2">Done</button>';
 seatPanel.querySelectorAll('button').forEach(b=>{b.style.cssText='background:#dcebdd;color:#17362e;border:0;border-radius:8px;padding:9px 5px;font-size:12px;font-weight:700';b.onclick=()=>{
  if(b.dataset.seat==='done'){seatPanel.hidden=true;seatButton.setAttribute('aria-expanded','false');return;}
  seatSettings.adjust(spec,b.dataset.seat);
