@@ -55,7 +55,7 @@ export function buildFleetVehicle(T,c){
   rounded('front-bumper',1.84,.15,.17,0,.50,-2.19,'rubber',.032);rounded('front-bumper',1.18,.065,.04,0,.491,-2.296,'chrome',.01);
   rounded('rear-bumper',1.82,.18,.17,0,.52,2.10,'rubber',.028);rounded('rear-bumper',1.13,.055,.08,0,.46,2.16,'chrome',.012);
   textBadge('tailgate','SANTA FE',-.50,.99,2.176,.39);plate('grille',-2.39,.64,'SANTA FE');plate('tailgate',2.185,1.02,'SANTA FE');mirrors(1.37,-.63,.97);
-  k.interior({front:.02,rear:1.05,baseY:.79,dash:-.69,width:.79});
+  k.interior({front:.02,rear:1.05,baseY:.79,dash:-.69,width:.79,clearDriverHeadrest:true});
  }else if(!van){
   const bodyRows=[[-2.68,.93,.53,1.04],[-2.42,1.02,.48,1.15],[-1.65,1.04,.48,1.21],[-.72,1.025,.49,1.25],[.7,1.03,.49,1.25],[1.85,1.01,.49,1.20],[2.65,.91,.54,1.12]];
   skin(bodyRows,p=>p.z<-.8?'hood':p.z>1.22?'trunk':p.x>0?'door-left':'door-right','paint',true);
@@ -85,7 +85,7 @@ export function buildFleetVehicle(T,c){
   const ornamentBase=interp(bodyRows,-2.34)[2];cyl('hood-ornament',.018,.16,0,ornamentBase+.08,-2.34,'chrome','y');torus('hood-ornament',.035,.007,0,ornamentBase+.175,-2.34,'chrome','z',20);
   textBadge('hood','C H R Y S L E R',0,1.17,-2.717,.88);textBadge('trunk','NEW YORKER',0,1.087,2.672,.63);
   mirrors(1.34,-.87,1.035,true);plate('front-bumper',-2.873,.665,'NEW YORK');plate('rear-bumper',2.831,.704,'NEW YORK');
-  k.interior({front:.0,rear:1.03,baseY:.77,dash:-.82,width:.84,luxury:true});
+  k.interior({front:.0,rear:1.03,baseY:.77,dash:-.82,width:.84,luxury:true,clearDriverHeadrest:true});
  }else{
   skin([[-2.58,.91,.46,1.20],[-2.23,1.035,.45,1.27],[-1.40,1.06,.45,1.38],[-.65,1.06,.46,1.39],[1.60,1.055,.46,1.39],[2.63,.97,.47,1.36]],p=>p.z<-1.30?'hood':p.z>2?'rear-lower':p.x>0?'lower-left':'lower-right','paint',true);
   skin([[-.84,.90,2.05,2.22],[-.57,.98,2.13,2.32],[1.8,.98,2.14,2.34],[2.56,.91,2.04,2.27]],'roof','roofPaint');
