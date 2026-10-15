@@ -1,0 +1,149 @@
+import {createContentsDebris} from './contents-debris.js';
+import {setDamageAppearance} from './damage-appearance.js';
+// Damageable scenery uses the same bodies during driving, wrecks and recorded replays.
+import {createCrushContact} from './crush-contact.js';
+export function createDestructibleEnvironment({T,C,scene,world,lots,onExplode,onContact}){
+ let active=[],activeSet=new Set(),settledWake=new Set(),pending=new Map(),elapsed=0,explosionCount=0,launchedBarrels=0;const FRAGMENT_LIMIT=96,AWAKE_LIMIT=144;const structures=new Map(),dirtyStructures=new Set(),supportedBodies=new Set(),moving=[],awake=[];const explosions=[],fragments=[],fragmentPool=[],fragmentBox=new T.BoxGeometry(1,1,1),rubbleMat=new C.Material({friction:.55,restitution:.04}),registered=new Set(),q=new T.Quaternion(),v=new T.Vector3(),contact=createCrushContact(C);
+ const contentsDebris=createContentsDebris(T,fragmentBox);
+  // Small shards are instanced: hundreds of chips are one draw call, not hundreds of bodies.
+  // The larger, collidable rubble keeps its existing 96-body physics budget.
+  const CHIP_LIMIT=typeof navigator!=='undefined'&&/iPhone|iPad|Android/i.test(navigator.userAgent||'')?192:360;
+  const chipMesh=new T.InstancedMesh(fragmentBox,new T.MeshStandardMaterial({color:0xaaa397,roughness:1,metalness:0}),CHIP_LIMIT);
+  chipMesh.count=0;chipMesh.castShadow=false;chipMesh.receiveShadow=false;chipMesh.frustumCulled=false;
+  chipMesh.instanceMatrix.setUsage(T.DynamicDrawUsage);scene.add(chipMesh);
+  const chips=[],chipObject=new T.Object3D(),chipTint=new T.Color();
+  function clearChips(){chips.length=0;chipMesh.count=0;}
+  function spawnChips(e,center){
+   const span=e.originalSize||e.size,quantity=Math.min(42,12+Math.ceil((span[0]*span[1]+span[1]*span[2]+span[0]*span[2])*.20));
+   for(let i=0;i<quantity;i++){
+    if(chips.length>=CHIP_LIMIT)chips.shift();
+    const size=.12+Math.random()*.49,angle=Math.random()*Math.PI*2,speed=1.8+Math.random()*8;
+    chips.push({x:center.x+(Math.random()-.5)*span[0]*.75,y:center.y+(Math.random()-.5)*span[1]*.6,z:center.z+(Math.random()-.5)*span[2]*.75,
+     vx:Math.cos(angle)*speed,vy:2+Math.random()*7,vz:Math.sin(angle)*speed,
+     rx:Math.random()*3,ry:Math.random()*3,rz:0,spin:(Math.random()-.5)*9,size,life:2.5+Math.random()*3,
+     color:e.charred>.15?0x48433b:[0xaaa397,0x8a8175,0xc0b7a5,0x675e55][i%4]});
+   }
+  }
+  function updateChips(dt,focus){
+   let k=0;
+   for(let i=chips.length-1;i>=0;i--){
+    const b=chips[i];b.life-=dt;if(b.life<=0||(focus&&Math.hypot(b.x-focus.x,b.z-focus.z)>115)){chips.splice(i,1);continue;}
+    b.x+=b.vx*dt;b.z+=b.vz*dt;b.y+=b.vy*dt;b.vy-=14*dt;
+    if(b.y<b.size*.5){b.y=b.size*.5;b.vy=Math.abs(b.vy)*.23;b.vx*=.86;b.vz*=.86;}
+    b.rx+=b.spin*dt;b.ry+=b.spin*.56*dt;
+    chipObject.position.set(b.x,b.y,b.z);chipObject.rotation.set(b.rx,b.ry,b.rz);
+    chipObject.scale.set(b.size,b.size*(.4+(i%3)*.25),b.size);
+    chipObject.updateMatrix();chipMesh.setMatrixAt(k,chipObject.matrix);
+    chipMesh.setColorAt(k,chipTint.setHex(b.color));k++;
+   }
+   chipMesh.count=k;if(k){chipMesh.instanceMatrix.needsUpdate=true;chipMesh.instanceColor.needsUpdate=true;}
+  }
+ const crackedRubble=new T.MeshStandardMaterial({color:0x9b978d,roughness:1}),burnedRubble=new T.MeshStandardMaterial({color:0x34312b,roughness:1});setDamageAppearance(T,crackedRubble,.85,0);setDamageAppearance(T,burnedRubble,1,1);
+ const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+ const isDestructionLevel=level=>!!lots.views[level]?.routes;
+ function register(entries){for(const e of entries){if(registered.has(e))continue;registered.add(e);
+  e.body.updateAABB();e.homeBottom=e.body.aabb.lowerBound.y;e.supportWidth=e.body.aabb.upperBound.x-e.body.aabb.lowerBound.x;e.supportDepth=e.body.aabb.upperBound.z-e.body.aabb.lowerBound.z;e.home=e.body.position.clone();e.turn=e.body.quaternion.clone();e.originalPhysicsMaterial=e.body.material;e.originalShape=e.body.shapes[0];e.originalScale=e.mesh.scale.clone();e.originalSize=e.size.slice();e.filterGroup=e.body.collisionFilterGroup;e.geometry=e.mesh.geometry;e.color=e.mesh.material.color.clone();e.damage=0;e.charred=0;e.broken=false;e.childMaterials=[];e.last=-10;e.lastRam=-10;e.dent=[0,0,0,0,0,1];e.visualDamage=-1;
+  if(e.structure){if(!structures.has(e.structure))structures.set(e.structure,{entries:[],ordered:[],supports:new Map()});structures.get(e.structure).entries.push(e);}
+  e.body.addEventListener('collide',event=>{
+   if(e.body.userData?.kind==='ramp'&&Math.abs(event.contact.ni.y)>.6)return;
+   if(activeSet.has(e))onContact?.(e,event.body,Math.abs(event.contact.getImpactVelocityAlongNormal()));
+   if(e.broken&&!e.explosive){if(activeSet.has(e)&&(event.body.collisionFilterGroup&32))settledWake.add(e);return;}
+   const kind=event.body.userData?.kind,target=!!kind&&kind!=='pedestrian',armedTarget=e.explosive&&e.armed&&target&&elapsed-e.armedAt>.08&&e.body.position.distanceTo(e.launchPosition)>1.5;
+   if(!activeSet.has(e)||event.body.mass<=0&&!armedTarget||kind==='pedestrian'||elapsed-e.last<.24&&!armedTarget)return;
+   const speed=Math.abs(event.contact.getImpactVelocityAlongNormal());if(speed<1.4)return;
+   const relative=event.contact.bi===e.body?event.contact.ri:event.contact.rj;
+   const point=e.body.position.vadd(relative),velocity=event.contact.ni.scale(event.contact.bi===e.body?-speed:speed);
+   if(!pending.has(e)||pending.get(e).speed<speed)pending.set(e,{speed,point,velocity,target:armedTarget,monster:!!event.body.userData?.monster});
+  });
+ }for(const group of structures.values()){group.ordered=group.entries.slice().sort((a,b)=>a.home.y-b.home.y);for(const e of group.ordered){const bottom=e.homeBottom;e.foundation=e.role!=='contents'&&bottom<=.65;e.roof=e.role==='roof'||!e.role&&e.originalSize[1]<1&&Math.max(e.originalSize[0],e.originalSize[2])>6;group.supports.set(e,e.floorOwner?[e.floorOwner]:group.ordered.filter(o=>o.role!=='contents'&&o!==e&&o.home.y<e.home.y-.2&&bottom<=o.home.y+o.originalSize[1]/2+1&&Math.abs(o.home.x-e.home.x)<(o.supportWidth+e.supportWidth)/2+.6&&Math.abs(o.home.z-e.home.z)<(o.supportDepth+e.supportDepth)/2+.6));}}}register(lots.breakables);
+ function deform(e,amount,dent=e.dent){
+  contentsDebris.sync(e,amount);
+  if(Math.abs(e.visualDamage-amount)<.012&&e.visualChar===e.charred)return;e.visualChar=e.charred;e.mesh.userData.damage=amount;e.mesh.userData.charred=e.charred;e.visualDamage=amount;
+  if(amount===0){if(e.mesh.geometry!==e.geometry)e.mesh.geometry.dispose();e.mesh.geometry=e.geometry;if(e.mesh.material!==e.originalMaterial&&e.originalMaterial){e.mesh.material.dispose();e.mesh.material=e.originalMaterial;}for(const child of e.childMaterials){child.mesh.material=child.original;child.material.dispose();}e.childMaterials.length=0;return;}
+  if(e.mesh.geometry===e.geometry){e.originalMaterial=e.mesh.material;e.mesh.material=e.mesh.material.clone();e.mesh.geometry=e.geometry.type==='BoxGeometry'?new T.BoxGeometry(1,1,1,isDestructionLevel(e.level)?3:8,isDestructionLevel(e.level)?2:4,isDestructionLevel(e.level)?3:8):e.geometry.clone();e.baseVertices=e.mesh.geometry.attributes.position.array.slice();e.mesh.traverse(child=>{if(child!==e.mesh&&child.isMesh&&!child.isInstancedMesh&&!Array.isArray(child.material)){const original=child.material;child.material=original.clone();e.childMaterials.push({mesh:child,original,material:child.material,color:original.color.clone()});}});}
+  const p=e.mesh.geometry.attributes.position,base=e.baseVertices,scale=e.mesh.scale,depth=Math.min(.65,Math.max(.09,Math.min(scale.x,scale.z)*.32))*amount;
+  for(let i=0;i<p.count;i++){const k=i*3,dx=(base[k]-dent[0])*scale.x,dy=(base[k+1]-dent[1])*scale.y,dz=(base[k+2]-dent[2])*scale.z,falloff=Math.exp(-(dx*dx+dy*dy+dz*dz)/4);
+   p.setXYZ(i,base[k]+dent[3]*depth*falloff/scale.x,base[k+1]+dent[4]*depth*falloff/scale.y,base[k+2]+dent[5]*depth*falloff/scale.z);
+  }p.needsUpdate=true;e.mesh.geometry.computeVertexNormals();e.mesh.material.color.copy(e.color).multiplyScalar(1-amount*.45);e.mesh.material.roughness=.95;setDamageAppearance(T,e.mesh.material,amount,e.charred);for(const child of e.childMaterials){child.material.color.copy(child.color).multiplyScalar(1-amount*.35);setDamageAppearance(T,child.material,amount,e.charred);}
+ }
+ const pieceMass=e=>e.explosive?55:clamp(e.size[0]*e.size[1]*e.size[2]*90,12,650);
+ function fracture(e){
+  const pointForFracture=e.body.position.clone();
+  if(e.unfragmented||e.explosive||e.shattered||Math.max(...e.size)<=3.6||!e.structure&&e.size[0]<1&&e.size[2]<1)return;
+  e.shattered=true;const size=e.size.slice(),axes=[0,1,2].filter(i=>size[i]>2).sort((a,b)=>size[b]-size[a]),splits=[1,1,1];
+   splits[axes[0]]=Math.min(7,Math.max(2,Math.ceil(size[axes[0]]/2.15)));
+   if(axes.length>1)splits[axes[1]]=Math.min(3,Math.max(2,Math.ceil(size[axes[1]]/2)));
+   if(size[1]>2.4&&Math.min(size[0],size[2])<1)splits[1]=Math.min(3,Math.ceil(size[1]/1.2));
+  const chunk=size.map((n,i)=>n/splits[i]),count=splits[0]*splits[1]*splits[2],mass=e.body.mass/count,origin=e.body.position.clone(),turn=e.body.quaternion.clone();let index=0;spawnChips(e,origin);
+  for(let x=0;x<splits[0];x++)for(let y=0;y<splits[1];y++)for(let z=0;z<splits[2];z++){
+   const offset=new C.Vec3((x+.5)*chunk[0]-size[0]/2,(y+.5)*chunk[1]-size[1]/2,(z+.5)*chunk[2]-size[2]/2),position=turn.vmult(offset).vadd(origin);
+   if(index++===0){e.size=chunk.slice();e.body.removeShape(e.body.shapes[0]);e.body.addShape(new C.Box(new C.Vec3(...chunk.map(n=>n/2))));e.body.mass=mass;e.body.position.copy(position);e.body.updateMassProperties();e.body.updateBoundingRadius();e.body.aabbNeedsUpdate=true;e.mesh.scale.set(e.originalScale.x/splits[0],e.originalScale.y/splits[1],e.originalScale.z/splits[2]);e.mesh.position.copy(position);continue;}
+   let f=fragmentPool.find(f=>!f.active);
+   if(!f&&fragmentPool.length<FRAGMENT_LIMIT){const mesh=new T.Mesh(fragmentBox,e.charred>.15?burnedRubble:crackedRubble),body=new C.Body({mass:1,material:rubbleMat,shape:new C.Box(new C.Vec3(1,1,1)),collisionFilterGroup:8,collisionFilterMask:1|32|16,linearDamping:.28,angularDamping:.32,allowSleep:true,sleepSpeedLimit:.3,sleepTimeLimit:1.5});body.userData={kind:'building rubble'};f={mesh,body,size:[1,1,1],active:false};body.addEventListener('collide',event=>{if(f.active&&f.source)onContact?.(f.source,event.body,Math.abs(event.contact.getImpactVelocityAlongNormal()),f.body);});fragmentPool.push(f);}
+   // Keep existing near-impact rubble when the pool is full; omit extra chips.
+   if(!f)continue;const {mesh,body}=f;mesh.material=e.charred>.15?burnedRubble:crackedRubble;mesh.scale.set(...chunk);mesh.position.copy(position);mesh.quaternion.copy(turn);mesh.visible=true;mesh.castShadow=mesh.receiveShadow=true;e.mesh.parent.add(mesh);
+   body.removeShape(body.shapes[0]);body.addShape(new C.Box(new C.Vec3(...chunk.map(n=>n/2))));body.type=C.Body.DYNAMIC;body.mass=mass;f.restMass=mass;body.position.copy(position);body.quaternion.copy(turn);body.velocity.copy(e.body.velocity);const away=position.vsub(pointForFracture),len=Math.max(1,away.length());body.velocity.x+=away.x/len*3;body.velocity.y+=1.2+Math.abs(away.y/len);body.velocity.z+=away.z/len*3;body.angularVelocity.set((y+1)*.7,(x-z)*.8,(z+1)*-.6);body.force.setZero();body.torque.setZero();body.updateMassProperties();body.updateBoundingRadius();body.aabbNeedsUpdate=true;body.wakeUp();world.addBody(body);Object.assign(f,{size:chunk.slice(),source:e,age:0,restTime:0,active:true});fragments.push(f);
+  }
+ }
+ function release(e,velocity,point,physical=false){
+  if(e.broken)return;e.broken=true;e.age=0;e.restTime=0;e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.linearDamping=.16;e.body.angularDamping=.26;e.body.allowSleep=true;e.body.collisionFilterGroup=8;e.body.material=rubbleMat;e.body.updateMassProperties();e.body.wakeUp();
+  if(physical&&velocity.length()<1){e.body.velocity.set(0,-.4,0);e.body.angularVelocity.set(.18,.08,-.15);}else{const speed=velocity.length();e.body.velocity.set(clamp(velocity.x*.65,-18,18),Math.min(6,.8+speed*.24),clamp(velocity.z*.65,-18,18));e.body.angularVelocity.set(clamp((e.home.z-point.z)*.5,-4,4),.7,clamp((point.x-e.home.x)*.5,-4,4));}if(!e.structure&&e.size[0]<1&&e.size[2]<1){e.body.angularVelocity.x+=1.3+velocity.z*.12;e.body.angularVelocity.z-=velocity.x*.12;}e.body.aabbNeedsUpdate=true;
+  // Local support failure pulls the facade and roof above it down, not the whole city.
+  if(e.structure)dirtyStructures.add(e.structure);
+  contentsDebris.scatter(e);if(Math.max(...e.size)<=3.6)spawnChips(e,point);fracture(e);
+ }
+ function collapseUnsupported(){for(const id of dirtyStructures){const group=structures.get(id);if(!group)continue;const supported=new Set();for(const e of group.ordered){if(e.broken)continue;const below=group.supports.get(e).filter(o=>supported.has(o)&&!o.broken),required=e.floorOwner?1:e.roof||e.role==='floor'?Math.max(1,Math.ceil(group.supports.get(e).length*.5)):1,valid=e.foundation||below.length>=required;if(valid){supported.add(e);continue;}e.damage=Math.max(e.damage,.9);deform(e,e.damage);release(e,new C.Vec3(),e.body.position,true);e.body.sleepTimeLimit=2;e.body.wakeUp();}}dirtyStructures.clear();}
+ function throwPiece(e,velocity,point){
+  release(e,velocity,point);e.age=0;e.age=0;e.body.type=C.Body.DYNAMIC;if(!e.body.mass)e.body.mass=pieceMass(e);e.body.updateMassProperties();e.body.wakeUp();
+  const speed=Math.hypot(velocity.x,velocity.z),dx=e.body.position.x-point.x,dz=e.body.position.z-point.z,d=Math.max(1,Math.hypot(dx,dz));
+  e.body.velocity.set(clamp(velocity.x*.85+dx/d*7,-34,34),Math.min(11,4+speed*.18),clamp(velocity.z*.85+dz/d*7,-34,34));e.body.angularVelocity.set(dz/d*4,2,-dx/d*4);
+ }
+ function detonate(e){if(e.detonated)return;e.detonated=true;e.armed=false;e.damage=1;e.charred=1;if(e.fuseMesh)e.fuseMesh.visible=false;deform(e,1);release(e,new C.Vec3(0,4,0),e.body.position);explosions.push(e.body.position.clone());}
+ function launchBarrel(e,velocity,point){
+  if(e.detonated||e.armed&&elapsed-e.lastRam<.55)return;
+  if(!e.armed){e.armed=true;e.armedAt=elapsed;e.launchPosition=e.body.position.clone();launchedBarrels++;}
+  release(e,velocity,point);const speed=Math.hypot(velocity.x,velocity.z),scale=Math.min(32,Math.max(13,speed*1.25))/Math.max(.1,speed),vx=velocity.x*scale,vz=velocity.z*scale;
+  e.body.linearDamping=.035;e.body.angularDamping=.045;e.body.quaternion.setFromVectors(new C.Vec3(0,1,0),new C.Vec3(-vz,0,vx).unit());e.body.velocity.set(vx,.7,vz);e.body.angularVelocity.set(vz/.475,0,-vx/.475);e.body.aabbNeedsUpdate=true;e.body.wakeUp();e.lastRam=elapsed;if(e.fuseMesh)e.fuseMesh.visible=true;
+ }
+ function hit(e,speed,point,velocity,source='collision',target=false){
+  if(e.broken&&!e.explosive&&source!=='blast'){if(source==='weapon'){wakeEntry(e);e.body.applyImpulse(new C.Vec3(velocity.x*e.body.mass,velocity.y*e.body.mass,velocity.z*e.body.mass));}return;}
+  if(e.explosive){if(source==='blast'||target||speed>=6.5){detonate(e);return;}if(e.detonated)return;launchBarrel(e,velocity,point);return;}
+  e.last=elapsed;if(source==='blast')e.charred=Math.max(e.charred,Math.min(1,speed/20));const lp=e.mesh.worldToLocal(new T.Vector3(point.x,point.y,point.z)),dir=new T.Vector3(velocity.x,velocity.y,velocity.z).normalize().applyQuaternion(q.copy(e.mesh.quaternion).invert());
+  e.dent=[clamp(lp.x,-.5,.5),clamp(lp.y,-.5,.5),clamp(lp.z,-.5,.5),dir.x,dir.y,dir.z];e.damage=clamp(e.damage+speed/(e.structure?15:9),0,1);deform(e,e.damage);
+  if(e.damage>=(e.structure ? .72 : .58))release(e,velocity,point,source==='ram');
+  if(source==='blast')throwPiece(e,velocity,point);
+ }
+ function wakeEntry(e){if(e.body.type!==C.Body.DYNAMIC){e.age=0;e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.updateMassProperties();}e.body.wakeUp();}
+ function wakeFragment(f){if(f.body.type!==C.Body.DYNAMIC){f.body.type=C.Body.DYNAMIC;f.body.mass=f.restMass||12;f.body.updateMassProperties();}f.age=0;f.body.wakeUp();}
+ function recycleFragment(f){world.removeBody(f.body);f.mesh.removeFromParent();f.mesh.visible=false;f.active=false;f.source=null;const i=fragments.indexOf(f);if(i>=0)fragments.splice(i,1);}
+ function restoreEntry(e){pending.delete(e);e.size=e.originalSize.slice();e.mesh.scale.copy(e.originalScale);if(e.shattered){e.body.removeShape(e.body.shapes[0]);e.body.addShape(e.originalShape);e.body.updateBoundingRadius();e.shattered=false;}e.body.type=C.Body.STATIC;e.body.mass=0;e.body.material=e.originalPhysicsMaterial;e.body.collisionFilterGroup=e.filterGroup;e.body.linearDamping=.16;e.body.angularDamping=.26;e.body.updateMassProperties();e.body.position.copy(e.home);e.body.quaternion.copy(e.turn);e.body.velocity.setZero();e.body.angularVelocity.setZero();e.body.force.setZero();e.body.torque.setZero();e.body.aabbNeedsUpdate=true;e.body.wakeUp();e.mesh.position.copy(e.home);e.mesh.quaternion.copy(e.turn);e.mesh.visible=true;e.damage=0;e.charred=0;e.broken=false;e.detonated=false;e.armed=false;e.age=0;if(e.fuseMesh)e.fuseMesh.visible=false;deform(e,0);e.baseVertices=null;e.last=e.lastRam=-10;contentsDebris.restore(e);}
+ function reset(level){clearChips();contentsDebris.clear();settledWake.clear();pending.clear();explosions.length=0;dirtyStructures.clear();explosionCount=0;launchedBarrels=0;elapsed=0;for(const f of [...fragments])recycleFragment(f);for(const e of active)restoreEntry(e);active=lots.breakables.filter(e=>e.level===level);activeSet=new Set(active);}
+ function resetDistrict(d){contentsDebris.clear(d);for(const [id,g]of structures)if(g.entries[0]?.target?.district===d)dirtyStructures.delete(id);for(const f of [...fragments])if(f.source.target?.district===d)recycleFragment(f);for(const e of active)if(e.target?.district===d)restoreEntry(e);}
+
+ function blast(point,strength=1){for(const e of active){const dx=e.body.position.x-point.x,dz=e.body.position.z-point.z,dy=e.body.position.y-point.y,distance=Math.hypot(dx,dz,dy),radius=18;if(distance>radius)continue;const force=(1-distance/radius)*strength;
+   if(force<.08)continue;const kick=isDestructionLevel(e.level)?25:18;hit(e,8+force*15,point,new C.Vec3(dx/(distance||1)*force*kick,force*(isDestructionLevel(e.level)?7:5),dz/(distance||1)*force*kick),'blast');}
+  for(const f of fragments){const d=f.body.position.vsub(point),length=d.length(),power=Math.max(0,1-length/18)*strength;if(power<.08)continue;wakeFragment(f);f.body.applyImpulse(new C.Vec3(d.x/Math.max(1,length)*power*f.body.mass*12,power*f.body.mass*4,d.z/Math.max(1,length)*power*f.body.mass*12));}
+ }
+ // Only actual collider contact can crush a piece. Held throttle continues to
+ // stress an intact wall while it resists. Broken chunks receive a bounded impact
+ // kick while the existing physical contact still slows and jolts the vehicle.
+ function ram(chassis,dt,driveForce=0,multiplier=1){const speed=Math.hypot(chassis.velocity.x,chassis.velocity.z);if(speed<.15&&driveForce<1)return;for(const e of active){if(e.body.userData?.kind==='ramp')continue;const point=contact(chassis,e.body,e.size);if(!point)continue;
+  if(e.explosive){if(speed>8)detonate(e);else if(!e.armed)launchBarrel(e,chassis.velocity,point);continue;}
+  if(e.broken){if(e.body.type!==C.Body.DYNAMIC||!e.body.mass){e.age=0;e.body.type=C.Body.DYNAMIC;e.body.mass=pieceMass(e);e.body.updateMassProperties();}e.body.wakeUp();continue;}
+  const pushing=clamp(driveForce/88000,0,1);e.damage=clamp(e.damage+pushing*(e.structure?.95:1.5)*dt*multiplier,0,1);deform(e,e.damage);
+  if(elapsed-e.lastRam>.24&&speed>1.2){e.lastRam=elapsed;hit(e,speed,point,chassis.velocity,'ram');}
+  if(e.damage>=(e.structure?.72:.58))release(e,chassis.velocity,point,true);
+ }for(const f of fragments)if(contact(chassis,f.body,f.size))wakeFragment(f);}
+ function update(dt,focus=null){elapsed+=dt;supportedBodies.clear();for(const c of world.contacts){if(c.ni.y<-.45)supportedBodies.add(c.bi);if(c.ni.y>.45)supportedBodies.add(c.bj);}for(const e of settledWake)if(activeSet.has(e))wakeEntry(e);settledWake.clear();for(const [e,h]of pending)hit(e,h.speed,h.point,h.velocity,h.monster?'ram':'collision',h.target);pending.clear();for(const e of active)if(e.armed&&!e.detonated){if(elapsed-e.armedAt>3)detonate(e);else if(e.fuseMesh)e.fuseMesh.material.emissiveIntensity=1.8+Math.sin(elapsed*30);}
+  for(let i=0;i<3&&explosions.length;i++){const point=explosions.shift();explosionCount++;blast(point,2);onExplode?.(point,2);}collapseUnsupported();moving.length=0;for(const e of active)if(e.broken&&e.body.type===C.Body.DYNAMIC)moving.push(e);for(const e of moving){e.age+=dt;e.mesh.position.copy(e.body.position);e.mesh.quaternion.copy(e.body.quaternion);const resting=e.body.sleepState===C.Body.SLEEPING||e.body.velocity.lengthSquared()<.36&&e.body.angularVelocity.lengthSquared()<.36;e.restTime=resting&&supportedBodies.has(e.body)?(e.restTime||0)+dt:0;if(!e.armed&&e.restTime>.45&&e.age>2){e.body.type=C.Body.STATIC;e.body.mass=0;e.body.updateMassProperties();e.body.velocity.setZero();e.body.angularVelocity.setZero();e.body.aabbNeedsUpdate=true;}}for(let fi=fragments.length-1;fi>=0;fi--){const f=fragments[fi];f.age+=dt;if(f.age>18||f.age>3&&focus&&f.body.position.distanceTo(focus)>100){recycleFragment(f);continue;}if(f.body.type===C.Body.DYNAMIC){f.mesh.position.copy(f.body.position);f.mesh.quaternion.copy(f.body.quaternion);const resting=f.body.sleepState===C.Body.SLEEPING||f.body.velocity.lengthSquared()<.36&&f.body.angularVelocity.lengthSquared()<.36;f.restTime=resting&&supportedBodies.has(f.body)?(f.restTime||0)+dt:0;if(f.age>2&&f.restTime>.45){f.restMass=f.body.mass;f.body.type=C.Body.STATIC;f.body.mass=0;f.body.updateMassProperties();f.body.velocity.setZero();f.body.angularVelocity.setZero();f.body.aabbNeedsUpdate=true;}}}
+  if(isDestructionLevel(active[0]?.level)){awake.length=0;for(const e of moving)if(!e.armed&&e.body.sleepState!==C.Body.SLEEPING)awake.push(e);awake.sort((a,b)=>b.age-a.age);let excess=Math.max(0,awake.length-AWAKE_LIMIT);for(const e of awake){if(!excess)break;if(e.age>2&&e.restTime>.45&&e.body.velocity.length()<.35&&e.body.angularVelocity.length()<.35){e.body.sleep();excess--;}}if(focus)for(const e of moving)if(!e.armed&&e.age>3&&e.restTime>.45&&e.body.position.distanceTo(focus)>120&&e.body.velocity.length()<.35&&e.body.angularVelocity.length()<.35)e.body.sleep();}
+ }
+ function snapshot(){const a=new Float32Array(active.length*16);for(let i=0;i<active.length;i++){const e=active[i],p=e.mesh.position,q=e.mesh.quaternion,k=i*16;
+   a[k]=p.x;a[k+1]=p.y;a[k+2]=p.z;a[k+3]=q.x;a[k+4]=q.y;a[k+5]=q.z;a[k+6]=q.w;a[k+7]=e.damage;
+   for(let j=0;j<6;j++)a[k+8+j]=e.dent[j];a[k+14]=e.broken?1:0;a[k+15]=e.charred;}
+  return a;}
+ function apply(a,b,u){if(!a||!b)return;clearChips();contentsDebris.hide();active.forEach((e,i)=>{const n=i*16;if(b.length<=n)return;e.charred=a[n+15]+(b[n+15]-a[n+15])*u;e.mesh.position.fromArray(a,n).lerp(v.fromArray(b,n),u);e.mesh.quaternion.fromArray(a,n+3).slerp(q.fromArray(b,n+3),u);deform(e,a[n+7]+(b[n+7]-a[n+7])*u,Array.from(u<.5?a.slice(n+8,n+14):b.slice(n+8,n+14)));});}
+ function strike(body,point,power){const e=active.find(e=>e.body===body);if(e)hit(e,power,point,new C.Vec3(0,.3,0),'weapon',!!e.explosive);}
+ return{render(dt,focus=null){updateChips(dt,focus);contentsDebris.update(dt,focus);},strike,register,reset,resetDistrict,update,blast,ram,snapshot,apply,get entries(){return active;},get fragments(){return fragments;},getInfo:()=>({...contentsDebris.getInfo(),contentsObjects:active.filter(e=>e.role==='contents').reduce((n,e)=>n+(e.contentsObjects||1),0),props:active.length,unsupportedRoofs:active.filter(e=>e.roof&&!e.broken&&!(structures.get(e.structure)?.supports.get(e)||[]).some(o=>!o.broken)).length,charred:active.filter(e=>e.charred>.1).length,dented:active.filter(e=>e.damage>0).length,broken:active.filter(e=>e.broken).length,moving:active.filter(e=>e.broken&&e.body.type===C.Body.DYNAMIC&&e.body.sleepState!==C.Body.SLEEPING).length,rubbleFragments:fragments.length,rubblePool:fragmentPool.length,visualChips:chips.length,visualChipLimit:CHIP_LIMIT,chipDrawCalls:1,rubbleLimit:FRAGMENT_LIMIT,awakeBudget:AWAKE_LIMIT,explosions:explosionCount,queuedExplosions:explosions.length,rollingBarrels:active.filter(e=>e.armed&&!e.detonated).length,launchedBarrels})};
+}
+
