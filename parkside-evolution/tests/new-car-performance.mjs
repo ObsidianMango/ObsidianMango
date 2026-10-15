@@ -6,11 +6,12 @@ for(const [id,[index,mult,power]] of Object.entries(expected)){
  t.setState('menu');t.selectVehicle(index);
  assert.equal(t.spec.id,id);assert.equal(t.spec.power,power);
  assert.equal(t.spec.scoreMultiplier,mult);
- assert.equal(get('garage').children[index].querySelector('.vehicle-multiplier').textContent,'×'+mult);
+ assert.equal(get('selectedVehicleName').textContent,t.spec.name);
+ assert(get('vehicleCount').textContent.startsWith(String(index+1).padStart(2,'0')));
  app.start();t.setState('running');
  assert.equal(t.scoring.hit(0).points,100*mult);
  const result=t.scoring.bank({parked:true,stars:0,elapsed:0,par:0,lot:0,vehicle:id});
  assert.equal(result.parkingPoints,1000*mult);assert.equal(result.total,1100*mult);
  t.setState('menu');t.setGoldenMode(true);assert.equal(t.spec.scoreMultiplier,mult);t.setGoldenMode(false);
 }
-console.log('New car challenge badges, pedestrian points, parking bank, golden multiplier inheritance and original engine tuning pass.');
+console.log('Carousel selection, pedestrian points, parking bank, golden multiplier inheritance and original engine tuning pass.');

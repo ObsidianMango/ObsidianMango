@@ -35,7 +35,7 @@ export function createXboxControls({onAction,onConnection,onMode}){
   }
   focusButton(next);
  }
- function poll(dt,{menuRoot=null,defaultButton='',driving=false,walking=false}={}){
+ function poll(dt,{menuRoot=null,defaultButton='',menuNavigate=null,driving=false,walking=false}={}){
   let pads=[];try{pads=Array.from(navigator.getGamepads?.()||[]);}catch{}
   const supported=p=>p?.connected&&(p.mapping==='standard'||(!p.mapping&&/xbox/i.test(p.id)&&p.buttons.length>=16&&p.axes.length>=4));
   let pad=pads.find(p=>p?.index===index&&supported(p));
@@ -56,7 +56,7 @@ export function createXboxControls({onAction,onConnection,onMode}){
   if(menuRoot){
    const direction=down[12]?'up':down[13]?'down':down[14]?'left':down[15]?'right':Math.abs(x)>Math.abs(y)?x<-.5?'left':x>.5?'right':'':y<-.5?'up':y>.5?'down':'';
    repeat-=dt;
-   if(direction&&(direction!==nav||repeat<=0)){navigate(direction,all);repeat=direction===nav?.13:.38;}
+   if(direction&&(direction!==nav||repeat<=0)){if(!menuNavigate?.(direction))navigate(direction,all);repeat=direction===nav?.13:.38;}
    if(!direction)repeat=0;nav=direction;
    if(edge(0))focus?.click();
    else if(edge(1))onAction('back');

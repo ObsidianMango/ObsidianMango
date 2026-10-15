@@ -1,0 +1,2 @@
+import assert from 'node:assert/strict';import {bootGame} from './helpers/game.mjs';import {VEHICLES} from '../garage-models.js';
+const {app,get}=await bootGame({progress:[]});app.test.selectVehicle(0);get('previousVehicle').click();assert.equal(app.getState().vehicle,VEHICLES.at(-1).id);assert.equal(get('goldFleet').disabled,true);assert.equal(get('secretLot').disabled,true);assert.equal(get('vehicleCount').textContent.split(' / ')[1],String(VEHICLES.length).padStart(2,'0'));console.log('New saves cannot select reward truck, gold fleet, or secret level.');
