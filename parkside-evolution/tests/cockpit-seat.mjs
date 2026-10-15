@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {createCockpitSeats,seatDefaults} from '../cockpit-seat.js';
+const memory=new Map();const store={getItem:k=>memory.get(k)||null,setItem:(k,v)=>memory.set(k,v)};
+const seats=createCockpitSeats(store);
+const santa={id:'santafe'},newYork={id:'newyorker'},nova={id:'nova'},impala={id:'impala'},monte={id:'montecarlo'};
+assert.equal(seats.get(santa).height,1.62);
+assert.equal(seats.get(newYork).depth,.67);
+for(const car of [nova,impala,monte])assert.deepEqual(seats.get(car),seatDefaults[car.id],'leave approved default views unchanged');
+seats.adjust(santa,'up');seats.adjust(santa,'back');
+assert.equal(seats.get(newYork).height,1.59,'settings never leak between cars');
+assert(seats.get(santa).height>1.62&&seats.get(santa).depth>.65);
+const fresh=createCockpitSeats(store);assert.deepEqual(fresh.get(santa),seats.get(santa),'position persists across reload');
+seats.adjust(santa,'reset');assert.deepEqual(seats.get(santa),seatDefaults.santafe);
+memory.set('parkside-evolution:v1:seat:santafe','{');assert.deepEqual(createCockpitSeats(store).get(santa),seatDefaults.santafe,'corrupt settings must recover');
+memory.set('parkside-evolution:v1:seat:santafe',JSON.stringify({height:Infinity,depth:-900}));
+assert.deepEqual(createCockpitSeats(store).get(santa),{height:1.62,depth:-.8});
+console.log('Per-vehicle cockpit positions, approved views, four seat actions, persistence, reset and corrupt saves pass.');

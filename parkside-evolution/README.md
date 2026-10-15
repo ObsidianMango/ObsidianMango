@@ -53,3 +53,7 @@ Serve the repository over HTTP to play locally. On `localhost` the existing `win
 | Integration, camera, input and game states | `drive.js`, with `xbox-controls.js` and UI modules |
 
 See [ADDING-LEVELS.md](ADDING-LEVELS.md) for data-driven level creation and [ROADMAP.md](ROADMAP.md) for remaining work. See [VALIDATION.md](VALIDATION.md) for measured results and test limits.
+
+## Cockpit seat and headrest clearance (October 2026)
+
+`cockpit-seat.js` maintains persistent per-vehicle first-person eye offsets. **Adjust Seat** is visible while driving in first-person view, with Up, Down, Forward, Back, Reset and Done. Presets improve Santa Fe and New Yorker visibility; Nova, Impala and Monte Carlo defaults are unchanged. The Santa Fe/New Yorker driver's headrests are separate cosmetic geometry, visible from third-person and temporarily hidden only while seated in first person. All other models, destruction, wheels, and parking progress remain intact. The controls are responsive on small landscape screens. Tests: `cockpit-seat.mjs` and `cockpit-seat-integration.mjs`.
