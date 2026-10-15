@@ -6,7 +6,7 @@ export const seatDefaults=Object.freeze({
  impala:Object.freeze({height:1.54,depth:.68}),
  montecarlo:Object.freeze({height:1.54,depth:.68})
 });
-const safe=(v,backup,lo,hi)=>Number.isFinite(Number(v))?Math.max(lo,Math.min(hi,Number(v))):backup;
+const safe=(v,backup,lo,hi)=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Math.max(lo,Math.min(hi,Number(v))):backup;
 export function createCockpitSeats(storage,namespace='parkside-evolution:v1:seat:'){
  const entries=new Map();
  function defaults(spec){
