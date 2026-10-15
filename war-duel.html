@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#101b2a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>WAR! — Two Player Card Battle</title>
+<style>
+:root { color-scheme: dark; --cream:#f7e8c5; --gold:#ffce75; --ink:#101b2a; }
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--ink);font-family:ui-rounded,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-user-select:none;user-select:none;touch-action:manipulation;overscroll-behavior:none}
+button{font:inherit;cursor:pointer}
+#game{display:grid;grid-template-rows:minmax(0,1fr) auto minmax(0,1fr);height:100vh;height:100dvh;overflow:hidden}
+.player{position:relative;min-height:0;overflow:hidden;display:grid;place-items:center;cursor:pointer;isolation:isolate;transition:filter .18s}
+.player:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(circle at 50% 70%,transparent 20%,rgba(0,0,0,.3) 100%),repeating-linear-gradient(120deg,transparent 0 17px,rgba(255,255,255,.025) 17px 18px)}
+.player.two{background:radial-gradient(ellipse at 50% 60%,#266a70 0%,#14414c 64%,#0d2937 100%)}
+.player.one{background:radial-gradient(ellipse at 50% 45%,#a24245 0%,#642d3d 68%,#40243a 100%)}
+.player.ready:after{content:"";position:absolute;inset:5px;pointer-events:none;border:2px solid rgba(255,211,124,.78);border-radius:19px;box-shadow:inset 0 0 24px rgba(255,206,117,.1)}
+.player-inner{width:100%;height:100%;min-height:0;max-width:460px;padding:8px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;pointer-events:none}
+.two .player-inner{transform:rotate(180deg)}
+.eyebrow{font-size:10px;letter-spacing:3px;color:#ffffffa8;font-weight:850;text-transform:uppercase}
+.player-title{font-size:clamp(19px,5.3vw,25px);font-weight:1000;color:#fff7e1;letter-spacing:1px;line-height:1.05;text-shadow:0 2px 4px #0004}
+.count{font-size:12px;font-weight:800;letter-spacing:1px;color:#fff9dfad;margin-top:1px;font-variant-numeric:tabular-nums}
+.card-slot{height:clamp(114px,18vh,165px);display:grid;place-items:center;flex-shrink:1;margin:4px 0}
+.playing-card{position:relative;height:100%;aspect-ratio: 0.72;border-radius:10px;border:4px solid #fffdfa;box-shadow:0 7px 1px #10131d55,0 14px 22px #080b144d;display:flex;align-items:center;justify-content:center;animation:pop .22s ease-out;overflow:hidden}
+@keyframes pop{0%{transform:scale(.82) rotate(-4deg);opacity:.55}100%{transform:scale(1) rotate(0);opacity:1}}
+.card-face{background:linear-gradient(145deg,#fffefa,#f7f2e6);color:#181b22}
+.card-face.red{color:#d33a4e}
+.corner{position:absolute;top:6px;left:6px;display:flex;flex-direction:column;align-items:center;font-size:clamp(18px,4vh,26px);font-weight:1000;line-height:.94;letter-spacing:-1px}
+.corner .small-suit{font-size:17px;line-height:1.1;margin-top:3px}
+.corner.alt{inset:auto 6px 6px auto;transform:rotate(180deg)}
+.center-suit{font-family:Georgia,serif;font-size:clamp(56px,10.1vh,88px);line-height:1;text-shadow:1px 2px 0 #0000000d}
+.card-back{background:repeating-linear-gradient(45deg,#183b62 0 8px,#25507e 8px 10px,#173758 10px 18px);border-color:#fff2d6;outline:2px solid #27445c;outline-offset:-10px}
+.back-mark{height:65px;width:65px;display:grid;place-items:center;border-radius:50%;background:#f8ddb1;border:5px double #163e62;color:#16466a;font-family:Georgia,serif;font-size:38px;font-weight:900;text-shadow:0 1px white;box-shadow:0 3px 0 #0003}
+.tapcue{min-width:165px;max-width:92vw;text-align:center;border-radius:999px;border:2px solid #ffe3a58f;background:#1b1a2855;padding:10px 14px;color:#fff6da;font-weight:950;font-size:clamp(12px,3.5vw,16px);letter-spacing:.45px;box-shadow:0 3px 0 #0002}
+.ready .tapcue{background:#fbd785;color:#2a2632;border-color:#fff0be}
+.player:active{filter:brightness(1.16)}
+.hub{z-index:2;min-height:100px;padding:10px max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));display:grid;grid-template-columns:56px 1fr 56px;align-items:center;gap:5px;background:linear-gradient(180deg,#101b29,#182334 50%,#101b29);color:#fff7e0;box-shadow:0 0 0 2px #f0c178 inset,0 -5px 12px #0003,0 5px 12px #0004;border-top:3px solid #f8cd77;border-bottom:3px solid #f8cd77;text-align:center}
+.mini-label{font-size:9px;color:#e6cda5;letter-spacing:1.1px;font-weight:900}
+.round-number{font-size:26px;color:#fff;font-weight:1000;font-variant-numeric:tabular-nums}
+.middle{min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px}
+.logo{color:var(--gold);font-family:Georgia,serif;font-size:clamp(20px,6vw,30px);font-weight:900;line-height:1;text-shadow:0 2px #0004;letter-spacing:2px}
+#message{font-size:clamp(11px,3.15vw,14px);font-weight:1000;line-height:1.1;color:#fff;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#detail{font-size:9px;letter-spacing:.5px;font-weight:750;opacity:.72;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tools{display:flex;align-items:center;justify-content:center;gap:6px;flex-direction:column}
+.tool{border:1px solid #ecd6a85f;background:#263a4a;color:#ffedc9;border-radius:10px;width:35px;height:35px;display:grid;place-items:center;font-size:20px;font-weight:900;padding:0}
+.tool:active{background:#4e6678}
+.modal[hidden]{display:none}
+.modal{position:fixed;inset:0;z-index:20;background:#050b12c9;display:grid;place-items:center;padding:18px;backdrop-filter:blur(5px)}
+.dialog{background:#f9edcf;color:#242836;border:4px solid #ffc66e;border-radius:23px;padding:22px 20px;max-width:360px;width:100%;box-shadow:0 14px 55px #000a;text-align:center}
+.dialog h2{font-family:Georgia,serif;font-size:26px;margin:4px 0 12px}
+.dialog p{font-size:15px;line-height:1.5;margin:9px 0}
+.dialog strong{color:#8e3141}
+.dialog .actions{display:flex;gap:10px;justify-content:center;margin-top:18px}
+.dialog button{border:0;border-radius:12px;padding:12px 15px;font-size:15px;font-weight:900;min-width:100px}
+.primary{background:#bf4451;color:white}
+.secondary{background:#e6d8b8;color:#23252c}
+.footer-small{font-size:11px!important;opacity:.65}
+@media(max-height:730px){.player-inner{gap:3px}.card-slot{height:clamp(94px,16vh,140px);margin:2px 0}.tapcue{padding:7px 12px}.hub{min-height:88px;padding-top:6px;padding-bottom:6px}.corner{font-size:19px}.center-suit{font-size:56px}}
+@media(max-height:570px){.player-inner{gap:1px}.card-slot{height:clamp(65px,17vh,95px)}.eyebrow{font-size:8px}.player-title{font-size:15px}.count{font-size:10px}.tapcue{padding:5px 8px;font-size:11px}.hub{min-height:75px}.back-mark{height:42px;width:42px;font-size:24px}.center-suit{font-size:40px}.corner{font-size:13px}.corner .small-suit{font-size:11px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main id="game" aria-label="Two-player War card game">
+ <section class="player two" id="zone2" role="button" tabindex="0" aria-label="Player 2 draw card">
+  <div class="player-inner">
+   <div class="eyebrow">THE TOP SIDE</div><div class="player-title">PLAYER TWO</div>
+   <div class="count" id="count2">26 CARDS LEFT</div>
+   <div class="card-slot" id="card2"></div>
+   <div class="tapcue" id="cue2">TAP TO DRAW</div>
+  </div>
+ </section>
+ <div class="hub">
+  <div><div class="mini-label">ROUND</div><div class="round-number" id="round">0</div></div>
+  <div class="middle"><div class="logo">⚔ WAR! ⚔</div><div id="message" aria-live="polite">BOTH PLAYERS TAP!</div><div id="detail">HIGH CARD TAKES BOTH</div></div>
+  <div class="tools"><button class="tool" id="resetBtn" aria-label="Start a new game">↻</button><button class="tool" id="helpBtn" aria-label="How to play">?</button></div>
+ </div>
+ <section class="player one" id="zone1" role="button" tabindex="0" aria-label="Player 1 draw card">
+  <div class="player-inner">
+   <div class="eyebrow">THE BOTTOM SIDE</div><div class="player-title">PLAYER ONE</div>
+   <div class="count" id="count1">26 CARDS LEFT</div>
+   <div class="card-slot" id="card1"></div>
+   <div class="tapcue" id="cue1">TAP TO DRAW</div>
+  </div>
+ </section>
+</main>
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-label="Game menu">
+ <div class="dialog"><h2 id="modalTitle"></h2><div id="modalText"></div><div class="actions" id="modalActions"></div></div>
+</div>
+<script>
+(function(){
+'use strict';
+var KEY='obm-war-duel-v1';
+var ranks=[null,null,'2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+var suits=['♠','♥','♣','♦'];
+var decks=[[],[]],visible=[null,null],ready=[false,false];
+var round=0,pot=[],resolving=false,gameOver=false,endedDraw=false;
+var status='BOTH PLAYERS TAP!',detail='HIGH CARD TAKES BOTH',timer=null;
+var $=function(id){return document.getElementById(id);};
+function shuffle(cards){for(var i=cards.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=cards[i];cards[i]=cards[j];cards[j]=t;}return cards;}
+function setTimer(fn,ms){clearTimeout(timer);timer=setTimeout(fn,ms);}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({decks:decks,visible:visible,round:round,status:status,detail:detail,gameOver:gameOver,endedDraw:endedDraw}));}catch(e){}}
+function restore(){try{var d=JSON.parse(localStorage.getItem(KEY));if(!d||!Array.isArray(d.decks)||d.decks.length!==2||!Array.isArray(d.decks[0])||!Array.isArray(d.decks[1])||d.decks[0].length+d.decks[1].length!==52||!Array.isArray(d.visible)||d.visible.length!==2)return false;
+ decks=d.decks;visible=d.visible;round=Number(d.round)||0;status=String(d.status||'BOTH PLAYERS TAP!');detail=String(d.detail||'HIGH CARD TAKES BOTH');gameOver=!!d.gameOver;endedDraw=!!d.endedDraw;return true;
+ }catch(e){return false;}}
+function newGame(){clearTimeout(timer);var all=[];for(var s=0;s<4;s++)for(var v=2;v<=14;v++)all.push({v:v,s:s});shuffle(all);decks=[all.slice(0,26),all.slice(26)];visible=[null,null];ready=[false,false];round=0;pot=[];resolving=false;gameOver=false;endedDraw=false;status='BOTH PLAYERS TAP!';detail='HIGH CARD TAKES BOTH';save();render();}
+function cardHTML(card){if(!card)return '<div class="playing-card card-back"><div class="back-mark">W</div></div>';
+ var red=card.s===1||card.s===3;var r=ranks[card.v],s=suits[card.s];return '<div class="playing-card card-face'+(red?' red':'')+'"><div class="corner">'+r+'<span class="small-suit">'+s+'</span></div><div class="center-suit">'+s+'</div><div class="corner alt">'+r+'<span class="small-suit">'+s+'</span></div></div>';}
+function render(){for(var i=0;i<2;i++){var n=i+1;
+ $('count'+n).textContent=decks[i].length+' CARDS LEFT';$('card'+n).innerHTML=cardHTML(ready[i]?null:visible[i]);$('zone'+n).classList.toggle('ready',ready[i]);$('zone'+n).setAttribute('aria-pressed',String(ready[i]));$('cue'+n).textContent=gameOver?'GAME OVER':resolving?'BATTLE IN PROGRESS':ready[i]?'✓ READY!':(round?'TAP FOR NEXT ROUND':'TAP TO DRAW');
+ }$('round').textContent=round;$('message').textContent=status;$('detail').textContent=detail;}
+function tap(i){if(resolving||gameOver||ready[i]||!$('modal').hidden)return;if(!decks[i].length)return;ready[i]=true;status=ready[0]&&ready[1]?'FLIPPING...':(i===0?'PLAYER ONE READY':'PLAYER TWO READY');detail=ready[0]&&ready[1]?'HERE WE GO!':'WAITING FOR THE OTHER PLAYER';render();if(ready[0]&&ready[1]){resolving=true;setTimer(startRound,220);}}
+function startRound(){ready=[false,false];pot=[];round++;if(!decks[0].length||!decks[1].length){endGame(decks[0].length?0:1);return;}var a=decks[0].shift(),b=decks[1].shift();pot.push(a,b);visible=[a,b];compare(a,b,false);}
+function compare(a,b,wasWar){if(a.v===b.v){status='⚡ WAR! TIE! ⚡';detail=wasWar?'ANOTHER WAR!':'3 DOWN, 1 UP — AUTO';render();setTimer(warStep,1200);}else{finish(a.v>b.v?0:1,wasWar);}}
+function warStep(){if(!decks[0].length&&!decks[1].length){endGame(-1);return;}if(!decks[0].length){finish(1,true);return;}if(!decks[1].length){finish(0,true);return;}
+ for(var i=0;i<2;i++){var n=Math.min(3,decks[i].length-1);for(var j=0;j<n;j++)pot.push(decks[i].shift());}
+ var a=decks[0].shift(),b=decks[1].shift();pot.push(a,b);visible=[a,b];status='⚡ WAR REVEAL! ⚡';detail=pot.length+' CARDS AT STAKE';render();setTimer(function(){compare(a,b,true);},650);
+}
+function finish(winner,wasWar){var gain=pot.length;shuffle(pot);Array.prototype.push.apply(decks[winner],pot);pot=[];resolving=false;ready=[false,false];status='PLAYER '+(winner+1)+' WINS +'+gain+'!';detail=wasWar?'WAR VICTORY! TAP TO CONTINUE':'TAP YOUR SIDE FOR NEXT ROUND';if(!decks[1-winner].length){gameOver=true;status='PLAYER '+(winner+1)+' WINS THE GAME!';detail='ALL 52 CARDS CAPTURED';}
+ save();render();if(gameOver)setTimer(function(){endScreen(winner);},900);}
+function endGame(winner){resolving=false;ready=[false,false];gameOver=true;endedDraw=winner===-1;status=winner===-1?'A RARE DRAW!':'PLAYER '+(winner+1)+' WINS THE GAME!';detail='PLAY AGAIN?';save();render();setTimer(function(){endScreen(winner);},500);}
+function showModal(title,body,buttons){$('modalTitle').textContent=title;$('modalText').innerHTML=body;var wrap=$('modalActions');wrap.innerHTML='';buttons.forEach(function(b){var btn=document.createElement('button');btn.className=b.primary?'primary':'secondary';btn.textContent=b.text;btn.addEventListener('click',b.action);wrap.appendChild(btn);});$('modal').hidden=false;}
+function closeModal(){$('modal').hidden=true;}
+function endScreen(winner){showModal(winner===-1?'A draw!':'PLAYER '+(winner+1)+' WINS!','<p>THE WAR IS OVER.</p><p>'+round+' rounds played. Ready for a rematch?</p>',[{text:'PLAY AGAIN',primary:true,action:function(){closeModal();newGame();}},{text:'CLOSE',action:closeModal}]);}
+function help(){showModal('HOW TO PLAY','<p>Put the phone between you. <strong>Player Two</strong> uses the top half, and <strong>Player One</strong> uses the bottom.</p><p><strong>Both tap their side</strong> to flip cards. Higher card takes both. Aces are high.</p><p>On a tie, <strong>WAR!</strong> Each player puts 3 cards down and flips a fourth. The game handles it automatically. Win all 52 cards to win.</p><p class="footer-small">Your progress saves on this phone. Works offline once opened.</p>',[{text:'LET’S PLAY',primary:true,action:closeModal}]);}
+$('zone1').addEventListener('click',function(){tap(0);});$('zone2').addEventListener('click',function(){tap(1);});
+['zone1','zone2'].forEach(function(id,ix){$(id).addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();tap(ix);}});});
+$('helpBtn').addEventListener('click',help);
+$('resetBtn').addEventListener('click',function(){showModal('START OVER?','<p>Shuffle all 52 cards and begin a fresh game?</p>',[{text:'NEW GAME',primary:true,action:function(){closeModal();newGame();}},{text:'KEEP PLAYING',action:closeModal}]);});
+if(!restore())newGame();else render();
+})();
+</script>
+</body>
+</html>
