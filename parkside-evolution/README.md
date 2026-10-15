@@ -53,3 +53,7 @@ Serve the repository over HTTP to play locally. On `localhost` the existing `win
 | Integration, camera, input and game states | `drive.js`, with `xbox-controls.js` and UI modules |
 
 See [ADDING-LEVELS.md](ADDING-LEVELS.md) for data-driven level creation and [ROADMAP.md](ROADMAP.md) for remaining work. See [VALIDATION.md](VALIDATION.md) for measured results and test limits.
+
+## Adjustable in-car seat and hollowed fleet roofs
+
+First-person camera positions are vehicle-specific. The Chevy Nova, Impala and Monte Carlo keep their prior default eye settings; the Santa Fe and New Yorker sit forward of the front-seat backrest so the cockpit and steering wheel remain visible. An unobtrusive **Adjust seat** button in first-person driving opens Up, Down, Forward, Back and Reset controls. Seat positions persist separately per vehicle in the Evolution progress namespace and never change driving physics. Santa Fe/New Yorker roof geometry omits opaque internal underside and blocking roof end-caps, while retaining external roof details and the authored breakaway assembly. These changes have integration and geometry regression checks; actual iPhone/iPad cockpit sightlines still require physical-device validation.
