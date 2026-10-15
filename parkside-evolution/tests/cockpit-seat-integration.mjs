@@ -16,7 +16,7 @@ for(const id of ['santafe','newyorker','nova','impala','montecarlo']){
   assert(headrest,'separate driver headrest retains exterior model detail');
   assert.equal(headrest.visible,false,'hide only obstructing headrest in cockpit');
   assert(eye.y>=1.58&&eye.z>=.60,'camera clears headrest');
- }else assert.equal(headrest,null,'approved fleet camera geometry unchanged');
+ }else assert.equal(headrest,undefined,'approved fleet camera geometry unchanged');
  const before=eye.clone();
  seat.querySelector('[data-seat=up]').click();seat.querySelector('[data-seat=back]').click();frame();
  const after=car.root.worldToLocal(app.camera.position.clone());
