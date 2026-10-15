@@ -8,6 +8,7 @@ for(const id of ['santafe','newyorker','nova','impala','montecarlo']){
  document.getElementById('perspectiveButton').click();
  frame();
  const car=t.car,seat=document.getElementById('seatAdjustPanel'),headrest=car.root.getObjectByName('driver-headrest');
+ document.querySelector('[aria-label="Adjust driver seat"]').click();
  assert(!seat.hidden,'seat panel must be available in first person');
  const eye=car.root.worldToLocal(app.camera.position.clone());
  assert(eye.y>1.40);
