@@ -1,5 +1,6 @@
 // Persistent, per-vehicle cockpit offsets. Does not change vehicle physics or saves.
 export const seatDefaults=Object.freeze({
+ e250:Object.freeze({height:1.78,depth:-.35}),
  santafe:Object.freeze({height:1.62,depth:.65}),
  newyorker:Object.freeze({height:1.59,depth:.67}),
  nova:Object.freeze({height:1.54,depth:.68}),
