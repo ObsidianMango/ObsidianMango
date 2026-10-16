@@ -3,14 +3,16 @@ export const INTERIOR_LAYOUTS={restaurant:{title:'Marina Kitchen',floors:['Resta
 export function buildInteriorLayout({T,room,box,label,people,building,floor,cutaway}){
  const hospital=building.type==='hospital',ward=hospital&&floor>0,wood=0x8f6c49,metal=0x879c9d,teal=0x547d7b,ivory=0xe4dfcf;
  function part(w,h,d,x,y,z,c,solid=false,structural=false,parent=room){const m=box(parent,w,h,d,x,y,z,c,solid);m.userData.interiorStatic=structural;return m;}
- function wall(w,d,x,z,c=ivory){part(w,.9,d,x,.45,z,c,true,true);part(w,2.45,d,x,2.125,z,c,false,true,cutaway);part(w+.02,.08,d+.02,x,.08,z,teal,false,true);}
+ let groupId=0;function breakable(mesh,id){mesh.userData.interiorBreakable=true;mesh.userData.breakGroup=id;return mesh;}
+ function wall(w,d,x,z,c=ivory){const alongX=w>=d,count=Math.ceil(Math.max(w,d)/2.4);for(let i=0;i<count;i++){const sw=alongX?w/count:w,sd=alongX?d:d/count,sx=x+(alongX?(i-(count-1)/2)*sw:0),sz=z+(!alongX?(i-(count-1)/2)*sd:0),id='wall-'+groupId++;breakable(part(sw,.9,sd,sx,.45,sz,c,true,true),id);breakable(part(sw,2.45,sd,sx,2.125,sz,c,false,true,cutaway),id);breakable(part(sw+.02,.08,sd+.02,sx,.08,sz,teal,false,true),id);}}
+
  function sign(text,x,y,z,w=2,ry=0){const m=label(room,text,x,y,z,w);m.rotation.y=ry;return m;}
  function chair(x,z,yaw=0,color=teal){const m=part(.65,.1,.65,x,.46,z,color,true);for(const dx of [-.25,.25])for(const dz of [-.25,.25])part(.05,.43,.05,x+dx,.22,z+dz,metal);part(.67,.62,.09,x,.8,z+Math.cos(yaw)*.29,color);return m;}
  function table(x,z,w=1.8,d=1.05){part(w,.11,d,x,.8,z,wood,true);for(const dx of [-w*.4,w*.4])for(const dz of [-d*.35,d*.35])part(.07,.75,.07,x+dx,.38,z+dz,metal);for(const dx of [-.4,.4]){part(.30,.018,.30,x+dx,.87,z,0xeee9d8);part(.075,.13,.075,x+dx+.16,.94,z+.22,0x9fc1bb);}part(.06,.22,.06,x,.97,z,teal);}
  function plant(x,z){part(.45,.45,.45,x,.225,z,0x9c7857);for(const dx of [-.16,0,.16])part(.2,.65,.19,x+dx,.7,z,0x65875c);}
- function window(x,z,w=2.5){part(w,1.55,.025,x,1.9,z,0x87b2b6,false,true);part(w+.15,.08,.07,x,1.1,z-.03,ivory,false,true);for(const dx of [-w/2,0,w/2])part(.045,1.6,.06,x+dx,1.9,z-.04,ivory,false,true);}
+ function window(x,z,w=2.5){const id='window-'+groupId++;breakable(part(w,1.55,.025,x,1.9,z,0x87b2b6,false,true),id);breakable(part(w+.15,.08,.07,x,1.1,z-.03,ivory,false,true),id);for(const dx of [-w/2,0,w/2])breakable(part(.045,1.6,.06,x+dx,1.9,z-.04,ivory,false,true),id);}
  part(16,.15,14,0,-.075,0,hospital?0xc5cdc5:0x9f8d70,false,true);wall(16,.18,0,-7);for(const x of [-8,8])wall(.18,14,x,0);for(const x of [-4.8,4.8])wall(6.4,.18,x,7);
- part(15.8,.12,13.8,0,3.42,0,ivory,false,true,cutaway);for(const x of [-5,0,5])for(const z of [-4,1,4.5])part(1.4,.035,.55,x,3.28,z,0xf5edc9,false,true,cutaway);
+ for(let col=0;col<4;col++)for(let row=0;row<4;row++)breakable(part(3.95,.12,3.45,-5.925+col*3.95,3.42,-5.175+row*3.45,ivory,false,true,cutaway),'ceiling-'+col+'-'+row);for(const x of [-5,0,5])for(const z of [-4,1,4.5])breakable(part(1.4,.035,.55,x,3.28,z,0xf5edc9,false,true,cutaway),'ceiling-'+Math.min(3,Math.floor((x+7.9)/3.95))+'-'+Math.min(3,Math.floor((z+6.9)/3.45)));
  part(2.5,.025,1.8,0,.02,5.8,0x426f6b,false,true);sign(ward?'LOBBY ↓':'EXIT',0,2.25,6.87,1.6,Math.PI);plant(-7,5.5);plant(7,5.5);
  if(hospital){
   sign(building.name,0,2.9,-6.84,6);sign(ward?'FLOOR '+(floor+1)+' · PATIENT ROOMS':'LOBBY · RECEPTION',0,2.5,-6.82,5);

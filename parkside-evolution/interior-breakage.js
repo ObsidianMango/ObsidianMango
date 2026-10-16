@@ -14,19 +14,19 @@ export function createInteriorBreakage(T,geometry){
  function build(nextRoom,nextBuilding,colliders){
   clear();room=nextRoom;building=nextBuilding;
   const protectedCounter=c=>c.z<-4&&Math.abs(c.x)<.1||nextBuilding.type==='casino'&&c.x===5.5&&c.z===4.8;
-  for(const c of colliders){c.broken=false;if(protectedCounter(c)||c.mesh.userData.interiorStatic)continue;targets.push({p:new T.Vector3(c.x,c.mesh.position.y,c.z),size:c.mesh.scale.clone(),collider:c,parts:[],damage:0,broken:false});}
+  for(const c of colliders){c.broken=false;if(protectedCounter(c)||c.mesh.userData.interiorStatic&&!c.mesh.userData.interiorBreakable)continue;targets.push({p:new T.Vector3(c.x,c.mesh.position.y,c.z),size:c.mesh.scale.clone(),collider:c,parts:[],damage:0,broken:false,breakGroup:c.mesh.userData.breakGroup});}
   const parts=[];
   room.traverse(mesh=>{
-   if(!mesh.isMesh||mesh.userData.indoorPerson||mesh.userData.interiorStatic||mesh.material?.map||mesh.userData.casinoMotion&&mesh.userData.casinoMotion!=='reel')return;
-   if(mesh.isInstancedMesh){if(mesh.parent!==room)return;for(const [index,p]of (mesh.userData.indoorParts||[]).entries())parts.push({mesh,index,p:p.position,size:p.scale,matrix:p.matrix});}
+   if(!mesh.isMesh||mesh.userData.indoorPerson||mesh.userData.interiorStatic&&!mesh.userData.interiorBreakable||mesh.material?.map||mesh.userData.casinoMotion&&mesh.userData.casinoMotion!=='reel')return;
+   if(mesh.isInstancedMesh){if(mesh.parent!==room&&!mesh.userData.interiorBreakable)return;for(const [index,p]of (mesh.userData.indoorParts||[]).entries())parts.push({mesh,index,p:p.position,size:p.scale,matrix:p.matrix,breakGroup:p.breakGroup});}
    else if(mesh.parent===room)parts.push({mesh,p:mesh.position.clone(),size:mesh.scale.clone(),rotationZ:mesh.rotation.z});
   });
   for(const part of parts){
-   const {p,size}=part;let target=targets.find(t=>t.collider?.mesh===part.mesh);
+   const {p,size}=part;let target=targets.find(t=>part.breakGroup?t.breakGroup===part.breakGroup:t.collider?.mesh===part.mesh);
    if(!target)target=targets.filter(t=>Math.abs(p.x-t.p.x)<=t.size.x/2+.18&&Math.abs(p.z-t.p.z)<=t.size.z/2+.22&&p.y>=.1&&p.y<t.p.y+t.size.y/2+1.1).sort((a,b)=>p.distanceToSquared(a.p)-p.distanceToSquared(b.p))[0];
    const small=Math.max(size.x,size.y,size.z)<=1.1&&p.y>.12&&p.y<2.8&&Math.abs(p.x)<7.5&&p.z>-6.8;
    const window=Math.abs(p.x)>7.8&&size.x<.1&&size.y>1&&size.z<2;
-   if(!target&&(small||window)&&targets.length<TARGET_LIMIT){target={p:p.clone(),size:size.clone(),parts:[],damage:0,broken:false};targets.push(target);}
+   if(!target&&(small||window||part.breakGroup)&&targets.length<TARGET_LIMIT){target={p:p.clone(),size:size.clone(),parts:[],damage:0,broken:false,breakGroup:part.breakGroup};targets.push(target);}
    if(!target)continue;
    target.parts.push(part);if(!lookup.has(part.mesh))lookup.set(part.mesh,new Map());lookup.get(part.mesh).set(part.index??-1,target);
   }
@@ -49,7 +49,7 @@ export function createInteriorBreakage(T,geometry){
  }
  function trace(from,to){
   if(!room)return null;room.updateMatrixWorld(true);const direction=new T.Vector3().subVectors(to,from),length=direction.length();if(length<.0001)return null;ray.set(from,direction.multiplyScalar(1/length));ray.near=0;ray.far=length;
-  const hit=ray.intersectObject(room,true).find(h=>h.object!==debris&&visible(h.object));if(!hit)return null;return {point:hit.point,target:lookup.get(hit.object)?.get(hit.instanceId??-1)||null};
+  const hit=ray.intersectObject(room,true).find(h=>h.object!==debris&&(visible(h.object)||h.object.userData.interiorBreakable&&h.object.visible&&room.visible));if(!hit)return null;return {point:hit.point,person:hit.object.userData.indoorPerson?hit.object:null,object:hit.object,target:lookup.get(hit.object)?.get(hit.instanceId??-1)||null};
  }
  function strike(from,direction,range,power){const to=from.clone().addScaledVector(direction,range),hit=trace(from,to);return hit?damage(hit.target,power,direction):false;}
  function blast(point,power=1){if(!room)return;const p=room.worldToLocal(point.clone());for(const t of targets){const distance=p.distanceTo(t.p);if(distance>4.5)continue;damage(t,Math.max(0,1-distance/4.5)*power*28,t.p.clone().sub(p).normalize(),true);}}
@@ -57,5 +57,5 @@ export function createInteriorBreakage(T,geometry){
   let count=0;for(let i=0;i<LIMIT;i++){const c=chips[i];if(!c.active){debris.setMatrixAt(i,zero);continue;}c.age+=dt;if(c.age>9){c.active=false;debris.setMatrixAt(i,zero);continue;}count=Math.max(count,i+1);if(c.p.y>c.size.y/2+.035||c.v.y>0){c.v.y-=9.82*dt;c.p.addScaledVector(c.v,dt);c.turn.addScaledVector(c.spin,dt);if(c.p.y<c.size.y/2+.035){c.p.y=c.size.y/2+.035;c.v.y*=-.18;c.v.x*=.55;c.v.z*=.55;if(Math.abs(c.v.y)<.3)c.v.y=0;}}c.p.x=Math.max(-7.7,Math.min(7.7,c.p.x));c.p.z=Math.max(-6.7,Math.min(6.7,c.p.z));dummy.position.copy(c.p);dummy.rotation.set(c.turn.x,c.turn.y,c.turn.z);dummy.scale.copy(c.size).multiplyScalar(c.age>8?9-c.age:1);dummy.updateMatrix();debris.setMatrixAt(i,dummy.matrix);}
   debris.count=count;debris.instanceMatrix.needsUpdate=true;
  }
- return{build,clear,strike,trace,blast,update,get targets(){return targets;},getInfo:()=>({targets:targets.length,broken:targets.filter(t=>t.broken).length,debris:chips.filter(c=>c.active).length,debrisLimit:LIMIT,batches:1,physicsBodies:0})};
+ return{build,clear,strike,trace,blast,update,get targets(){return targets;},getInfo:()=>({targets:targets.length,architecture:targets.filter(t=>t.breakGroup).length,broken:targets.filter(t=>t.broken).length,debris:chips.filter(c=>c.active).length,debrisLimit:LIMIT,batches:1,physicsBodies:0})};
 }
