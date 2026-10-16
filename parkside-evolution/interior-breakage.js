@@ -14,10 +14,10 @@ export function createInteriorBreakage(T,geometry){
  function build(nextRoom,nextBuilding,colliders){
   clear();room=nextRoom;building=nextBuilding;
   const protectedCounter=c=>c.z<-4&&Math.abs(c.x)<.1||nextBuilding.type==='casino'&&c.x===5.5&&c.z===4.8;
-  for(const c of colliders){c.broken=false;if(protectedCounter(c))continue;targets.push({p:new T.Vector3(c.x,c.mesh.position.y,c.z),size:c.mesh.scale.clone(),collider:c,parts:[],damage:0,broken:false});}
+  for(const c of colliders){c.broken=false;if(protectedCounter(c)||c.mesh.userData.interiorStatic)continue;targets.push({p:new T.Vector3(c.x,c.mesh.position.y,c.z),size:c.mesh.scale.clone(),collider:c,parts:[],damage:0,broken:false});}
   const parts=[];
   room.traverse(mesh=>{
-   if(!mesh.isMesh||mesh.material?.map||mesh.userData.casinoMotion&&mesh.userData.casinoMotion!=='reel')return;
+   if(!mesh.isMesh||mesh.userData.indoorPerson||mesh.userData.interiorStatic||mesh.material?.map||mesh.userData.casinoMotion&&mesh.userData.casinoMotion!=='reel')return;
    if(mesh.isInstancedMesh){if(mesh.parent!==room)return;for(const [index,p]of (mesh.userData.indoorParts||[]).entries())parts.push({mesh,index,p:p.position,size:p.scale,matrix:p.matrix});}
    else if(mesh.parent===room)parts.push({mesh,p:mesh.position.clone(),size:mesh.scale.clone(),rotationZ:mesh.rotation.z});
   });

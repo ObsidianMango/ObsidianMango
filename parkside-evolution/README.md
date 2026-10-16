@@ -65,3 +65,9 @@ On foot, approach detached car wreckage and use Interact (E / Xbox X / touch pro
 First-person hands and weapons use cached, merged detail meshes with recoil. Marine Park has repeating pavement materials and 107 instanced surface details in five batches, without extra physics bodies. Adaptive resolution can reach 1.25 device pixels per CSS pixel on mobile and 1.75 on desktop, lowering resolution under sustained load.
 
 Parked-car wrecks now release up to 24 recognizable assemblies, including wheels, doors, bumpers, hoods, and engines. Detached pieces render independently of the wreck, retain their original panel thickness, and use converted physics rotations so held/thrown parts remain visible. First-person carrying also keeps parts below eye level in Hulk mode.
+
+### Separate walkable interiors
+
+Marine Park’s Marina Kitchen has dining tables, a bar, kitchen, bathroom, and 12 indoor occupants. The hospital buildings at Riverview have a lobby and two patient floors, each with four occupied rooms and staff. Walk up to an entrance on foot and use Interact. The elevator beside the hospital entrance opens a floor selector; the green mat on patient floors returns to the lobby, and the lobby mat exits. Approach an occupant to talk.
+
+The reusable interior layout registry is in `interior-layouts.js`. Only one interior floor is built and rendered at a time; the exterior is hidden while indoors. Architecture/furniture are batched, people have no physics bodies, floor damage is kept separately, and leaving clears the active interior.

@@ -102,7 +102,7 @@ export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat,break
  for(let z=-25;z<=26;z+=12)marking(.12,2.5,25,z,0xe0e2d8);
  // Historic brown marina office at northwest end, slate roof and white-framed windows.
  const officeId=index+':marina-office';
- buildings.push({id:officeId,level:index,x:ox-14,z:-49,w:18,d:12,h:9.1,yaw:0,name:'Marina office',type:'office'});
+ buildings.push({id:officeId,level:index,x:ox-14,z:-49,w:18,d:12,h:9.1,yaw:0,name:'Marina Kitchen',type:'restaurant'});
  for(let row=0;row<3;row++)for(const side of [-1,1]){
   for(let col=0;col<6;col++)piece(3,9.1/3,.5,-21.5+col*3,(row+.5)*9.1/3,-49+side*6,0x5e4c3f,0,officeId);
   for(let col=0;col<4;col++)piece(.5,9.1/3,3,-14+side*9,(row+.5)*9.1/3,-53.5+col*3,0x5e4c3f,0,officeId);

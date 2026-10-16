@@ -1,0 +1,16 @@
+import {createInteriorPeople} from './interior-people.js';
+import {buildInteriorLayout,INTERIOR_LAYOUTS} from './interior-layouts.js';
+// Reusable separate interiors. A single active floor and zero extra physics bodies.
+export function createInteriorWorld(T,geometry){
+ const people=createInteriorPeople(T),histories=new WeakMap();let active=null,cutaway=null,batches=0,first=true;
+ function supports(b){return !!INTERIOR_LAYOUTS[b?.type];}
+ function key(building,floor){let floors=histories.get(building);if(!floors){floors=[];histories.set(building,floors);}if(!floors[floor])floors[floor]={id:building.id+':floor:'+floor,name:building.name,type:building.type,target:building.target};return floors[floor];}
+ function batch(parent){const groups=new Map();for(const m of [...parent.children]){if(!m.isMesh||m.geometry!==geometry||m.material.map)continue;m.updateMatrix();const k=(m.userData.interiorStatic?'static:':'furniture:')+m.material.uuid;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(m);}
+  for(const list of groups.values()){const mesh=new T.InstancedMesh(geometry,list[0].material,list.length);mesh.name='Interior '+(list[0].userData.interiorStatic?'architecture':'furniture');mesh.userData.interiorStatic=!!list[0].userData.interiorStatic;if(!mesh.userData.interiorStatic)mesh.userData.indoorParts=list.map(m=>({position:m.position.clone(),scale:m.scale.clone(),matrix:m.matrix.clone()}));list.forEach((m,i)=>{mesh.setMatrixAt(i,m.matrix);parent.remove(m);});mesh.instanceMatrix.needsUpdate=true;mesh.receiveShadow=true;parent.add(mesh);batches++;}
+ }
+ function build({room,box,label,building,floor=0}){people.clear();batches=0;cutaway=new T.Group();cutaway.name='Interior upper walls and ceiling';room.add(cutaway);const def=INTERIOR_LAYOUTS[building.type];floor=Math.max(0,Math.min(def.floors.length-1,floor));const info=buildInteriorLayout({T,room,box,label,people,building,floor,cutaway});batch(room);batch(cutaway);active={building,floor,...info};setFirstPerson(first);return key(building,floor);}
+ function context(x,z){if(!active)return null;if(active.elevator&&Math.hypot(x-active.elevator.x,z-active.elevator.z)<1.85)return{kind:'interiorTravel',label:'Use elevator'};if(active.floor>0&&Math.hypot(x,z-5.2)<2.3)return{kind:'interiorLobby',label:'Return to lobby'};const person=people.nearest(x,z);if(person)return{kind:'interiorTalk',person,label:'Talk to '+person.role};return null;}
+ function setFirstPerson(value){first=value;if(cutaway)cutaway.visible=value;}
+ function clear(){people.clear();active=null;cutaway=null;batches=0;}
+ return{supports,build,context,setFirstPerson,clear,react:people.react,update:people.update,get floors(){return active?INTERIOR_LAYOUTS[active.building.type].floors:[];},get active(){return active;},get people(){return people.people;},getInfo:()=>({active:!!active,type:active?.building.type||null,floor:active?.floor??0,floorLabel:active?.floorLabel||null,floors:active?INTERIOR_LAYOUTS[active.building.type].floors.length:0,rooms:active?.rooms||0,loadedFloors:active?1:0,batches,occupants:people.getInfo(),physicsBodies:0})};
+}
