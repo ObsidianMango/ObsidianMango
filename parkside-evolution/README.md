@@ -73,3 +73,5 @@ Marine Park’s Marina Kitchen has dining tables, a bar, kitchen, bathroom, and 
 The reusable interior layout registry is in `interior-layouts.js`. Only one interior floor is built and rendered at a time; the exterior is hidden while indoors. Architecture/furniture are batched, people have no physics bodies, floor damage is kept separately, and leaving clears the active interior.
 
 Indoor occupants now receive firearm, hammer, and grenade damage, can be snared by webs, and retain damage/down states per floor. Interior walls break in local sections, with breakable windows and ceiling/light panels as well as furniture. Shots respect walls in both camera views; breaking a wall section removes its collision. Floors, exits, and elevator controls remain usable. Indoor effects retain the 64-piece debris pool and add no rigid bodies.
+
+Adaptive resolution now raises quality after roughly two seconds of sustained frame-time headroom (about 48 FPS or better). Brief dips reduce recovery progress instead of clearing it; sustained overload still lowers resolution quickly. A failed upward probe waits briefly before trying again to avoid repeated sharp/blurry switching.
