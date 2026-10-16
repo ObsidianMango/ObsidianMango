@@ -57,3 +57,9 @@ See [ADDING-LEVELS.md](ADDING-LEVELS.md) for data-driven level creation and [ROA
 ## Cockpit seat and headrest clearance (October 2026)
 
 `cockpit-seat.js` maintains persistent per-vehicle first-person eye offsets. **Adjust Seat** is visible while driving in first-person view, with Up, Down, Forward, Back, Reset and Done. Presets improve Santa Fe and New Yorker visibility; Nova, Impala and Monte Carlo defaults are unchanged. The Santa Fe/New Yorker driver's headrests are separate cosmetic geometry, visible from third-person and temporarily hidden only while seated in first person. All other models, destruction, wheels, and parking progress remain intact. The controls are responsive on small landscape screens. Tests: `cockpit-seat.mjs` and `cockpit-seat-integration.mjs`.
+
+### Car-part handling and visual detail
+
+On foot, approach detached car wreckage and use Interact (E / Xbox X / touch prompt) to pick it up. Use Fire (Space / RT / THROW) to toss it, or Interact again to drop it. Heavier pieces throw more slowly. Recently settled parked-car wreckage remains pickable within the existing 128-piece pool; resetting the level releases held pieces.
+
+First-person hands and weapons use cached, merged detail meshes with recoil. Marine Park has repeating pavement materials and 107 instanced surface details in five batches, without extra physics bodies. Adaptive resolution can reach 1.25 device pixels per CSS pixel on mobile and 1.75 on desktop, lowering resolution under sustained load.

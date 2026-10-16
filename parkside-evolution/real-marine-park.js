@@ -1,13 +1,15 @@
+import {createMarineDetail} from './marine-detail.js';
 // Procedural Red Bank Marine Park approximation from supplied visual references.
 // No Google imagery, tiles or screenshots are embedded in the game.
 export function buildMarinePark({T,group,ox,piece,bay,parked,text,mini,mat,breakables,buildings,index}){
+ const detail=createMarineDetail(T,group,ox);
  const cube=new T.BoxGeometry(1,1,1);
  function deco(w,h,d,x,y,z,c,yaw=0){
   const m=new T.Mesh(cube,mat(c));m.position.set(ox+x,y,z);m.scale.set(w,h,d);m.rotation.y=yaw;
   m.castShadow=h>2;m.receiveShadow=true;group.add(m);return m;
  }
  function plane(w,d,x,z,c,y=.037){
-  const m=new T.Mesh(new T.PlaneGeometry(w,d),mat(c));m.rotation.x=-Math.PI/2;
+  const m=new T.Mesh(new T.PlaneGeometry(w,d),[0x343b3e,0x575c5a,0xb2b4a8,0xb8b4a8].includes(c)?detail.ground(w,d,[0xb2b4a8,0xb8b4a8].includes(c)):mat(c));m.rotation.x=-Math.PI/2;
   m.position.set(ox+x,y,z);m.userData.guide=true;m.receiveShadow=true;group.add(m);return m;
  }
  function collision(w,h,d,x,y,z,c){return piece(w,h,d,x,y,z,c);}
