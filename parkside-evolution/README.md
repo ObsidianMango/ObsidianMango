@@ -63,3 +63,5 @@ See [ADDING-LEVELS.md](ADDING-LEVELS.md) for data-driven level creation and [ROA
 On foot, approach detached car wreckage and use Interact (E / Xbox X / touch prompt) to pick it up. Use Fire (Space / RT / THROW) to toss it, or Interact again to drop it. Heavier pieces throw more slowly. Recently settled parked-car wreckage remains pickable within the existing 128-piece pool; resetting the level releases held pieces.
 
 First-person hands and weapons use cached, merged detail meshes with recoil. Marine Park has repeating pavement materials and 107 instanced surface details in five batches, without extra physics bodies. Adaptive resolution can reach 1.25 device pixels per CSS pixel on mobile and 1.75 on desktop, lowering resolution under sustained load.
+
+Parked-car wrecks now release up to 24 recognizable assemblies, including wheels, doors, bumpers, hoods, and engines. Detached pieces render independently of the wreck, retain their original panel thickness, and use converted physics rotations so held/thrown parts remain visible. First-person carrying also keeps parts below eye level in Hulk mode.
