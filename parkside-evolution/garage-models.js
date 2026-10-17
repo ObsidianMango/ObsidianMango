@@ -12,6 +12,7 @@ export const VEHICLES=[
  {id:'suburban',name:'Lifted Suburban',detail:'Teal · long-body 4×4',mass:2700,radius:.62,track:1.10,front:-1.64,rear:1.78,offset:.873,power:4400,halfWidth:1.30,halfLength:2.94,box:[1.08,.62,2.78],center:.53,suspension:.38},
  {id:'impala',name:'Impala SS',detail:'Blue-gray · V8 sedan',mass:1830,radius:.42,track:1.02,front:-1.61,rear:1.61,offset:.673,power:3400,halfWidth:1.22,halfLength:2.70,box:[1.04,.32,2.53],center:.18},
  {id:'colorado',name:'Colorado Z71',detail:'Orange · extended-cab pickup',mass:1950,radius:.50,track:1.06,front:-1.53,rear:1.65,offset:.753,power:3300,halfWidth:1.28,halfLength:2.72,box:[1.06,.42,2.57],center:.36,suspension:.34},
+ {id:'semi',name:'18-Wheeler',detail:'Tractor & articulated trailer',semi:true,mass:6500,radius:.5,track:1.12,front:-2.55,rear:1.4,offset:.8,power:12000,maxSpeed:17,reverseSpeed:3,halfWidth:1.58,halfLength:3.85,box:[1.17,.48,3.55],center:.45},
 ];
 export function buildSUV(T,kind){
  const jeep=kind==='jeep',root=new T.Group(),groups=new Map();

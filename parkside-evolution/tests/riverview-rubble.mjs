@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {bootGame} from './helpers/game.mjs';
 import {LOTS,SECRET_LEVEL_INDEX,MULTIPLAYER_LEVELS,LEVEL_SIGNATURE} from '../level-catalog.js';
 const {app,T,context,frame}=await bootGame(),t=app.test,C=context.C;
-const level=LOTS.findIndex(l=>l.style==='riverviewHospital');assert.equal(level,25);assert.equal(SECRET_LEVEL_INDEX,26);assert.equal(MULTIPLAYER_LEVELS.length,27);
+const level=LOTS.findIndex(l=>l.style==='riverviewHospital');assert.equal(level,25);assert.equal(SECRET_LEVEL_INDEX,27);assert.equal(MULTIPLAYER_LEVELS.length,28);
 assert(t.loadLevel(level));app.start();t.setState('running');const v=t.lots.views[level],layout=v.group.userData.riverview;
 assert.equal(layout.slots,144);assert(layout.occupied>125);assert.equal(t.traffic.active.length,layout.occupied);
 assert(!t.traffic.active.some(p=>Math.hypot(p.body.position.x-v.ox+23.2,p.body.position.z-21.8)<1));

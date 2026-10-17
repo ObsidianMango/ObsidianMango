@@ -1,5 +1,6 @@
 // Persistent, per-vehicle cockpit offsets. Does not change vehicle physics or saves.
 export const seatDefaults=Object.freeze({
+ semi:Object.freeze({height:2.75,depth:-.6}),
  e250:Object.freeze({height:1.78,depth:-.35}),
  santafe:Object.freeze({height:1.62,depth:.65}),
  newyorker:Object.freeze({height:1.59,depth:.67}),
@@ -11,7 +12,7 @@ const safe=(v,backup,lo,hi)=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Nu
 export function createCockpitSeats(storage,namespace='parkside-evolution:v1:seat:'){
  const entries=new Map();
  function defaults(spec){
-  const b=seatDefaults[spec.id];
+  const b=seatDefaults[spec.baseId||spec.id];
   return b?{...b}:{height:spec.monster?3.55:1.54,depth:spec.monster?.38:.68};
  }
  function get(spec){

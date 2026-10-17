@@ -4,7 +4,7 @@ import {bootGame} from './helpers/game.mjs';
 import {VEHICLES} from '../garage-models.js';
 const {app,get,T,frame}=await bootGame(),t=app.test,life=t.streetLife;
 const ids=['montecarlo','suburban','impala','colorado'];
-assert.equal(VEHICLES.length,12);
+assert.equal(VEHICLES.length,13);
 const modelReport=[];
 for(const id of ids){t.loadLevel(0);t.setState('menu');t.selectVehicle(VEHICLES.findIndex(c=>c.id===id));const car=t.car;assert.equal(car.config.id,id);for(const name of ['wheel-front-right','wheel-front-left','wheel-rear-right','wheel-rear-left','engine','cabin','roof'])assert(car.assemblies.some(p=>p.name===name),id+' '+name);let vertices=0,meshes=0;car.root.traverse(o=>{if(!o.isMesh)return;meshes++;const p=o.geometry.attributes.position;vertices+=p.count;for(const n of p.array)assert(Number.isFinite(n));});assert(vertices<250000);assert(meshes<160);modelReport.push({id,assemblies:car.assemblies.length,vertices,meshes});}
 t.loadLevel(SECRET_LEVEL_INDEX);app.start();t.setState('running');t.teleport(0,190);assert(life.exitVehicle());const baseline=t.world.bodies.length;assert.equal(baseline,1071);

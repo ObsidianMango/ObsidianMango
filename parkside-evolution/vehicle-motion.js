@@ -4,7 +4,7 @@ export function createVehicleMotion(T){
  let nodes=[],capturedCar=null,assemblyCount=0;
  function capture(car,reset=false){
   if(reset||car!==capturedCar||car.assemblies.length!==assemblyCount){
-   capturedCar=car;assemblyCount=car.assemblies.length;nodes=[car.root,...car.assemblies.filter(p=>p.name.startsWith('wheel-')||p.name==='steering-wheel')];previous.length=current.length=0;
+   capturedCar=car;assemblyCount=car.assemblies.length;nodes=[car.root,...car.assemblies.filter(p=>p.name.startsWith('wheel-')||p.name==='steering-wheel'||p.name==='trailer')];previous.length=current.length=0;
    for(const node of nodes){const a=pose(),b=pose();a.p.copy(node.position);a.q.copy(node.quaternion);b.p.copy(a.p);b.q.copy(a.q);previous.push(a);current.push(b);}
    return;
   }

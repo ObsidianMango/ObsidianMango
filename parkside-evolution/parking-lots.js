@@ -1,10 +1,11 @@
+import {buildChurchStreet} from './church-street.js';
 import {addBuildingContents} from './building-contents.js';
 import {createSceneryDetail} from './scenery-detail.js';
 import {buildMarinePark} from './real-marine-park.js';
 import {LOTS,ORIGINAL_LOT_COUNT} from './level-catalog.js';
 export {LOTS,ORIGINAL_LOT_COUNT} from './level-catalog.js';
 import {buildRiverview} from './real-riverview.js';
-const LEVEL_BUILDERS={redbankMarina:buildMarinePark,riverviewHospital:buildRiverview};
+const LEVEL_BUILDERS={churchStreet:buildChurchStreet,redbankMarina:buildMarinePark,riverviewHospital:buildRiverview};
 export const CHAPTER_SIZE=8;
 export function completedThrough(saves,count){return Array.from({length:count},(_,i)=>saves[i]?.stars>=1).every(Boolean);}
 export function isLotUnlocked(index,saves){return Number.isInteger(index)&&index>=0&&index<LOTS.length&&(LOTS[index].realWorld||completedThrough(saves,Math.floor(index/CHAPTER_SIZE)*CHAPTER_SIZE));}

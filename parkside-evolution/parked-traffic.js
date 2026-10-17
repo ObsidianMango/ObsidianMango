@@ -2,6 +2,7 @@
 import {createCrushContact} from './crush-contact.js';
 import {setDamageAppearance} from './damage-appearance.js';
 export function createParkedTraffic({T,C,scene,world,lots,garage,onWreck}){
+ garage=garage.filter(g=>!g.config.semi);
  const LIMIT=128,activeDebris=[],pool=[],debrisRoots=new Map();
  function debrisRoot(item){let root=debrisRoots.get(item.level);if(!root){root=new T.Group();root.name='Independent vehicle wreckage';lots.views[item.level].group.add(root);debrisRoots.set(item.level,root);}return root;}
  const isDestructionLevel=level=>!!lots.views[level]?.routes;

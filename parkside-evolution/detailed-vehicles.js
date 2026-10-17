@@ -1,3 +1,4 @@
+import {buildSemiTruck} from './semi-truck.js';
 import {buildReferenceVehicle} from './reference-vehicles.js';
 import {detailKit} from './vehicle-detail-kit.js';
 import {buildNova} from './nova-model.js';
@@ -5,6 +6,7 @@ import {buildFleetVehicle} from './fleet-models.js';
 import {buildWienermobile} from './wienermobile-model.js';
 
 export function buildDetailedVehicle(T,c){
+ if(c.semi)return buildSemiTruck(T,c);
  if(['montecarlo','suburban','impala','colorado'].includes(c.id))return buildReferenceVehicle(T,c);
  if(['santafe','newyorker','e250'].includes(c.id))return buildFleetVehicle(T,c);
  if(c.id==='wiener')return buildWienermobile(T,c);
