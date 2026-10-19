@@ -1,6 +1,6 @@
 # MangoWarz Classic
 
-MangoWarz Classic is a mobile-first, static browser strategy game built around a 30-day travel, trading, finance, street-event, and police-encounter loop. It is an original implementation with original writing, synthesized sound, and a project-specific visual system.
+MangoWarz Classic is a mobile-first, static browser strategy game built around the original 30-day travel, trading, finance, street-event, and police-encounter loop. Its public interface follows a focused 1985 computer-game presentation: black arcade panels, warm-gold rules, a limited cyan/green/red palette, crisp pixel scenes, compact status cells, and one task per screen.
 
 Public path: `https://obsidianmango.github.io/ObsidianMango/mangowarz-classic/`
 
@@ -20,10 +20,10 @@ For live-reload development and layout QA, run `npm install` followed by `npm ru
 
 ## Rules
 
-- Begin on Day 1 in the Bronx with $2,000 cash, $5,500 debt, 100 health, and 100 coat spaces.
+- Begin on Day 1 in Uptown with $2,000 cash, $5,500 debt, 100 health, and 100 coat spaces.
 - Buy available products, travel to a different neighborhood, and sell when the price is favorable.
 - Every completed trip advances one day, adds 10% debt interest, and adds 5% bank interest using floored integer arithmetic.
-- The Bronx loan shark accepts repayments but issues no new standard Classic loans. Manhattan provides bank deposits and withdrawals.
+- The Uptown loan shark accepts repayments but issues no new standard Classic loans. Chinatown provides bank deposits and withdrawals.
 - Random events use the run’s seeded PRNG. A refresh resumes the exact market, RNG position, and pending encounter.
 - Day 30 remains fully playable. The player explicitly finishes after final trading and services.
 - Classic score is exactly `cash + bank - debt`. Inventory is not automatically liquidated.
@@ -32,12 +32,13 @@ The optional six-product variant is chosen only when starting a run. The default
 
 ## Modes
 
-Classic Mode and Mango Extended Mode have separate new-game selections, save keys, personal bests, explanations, and balance data. Extended Mode keeps the 30-day core but adds disclosed vehicles, properties, companions, resale factors, capacity bonuses, escape bonuses, and the fictional Wife/divorce-risk satire. Extended portfolio resale value is added only to the separate Extended final score.
+The public title screen starts Classic Mode only, keeping the experience focused on the original game structure. The previously implemented Extended data and save namespace remain preserved in source for compatibility but are not offered as a public new-game choice.
 
 ## Controls
 
 - Touch/mouse: all controls use labeled targets at least about 44 CSS pixels tall.
-- Keyboard: tab through every control; `T` opens Travel, `S` Services, `I` Inventory, and `H` History when no dialog is open.
+- Keyboard: tab through every control. On the hub, `M` opens Market, `J`/`T` opens Travel, `I` opens Stats/Inventory, `L`/`H` opens Event Log, and `O` opens Options. In the market, `B` buys, `S` sells, and `X` sets the maximum quantity for the selected item.
+- `Escape` returns from the Market or Subway screen to the neighborhood hub.
 - `Escape` closes dismissible sheets. Mandatory encounters intentionally remain open until resolved.
 - Dialog focus is trapped while open and returned to the trigger on close.
 
@@ -71,15 +72,16 @@ For exact responsive checks during local development, open `tools/viewport-qa.ht
 ## Folder structure
 
 - `index.html` — semantic app shell and PWA metadata
-- `css/` — reset, tokens, responsive layout, components, motion, and accessibility
+- `css/` — reset, engine styles, and the final `classic.css` 1985 pixel-interface layer
 - `js/` — modular deterministic game engine, rendering, persistence, audio, and accessibility
-- `assets/` — branding, characters, police, civilians, products, items, services, locations, encounters, effects, Extended art, and the manifest
+- `assets/classic-ui/` — the single public pixel-art set: title skyline, six neighborhood scenes, subway map, 12 product glyphs, eight hub icons, and its own provenance manifest
+- `assets/` — preserved branding, character, police, civilian, encounter, Extended, and compatibility artwork that is not mixed into the playable Classic shell
 - `tests/` — focused deterministic tests and the 10,000-run simulation
 - `tools/` — reproducible SVG generation, compatibility export, and asset QA
 
 ## Asset pipeline and provenance
 
-`tools/generate-assets.mjs` writes the deterministic original SVG pack and `assets/asset-manifest.json`. Every visible illustration uses the single **Mango Noir Vector** direction: full-bleed city staging, hard pixel-inspired silhouettes, mango-orange and electric-blue lighting, scanline texture, and shared atmospheric depth. There are no separate generated-raster masters in the game. `tools/render-raster.mjs` creates only the four PNG compatibility exports required for broad PWA icon and social-preview support, directly from the same SVG masters.
+`tools/generate-reference-ui.mjs` writes the complete public `assets/classic-ui/` set from shared palette and grid rules. The hub, market, products, title, locations, and subway therefore use one authored visual language with no external images. `tools/generate-assets.mjs` still writes the preserved compatibility SVG library and `assets/asset-manifest.json`; those older illustrations remain available for metadata and private experiments but are not mixed into the playable Classic shell. `tools/render-raster.mjs` creates four PNG compatibility exports directly from SVG masters.
 
 Every manifest record includes a stable ID, category, path, format, dimensions, alt text, states, frame information, anchor, provenance, mode, fallback, and preload priority. Optional image failures fall back to `assets/ui/image-fallback.svg` without blocking play.
 
@@ -91,12 +93,12 @@ The interface uses semantic regions, logical headings, visible focus, text label
 
 ## Intentional differences and limitations
 
-- Writing, art, audio, character designs, and visual branding are original rather than copied from an older game.
+- The layout, palette, compact panels, and task flow intentionally evoke mid-1980s computer trading games, while every distributable image, line of code, label, and MangoWarz brand element is independently created.
 - Market tips are clearly labeled as rumors, not guaranteed future prices.
 - The clinic is available in every neighborhood for usability.
 - Combat abstracts ammunition; weapons occupy capacity and deal the configured damage but do not model realistic ballistics.
 - “Baretta” is retained as requested compatibility data; the real-world brand spelling is commonly different.
-- Extended Mode is a separate portfolio layer on the completed Classic engine, not a second map or narrative campaign.
+- Extended Mode source and its separate saves are preserved but hidden from the public new-game screen.
 - Audio is synthesized through Web Audio, so no OGG/MP3 download is necessary; play remains unaffected if audio is unavailable.
 - Offline installation requires one successful online load under HTTPS or localhost.
 

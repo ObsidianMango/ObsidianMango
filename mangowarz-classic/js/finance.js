@@ -17,7 +17,7 @@ export function applyTripInterest(state) {
 
 export function repayDebt(state, amount) {
   if (state.ended) return reject('This run is over.');
-  if (state.location !== 'bronx') return reject('The loan shark is only available in the Bronx.');
+  if (state.location !== 'bronx') return reject('The loan shark is only available in Uptown.');
   if (!isWholePositive(amount)) return reject('Enter a whole-dollar amount above zero.');
   if (amount > state.cash) return reject('You do not have that much carried cash.');
   if (amount > state.debt) return reject('That exceeds the debt balance.');
@@ -30,7 +30,7 @@ export function repayDebt(state, amount) {
 
 export function deposit(state, amount) {
   if (state.ended) return reject('This run is over.');
-  if (state.location !== 'manhattan') return reject('The bank is only available in Manhattan.');
+  if (state.location !== 'manhattan') return reject('The bank is only available in Chinatown.');
   if (!isWholePositive(amount)) return reject('Enter a whole-dollar amount above zero.');
   if (amount > state.cash) return reject('Deposit exceeds carried cash.');
   state.cash -= amount;
@@ -42,7 +42,7 @@ export function deposit(state, amount) {
 
 export function withdraw(state, amount) {
   if (state.ended) return reject('This run is over.');
-  if (state.location !== 'manhattan') return reject('The bank is only available in Manhattan.');
+  if (state.location !== 'manhattan') return reject('The bank is only available in Chinatown.');
   if (!isWholePositive(amount)) return reject('Enter a whole-dollar amount above zero.');
   if (amount > state.bank) return reject('Withdrawal exceeds bank balance.');
   state.bank -= amount;

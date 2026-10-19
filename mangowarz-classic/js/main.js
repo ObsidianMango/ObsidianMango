@@ -9,7 +9,7 @@ import { Haptics } from './haptics.js';
 import { ModalManager } from './modal-manager.js?v=5';
 import { loadGame, loadSettings, recordBestScore, resetSave, saveGame, saveSettings } from './persistence.js';
 import { createSeed, SeededRng } from './rng.js';
-import { Renderer, escapeHtml, icon } from './renderer.js?v=9';
+import { Renderer, escapeHtml } from './renderer.js?v=12';
 import { finishRun, shareSummary } from './scoring.js';
 import { createInitialState, freeCapacity, totalCapacity, usedCapacity } from './state.js';
 import { buyProduct, maxBuyable, maxSellable, sellProduct } from './trading.js';
@@ -28,6 +28,10 @@ let busy=false;
 let lastTradeSubmission={key:'',at:-Infinity};
 let installPrompt=null;
 let titleNotice='';
+let activeView='home';
+let selectedProductId=null;
+let selectedDestination=null;
+let activeService='all';
 
 if('scrollRestoration' in history) history.scrollRestoration='manual';
 applyMotionPreference(storedSettings.reducedMotion ?? null);
@@ -39,7 +43,7 @@ function resetPageScroll() {
 }
 
 function showTitle(notice=titleNotice) {
-  state=null; modal.close();
+  state=null; activeView='home'; selectedProductId=null; selectedDestination=null; modal.close();
   const classic=loadGame('classic'); const extended=loadGame('extended');
   renderer.renderTitle({classicSave:classic.state,extendedSave:extended.state,settings:loadSettings(),notice:notice || (!classic.ok?classic.reason:!extended.ok?extended.reason:'')});
   assets.guardAll(main); syncInstallButton(); resetPageScroll();
@@ -49,7 +53,7 @@ function renderGame({save=true}={}) {
   if(!state)return;
   if(save) saveGame(state);
   if(state.finished){renderer.renderFinal(state,state._isBest);assets.guardAll(main);return;}
-  renderer.renderGame(state); assets.guardAll(document.getElementById('app'));
+  renderer.renderGame(state,{view:activeView,selectedProductId,selectedDestination}); assets.guardAll(document.getElementById('app'));
 }
 
 function toast(message,type='info') {
@@ -75,6 +79,7 @@ function beginNewGame(values) {
     const settings={audio:values.audio,haptics:values.haptics,reducedMotion:storedSettings.reducedMotion??false};
     saveSettings(settings); audio.setEnabled(values.audio);haptics.setEnabled(values.haptics);
     state=createInitialState({mode,seed:values.seed||createSeed(),sixProductVariant:values.sixProductVariant,...settings});
+    activeView='home'; selectedProductId=null; selectedDestination=null;
     initializeMarket(state); saveGame(state); audio.play('travel'); renderGame(); resetPageScroll();
   };
   if(existing&&!existing.finished) confirmAction({title:'Replace saved run?',text:`This will replace the saved ${mode==='classic'?'Classic':'Extended'} run on Day ${existing.day}. The other mode is untouched.`,confirmLabel:'Replace run',danger:true,onConfirm:create}); else create();
@@ -84,6 +89,7 @@ function resumeMode(mode) {
   const loaded=loadGame(mode);
   if(!loaded.ok||!loaded.state){showTitle(loaded.reason||'No save found.');return;}
   state=loaded.state; audio.setEnabled(state.settings.audio); haptics.setEnabled(state.settings.haptics); applyMotionPreference(state.settings.reducedMotion);
+  activeView='home'; selectedProductId=null; selectedDestination=null;
   if(state.finished){const best=recordBestScore(state);state._isBest=best.isBest;renderGame({save:false});resetPageScroll();return;}
   renderGame({save:false}); resetPageScroll();
   if(state.pendingEncounter) queueMicrotask(openEncounter);
@@ -104,18 +110,28 @@ function setQuantity(productId,value) {
 
 function mutateTrade(kind,productId) {
   const now=performance.now();const key=`${kind}:${productId}`;
-  if(busy||(lastTradeSubmission.key===key&&now-lastTradeSubmission.at<300)){toast('That transaction is already being submitted.','error');return;}
+  if(busy||(lastTradeSubmission.key===key&&now-lastTradeSubmission.at<300)){toast('That transaction is already being submitted.','error');return false;}
   lastTradeSubmission={key,at:now};busy=true;
+  let succeeded=false;
   try{
     const quantity=quantityFor(productId); const result=kind==='buy'?buyProduct(state,productId,quantity):sellProduct(state,productId,quantity);
-    if(feedback(result,kind==='buy'?'purchase':'sale')){saveGame(state);renderGame({save:false});}
+    if(feedback(result,kind==='buy'?'purchase':'sale')){saveGame(state);renderGame({save:false});succeeded=true;}
   } finally {busy=false;}
+  return succeeded;
+}
+
+function openTrade(productId) {
+  const product=PRODUCT_BY_ID[productId], row=state.market?.rows?.[productId];
+  if(!product||!row?.available){toast('That product is not for sale here.','error');return;}
+  const owned=state.inventory[productId]??0, buyMax=maxBuyable(state,productId), sellMax=maxSellable(state,productId);
+  const quantity=renderer.quantities.get(productId)??1;
+  const completeTrade=kind=>{if(!mutateTrade(kind,productId))return;modal.close(false);requestAnimationFrame(()=>document.querySelector(`[data-action="trade-product"][data-product="${productId}"]`)?.focus());};
+  modal.open({title:`TRADE: ${product.name.toUpperCase()}`,className:'dos-dialog',content:`<div class="trade-dialog"><div class="dos-trade-readout"><p>PRICE <b>${formatMoney(row.price)}</b></p><p>YOU HAVE <b>${owned}</b></p><p>CASH <b>${formatMoney(state.cash)}</b></p><p>COAT <b>${freeCapacity(state)} FREE</b></p></div><div class="trade-controls"><button class="qty-button" data-action="qty-minus" data-product="${productId}" aria-label="Decrease ${escapeHtml(product.name)} quantity">−</button><input class="qty-input" data-quantity="${productId}" inputmode="numeric" pattern="[0-9]*" value="${quantity}" aria-label="${escapeHtml(product.name)} quantity"><button class="qty-button" data-action="qty-plus" data-product="${productId}" aria-label="Increase ${escapeHtml(product.name)} quantity">+</button><div class="max-buttons"><button class="qty-button" data-action="qty-buy-max" data-product="${productId}" ${buyMax===0?'disabled':''}>MAX BUY ${buyMax}</button><button class="qty-button" data-action="qty-sell-max" data-product="${productId}" ${sellMax===0?'disabled':''}>MAX SELL ${sellMax}</button></div></div></div>`,returnFocus:document.querySelector(`[data-action="trade-product"][data-product="${productId}"]`),actions:[{label:'BUY',className:'button buy',disabled:buyMax===0,onClick:()=>completeTrade('buy')},{label:'SELL',className:'button sell',disabled:sellMax===0,onClick:()=>completeTrade('sell')}]});
 }
 
 function openTravel() {
-  const cards=LOCATIONS.map(location=>`<button class="destination-card ${location.id===state.location?'current':''}" data-action="travel-destination" data-destination="${location.id}" ${location.id===state.location?'disabled':''}><img src="assets/locations/${location.id}-map.svg" alt="Map thumbnail for ${escapeHtml(location.name)}"><span><strong>${escapeHtml(location.name)}</strong><small>Listings ${location.minListed}–${location.maxListedExclusive-1}</small></span><span aria-label="Police rating ${location.police}" class="danger-dots">${'•'.repeat(Math.max(1,Math.ceil(location.police/20)))}</span></button>`).join('');
-  modal.open({title:`Travel • Day ${state.day}`,content:`<figure class="travel-banner"><img src="assets/locations/${state.location}-travel.svg" alt="Leaving ${escapeHtml(LOCATION_BY_ID[state.location].name)}"><img class="travel-avatar" src="assets/characters/player-traveling.svg" alt="Your trader ready to travel"></figure><p style="margin-bottom:10px">A successful trip advances the day and applies 10% debt interest plus 5% bank interest.</p><div class="sheet-grid">${cards}</div>${state.day===29?'<div class="change-preview"><b>Next stop is Day 30.</b> You will still get the full final market and services before choosing Finish Run.</div>':''}`,dismissible:true,returnFocus:document.querySelector('[data-action="travel"]')});
-  assets.guardAll(modal.current.dialog);
+  const cards=LOCATIONS.map((location,index)=>`<button class="destination-card ${location.id===state.location?'current':''}" data-action="travel-destination" data-destination="${location.id}" ${location.id===state.location?'disabled':''}><span class="destination-number">${index+1}</span><strong>${escapeHtml(location.name).toUpperCase()}</strong></button>`).join('');
+  modal.open({title:`WHERE TO? — DAY ${state.day}`,className:'dos-dialog',content:`<div class="sheet-grid destination-list">${cards}</div>${state.day===29?'<p class="dos-alert">NEXT STOP IS DAY 30. YOU MAY STILL TRADE BEFORE FINISHING.</p>':''}`,dismissible:true,returnFocus:document.querySelector('[data-action="travel"]')});
 }
 
 function doTravel(destination) {
@@ -124,48 +140,46 @@ function doTravel(destination) {
   const result=travelTo(state,destination);
   busy=false;
   if(!result.ok){toast(result.reason,'error');return;}
+  activeView='home'; selectedProductId=null; selectedDestination=null;
   audio.play(result.encounter?.type==='police'?'police':'travel');haptics.pulse(25);saveGame(state);renderGame({save:false});
   if(result.encounter) setTimeout(openEncounter,state.settings.reducedMotion?0:220);
 }
 
-function serviceContent() {
+function serviceContent(kind='all') {
   const quote=treatmentQuote(state);
-  const loan=state.location==='bronx'?`<section class="panel-card form-stack"><img class="service-scene" src="assets/services/bronx-loan-shark-room.svg" alt="Dim Bronx loan-shark office with a desk and safe"><div class="actor-chip"><img src="assets/civilians/loan-shark.svg" alt="Loan shark portrait"><div><h3>Loan Shark</h3><small>Repayment only. No new Classic loans.</small></div></div><div class="field"><label for="loan-amount">Repay debt</label><input id="loan-amount" inputmode="numeric" placeholder="Whole dollars"><button class="button ghost" data-action="service-max" data-target="loan-amount" data-value="${Math.min(state.cash,state.debt)}">Max ${formatMoney(Math.min(state.cash,state.debt))}</button></div><button class="button primary" data-action="repay-debt">Repay</button></section>`:'';
-  const bank=state.location==='manhattan'?`<section class="panel-card form-stack"><img class="service-scene" src="assets/services/manhattan-bank.svg" alt="Neon Manhattan bank hall with columns and a secure vault"><div class="actor-chip"><img src="assets/civilians/banker.svg" alt="Banker portrait"><div><h3>Manhattan Bank</h3><small>Balances gain 5% after every completed trip.</small></div></div><div class="two-col"><div class="field"><label for="deposit-amount">Deposit</label><input id="deposit-amount" inputmode="numeric"><button class="button ghost" data-action="service-max" data-target="deposit-amount" data-value="${state.cash}">Max</button><button class="button buy" data-action="bank-deposit">Deposit</button></div><div class="field"><label for="withdraw-amount">Withdraw</label><input id="withdraw-amount" inputmode="numeric"><button class="button ghost" data-action="service-max" data-target="withdraw-amount" data-value="${state.bank}">Max</button><button class="button sell" data-action="bank-withdraw">Withdraw</button></div></div></section>`:'';
-  const clinic=`<section class="panel-card form-stack"><img class="service-scene" src="assets/services/clinic.svg" alt="Compact street clinic with treatment bed and medical cabinets"><div class="actor-chip"><img src="assets/civilians/doctor.svg" alt="Doctor portrait"><div><h3>Street Clinic</h3><small>Restore ${quote.healing} health for ${formatMoney(quote.cost)}.</small></div></div><button class="button buy" data-action="buy-treatment" ${quote.healing===0||state.cash<quote.cost?'disabled':''}>Treat to ${Math.min(100,state.health+quote.healing)} health</button></section>`;
+  const loan=(kind==='all'||kind==='loan')&&state.location==='bronx'?`<section class="panel-card form-stack"><h3>LOAN SHARK</h3><p>DEBT: <b>${formatMoney(state.debt)}</b></p><div class="field"><label for="loan-amount">AMOUNT TO REPAY</label><input id="loan-amount" inputmode="numeric" placeholder="WHOLE DOLLARS"><button class="button ghost" data-action="service-max" data-target="loan-amount" data-value="${Math.min(state.cash,state.debt)}">MAX ${formatMoney(Math.min(state.cash,state.debt))}</button></div><button class="button primary" data-action="repay-debt">PAY DEBT</button></section>`:'';
+  const bank=(kind==='all'||kind==='bank')&&state.location==='manhattan'?`<section class="panel-card form-stack"><h3>CHINATOWN BANK</h3><p>BALANCE: <b>${formatMoney(state.bank)}</b></p><div class="two-col"><div class="field"><label for="deposit-amount">DEPOSIT</label><input id="deposit-amount" inputmode="numeric"><button class="button ghost" data-action="service-max" data-target="deposit-amount" data-value="${state.cash}">MAX</button><button class="button buy" data-action="bank-deposit">DEPOSIT</button></div><div class="field"><label for="withdraw-amount">WITHDRAW</label><input id="withdraw-amount" inputmode="numeric"><button class="button ghost" data-action="service-max" data-target="withdraw-amount" data-value="${state.bank}">MAX</button><button class="button sell" data-action="bank-withdraw">WITHDRAW</button></div></div></section>`:'';
+  const clinic=kind==='all'||kind==='clinic'?`<section class="panel-card form-stack"><h3>HOSPITAL</h3><p>RESTORE ${quote.healing} HEALTH FOR ${formatMoney(quote.cost)}.</p><button class="button buy" data-action="buy-treatment" ${quote.healing===0||state.cash<quote.cost?'disabled':''}>GET TREATMENT</button></section>`:'';
   const extended=state.mode==='extended'?`<section><img class="service-scene" src="assets/extended-mode/property-portfolio.svg" alt="Mango Extended property portfolio skyline"><span class="eyebrow">Extended asset exchange</span><p>Resale factors and risks are disclosed on every card.</p><div class="sheet-grid" style="margin-top:10px">${EXTENDED_ASSETS.map(asset=>`<article class="asset-card"><img src="assets/extended-mode/${asset.id}.svg" alt="${escapeHtml(asset.name)} illustration"><span><strong>${escapeHtml(asset.name)} • ${formatMoney(asset.price)}</strong><small>${escapeHtml(asset.description)}</small><small>Owned: ${state.ownedAssets[asset.id]??0}</small></span><span><button class="button buy" data-action="asset-buy" data-asset="${asset.id}" ${state.cash<asset.price?'disabled':''}>Buy</button>${state.ownedAssets[asset.id]>0?`<button class="button sell" data-action="asset-sell" data-asset="${asset.id}">Sell</button>`:''}</span></article>`).join('')}</div></section>`:'';
-  return `<div class="sheet-grid">${loan}${bank}${!loan&&!bank?'<div class="panel-card"><p>No bank or loan shark in this neighborhood.</p></div>':''}${clinic}${extended}</div>`;
+  return `<div class="sheet-grid">${loan}${bank}${clinic}${extended}</div>`;
 }
 
-function openServices() { modal.open({title:`Services • ${LOCATION_BY_ID[state.location].name}`,content:serviceContent(),dismissible:true,returnFocus:document.querySelector('[data-action="services"]')});assets.guardAll(modal.current.dialog); }
+function openServices(kind='all') { activeService=kind; const label=kind==='bank'?'BANK':kind==='loan'?'LOAN SHARK':kind==='clinic'?'HOSPITAL':'VISIT'; modal.open({title:`${label} — ${LOCATION_BY_ID[state.location].name.toUpperCase()}`,className:'dos-dialog',content:serviceContent(kind),dismissible:true,returnFocus:document.querySelector(`[data-action="service-${kind}"]`)??document.querySelector('[data-action="services"]')}); }
 
-function serviceMutation(result,sound='purchase') { if(feedback(result,sound)){saveGame(state);renderGame({save:false});openServices();} }
+function serviceMutation(result,sound='purchase') { if(feedback(result,sound)){saveGame(state);renderGame({save:false});openServices(activeService);} }
 
 function openInventory() {
-  const products=Object.entries(state.inventory).filter(([,q])=>q>0).map(([id,q])=>`<div class="log-card"><img src="assets/products/${id}.svg" alt="${escapeHtml(PRODUCT_BY_ID[id].name)}"><span><strong>${escapeHtml(PRODUCT_BY_ID[id].name)}</strong><small>${q} units</small></span><b>${q}</b></div>`).join('')||'<div class="panel-card"><p>Your coat is empty.</p></div>';
-  const weapons=state.weapons.map(id=>`<div class="log-card"><img src="assets/weapons/${id}.svg" alt="${escapeHtml(WEAPON_BY_ID[id].name)}"><span><strong>${escapeHtml(WEAPON_BY_ID[id].name)}</strong><small>Damage ${WEAPON_BY_ID[id].damage} • ${WEAPON_BY_ID[id].spaces} spaces</small></span></div>`).join('')||'<p class="small">No weapons.</p>';
+  const products=Object.entries(state.inventory).filter(([,q])=>q>0).map(([id,q])=>`<div class="log-card"><strong>${escapeHtml(PRODUCT_BY_ID[id].name).toUpperCase()}</strong><b>${q}</b></div>`).join('')||'<div class="panel-card"><p>YOUR COAT IS EMPTY.</p></div>';
+  const weapons=state.weapons.map(id=>`<div class="log-card"><strong>${escapeHtml(WEAPON_BY_ID[id].name).toUpperCase()}</strong><span>DAMAGE ${WEAPON_BY_ID[id].damage} • ${WEAPON_BY_ID[id].spaces} SPACES</span></div>`).join('')||'<p>NO WEAPONS.</p>';
   const assetsOwned=state.mode==='extended'?Object.entries(state.ownedAssets).filter(([,q])=>q>0).map(([id,q])=>`<div class="log-card"><img src="assets/extended-mode/${id}.svg" alt=""><span><strong>${escapeHtml(EXTENDED_ASSETS.find(x=>x.id===id)?.name)}</strong><small>Owned ${q}</small></span></div>`).join(''):'';
-  const coatId=freeCapacity(state)===0?'full-capacity-coat':state.capacityModifier<0?'damaged-coat':state.capacityBase>100?'upgraded-coat':usedCapacity(state)===0?'empty-capacity-coat':'standard-coat';
-  modal.open({title:'Inventory',content:`<div class="panel-card inventory-summary"><img src="assets/items/${coatId}.svg" alt="Current coat capacity state"><div><span class="eyebrow">Capacity</span><h2>${freeCapacity(state)} free / ${totalCapacity(state)}</h2><p>${usedCapacity(state)} occupied, including weapon space.</p></div></div><div class="sheet-grid" style="margin-top:10px">${products}<h3>Weapons</h3>${weapons}${assetsOwned?`<h3>Extended assets</h3>${assetsOwned}`:''}</div>`,returnFocus:document.querySelector('[data-action="inventory"]')});assets.guardAll(modal.current.dialog);
-}
-
-function historyArt(type) {
-  const art={buy:'effects/purchase-success.svg',sell:'effects/sale-success.svg',travel:'effects/travel.svg',cheap:'effects/market-flood.svg',expensive:'effects/market-shortage.svg',interest:'effects/debt-increase.svg',debt:'items/debt-document.svg',bank:'items/bank-deposit.svg',health:'weapons/medical-kit.svg',defeat:'effects/defeat.svg',escape:'effects/escape.svg',police:'weapons/police-badge.svg',victory:'effects/victory.svg',finish:'effects/new-high-score.svg',offer:'items/information-tip.svg',asset:'extended-mode/property-portfolio.svg',divorce:'extended-mode/divorce-event.svg'};
-  const incident=type&&['mugging','robbery','found-cash','found-goods','lost-goods','friend-gift','medical-emergency','coat-damage','street-tip','quiet-journey','abandoned-property'].includes(type)?`encounters/${type}.svg`:null;
-  return `assets/${incident??art[type]??'ui/ticker.svg'}`;
+  modal.open({title:'TRENCHCOAT',className:'dos-dialog',content:`<div class="panel-card inventory-summary"><div><h2>${freeCapacity(state)} FREE / ${totalCapacity(state)} TOTAL</h2><p>${usedCapacity(state)} SPACES USED.</p></div></div><div class="sheet-grid" style="margin-top:10px">${products}<h3>WEAPONS</h3>${weapons}${assetsOwned?`<h3>EXTENDED ASSETS</h3>${assetsOwned}`:''}</div>`,returnFocus:document.querySelector('[data-action="inventory"]')});
 }
 
 function openHistory() {
-  const logs=state.eventHistory.map(event=>`<article class="log-card"><img src="${historyArt(event.type)}" alt="${escapeHtml(event.type)} event illustration"><span><strong>Day ${event.day} • ${escapeHtml(LOCATION_BY_ID[event.location]?.name??event.location)}</strong><small>${escapeHtml(event.message)}</small></span><span class="tag">${escapeHtml(event.type)}</span></article>`).join('');
-  modal.open({title:'Recent Event History',content:`<div class="sheet-grid">${logs||'<p>No events yet.</p>'}</div>`,returnFocus:document.querySelector('[data-action="history"]')});assets.guardAll(modal.current.dialog);
+  const logs=state.eventHistory.map(event=>`<article class="log-card"><span><strong>DAY ${event.day} • ${escapeHtml(LOCATION_BY_ID[event.location]?.name??event.location).toUpperCase()}</strong><small>${escapeHtml(event.message)}</small></span></article>`).join('');
+  modal.open({title:'EVENT LOG',className:'dos-dialog',content:`<div class="sheet-grid">${logs||'<p>NO EVENTS YET.</p>'}</div>`,returnFocus:document.querySelector('[data-action="history"]')});
 }
 
 function openSettings() {
   modal.open({title:'Settings & Run Data',content:`<div class="form-stack"><label class="check-row"><input type="checkbox" data-setting="audio" ${state.settings.audio?'checked':''}><span><b>Sound effects</b><small>Original synthesized audio after interaction only.</small></span></label><label class="check-row"><input type="checkbox" data-setting="haptics" ${state.settings.haptics?'checked':''}><span><b>Haptics</b><small>Supported devices only.</small></span></label><label class="check-row"><input type="checkbox" data-setting="reducedMotion" ${state.settings.reducedMotion?'checked':''}><span><b>Reduced motion</b><small>Replaces significant movement with instant changes.</small></span></label><div class="panel-card"><span class="eyebrow">Reproducible run</span><p>Mode: <b>${state.mode}</b></p><p>Seed: <code>${escapeHtml(state.seed)}</code></p><p>Product set: ${state.settings.sixProductVariant?'six-product variant':'default 12 products'}</p><button class="button ghost" data-action="copy-seed">Copy seed</button></div><button class="button ghost" data-action="return-title">Save & return to title</button><button class="button danger" data-action="reset-run">Reset this ${state.mode} save</button><p class="small">Gameplay note: “Baretta” preserves the requested compatibility spelling; the real-world brand is commonly spelled differently.</p></div>`,returnFocus:document.querySelector('[data-action="settings"]')});
 }
 
+function openHowToPlay() {
+  modal.open({title:'HOW TO PLAY',className:'dos-dialog',content:`<div class="how-to"><p><b>1.</b> Open the market. Buy goods when prices are low.</p><p><b>2.</b> Take the subway to a different neighborhood. Each trip advances one day and changes prices.</p><p><b>3.</b> Sell for a profit, keep space in your coat, and pay the loan shark in Uptown.</p><p><b>4.</b> Use the bank in Chinatown. Interest is applied after every trip.</p><p><b>5.</b> Survive police and street encounters. Day 30 stays open until you choose Finish Run.</p><p class="arcade-notice">FINAL SCORE = CASH + BANK − DEBT</p></div>`,returnFocus:document.querySelector('[data-action="how-to-play"]')});
+}
+
 function encounterMarkup(encounter) {
-  return `<div class="encounter-layout"><div class="encounter-art"><img src="${encounter.art}" alt="${escapeHtml(encounter.title)} encounter illustration"><div class="actor-chip"><img src="${encounter.actorArt}" alt=""><small>${escapeHtml(encounter.actor)}</small></div></div><div><p>${escapeHtml(encounter.text)}</p>${encounter.data?.before!==undefined?`<div class="change-preview"><b>Capacity preview</b><p>${encounter.data.before} → ${encounter.data.after} total; inventory stays intact.</p></div>`:''}${encounter.data?.cost?`<div class="change-preview"><b>Cost ${formatMoney(encounter.data.cost)}</b>${encounter.data.damage?` • damage ${encounter.data.damage} • ${encounter.data.spaces} spaces`:''}</div>`:''}</div></div>`;
+  return `<div class="encounter-layout"><p class="dos-speaker">${escapeHtml(encounter.actor).toUpperCase()}</p><p>${escapeHtml(encounter.text)}</p>${encounter.data?.before!==undefined?`<div class="change-preview"><b>COAT: ${encounter.data.before} → ${encounter.data.after}</b><p>INVENTORY STAYS INTACT.</p></div>`:''}${encounter.data?.cost?`<div class="change-preview"><b>COST ${formatMoney(encounter.data.cost)}</b>${encounter.data.damage?` • DAMAGE ${encounter.data.damage} • ${encounter.data.spaces} SPACES`:''}</div>`:''}</div>`;
 }
 
 function openEncounter() {
@@ -184,12 +198,8 @@ function openCombat() {
   const encounter=state.pendingEncounter,combat=state.combat,weapon=activeWeapon(state);if(!combat)return;
   const goods=Object.values(state.inventory).reduce((sum,q)=>sum+q,0); const enemyPct=Math.round(combat.enemyHealth/combat.enemyMaxHealth*100); const playerPct=state.health;
   const goodsSummary=Object.entries(state.inventory).filter(([,quantity])=>quantity>0).map(([id,quantity])=>`${PRODUCT_BY_ID[id].name} ×${quantity}`).join(', ')||'No carried products';
-  const playerState=combat.status==='defeat'?'defeated':combat.status==='victory'?'victorious':combat.status==='player-attack'?'firing':state.health<=25?'critical':state.health<70?'injured':'neutral';
-  const opponentState=combat.status==='victory'?'defeated':combat.status==='player-attack'?'hit':combat.status==='escape-attempt'?'pursuing':'idle';
-  const supportCandidates=[{id:'patrol-officer',file:'patrol-officer.svg'},{id:'deputy',file:'deputy.svg'},{id:'police-dog',file:'police-dog.svg'}].filter(item=>item.id!==combat.unitId);
-  const support=supportCandidates.slice(0,Math.max(0,combat.enemyCount-1)).map((item,index)=>`<img src="assets/cops/${item.file}" alt="" class="support-${index+1}">`).join('');
   const runChance=Math.round(escapeProbability(state)*100), dropChance=Math.round(escapeProbability(state,{abandonGoods:true})*100);
-  const content=`<p>${escapeHtml(encounter.text)}</p><div class="combat-stage"><figure class="combat-character player-${playerState}"><img src="assets/characters/player-${playerState}.${playerState==='neutral'?'webp':'svg'}" alt="Player ${playerState}"><figcaption>You</figcaption></figure><div class="combat-versus" aria-hidden="true">VS</div><figure class="combat-character opponent-${opponentState}"><div class="opponent-group"><img src="${combat.portrait}" alt="${escapeHtml(combat.unitName)} portrait">${support}</div><figcaption>${escapeHtml(combat.unitName)} • ${combat.enemyCount} unit${combat.enemyCount===1?'':'s'}</figcaption></figure></div><div class="combat-stats"><div class="panel-card"><span class="eyebrow">Player</span><h3>${state.health}/100 health</h3><div class="combat-meter" style="--meter:${playerPct}%"><i></i></div><small>${weapon?`${escapeHtml(weapon.name)} • ${weapon.damage} damage`:'Unarmed'} • ${goods} carried units</small><small class="combat-goods">${escapeHtml(goodsSummary)}</small></div><div class="panel-card"><span class="eyebrow">${combat.activeEnemies} active / ${combat.enemyCount}</span><h3>${combat.enemyHealth}/${combat.enemyMaxHealth} enemy health</h3><div class="combat-meter" style="--meter:${enemyPct}%"><i></i></div><small>Round ${combat.round} • state: ${combat.status}</small></div></div><div class="combat-log" aria-label="Combat log">${combat.log.map(line=>`<div>${escapeHtml(line)}</div>`).join('')}</div>`;
+  const content=`<p>${escapeHtml(encounter.text)}</p><div class="combat-stats"><div class="panel-card"><h3>YOU: ${state.health}/100</h3><div class="combat-meter" style="--meter:${playerPct}%"><i></i></div><p>${weapon?`${escapeHtml(weapon.name).toUpperCase()} • ${weapon.damage} DAMAGE`:'UNARMED'} • ${goods} UNITS</p><small class="combat-goods">${escapeHtml(goodsSummary)}</small></div><div class="panel-card"><h3>${escapeHtml(combat.unitName).toUpperCase()}: ${combat.enemyHealth}/${combat.enemyMaxHealth}</h3><div class="combat-meter" style="--meter:${enemyPct}%"><i></i></div><p>${combat.activeEnemies}/${combat.enemyCount} ACTIVE • ROUND ${combat.round}</p></div></div><div class="combat-log" aria-label="Combat log">${combat.log.map(line=>`<div>&gt; ${escapeHtml(line)}</div>`).join('')}</div>`;
   const actions=[];
   if(combat.status==='player-choice'&&!combat.resolving){
     actions.push({label:`Run (${runChance}%)`,className:'button sell',onClick:()=>runCombat(false)});
@@ -255,13 +265,30 @@ document.addEventListener('change',event=>{
 
 document.addEventListener('click',event=>{
   const button=event.target.closest('[data-action]');if(!button||button.disabled)return;audio.unlock();const action=button.dataset.action;
+  if(action==='how-to-play')return openHowToPlay();
   if(action==='resume')return resumeMode(button.dataset.mode);
+  if(action==='open-market'){
+    activeView='market';
+    selectedProductId=Object.values(PRODUCT_BY_ID).find(product=>state.market?.rows?.[product.id]?.available)?.id??null;
+    renderGame({save:false});resetPageScroll();return;
+  }
+  if(action==='trade-product'){selectedProductId=button.dataset.product;renderGame({save:false});requestAnimationFrame(()=>document.querySelector(`[data-action="trade-product"][data-product="${selectedProductId}"]`)?.focus());return;}
   if(action==='qty-minus')return setQuantity(button.dataset.product,quantityFor(button.dataset.product)-1);
   if(action==='qty-plus')return setQuantity(button.dataset.product,quantityFor(button.dataset.product)+1);
   if(action==='qty-buy-max')return setQuantity(button.dataset.product,Math.max(1,maxBuyable(state,button.dataset.product)));
   if(action==='qty-sell-max')return setQuantity(button.dataset.product,Math.max(1,maxSellable(state,button.dataset.product)));
+  if(action==='qty-auto-max')return setQuantity(button.dataset.product,Math.max(1,Number(button.dataset.buyMax)||Number(button.dataset.sellMax)||1));
   if(action==='buy'||action==='sell')return mutateTrade(action,button.dataset.product);
+  if(action==='open-travel'){
+    activeView='travel';
+    selectedDestination=LOCATIONS.find(location=>location.id!==state.location)?.id??null;
+    renderGame({save:false});resetPageScroll();return;
+  }
+  if(action==='select-destination'){selectedDestination=button.dataset.destination;renderGame({save:false});requestAnimationFrame(()=>document.querySelector(`[data-action="select-destination"][data-destination="${selectedDestination}"]`)?.focus());return;}
+  if(action==='travel-confirm')return doTravel(button.dataset.destination);
+  if(action==='screen-back'){activeView='home';selectedProductId=null;selectedDestination=null;renderGame({save:false});resetPageScroll();return;}
   if(action==='travel')return openTravel();if(action==='travel-destination')return doTravel(button.dataset.destination);
+  if(action==='service-bank')return openServices('bank');if(action==='service-loan')return openServices('loan');if(action==='service-clinic')return openServices('clinic');
   if(action==='services')return openServices();if(action==='inventory')return openInventory();if(action==='history')return openHistory();if(action==='settings')return openSettings();
   if(action==='service-max'){const input=document.getElementById(button.dataset.target);if(input)input.value=button.dataset.value;return;}
   if(action==='repay-debt')return serviceMutation(repayDebt(state,Number(document.getElementById('loan-amount')?.value)),'sale');
@@ -282,10 +309,20 @@ document.getElementById('brand-home').addEventListener('click',()=>{if(state){sa
 
 document.addEventListener('keydown',event=>{
   if(!state||modal.current||event.metaKey||event.ctrlKey||event.altKey||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName))return;
-  if(event.key.toLowerCase()==='t'&&state.day<state.maxDay)openTravel();
-  if(event.key.toLowerCase()==='s')openServices();
-  if(event.key.toLowerCase()==='i')openInventory();
-  if(event.key.toLowerCase()==='h')openHistory();
+  const key=event.key.toLowerCase();
+  if(key==='escape'&&activeView!=='home'){activeView='home';selectedProductId=null;selectedDestination=null;renderGame({save:false});return;}
+  if(activeView==='home'){
+    if(key==='m'){activeView='market';selectedProductId=Object.values(PRODUCT_BY_ID).find(product=>state.market?.rows?.[product.id]?.available)?.id??null;renderGame({save:false});}
+    if((key==='j'||key==='t')&&state.day<state.maxDay){activeView='travel';selectedDestination=LOCATIONS.find(location=>location.id!==state.location)?.id??null;renderGame({save:false});}
+    if(key==='i')openInventory();
+    if(key==='l'||key==='h')openHistory();
+    if(key==='o')openSettings();
+  }
+  if(activeView==='market'&&selectedProductId){
+    if(key==='b')mutateTrade('buy',selectedProductId);
+    if(key==='s')mutateTrade('sell',selectedProductId);
+    if(key==='x')setQuantity(selectedProductId,Math.max(1,maxBuyable(state,selectedProductId)||maxSellable(state,selectedProductId)));
+  }
 });
 
 function syncInstallButton(){const button=document.getElementById('install-button');if(button)button.hidden=!installPrompt;}
