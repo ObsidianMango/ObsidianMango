@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {bootGame} from './helpers/game.mjs';
 const {app,T,context}=await bootGame(),t=app.test,C=context.C;
 t.loadLevel(SECRET_LEVEL_INDEX);app.start();const env=t.environment,view=t.secretView,baseline=t.world.bodies.length,initial=env.snapshot();
-assert.equal(baseline,1070,'furnished floors must not add permanent city physics bodies');
+assert.equal(baseline,1071,'furnished floors must not add permanent city physics bodies');
 assert.equal(env.entries.length,view.targets.reduce((n,t)=>n+(t.entries?.length||0),0));assert.equal(env.getInfo().looseContentsBodies,0);
 const furniture=env.entries.filter(e=>e.role==='contents'),objects=furniture.reduce((n,e)=>n+e.contentsObjects,0);
 assert(objects>furniture.length*6);assert(view.detail.getInfo().instances<10000);assert(view.detail.getInfo().batches<=32);

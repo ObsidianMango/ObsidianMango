@@ -4,7 +4,7 @@ export function buildSemiTruck(T,c){
  const k=detailKit(T),{box,cyl,tube,pane}=k;
  k.mat('paint',0x234e69,.38,.32);k.mat('cargo',0xd9dfdc,.25,.58);
  box('chassis',1.8,.24,6.7,0,.72,0,'steel');
- box('bonnet',2.02,.86,1.8,0,1.55,-2.65,'paint');box('grille',1.6,.95,.12,0,1.5,-3.59,'trim');
+ k.loft('bonnet',[[-3.55,.88,1.12,1.88],[-3.25,1.01,1.12,2.02],[-1.75,1.01,1.12,2.12]],'paint');box('grille',1.6,.95,.12,0,1.5,-3.59,'trim');
  for(let i=-6;i<=6;i++)box('grille',.055,.79,.05,i*.105,1.5,-3.67,'black');
  box('front-bumper',2.5,.32,.25,0,.8,-3.7,'trim');
  box('tub',2.3,.15,2.35,0,1.23,-.58,'paint');box('roof',2.35,.14,2.4,0,3.15,-.58,'paint');box('cab-back',2.3,1.8,.12,0,2.2,.58,'paint');
@@ -34,6 +34,40 @@ export function buildSemiTruck(T,c){
  box(n,2.6,2.8,.08,0,2.7,2,'cargo');box(n,2.6,2.8,.08,0,2.7,14,'cargo');for(const x of [-.65,.65]){box(n,.04,2.45,.07,x,2.7,14.08,'trim');box(n,.28,.14,.08,x,1.42,14.1,'tailLens');}
  box(n,2.5,.16,.18,0,.65,14,'steel');
  for(const z of [11.6,12.85])for(const side of [-1,1])for(const x of [.89,1.19]){cyl(n,.5,.26,side*x,.5,z,'tire');cyl(n,.28,.28,side*x,.5,z,'trim');}
+
+ // Coachwork stays merged into existing breakaway assemblies.
+ for(const side of [-1,1]){
+  k.wing('fender-front-'+side,side,c.front,.58,c.track,'paint');
+  box('bonnet',.025,.10,1.45,side*1.02,1.66,-2.55,'ivory');
+  for(let z=-3.1;z<-2;z+=.16)box('bonnet',.025,.22,.045,side*1.025,1.39,z,'black');
+  box('door-'+side,.025,.10,2.10,side*1.18,1.68,-.55,'ivory');
+  box('door-'+side,.035,.055,.38,side*1.19,2.07,-.15,'black');
+  for(const z of [.5,1.5])k.torus('tank-'+side,.365,.025,side*.92,.82,z,'steel','z');
+  box('step-'+side,.42,.10,1.5,side*1.2,.67,-.45,'steel');
+  for(let z=-1.1;z<.3;z+=.12)box('step-'+side,.35,.015,.035,side*1.2,1.08,z,'black');
+  cyl('exhaust-'+side,.12,1.25,side*1.04,1.7,.7,'steel','y');
+  cyl('exhaust-'+side,.065,.015,side*1.04,3.93,.7,'black','y');
+  box('mirror-'+side,.19,.36,.012,side*1.55,2.75,-1.445,'disc');
+  box('rear-mudguard-'+side,.68,.10,2.4,side*.98,1.15,2.03,'paint');
+  box('rear-mudguard-'+side,.68,.58,.045,side*.98,.61,3.18,'black');
+  for(const z of [11.6,12.85]){
+   cyl(n,.16,.08,side*1.36,.5,z,'steel');
+   for(let j=0;j<8;j++){const a=j*Math.PI/4;cyl(n,.035,.025,side*1.375,.5+Math.sin(a)*.21,z+Math.cos(a)*.21,'steel');}
+  }
+  box(n,.67,.62,.06,side*1.0,.55,13.45,'black');
+  box(n,.16,.65,.16,side*.92,.83,4.4,'steel');box(n,.4,.08,.4,side*.92,.49,4.4,'black');
+  for(let z=2.5;z<14;z+=1.1)box(n,.03,.075,.32,side*1.36,1.34,z,'ivory');
+  for(const z of [2.3,7.9,13.7])box(n,.04,.1,.18,side*1.34,3.97,z,'amberLens');
+ }
+ box('roof',2.48,.06,.5,0,3.13,-1.85,'trim');
+ for(const x of [-.63,.63]){tube('windshield',[[x-.22,2.27,-1.76],[x+.22,2.55,-1.76]],.018,'black');cyl('roof',.075,.65,x,3.31,-.7,'trim','z');cyl('roof',.13,.12,x,3.31,-1.07,'trim','z');}
+ box('chassis',1.6,.05,.9,0,1.02,1.2,'trim');
+ for(let z=3;z<13.8;z+=.8)box(n,2.35,.12,.08,0,1.12,z,'steel');
+ box(n,.04,2.8,.045,0,2.7,14.06,'black');
+ for(const x of [-1.18,1.18])for(const y of [1.6,2.6,3.7])box(n,.20,.12,.09,x,y,14.1,'steel');
+ for(const x of [-.65,.65]){box(n,.36,.055,.12,x,2.05,14.15,'steel');box(n,.12,.26,.04,x,2.13,14.2,'black');}
+ for(const x of [-.95,-.65,.65,.95])cyl(n,.09,.05,x,.95,14.13,'tailLens','z');
+ box(n,2.5,.13,.15,0,.45,14.14,'trim');
  const item=k.finish();item.root.userData.steeringX=-.47;item.root.userData.tires=18;return item;
 }
 
