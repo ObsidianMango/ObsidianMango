@@ -1,3 +1,4 @@
+import {buildUndici} from './undici-lots.js';
 import {buildChurchStreet} from './church-street.js';
 import {addBuildingContents} from './building-contents.js';
 import {createSceneryDetail} from './scenery-detail.js';
@@ -5,7 +6,7 @@ import {buildMarinePark} from './real-marine-park.js';
 import {LOTS,ORIGINAL_LOT_COUNT} from './level-catalog.js';
 export {LOTS,ORIGINAL_LOT_COUNT} from './level-catalog.js';
 import {buildRiverview} from './real-riverview.js';
-const LEVEL_BUILDERS={churchStreet:buildChurchStreet,redbankMarina:buildMarinePark,riverviewHospital:buildRiverview};
+const LEVEL_BUILDERS={undici:buildUndici,churchStreet:buildChurchStreet,redbankMarina:buildMarinePark,riverviewHospital:buildRiverview};
 export const CHAPTER_SIZE=8;
 export function completedThrough(saves,count){return Array.from({length:count},(_,i)=>saves[i]?.stars>=1).every(Boolean);}
 export function isLotUnlocked(index,saves){return Number.isInteger(index)&&index>=0&&index<LOTS.length&&(LOTS[index].realWorld||completedThrough(saves,Math.floor(index/CHAPTER_SIZE)*CHAPTER_SIZE));}
@@ -129,6 +130,7 @@ export function buildLots({T,C,scene,world,groundMat}){
   for(const z of [-13,-6,0])cone(-18,z);box(18,5,8,0,2.5,-31,0x879c86);text('FINAL TEST',0,3.5,-26.8,12);
  }
 
+ for(const a of level.alternateTargets||[]){bay(a.x/2,a.z/2,a.yaw,a.w,a.d,true);const label=text('P · '+level.code,a.x/2,2.8,a.z/2,2.8);label.userData.guide=true;}
  const t=level.target,marker=bay(t.x/2,t.z/2,t.yaw,t.w,t.d,true);text(level.code,(t.x+Math.sin(t.yaw)*(t.d/2-.44))/2,.085,(t.z+Math.cos(t.yaw)*(t.d/2-.44))/2,1.55,t.yaw,true,'#247957');
  // Beacon stays low enough to avoid blocking orbit cameras.
  const beacon=text('P · '+level.code,t.x/2,2.8,t.z/2,2.8);beacon.userData.guide=true;beacon.material.depthTest=false;beacon.renderOrder=2;
