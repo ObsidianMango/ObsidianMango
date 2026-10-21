@@ -3,6 +3,11 @@ import {bootGame} from './helpers/game.mjs';
 import {LOTS} from '../level-catalog.js';
 const {app}=await bootGame(),t=app.test,index=LOTS.findIndex(l=>l.style==='undici'),level=LOTS[index];
 t.loadLevel(index);const v=t.lots.views[index],data=v.group.userData.undici;
+for(let i=0;i<data.pavement.length;i++)for(let j=i+1;j<data.pavement.length;j++){
+ const a=data.pavement[i],b=data.pavement[j];
+ assert(!(Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0)>1e-8&&Math.min(a.z1,b.z1)-Math.max(a.z0,b.z0)>1e-8),'pavement must not overlap');
+}
+assert(v.buildings.some(b=>b.name==='RUMSON BOTTLE SHOP'));
 assert.equal(data.slots,47);assert.equal(data.occupied,45);assert.equal(data.vacancies.length,2);
 for(const lot of ['west','east'])assert.equal(data.vacancies.filter(s=>s.lot===lot).length,1);
 assert.equal(t.traffic.active.length,45);
