@@ -1,8 +1,16 @@
-// Screenshot-derived shopping lots. North is -Z; Church Street slopes across the south.
+// Two-view screenshot reconstruction: ACME court, Prospect Avenue and Church Street.
 export function buildChurchStreet({T,group,ox,piece,bay,parked,text,mini,mat,breakables,buildings,index}){
  const geo=new T.BoxGeometry(1,1,1),plans=new Map(),dummy=new T.Object3D(),poles=[],lights=[];
  function decor(w,h,d,x,y,z,color,yaw=0){if(!plans.has(color))plans.set(color,[]);plans.get(color).push([w,h,d,ox+x,y,z,yaw]);}
- function surface(w,d,x,z,color,y=.04,yaw=0){decor(w,.025,d,x,y,z,color,yaw);}
+ const pavement=[];
+ function surface(w,d,x,z,color,y=.04,yaw=0){
+  if(y!==.04||yaw){decor(w,.012,d,x,y,z,color,yaw);return;}
+  const cut={x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,color};
+  const next=[];for(const r of pavement){const a=Math.max(r.x0,cut.x0),b=Math.min(r.x1,cut.x1),c=Math.max(r.z0,cut.z0),e=Math.min(r.z1,cut.z1);
+   if(a>=b||c>=e){next.push(r);continue;}
+   for(const q of [{...r,x1:a},{...r,x0:b},{...r,x0:a,x1:b,z1:c},{...r,x0:a,x1:b,z0:e}])if(q.x1>q.x0&&q.z1>q.z0)next.push(q);
+  }pavement.splice(0,pavement.length,...next,cut);
+ }
  function curb(w,d,x,z){return piece(w,.25,d,x,.125,z,0xb8b5a4);}
  function tree(x,z,i=0){const trunk=piece(.4,3.8,.4,x,1.9,z,0x6a5540),crown=new T.Mesh(new T.IcosahedronGeometry(1,1),mat([0x607948,0x8b713f,0x9a5a3b][i%3]));crown.position.set(ox+x,4.5,z);crown.scale.set(2.6,2.5,2.4);group.add(crown);group.updateMatrixWorld(true);trunk.attach(crown);}
  const lit=new T.MeshStandardMaterial({color:0xffedbd,emissive:0xffd987,emissiveIntensity:1.5,roughness:.5});
@@ -15,36 +23,57 @@ export function buildChurchStreet({T,group,ox,piece,bay,parked,text,mini,mat,bre
   mini.push({x,z,w,d,color:'#96877b'});
  }
  // Ground and lot necks, kept flat so paint never changes tire contact.
- surface(190,190,0,0,0x82906b,.02);
- surface(63,104,61,-17,0x50595b);surface(20,94,-42,-48,0x535a5a);surface(94,16,1,-15,0x515959);
+
+ surface(63,104,61,-17,0x50595b);surface(63,10,61,-73.5,0x50595b);surface(63,25,61,42.5,0x50595b);surface(20,94,-42,-48,0x535a5a);surface(94,16,1,-15,0x515959);
  surface(22,88,-58,30,0x51595a);surface(40,42,-8,12,0x515959);surface(15,40,21,45,0x535b5b);surface(13,47,-35,53,0x535b5b);
- const roadYaw=Math.atan(.32);surface(214,14,0,79,0x414b50,.045,roadYaw);
- for(let x=-94;x<99;x+=6)surface(3,.13,x,79-.32*x,0xe9cd72,.07,roadYaw);
+ const roadYaw=Math.atan(.32);surface(214,14,0,79,0x414b50,.055,roadYaw);
+ for(let x=-94;x<99;x+=6)surface(3,.13,x,79-.32*x,0xe9cd72,.08,roadYaw);
  // Short driveway aprons meet the road without sealed entrances.
  for(const [x,z,w,d] of [[42,57,20,26],[21,64,15,18],[-35,78,13,22],[-58,85,22,22]])surface(w,d,x,z,0x535b5b);
  building('ACME Markets',-4,-54,52,56,7.5,0xa09a88,'market');
- building("Olivia’s Trattoria",66,-85,54,14,6,0xc0b6a2,'restaurant');
+ building('China Garden',43,-85,25,16,6,0xb9ad97,'restaurant');
+ building('Better Gourmet Health Kitchen',73,-85,35,16,6,0xc0b6a2,'restaurant');
  building('The Outpost',-10,48,23,26,5.2,0x899d8c,'shop');
- building('Church Street Shops',67,27.5,31,34,6,0xc4b99e,'shop');
+ building('Little Silver Family Pharmacy',79,30,26,32,6,0xc4b99e,'shop');
+ building('Little Silver Bottle Shop',79,9.5,26,9,5.6,0xc9c3b2,'shop');
+ building('United States Postal Service',55,37,18,14,4.4,0xadb4ae,'office');
  building('Cheshire Offices',-76,40,12,57,6.2,0xb2a38d,'office');
- const signs=[text('ACME MARKETS',22.3/2,5.8,-53/2,18,Math.PI/2),text('THE OUTPOST',-10/2,4.4,61.2/2,16),text('CHURCH STREET SHOPS',67/2,4.7,44.8/2,22),text('OLIVIA’S',66/2,4.8,-77.8/2,16)];
+ const signs=[text('ACME MARKETS',22.3/2,5.8,-53/2,18,Math.PI/2),text('THE OUTPOST',-10/2,4.4,61.2/2,16),text('FAMILY PHARMACY',79/2,4.7,46.3/2,23),text('CHINA GARDEN',43/2,4.8,-76.7/2,22),text('BETTER GOURMET',73/2,4.8,-76.7/2,29),text('LITTLE SILVER BOTTLE SHOP',65.7/2,4,9/2,22,-Math.PI/2),text('POST OFFICE',55/2,3.3,44.3/2,15)];
  for(const s of signs)s.userData.guide=true;
  text('CHURCH ST',-2, .09,77/2,14,roadYaw,true,'#495359');
  // Green annotation becomes planted verges and curbs, leaving all photographed aisles open.
- for(const [w,d,x,z] of [[.5,120,-70,25],[.5,61,-46,21],[.5,81,-29,42],[.5,61,29,22],[.5,67,-53,-53],[.5,56,-30,-54],[52,.5,-4,-26],[.5,57,22,-54],[.5,138,93,-7],[62,.5,62,-68]])curb(w,d,x,z);
+ for(const [w,d,x,z] of [[.5,120,-70,25],[.5,61,-46,21],[.5,81,-29,42],[.5,61,29,22],[.5,67,-53,-53],[.5,56,-30,-54],[52,.5,-4,-26],[.5,57,22,-54],[.5,21,93,-88.5],[.5,33,93,-38.5],[.5,50,93,17]])curb(w,d,x,z);
  for(const [x,z,w,d] of [[-38,4,8,31],[17,10,6,32],[-7,-7,37,3],[-10,69,18,6]]){surface(w,d,x,z,0x748852,.06);curb(w,.45,x,z-d/2);}
- for(const [x,z] of [[-49,-5],[-49,20],[-49,47],[-65,7],[-65,34],[-65,64],[-38,0],[-38,23],[17,-2],[17,25],[-22,72],[4,68],[86,-60],[87,-17],[85,5]])tree(x,z,Math.abs(Math.round(x+z)));
- // East grocery lot: perpendicular banks, a broad store-side delivery aisle, and crosswalk.
- let slots=0,occupied=0;
- function stall(x,z,yaw=0){bay(x/2,z/2,yaw,3.3,6.1);slots++;if(slots%6!==0){parked(x/2,z/2,yaw);occupied++;}}
- for(const z of [-55,-31,-7])for(let i=0;i<10;i++)stall(53+i*3.4,z,0);
- for(const z of [-48,-24])for(let i=0;i<10;i++)stall(53+i*3.4,z,Math.PI);
- // Independent smaller lots with intact drive-through aisles.
+ for(const [x,z] of [[-49,-5],[-49,20],[-49,47],[-65,7],[-65,34],[-65,64],[-38,0],[-38,23],[17,-2],[17,25],[-22,72],[4,68],[86,-60],[89,-27.5]])tree(x,z,Math.abs(Math.round(x+z)));
+ // Prospect Avenue and two open entrances into the shared shopping court.
+ surface(11,151,99,-25,0x414b50);surface(20,14,89,-63,0x50595b);surface(20,14,89,-15,0x50595b);
+ for(let z=-96;z<47;z+=7)surface(.13,3,99,z,0xe9cd72,.08);
+ text('PROSPECT AVE',99/2,.095,-25/2,18,Math.PI/2,true,'#495359');
+ // Three long planted medians, each with opposing parking banks.
+ let slots=0,occupied=0;const stalls=[],islands=[];
+ function stall(x,z,yaw=0){bay(x/2,z/2,yaw,3.3,6.1);slots++;const filled=slots%6!==0;stalls.push({x,z,yaw,occupied:filled});if(filled){parked(x/2,z/2,yaw);occupied++;}}
+ for(const z of [-51.5,-27.5,-3.5]){
+  islands.push({x:68.3,z,w:34,d:2});surface(34,2,68.3,z,0x83906a,.058);
+  curb(34,.22,68.3,z-1);curb(34,.22,68.3,z+1);curb(.22,2,51.3,z);curb(.22,2,85.3,z);
+  for(const x of [54,68,82])tree(x,z,Math.abs(Math.round(z)));
+  for(let i=0;i<10;i++){stall(53+i*3.4,z-4.5,0);stall(53+i*3.4,z+4.5,Math.PI);}
+ }
+ // Store-side pedestrian walk and crossing stripes across the driving aisles.
+ surface(4,56,25,-54,0xc7beaa);
+ for(const z of [-63,-39,-15,9])for(let x=29;x<47;x+=2)surface(1,3,x,z,0xe7e2cf,.083);
+ for(let z=-69;z<-57;z+=2)surface(7,.75,95,z,0xe7e2cf,.083);
+ for(const z of [-39,-15])text('→',70/2,.095,z/2,4,0,true,'#50595b');
+ // ACME's pitched storefront canopy faces the court; the rear dock stays accessible.
+ for(let z=-78;z<-26;z+=8){
+  const roof=new T.Mesh(new T.BoxGeometry(7,.18,8),mat(0xa9afaa));roof.position.set(ox+25.5,7.1,z);roof.rotation.z=-.18;group.add(roof);
+  const support=breakables.filter(e=>e.structure===buildings[0].id&&e.role==='roof').sort((a,b)=>a.mesh.position.distanceToSquared(roof.position)-b.mesh.position.distanceToSquared(roof.position))[0];
+  group.updateMatrixWorld(true);support.mesh.attach(roof);
+ }
+ for(let z=-76;z<-28;z+=7){decor(.1,2.4,4.8,22.3,2,z,0x405f68);decor(.3,.35,5.2,22.5,3.5,z,0xe4ddd0);}
+ // Secondary lots beside the Outpost, as visible beyond the main court.
  for(let z=0;z<54;z+=7)stall(-64,z,Math.PI/2);
  for(let x=-22;x<12;x+=3.7)stall(x,22,0);
  for(let z=3;z<24;z+=7)stall(9,z,-Math.PI/2);
- for(let z=10;z<48;z+=7)stall(48,z,-Math.PI/2);
- for(let z=-62;z<-56;z+=2)surface(11,.65,36,z,0xe4ded0,.08);
  // Rear service alley: dock doors, bins, rooftop ventilation and stopping box at the red X.
  for(const z of [-74,-59]){decor(.12,3.2,4,-30.25,2,z,0x596665);for(let y=.6;y<3.6;y+=.35)decor(.15,.04,3.9,-30.33,y,z,0x919997);piece(1.8,1.05,5,-31.2,.525,z,0xa6a296);}
  for(const z of [-39,-45]){piece(2,1.7,3,-32, .85,z,0x436953);decor(2.1,.12,3.1,-32,1.75,z,0x344846);}
@@ -67,7 +96,8 @@ export function buildChurchStreet({T,group,ox,piece,bay,parked,text,mini,mat,bre
   wireGeo.attributes.position.needsUpdate=true;
  }
  group.userData.powerGrid={update,getInfo:()=>({powered,poles:poles.length,down:poles.filter(p=>p.entry.broken).length,lights:lights.length}),poles};
- group.userData.churchStreet={slots,occupied,driveways:4,route:[[-75,103],[42,66],[42,-15],[-40,-15],[-40,-76]],boundary:'planted verges and curbs'};
+ group.userData.churchStreet={pavement,stalls,islands,slots,occupied,driveways:4,route:[[-75,103],[42,66],[42,-15],[-40,-15],[-40,-76]],boundary:'planted verges and curbs'};
+ for(const r of pavement)decor(r.x1-r.x0,.025,r.z1-r.z0,(r.x0+r.x1)/2,.04,(r.z0+r.z1)/2,r.color);
  for(const [color,list] of plans){const m=new T.InstancedMesh(geo,mat(color),list.length);m.userData.guide=true;m.receiveShadow=true;m.frustumCulled=false;list.forEach(([w,h,d,x,y,z,yaw],i)=>{dummy.position.set(x,y,z);dummy.scale.set(w,h,d);dummy.rotation.set(0,yaw,0);dummy.updateMatrix();m.setMatrixAt(i,dummy.matrix);});group.add(m);}
- mini.push({x:0,z:79,w:214,d:14,yaw:roadYaw,color:'#586164'},{x:42,z:0,w:18,d:132,color:'#586164'},{x:-42,z:-48,w:20,d:94,color:'#586164'});update(0);
+ mini.push({x:99,z:-25,w:11,d:151,color:'#586164'},{x:61,z:-17,w:63,d:104,color:'#586164'},{x:0,z:79,w:214,d:14,yaw:roadYaw,color:'#586164'},{x:42,z:0,w:18,d:132,color:'#586164'},{x:-42,z:-48,w:20,d:94,color:'#586164'});update(0);
 }

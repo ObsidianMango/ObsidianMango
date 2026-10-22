@@ -4,6 +4,15 @@ import {LOTS} from '../level-catalog.js';
 const {app,T}=await bootGame(),t=app.test,index=LOTS.findIndex(l=>l.style==='churchStreet');assert.equal(index,26);
 t.setState('menu');t.selectVehicle(12);assert.equal(t.spec.id,'semi');assert.equal(t.car.root.userData.tires,18);t.loadLevel(index);app.start();
 assert(t.semiTrailer.getInfo().active);const view=t.lots.views[index],grid=view.group.userData.powerGrid;assert(grid.getInfo().powered);assert(view.group.userData.churchStreet.driveways===4);
+const layout=view.group.userData.churchStreet;
+assert.equal(layout.islands.length,3);
+for(const stall of layout.stalls.slice(0,60))for(const b of view.buildings){
+ assert(!(Math.abs(stall.x-(b.x-view.ox))<b.w/2+1.65&&Math.abs(stall.z-b.z)<b.d/2+3.05),'central parking bays must clear buildings');
+}
+for(let i=0;i<layout.pavement.length;i++)for(let j=i+1;j<layout.pavement.length;j++){
+ const a=layout.pavement[i],b=layout.pavement[j];
+ assert(!(Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0)>1e-8&&Math.min(a.z1,b.z1)-Math.max(a.z0,b.z0)>1e-8),'pavement must not overlap');
+}
 for(let i=0;i<240;i++)t.step(1/60);
 let p=t.chassis.position,b=t.semiTrailer.body;console.log('rest',p,b.position,app.getState().health);
 assert(Number.isFinite(b.position.x)&&b.position.y>1&&b.position.y<4);assert(Math.hypot(p.x-b.position.x,p.z-b.position.z)>6);assert(app.getState().health>90);
