@@ -38,8 +38,8 @@ export function buildChurchStreet({T,group,ox,piece,bay,parked,text,mini,mat,bre
  building('Little Silver Bottle Shop',79,9.5,26,9,5.6,0xc9c3b2,'shop');
  building('United States Postal Service',55,37,18,14,4.4,0xadb4ae,'office');
  building('Cheshire Offices',-76,40,12,57,6.2,0xb2a38d,'office');
- const signs=[text('ACME MARKETS',22.3/2,5.8,-53/2,18,Math.PI/2),text('THE OUTPOST',-10/2,4.4,61.2/2,16),text('FAMILY PHARMACY',79/2,4.7,46.3/2,23),text('CHINA GARDEN',43/2,4.8,-76.7/2,22),text('BETTER GOURMET',73/2,4.8,-76.7/2,29),text('LITTLE SILVER BOTTLE SHOP',65.7/2,4,9/2,22,-Math.PI/2),text('POST OFFICE',55/2,3.3,44.3/2,15)];
- for(const s of signs)s.userData.guide=true;
+ const signs=[text('ACME MARKETS',22.3/2,5.8,-53/2,18,Math.PI/2),text('THE OUTPOST',-10/2,4.4,61.5/2,16),text('FAMILY PHARMACY',79/2,4.7,46.3/2,23),text('CHINA GARDEN',43/2,4.8,-76.7/2,22),text('BETTER GOURMET',73/2,4.8,-76.7/2,29),text('LITTLE SILVER BOTTLE SHOP',65.7/2,4,9.5/2,8,-Math.PI/2),text('POST OFFICE',55/2,3.3,44.3/2,15)];
+ for(const s of signs){s.userData.guide=true;s.userData.storefrontSign=true;s.scale.y=.3;s.material.polygonOffset=true;s.material.polygonOffsetFactor=-1;s.material.polygonOffsetUnits=-1;s.material.map.anisotropy=4;}
  text('CHURCH ST',-2, .09,77/2,14,roadYaw,true,'#495359');
  // Green annotation becomes planted verges and curbs, leaving all photographed aisles open.
  for(const [w,d,x,z] of [[.5,120,-70,25],[.5,61,-46,21],[.5,81,-29,42],[.5,61,29,22],[.5,67,-53,-53],[.5,56,-30,-54],[52,.5,-4,-26],[.5,57,22,-54],[.5,21,93,-88.5],[.5,33,93,-38.5],[.5,50,93,17]])curb(w,d,x,z);
@@ -97,7 +97,14 @@ export function buildChurchStreet({T,group,ox,piece,bay,parked,text,mini,mat,bre
  }
  group.userData.powerGrid={update,getInfo:()=>({powered,poles:poles.length,down:poles.filter(p=>p.entry.broken).length,lights:lights.length}),poles};
  group.userData.churchStreet={pavement,stalls,islands,slots,occupied,driveways:4,route:[[-75,103],[42,66],[42,-15],[-40,-15],[-40,-76]],boundary:'planted verges and curbs'};
- for(const r of pavement)decor(r.x1-r.x0,.025,r.z1-r.z0,(r.x0+r.x1)/2,.04,(r.z0+r.z1)/2,r.color);
+ // Trim the lot paving against the angled road instead of stacking almost coplanar slabs.
+ const cs=Math.cos(roadYaw),sn=Math.sin(roadYaw),roadPlanes=[p=>cs*p[0]-sn*(p[1]-79)-107,p=>-cs*p[0]+sn*(p[1]-79)-107,p=>sn*p[0]+cs*(p[1]-79)-7,p=>-sn*p[0]-cs*(p[1]-79)-7];
+ function clip(poly,f,outside){const out=[];for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length],da=f(a),db=f(b),ia=outside?da>=0:da<=0,ib=outside?db>=0:db<=0;if(ia)out.push(a);if(ia!==ib){const t=da/(da-db);out.push([a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])]);}}return out;}
+ const paving=new Map();
+ function addPaving(poly,color){if(poly.length<3)return;if(!paving.has(color))paving.set(color,[]);const out=paving.get(color);for(let i=1;i<poly.length-1;i++)for(const p of [poly[0],poly[i+1],poly[i]])out.push(ox+p[0],.0525,p[1]);}
+ for(const r of pavement){let remaining=[[r.x0,r.z0],[r.x1,r.z0],[r.x1,r.z1],[r.x0,r.z1]];for(const f of roadPlanes){addPaving(clip(remaining,f,true),r.color);remaining=clip(remaining,f,false);if(remaining.length<3)break;}}
+ for(const [color,vertices]of paving){const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geometry.computeVertexNormals();const mesh=new T.Mesh(geometry,mat(color));mesh.userData.guide=true;mesh.receiveShadow=true;group.add(mesh);}
+
  for(const [color,list] of plans){const m=new T.InstancedMesh(geo,mat(color),list.length);m.userData.guide=true;m.receiveShadow=true;m.frustumCulled=false;list.forEach(([w,h,d,x,y,z,yaw],i)=>{dummy.position.set(x,y,z);dummy.scale.set(w,h,d);dummy.rotation.set(0,yaw,0);dummy.updateMatrix();m.setMatrixAt(i,dummy.matrix);});group.add(m);}
  mini.push({x:99,z:-25,w:11,d:151,color:'#586164'},{x:61,z:-17,w:63,d:104,color:'#586164'},{x:0,z:79,w:214,d:14,yaw:roadYaw,color:'#586164'},{x:42,z:0,w:18,d:132,color:'#586164'},{x:-42,z:-48,w:20,d:94,color:'#586164'});update(0);
 }

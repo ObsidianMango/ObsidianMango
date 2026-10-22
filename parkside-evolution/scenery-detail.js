@@ -43,9 +43,10 @@ export function createSceneryDetail(T){
  function dress({group,ox,index,style,structures}){
   const root=new T.Group();root.name='lot-detail';root.userData.decorative=true;group.add(root);
   const rng=random(173+index*931),batches=new Map();
+  const customLayout=['churchStreet','undici','redbankMarina','riverviewHospital'].includes(style);
   function addBox(color,w,h,d,x,y,z,yaw=0){if(!batches.has(color))batches.set(color,[]);batches.get(color).push([w,h,d,x,y,z,yaw]);}
   // A paved edge, concrete joints and drains give the asphalt a real boundary.
-  for(const side of [-1,1]){
+  if(!customLayout)for(const side of [-1,1]){
    addBox(0xb8b6a5,3.2,.12,96,side*50,-.005,0);
    for(let z=-44;z<=44;z+=4)addBox(0x969a8d,3.1,.018,.045,side*50,.065,z);
    for(let z=-36;z<=36;z+=24){addBox(0x303d3b,1.2,.025,.65,side*46.8,.038,z);for(let k=-3;k<=3;k++)addBox(0x84918a,.045,.012,.58,side*46.8+k*.14,.055,z);}
@@ -65,7 +66,7 @@ export function createSceneryDetail(T){
   // Facade details attach to their structural section, so they fall with that section.
   const byStructure=new Map();for(const e of structures){if(!e.structure||e.role==='floor'||e.role==='contents')continue;if(!byStructure.has(e.structure))byStructure.set(e.structure,[]);byStructure.get(e.structure).push(e);}
   let facadeWindows=0;
-  for(const sections of byStructure.values()){
+  if(!customLayout)for(const sections of byStructure.values()){
    const front=Math.max(...sections.filter(e=>e.size[2]<1).map(e=>e.mesh.position.z));
    for(const e of sections){if(e.size[2]>=1||Math.abs(e.mesh.position.z-front)>.1||e.size[0]<2.5)continue;
     const detail=new T.Mesh(windowGeometry,windowMaterial);detail.position.set(e.mesh.position.x,e.mesh.position.y+.05,front+.38);detail.castShadow=false;group.add(detail);group.updateMatrixWorld(true);e.mesh.attach(detail);facadeWindows++;
