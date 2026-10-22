@@ -2,10 +2,10 @@
 export function createGarageMenu({T,getItems,getSelected,onSelect,onConfirm,isMenu}){
  const $=id=>document.getElementById(id),intro=$('intro'),panel=intro.querySelector('.panel');
  const top=intro.querySelector('.top'),fleet=$('fleetSwitch'),lots=$('lotList'),start=$('start'),multi=intro.querySelector('.duel-launch'),help=intro.querySelector('.controller-help');
- panel.replaceChildren(top);top.querySelector('.brand').textContent='PARKSIDE EVOLUTION';
+ panel.replaceChildren(top);top.querySelector('.brand').textContent='PARKER DESTROY';
  const steps=document.createElement('nav');steps.className='garage-steps';steps.innerHTML='<span id="vehicleStepLabel">01 / VEHICLE</span><span id="levelStepLabel">02 / LEVEL</span>';panel.append(steps);
  const vehicles=document.createElement('section');vehicles.id='vehicleStep';vehicles.innerHTML='<h1>Choose your ride</h1><div id="garage"><canvas id="showroomCanvas" aria-label="Rotating 3D vehicle preview"></canvas><button id="previousVehicle" aria-label="Previous vehicle">‹</button><button id="nextVehicle" aria-label="Next vehicle">›</button><span id="vehicleCount"></span></div><h2 id="selectedVehicleName" aria-live="polite"></h2><div id="showroomFleet"></div><button id="chooseVehicle" class="start">Select vehicle →</button>';panel.append(vehicles);$('showroomFleet').append(fleet);
- const levels=document.createElement('section');levels.id='levelStep';levels.hidden=true;levels.innerHTML='<button id="backToVehicles" class="pill">← Vehicle</button><h1>Choose your level</h1><p id="selectedRide"></p>';levels.append(lots,start);panel.append(levels);
+ const levels=document.createElement('section');levels.id='levelStep';levels.hidden=true;levels.innerHTML='<button id="backToVehicles" class="pill">← Vehicle</button><h1>Choose your level</h1><p id="selectedRide"></p><p class="parker-intro">Park clean. Or wreck the lot. Collect both medals.</p>';levels.append(lots,start);panel.append(levels);
  const footer=document.createElement('div');footer.className='garage-footer';if(multi){multi.textContent='Multiplayer';footer.append(multi);}if(help)footer.append(help);panel.append(footer);
  let step='vehicle',model=null,item=null,angle=-.55,elapsed=0,lastW=0,lastH=0;
  const canvas=$('showroomCanvas'),renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:true});renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio||1,1.5));renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;

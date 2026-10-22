@@ -1,8 +1,14 @@
-# Parkside Evolution
+# Parker Destroy
 
 A separate edition of Parkside Next, derived from the original game source. Play at https://obsidianmango.github.io/ObsidianMango/parkside-evolution/ . The original `/parkside-next/` is unchanged.
 
-Includes 26 parking levels (24 original challenges, Marine Park, Riverview Hospital) plus Secret City. The detailed fleet, Gold unlocks, upgrades, interiors, scratch-offs, casino games, demolition contracts, pedestrians, Hulk actions, weapons, webs and peer-to-peer multiplayer are retained.
+Includes 28 challenge levels (24 training lots plus Marine Park, Riverview Hospital, Church Street and Undici) plus unlockable Free Roam. The detailed fleet, Gold unlocks, upgrades, interiors, scratch-offs, casino games, demolition contracts, pedestrians, Hulk actions, weapons, webs and peer-to-peer multiplayer are retained.
+
+## Park or destroy
+
+Every challenge level has separate parking and destruction medals. Existing parking ratings, cash, vehicle upgrades and unlocks remain in their original storage namespace. Either medal counts toward training progression and Free Roam unlocks.
+
+Destruction medals use a fixed weighted list of buildings, props and parked vehicles: bronze at 25%, silver at 60%, gold at 90%. Buildings count once when 60% of their structural sections break. Furniture, floor slabs, pedestrians, debris and optional baskets do not inflate the destruction percentage. Targets score once per run. New medal tiers award $75 each; baskets retain their existing points and cash rewards. Select Park or Destroy during the run without restarting. After bronze, bank the destruction run or continue toward the next tier.
 
 ## This edition
 

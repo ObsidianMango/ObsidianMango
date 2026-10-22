@@ -8,11 +8,11 @@ export {LOTS,ORIGINAL_LOT_COUNT} from './level-catalog.js';
 import {buildRiverview} from './real-riverview.js';
 const LEVEL_BUILDERS={undici:buildUndici,churchStreet:buildChurchStreet,redbankMarina:buildMarinePark,riverviewHospital:buildRiverview};
 export const CHAPTER_SIZE=8;
-export function completedThrough(saves,count){return Array.from({length:count},(_,i)=>saves[i]?.stars>=1).every(Boolean);}
+export function completedThrough(saves,count){return Array.from({length:count},(_,i)=>(saves[i]?.stars>=1||saves[i]?.destruction>=1)).every(Boolean);}
 export function isLotUnlocked(index,saves){return Number.isInteger(index)&&index>=0&&index<LOTS.length&&(LOTS[index].realWorld||completedThrough(saves,Math.floor(index/CHAPTER_SIZE)*CHAPTER_SIZE));}
 export function nextLotIndex(index,saves){
  const next=index+1;if(next<LOTS.length&&isLotUnlocked(next,saves))return next;
- for(let i=0;i<LOTS.length;i++)if(isLotUnlocked(i,saves)&&!(saves[i]?.stars>=1))return i;
+ for(let i=0;i<LOTS.length;i++)if(isLotUnlocked(i,saves)&&!((saves[i]?.stars>=1||saves[i]?.destruction>=1)))return i;
  return null;
 }
 // Full footprint containment, heading, final approach, upright and stationary checks.
