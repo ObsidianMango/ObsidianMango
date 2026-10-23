@@ -33,7 +33,9 @@ export function createSquirrel(){
  fluffy(head,[0,-.085,.327],[.285,.21,.23],muzzleMat,600,'#aba28e',.039);
  fluffy(head,[-.16,-.13,.35],[.17,.13,.165],muzzleMat,250,'#a59b89',.031);
  fluffy(head,[.16,-.13,.35],[.17,.13,.165],muzzleMat,250,'#a59b89',.031);
- fluffy(head,[0,-.215,.32],[.22,.10,.16],cream,350,'#d7d6c3',.034,true);
+ const jaw=new THREE.Group();jaw.position.set(0,-.215,.32);head.add(jaw);fluffy(jaw,[0,0,0],[.22,.10,.16],cream,350,'#d7d6c3',.034,true);
+ const openMouth=mesh(smallSphere,material('#3e3028'),head,[0,-.19,.48],[.12,.05,.025]);openMouth.visible=false;
+ const teeth=new THREE.Group();head.add(teeth);for(const side of[-1,1])mesh(new THREE.BoxGeometry(.040,.075,.024),material('#fff4d5'),teeth,[side*.025,-.19,.512]);teeth.visible=false;
  const nose=mesh(smallSphere,black,head,[0,-.032,.552],[.074,.052,.054]);
  mesh(smallSphere,material('#acaba2',{roughness:.3}),nose,[-.15,.25,.75],[.22,.12,.1]);
  const mouthCurve=new THREE.CatmullRomCurve3([new THREE.Vector3(-.12,-.17,.49),new THREE.Vector3(0,-.185,.51),new THREE.Vector3(.12,-.17,.49)]);
@@ -77,7 +79,7 @@ export function createSquirrel(){
  const tailSilver=[];for(let i=0;i<1800;i++){const t=random()*.85+.05,f=Math.min(43,Math.floor(t*44)),a=random()*Math.PI*2,n=frames.normals[f].clone().multiplyScalar(Math.cos(a)).addScaledVector(frames.binormals[f],Math.sin(a));tailSilver.push({p:curve.getPointAt(t).addScaledVector(n,radius(t)*1.02),n:n.addScaledVector(curve.getTangentAt(t),.5).normalize()})}hairs(tail,tailSilver,'#92978a',.14,.0024);
  const carryPoint=new THREE.Object3D();carryPoint.position.set(0,1.10,.61);rig.add(carryPoint);
  let phase=0,tailX=0,tailZ=0,walkBlend=0,sprintBlend=0;
- function animate(dt,time,speed=0,holding=false,airborne=false,climbing=null){
+ function animate(dt,time,speed=0,holding=false,airborne=false,climbing=null,actions={}){
   const blend=1-Math.exp(-dt*10),limbBlend=1-Math.exp(-dt*24),moving=Math.min(speed/2.7,1),climbSpeed=climbing?Math.abs(climbing.speed)+Math.abs(climbing.orbitSpeed)*.5:0;
   walkBlend=lerp(walkBlend,climbing?0:moving,blend);sprintBlend=lerp(sprintBlend,climbing?0:THREE.MathUtils.clamp((speed-3)/2.5,0,1),blend);
   phase+=dt*(climbing?climbSpeed*5.4:speed>.12?7+speed*2:0);
@@ -96,6 +98,8 @@ export function createSquirrel(){
    arms[i].rotation.x=lerp(arms[i].rotation.x,armTarget,limbBlend);arms[i].rotation.z=lerp(arms[i].rotation.z,-sign*(climbing?.14:holding?.50:.10),limbBlend);
   }
   head.rotation.y=Math.sin(time*.8)*.045*(1-walkBlend);head.rotation.x=lerp(head.rotation.x,climbing?.04:-rig.rotation.x*.52+Math.sin(time*1.7)*.02,blend);
+  const chomp=Math.sin(THREE.MathUtils.clamp(actions.bite||0,0,1)*Math.PI),nibble=(actions.feed||0)>0?Math.max(0,Math.sin(time*21))*.30:0,opening=Math.max(chomp,nibble);
+  rig.position.z=climbing?0:chomp*.23;head.rotation.x-=chomp*.18;jaw.position.y=-.215-opening*.09;openMouth.visible=opening>.08;openMouth.scale.y=.05*(.3+opening);teeth.visible=opening>.08;
   carryPoint.position.set(0,climbing?1.70:1.10,climbing?.60:.61);
   nose.scale.y=.052*(1+Math.sin(time*15)*.035);
   const blink=Math.sin(time*1.4)>.997?.12:1;eyes.forEach(e=>e.scale.y=.103*blink);

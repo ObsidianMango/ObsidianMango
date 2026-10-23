@@ -4,7 +4,7 @@ A fluffy squirrel, a living woodland, and a few good things to get your paws on.
 
 ## Play
 
-Walk, run, jump, climb any full-size tree, circle the trunk, and leap back to the ground. Grab, carry, throw and stash 42 acorns and walnuts in the hollow stump. Carry nuts in your mouth while climbing. Stashing 12 completes the first winter goal; you can keep collecting all 42. Your stash saves on this device.
+Walk, run, jump, climb any full-size tree, circle the trunk, and leap back to the ground. Grab, carry, throw and stash 42 forest nuts, plus up to 24 bonus nuts from visitors, in the hollow stump. Carry nuts in your mouth while climbing. Stashing 12 completes the first winter goal; you can keep collecting all 66. Your stash saves on this device.
 
 The bounding run blends articulated hind legs, front-paw strides, body lean, hopping, head stabilization and a springy tail. Climbing has alternating paw grips and leg movements. The model includes 21,210 surface-aligned fur strands, tufted ears, a cream belly, whiskers, glossy eyes and individual claws.
 
@@ -21,7 +21,14 @@ The grove includes branching trees, bushes, ferns, grass, rocks, mushrooms, a fa
 | Circle a trunk | A / D or left / right | Joystick sideways | Left stick sideways |
 | Grab / drop / stash | E | Grab button | X |
 | Throw held nut | F | Throw | Right trigger |
+| Bite a visitor | B | Bite | B |
 | Inspect model | I / cube icon | Cube icon | Cube icon |
+
+## Visitors and biting
+
+Nora, Theo and Gus walk into the grove, crouch to offer nuts, and feed you when you come close. Press E or use the Grab button to accept immediately, or wait for their offer. If your paws are full, they leave a physical nut at your feet. Visitors navigate around trees and take turns returning to the grove.
+
+Press B, tap Bite, or use gamepad B beside a visitor to chomp. They flinch, complain, spill snacks and run away. The squirrel lunges and shows its little teeth. Visitor gifts persist in the stash; the food pool is bounded and reset clears visitors and gifts.
 
 ## Download the model
 
@@ -33,7 +40,7 @@ Serve this directory over HTTP. For example: `python -m http.server 8000`, then 
 
 ## Verify changes
 
-Install the package's development dependency, then run `npm test`. The verification script checks geometry, terrain and tree collisions, nut grabs and throws, jumping and landing, stash persistence, resets, tree ascent, circling, crown limits, paused grips, leaping, carrying while climbing, descending, and distinct walking and running gaits. It also regenerates `squirrel.glb`. The browser uses the same portable GLB writer for its model download.
+Install the package's development dependency, then run `npm test`. The verification script checks geometry, terrain and tree collisions, nut grabs and throws, jumping and landing, stash persistence, resets, tree ascent, circling, crown limits, paused grips, leaping, carrying while climbing, descending, and distinct walking and running gaits. The visitor suite also checks autonomous feeding, full paws, gift persistence, bite reactions, fleeing, pause behavior, pool limits and navigation in the actual forest. It also regenerates `squirrel.glb`. The browser uses the same portable GLB writer for its model download.
 
 The supplied cloud browser had WebGL disabled. Physics and animation checks passed directly, and software renders were used to inspect the squirrel's proportions and running pose; live GPU rendering and physical iPhone input remain unverified.
 

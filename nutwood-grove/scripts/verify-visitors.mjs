@@ -1,0 +1,33 @@
+import {createRequire} from 'node:module';
+import assert from 'node:assert/strict';
+import {writeFileSync} from 'node:fs';
+import * as THREE from '../vendor/three.module.js';
+import {GrovePhysics,GROUND_NUTS,GIFT_NUTS} from '../physics.js';
+import {GroveVisitors} from '../visitors.js';
+import {createWoodland} from '../woodland.js';
+import {height} from '../utils.js';
+const require=createRequire(import.meta.url),{createCanvas}=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES?process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES+'/@napi-rs/canvas':'@napi-rs/canvas');
+globalThis.document={createElement:()=>createCanvas(256,256)};const storage=new Map();globalThis.localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)};
+const scene=new THREE.Scene(),wood={start:new THREE.Vector3(0,height(0,2.5)+.03,2.5),home:new THREE.Vector3(-5,height(-5,-3),-3),storedVisual:new THREE.Group(),colliders:[{type:'trunk',climbable:true,x:8,z:4,y:4,radius:.5,barkRadius:.6,height:8,baseY:0,leanX:0,leanZ:0}]};
+const physics=new GrovePhysics(scene,wood),visitors=new GroveVisitors(scene,physics,wood),dt=1/60;
+function tick(frames,enabled=true){for(let i=0;i<frames;i++){visitors.update(dt,enabled,.38);physics.step(dt,{x:0,z:0,run:false},enabled)}}
+assert.equal(visitors.visitors.length,3);assert.equal(physics.nuts.filter(n=>n.active).length,GROUND_NUTS);assert.equal(physics.nuts.filter(n=>n.gift).length,GIFT_NUTS);
+tick(1600);assert(visitors.stats.fed>=1,'A visitor must independently approach and offer a nut');assert(physics.held?.gift,'An empty-pawed squirrel must receive the offered nut');assert(!physics.world.bodies.includes(physics.held.body),'A held gift must be removed from rigid-body simulation');
+const fedId=physics.held.id;physics.player.position.set(wood.home.x+1.9,wood.home.y,wood.home.z);assert.equal(physics.grab(),'stash');assert(physics.stashed.has(fedId));assert(JSON.parse(storage.get('nutwood-stash-v1')).includes(fedId),'Visitor nuts must persist in the same stash');
+const reloaded=new GrovePhysics(new THREE.Scene(),{...wood,storedVisual:new THREE.Group()});assert(reloaded.stashed.has(fedId),'A saved visitor gift must restore after reload');assert.equal(reloaded.nuts[fedId].mesh.visible,false);
+visitors.reset();physics.returnHome();tick(80);const v=visitors.visitors[0];v.position.set(physics.player.position.x+1.6,height(physics.player.position.x+1.6,physics.player.position.z),physics.player.position.z);v.state='offer';v.timer=0;
+const hit=visitors.bite();assert.equal(hit.type,'hit');assert.equal(v.state,'flinch');assert(v.message.length>5);assert.equal(visitors.bite().type,'cooldown','Biting must have a cooldown');assert(physics.nuts.filter(n=>n.gift&&n.active&&!n.stored).length>=3,'A startled visitor must spill physical snacks');
+const before=v.position.clone();tick(90);assert.equal(v.state,'flee');assert(v.position.distanceTo(before)>1.5,'A bitten visitor must run away');
+const paused=v.position.clone(),clock=visitors.clock,stats={...visitors.stats};tick(60,false);assert.equal(visitors.clock,clock);assert(v.position.distanceTo(paused)<.0001);assert.deepEqual(visitors.stats,stats,'Paused visitors cannot feed or react');
+tick(300);physics.player.position.set(0,10,0);v.position.set(0,height(0,0),.5);v.invulnerable=0;v.state='offer';assert.equal(visitors.bite().type,'miss','Bites cannot hit a person far below the squirrel');
+physics.returnHome();visitors.reset();physics.reset();tick(80);v.position.set(2.6,height(2.6,2.5),2.5);v.state='offer';v.timer=0;
+assert.equal(physics.grab(),'grab');const alreadyHeld=physics.held;tick(240);assert.equal(physics.held,alreadyHeld,'Offering a nut cannot replace one already being carried');assert(visitors.stats.fed>=1);assert(physics.nuts.some(n=>n.gift&&n.active&&physics.world.bodies.includes(n.body)),'Full paws should make the visitor drop the gift nearby');
+for(let i=0;i<100;i++)physics.spawnGift(new THREE.Vector3(i%2?20:-20,2,20));assert.equal(physics.nuts.length,GROUND_NUTS+GIFT_NUTS,'The gift pool must remain bounded');
+visitors.reset();physics.reset();assert.equal(visitors.visitors.filter(v=>v.bodyAdded).length,0);assert.equal(physics.nuts.filter(n=>n.active).length,GROUND_NUTS);assert.equal(physics.nuts.filter(n=>physics.world.bodies.includes(n.body)).length,GROUND_NUTS,'Reset must remove gift bodies without duplicating ground nuts');
+const bodyCount=physics.world.bodies.length;for(let i=0;i<4;i++){visitors.reset();physics.reset()}assert.equal(physics.world.bodies.length,bodyCount,'Repeated resets cannot leak visitor or nut bodies');
+const forestScene=new THREE.Scene(),forest=createWoodland(forestScene),forestPhysics=new GrovePhysics(forestScene,forest),forestPeople=new GroveVisitors(forestScene,forestPhysics,forest);
+for(let i=0;i<1600;i++){forestPeople.update(dt,true,.38);forestPhysics.step(dt,{x:0,z:0,run:false})}
+assert(forestPeople.stats.fed>=1,'A visitor must reach and feed the squirrel in the actual forest');
+for(const person of forestPeople.visitors.filter(v=>v.root.visible))for(const trunk of forest.colliders.filter(c=>c.type==='trunk'))assert(Math.hypot(person.position.x-trunk.x,person.position.z-trunk.z)>=trunk.radius+.40,'Visitors must stay outside tree trunks');
+const report={result:'PASS',checks:['Three autonomous visitors approach and feed','Offered nuts transfer to empty paws','Visitor gifts stash, persist and restore','Biting triggers flinch, dialogue and spilled physical nuts','Bite cooldown and height limits','Bitten visitors flee','Pausing freezes visitor behavior','Full paws preserve the held nut and receive a dropped gift','Bounded gift pool','Reset cleans visitor and gift bodies','Visitors reach the squirrel in the full forest and avoid trunks'],visitorCount:3,giftPool:GIFT_NUTS,browserQA:'Unverified: GPU rendering unavailable in supplied preview browser'};
+writeFileSync(new URL('../visitors-verification.json',import.meta.url),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
