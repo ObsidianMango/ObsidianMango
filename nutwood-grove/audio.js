@@ -1,0 +1,8 @@
+export class GroveAudio{
+ constructor(){this.enabled=false;this.ctx=null;this.nextBird=0}
+ init(){if(this.ctx)return;this.ctx=new(window.AudioContext||window.webkitAudioContext)();this.master=this.ctx.createGain();this.master.gain.value=0;this.master.connect(this.ctx.destination);const s=this.ctx.sampleRate,buffer=this.ctx.createBuffer(1,s*4,s),data=buffer.getChannelData(0);let v=0;for(let i=0;i<data.length;i++){v=(v+(Math.random()-.5)*.07)/1.02;data[i]=v}const source=this.ctx.createBufferSource();source.buffer=buffer;source.loop=true;const filter=this.ctx.createBiquadFilter();filter.type='lowpass';filter.frequency.value=900;source.connect(filter);filter.connect(this.master);source.start()}
+ toggle(){this.init();this.ctx.resume();this.enabled=!this.enabled;this.master.gain.setTargetAtTime(this.enabled?.14:0,this.ctx.currentTime,.3);return this.enabled}
+ tone(freq,duration=.1,volume=.03,slide=1){if(!this.enabled)return;const t=this.ctx.currentTime,o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type='sine';o.frequency.setValueAtTime(freq,t);o.frequency.exponentialRampToValueAtTime(freq*slide,t+duration);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(volume,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+duration);o.connect(g);g.connect(this.master);o.start(t);o.stop(t+duration+.02)}
+ action(name){if(name==='stash'){this.tone(620,.16,.4,1.26);setTimeout(()=>this.tone(930,.2,.3,1.08),120)}else if(name==='grab')this.tone(500,.08,.25,1.3);else if(name==='throw')this.tone(330,.15,.15,.35);else if(name==='jump')this.tone(220,.13,.13,1.7)}
+ tick(t){if(this.enabled&&t>this.nextBird){this.nextBird=t+5+Math.random()*8;this.tone(2100+Math.random()*500,.15,.3,1.4);setTimeout(()=>this.tone(2800,.12,.21,.72),180)}}
+}
