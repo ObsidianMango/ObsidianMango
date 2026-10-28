@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {fresh,blankStore,shortage,makeDraft,stats,normalizeBackup,number} from '../core.js';
+const ps=[{id:'a',name:'A',vendor:'quality'},{id:'b',name:'B',vendor:'soda'},{id:'c',name:'C',vendor:'bags'}];
+test('unknown stock is not treated as empty; zero is counted',()=>{const s=blankStore();assert.equal(shortage(s,'a'),null);s.stock.a=0;assert.equal(shortage(s,'a'),1);assert.equal(stats(s,ps).counted,1);assert.equal(makeDraft(s,ps).skipped,2);});
+test('order is target minus stock rounded up to whole cases',()=>{const s=blankStore();s.stock={a:0.5,b:4,c:1};s.targets={a:2,b:1,c:1};const d=makeDraft(s,ps);assert.deepEqual(d.lines.map(l=>[l.id,l.qty]),[['a',2]]);});
+test('fraction precision does not cause an extra case',()=>{const s=blankStore();s.targets.a=1.1;s.stock.a=0.1;assert.equal(shortage(s,'a'),1);});
+test('zero target excludes a product and skips unknown counts',()=>{const s=blankStore();s.targets.a=0;assert.equal(shortage(s,'a'),0);assert.equal(stats(s,ps).total,2);assert.equal(makeDraft(s,ps).skipped,2);});
+test('stores and regenerated drafts are independent',()=>{const d=fresh();d.stores.LS.stock.a=0;d.stores.LS.draft=makeDraft(d.stores.LS,ps);d.stores.LS.draft.lines[0].qty=4;d.stores.LS.draft.notes='Delivery';assert.equal(d.stores.FH.stock.a,undefined);assert.equal(makeDraft(d.stores.LS,ps).lines[0].qty,1);assert.equal(makeDraft(d.stores.LS,ps).notes,'Delivery');});
+test('backup round trip keeps stock, targets, custom items and edited draft',()=>{const d=fresh();d.stores.FH.stock.a=0.5;d.stores.FH.targets.a=2;d.stores.FH.draft=makeDraft(d.stores.FH,ps);d.stores.FH.draft.edited=true;d.customs=[{id:'custom-abc',name:'Test',vendor:'quality'}];assert.deepEqual(normalizeBackup(JSON.parse(JSON.stringify(d))).stores,d.stores);});
+test('invalid and oversized numeric values do not enter calculations',()=>{for(const v of ['',null,undefined,-1,'abc',Infinity,10000])assert.equal(number(v),null);assert.equal(number('0'),0);assert.throws(()=>normalizeBackup({version:2}),/backup/);});
