@@ -45,8 +45,8 @@ const reserve=new Set();for(const p of [m.start,m.station,...m.targets,...m.cach
 const px=Math.floor(m.w*.46),pz=Math.floor(m.h*.48),gates=[4,m.h-5];
 for(let z=2;z<m.h-2;z++)if(!gates.includes(z))grid[z][px]='#';
 for(let x=px+1;x<m.w-2;x++)if(x!==m.w-5)grid[pz][x]='#';
-for(const z of gates){const p=pos(px,z),id=doors.length;doors.push({id,x:p.x,y:0,z:p.z,w:S,h:3.6,d:.2,open:0,target:0});grid[z][px]='D'}
-{const p=pos(m.w-5,pz),id=doors.length;doors.push({id,x:p.x,y:0,z:p.z,w:.2,h:3.6,d:S,open:0,target:0});grid[pz][m.w-5]='D'}
+for(const z of gates){const p=pos(px,z),id=doors.length;doors.push({id,x:p.x,y:0,z:p.z,w:.2,h:3.6,d:S,open:0,target:0});grid[z][px]='D'}
+{const p=pos(m.w-5,pz),id=doors.length;doors.push({id,x:p.x,y:0,z:p.z,w:S,h:3.6,d:.2,open:0,target:0});grid[pz][m.w-5]='D'}
 // Reserve objective positions even when a partition would otherwise cross one.
 for(const key of reserve){const [x,z]=key.split(',').map(Number);if(x>0&&x<m.w-1&&z>0&&z<m.h-1&&grid[z][x]==='#')grid[z][x]='.'}
 for(let z=0;z<m.h;z++)for(let x=0;x<m.w;x++){const p=pos(x,z);const fc=(x+z)%2?m.floor:m.floor.map(c=>c*.85);part(p.x-S/2,-.13,p.z-S/2,S,.13,S,fc);if(grid[z][x]==='#'){const outdoor=['yard','roof'].includes(m.kind),bh=outdoor&&(x===0||z===0||x===m.w-1||z===m.h-1)?1.5:3.8;part(p.x-S/2,0,p.z-S/2,S,bh,S,m.wall);part(p.x-S/2,.13,p.z-S/2,S,.1,S,m.wall.map(c=>c*.55));solid(p.x-S/2,0,p.z-S/2,S,bh,S)}}

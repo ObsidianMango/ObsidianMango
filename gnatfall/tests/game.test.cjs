@@ -33,3 +33,18 @@ for(let index=0;index<6;index++){
 }
 console.log('Six-location mixed-input simulation, finite AI state, and effect budgets passed');
 console.log('All GNATFALL campaign regression checks passed.');
+// Doors span each opening, blocking travel through the partition until raised.
+for(let index=0;index<6;index++){
+ const g=game(index);
+ for(const d of g.level.doors){
+  const acrossX=d.w<d.d;
+  assert.equal(acrossX,d.id<2,'door matches partition orientation');
+  const a={x:d.x+(acrossX?-1:0),y:1.65,z:d.z+(acrossX?0:-1)};
+  const b={x:d.x+(acrossX?1:0),y:1.65,z:d.z+(acrossX?0:1)};
+  assert(rayCrosses(a,b,g.doorSolid(d)),'closed door spans route');
+  d.open=1;assert(!rayCrosses(a,b,g.doorSolid(d)),'raised door clears route');
+ }
+}
+function rayCrosses(a,b,s){const axis=a.x!==b.x?'x':'z',i=axis==='x'?0:2,mid=(a[axis]+b[axis])/2;return mid>=s.min[i]&&mid<=s.max[i]&&a.y>=s.min[1]&&a.y<=s.max[1]}
+assert.equal(new G.Game({getItem:()=>JSON.stringify({version:2,graphics:0}),setItem(){}}).save.graphics,2,'old saves migrate to pixel graphics');
+console.log('Door orientation, closed/open clearance, and pixel save migration passed');
