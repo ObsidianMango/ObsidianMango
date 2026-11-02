@@ -31,3 +31,11 @@ Materials use instanced meshes. Sleeping bodies, sparse joints, pooled particles
 - `main.js`: game flow, modes, UI and input.
 
 Run `npm test` for simulation/replay/scoring checks. Run `python -m http.server 8080` in this directory for local play. Runtime paths are relative and compatible with `/ObsidianMango/castle-smasher/` on GitHub Pages. Third-party licenses are in `vendor/`.
+
+## Scoop release and developer flight range
+
+Catapults and trebuchets now carry a noncolliding projectile in the moving scoop for the wind-up. At release it becomes a dynamic Rapier body at the scoop position, with the chosen launch direction and power. Aiming previews start at this same release position. The wind-up runs on simulation time, pauses with gameplay, and is captured in recorded projectile transforms.
+
+Use **Castle** to leave drag aiming and orbit the fortress through 360 degrees. Manual orbit stops the follow camera from taking over.
+
+**Dev Mode** on the main menu opens all twelve castles and all sixteen weapons with unlimited ammunition. Its Flight Tools position the hovering launcher up to 60 metres high and 70 metres to either side/front/back, with full bearing rotation and downward elevation. Apply a new position during a ready-to-fire test or reset into a different level/weapon. Flight changes preserve the last replay, whose recorded launch platform is restored while watching. Dev tests do not award campaign coins, permanent medals or unlocks.

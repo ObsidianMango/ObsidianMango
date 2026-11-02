@@ -78,10 +78,28 @@ export function createSiegeModel(index,{golden=false,weapon}={}){const w=weapon,
  }
  finish(fixed);for(const part of parts){if(part===counter)continue;const rounds=loaded.filter(a=>a.parent===part);for(const a of rounds)part.remove(a);finish(part);for(const a of rounds)part.add(a);root.add(part);}if(counter){finish(counter);pivot.add(counter);}root.userData={kind,pivot,counter,loaded,shot:0};return root;
 }
-export function animateSiegeModel(root,dt,yaw,elevation,shot){const s=root.userData,p=s.pivot;root.rotation.y=-yaw*Math.PI/180;for(const a of s.loaded)a.visible=shot<=0;if(!p)return;const t=Math.min(1,Math.max(0,1-shot/.85)),kick=shot>0?Math.sin(Math.min(1,t*2)*Math.PI)*Math.exp(-t*3):0;
- if(['catapult','triple','trebuchet'].includes(s.kind)){p.rotation.x=shot>0?.25-Math.sin(t*Math.PI)*2.5:.25;if(s.counter)s.counter.rotation.x=-p.rotation.x;}
+export const RELEASE_TIME=.38;
+export const SHOT_CYCLE=.95;
+export function slingAngle(elapsed,elevation,offset){
+ const rest=.25,delta=Math.atan2(offset.y,offset.z);
+ const release=(elevation-90)*Math.PI/180+delta;
+ if(elapsed<=RELEASE_TIME)return rest+(release-rest)*(Math.max(0,elapsed)/RELEASE_TIME)**2;
+ if(elapsed<RELEASE_TIME+.16)return release-.48*(1-(1-(elapsed-RELEASE_TIME)/.16)**2);
+ const u=Math.min(1,(elapsed-RELEASE_TIME-.16)/(SHOT_CYCLE-RELEASE_TIME-.16)),smooth=u*u*(3-2*u);
+ return release-.48+(rest-release+.48)*smooth;
+}
+export function animateSiegeModel(root,dt,yaw,elevation,shot){const s=root.userData,p=s.pivot;root.rotation.y=-yaw*Math.PI/180;for(const a of s.loaded)a.visible=shot<=0;if(!p)return;const elapsed=SHOT_CYCLE-shot,t=Math.min(1,Math.max(0,elapsed/SHOT_CYCLE)),kick=shot>0?Math.sin(Math.min(1,t*2)*Math.PI)*Math.exp(-t*3):0;
+ if(['catapult','triple','trebuchet'].includes(s.kind)){p.rotation.x=shot>0?slingAngle(elapsed,elevation,s.loaded[0].position):.25;if(s.counter)s.counter.rotation.x=-p.rotation.x;}
  else if(s.kind==='cannon'){p.rotation.x=-elevation*Math.PI/180;p.position.z=kick*.42;}
  else if(s.kind==='ballista'){p.rotation.x=-elevation*Math.PI/180;p.position.z=kick*.16;}
- else if(s.kind==='ram'){p.rotation.x=shot>0?Math.sin(t*Math.PI*2)*.16:Math.sin(performance.now()*.0015)*.025;}
+ else if(s.kind==='ram'){p.rotation.x=shot>0?Math.sin(t*Math.PI*2)*.16:0;}
  else if(s.kind==='tower')p.rotation.x=-.65+(shot>0?Math.sin(t*Math.PI)*.5:0);
+}
+
+export function createHoverPlatform(){
+ const g=new T.Group();g.name='Developer hover platform';
+ block(g,0,-.3,.3,6.2,.3,8.1,C.iron,true);block(g,0,-.12,.3,5.8,.08,7.7,C.steel,true);
+ for(const side of[-1,1]){block(g,side*3,-.05,.3,.12,.18,8,C.brass,true);for(const z of[-3,3.6]){rod(g,[side*2.7,-.3,z],[side*2.7,-.9,z],.46,C.iron,true,.55,16);hoop(g,side*2.7,-.9,z,.43,.07,C.brass,'y');const jet=shape(g,new T.ConeGeometry(.3,1.1,10),0x56d8f5,side*2.7,-1.4,z,false,0x258cba);jet.rotation.x=Math.PI;ball(g,side*2.7,-.98,z,.18,0xc4f6ff,10,0x52bcf3);}}
+ for(const z of[-3.65,4.25])for(let i=0;i<8;i++){const mark=block(g,(i-3.5)*.66,-.11,z,.32,.045,.22,i%2?C.brass:C.black,true);mark.rotation.y=.3;}
+ return finish(g);
 }
