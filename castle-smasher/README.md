@@ -4,9 +4,9 @@ A static, local-first Three.js / Rapier 3D castle destruction game. Entry point:
 
 ## Play
 
-Campaign has twelve castles, ammunition limits, objectives, coin unlocks and eight destruction medals. Sandbox unlocks all sixteen weapons and adds gravity, launch-power, explosion and strength settings. Castle Builder supports snapped placement, stacking, rotation, movement, duplication, deletion and local blueprint saves. Challenges include precision treasure hunting, limited ammunition, timed destruction and one-shot puzzles. Endless Siege scales fortress height and ammunition with each round.
+Campaign has twelve castles, ammunition limits, objectives, coins and eight destruction medals. All twelve castles and sixteen weapons are available through the normal menus. Sandbox adds gravity, launch-power, explosion and strength settings. Castle Builder supports snapped placement, stacking, rotation, movement, duplication, deletion and local blueprint saves. Challenges include precision treasure hunting, limited ammunition, timed destruction and one-shot puzzles. Endless Siege scales fortress height and ammunition with each round.
 
-Drag the world to orbit, pinch/scroll to zoom, and use the three aiming sliders. Space fires; arrows aim; +/− adjust power; R opens replay; C resets the camera. Optional standard-mapping gamepads support aim/orbit, fire, power and replay. On iOS, Share → Add to Home Screen uses the included icon and manifest.
+Drag the world to orbit, pinch/scroll to zoom, and use the siege dials and power lever. Space fires; arrows aim; +/− adjust power; R opens replay; C resets the camera. Optional standard-mapping gamepads support aim/orbit, fire, power and replay. On iOS, Share → Add to Home Screen uses the included icon and manifest.
 
 ## Actual-shot replay
 
@@ -29,15 +29,18 @@ Materials use instanced meshes. Sleeping bodies, sparse joints, pooled particles
 - `scoring.js`, `save.js`: medals, economy and browser-local progress.
 - `audio.js`: synthesized weapon/impact sounds and optional music.
 - `main.js`: game flow, modes, UI and input.
+- `controls.js`: SVG siege dials, pointer capture, keyboard input and accessibility.
 
 Run `npm test` for simulation/replay/scoring checks. Run `python -m http.server 8080` in this directory for local play. Runtime paths are relative and compatible with `/ObsidianMango/castle-smasher/` on GitHub Pages. Third-party licenses are in `vendor/`.
 
-## Scoop release and developer flight range
+## Scoop release and siege controls
 
 Catapults and trebuchets now carry a noncolliding projectile in the moving scoop for the wind-up. At release it becomes a dynamic Rapier body at the scoop position, with the chosen launch direction and power. Aiming previews start at this same release position. The wind-up runs on simulation time, pauses with gameplay, and is captured in recorded projectile transforms.
 
 Use **Castle** to leave drag aiming and orbit the fortress through 360 degrees. Manual orbit stops the follow camera from taking over.
 
-**Dev Mode** is an unlock toggle for the normal game. Enable it on the main menu and use the regular castle cards and weapon armory: every level and weapon is available without purchasing unlocks. Campaign objectives, ammunition, results and progression still work normally. Disabling the toggle restores normal access rules without removing earned unlocks.
+All twelve castles and sixteen weapons are available in the normal menus. Campaign objectives, ammunition, results and scoring work normally; there is no developer mode.
 
-The **Attack Position** button opens live controls directly above the aiming controls. **Around Castle** moves the actual weapon through a full 360° around the fortress; **Distance** sets its range and **Height** optionally raises it. The camera follows the chosen attack side, and Aim toward castle points the launcher inward. The trajectory, launch origin and collision direction all come from that position. The weapon starts on the ground and has no jet platform or support deck. Adjustments apply immediately in-game and pause briefly while a projectile is attached to the moving scoop.
+The playing screen uses custom SVG siege instruments: drag the **Move Around** wheel to place the weapon around the castle, the **Bearing** compass to aim horizontally, and the **Elevation** cannon gauge to aim up or down. Drag the vertical **Power** lever and press the red **Fire** seal to launch. The dials support arrow keys as well as mouse/touch input.
+
+**Range / Height** expands optional live distance and height controls. The guide and launcher update immediately; movement is paused briefly while a projectile remains attached to the scoop. There is no jet platform.
