@@ -1,5 +1,5 @@
 import * as THREE from '../vendor/three.module.js';
-import {clamp} from './data.js';
+import {clamp} from './data.js?v=sibling-walk-7';
 export const STRIDE=14;
 export function bracket(frames,time){if(!frames.length)return[null,null,0];let lo=0,hi=frames.length-1;while(lo<hi){const mid=(lo+hi+1)>>1;if(frames[mid].t<=time)lo=mid;else hi=mid-1}const a=frames[lo],b=frames[Math.min(lo+1,frames.length-1)];return[a,b,b.t===a.t?0:clamp((time-a.t)/(b.t-a.t),0,1)]}
 export class Replay{

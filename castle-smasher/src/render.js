@@ -1,7 +1,7 @@
 import * as T from '../vendor/three.module.js';
 import {OrbitControls} from '../vendor/OrbitControls.js';
-import {rng,clamp} from './data.js';
-import {SoftwareRenderer} from './software-renderer.js';
+import {rng,clamp} from './data.js?v=sibling-walk-7';
+import {SoftwareRenderer} from './software-renderer.js?v=sibling-walk-7';
 export const box=new T.BoxGeometry(1,1,1);
 const sphere=new T.IcosahedronGeometry(1,1);
 export function mesh(geo,color){const m=new T.Mesh(geo,new T.MeshStandardMaterial({color,roughness:.85}));m.castShadow=true;m.receiveShadow=true;return m}
@@ -22,7 +22,7 @@ export class View{
  banner(parent,x,y,z,color=0xb8493b){cube(x,y,z,.09,3.8,.09,0x57422e,parent);const m=cube(x+.65,y+.7,z,1.3,1.6,.055,color,parent);cube(x+.65,y+.7,z+.04,.22,1.15,.03,0xf0cc75,parent);this.flags.push(m)}
  trajectory(points,target){this.aimLine.geometry.dispose();this.aimLine.geometry=new T.BufferGeometry().setFromPoints(points);this.aimLine.computeLineDistances();this.targetRing.position.copy(target);this.targetRing.position.y=Math.max(.08,target.y);this.aimLine.visible=this.targetRing.visible=this.settings.guide}
  direct(replay,entities,dt){const time=replay.time,events=replay.events;let e=events.filter(e=>e.t<=time+.3&&(['impact','collapse','explosion','lean','support'].includes(e.type))).at(-1)||{pos:{x:0,y:4,z:0},t:0};let mode=replay.camera;if(mode==='Free')return;if(mode==='Director'){mode=time<replay.impact?'Projectile':time<replay.impact+1.3?'Impact':time<replay.collapse+3?'Tower':'Wide'}const p=new T.Vector3(e.pos.x,e.pos.y,e.pos.z),cam=new T.Vector3();if(mode==='Projectile'){const projectile=entities.find(x=>x.projectile&&x.mesh.visible);if(projectile){p.copy(projectile.mesh.position);cam.copy(p).add(new T.Vector3(5,3,8))}else cam.copy(p).add(new T.Vector3(18,9,20))}else if(mode==='Impact'){cam.copy(p).add(new T.Vector3(10,5,12))}else if(mode==='Tower'){const fall=events.filter(v=>v.structure!==undefined&&['collapse','lean'].includes(v.type)&&v.t<=time+.4).at(-1);if(fall){const pieces=entities.filter(v=>v.b?.structure===fall.structure&&v.mesh.visible);if(pieces.length){p.set(0,0,0);for(const piece of pieces)p.add(piece.mesh.position);p.divideScalar(pieces.length)}}cam.copy(p).add(new T.Vector3(Math.sin(time*.2)*18,7,Math.cos(time*.2)*18))}else if(mode==='Ground'){cam.set(p.x+13,1.3,p.z+12);p.y=Math.max(2,p.y)}else{p.set(0,4,0);cam.set(32+Math.sin(time*.1)*6,23,38)}this.controls.target.lerp(p,1-Math.exp(-dt*4));this.camera.position.lerp(cam,1-Math.exp(-dt*3));}
- render(time,dt){for(const c of this.clouds)c.position.x+=dt*.22;for(const f of this.flags)f.rotation.y=Math.sin(time*2+f.position.x)*.09;this.controls.update();const offset=this.settings.shake?new T.Vector3((Math.random()-.5)*this.shake,(Math.random()-.5)*this.shake,0):new T.Vector3();this.camera.position.add(offset);this.renderer.render(this.scene,this.camera);this.camera.position.sub(offset);this.shake*=Math.exp(-dt*8)}
+ render(time,dt){for(const c of this.clouds)c.position.x+=dt*.22;for(const f of this.flags)f.rotation.y=Math.sin(time*2+f.position.x)*.09;if(!this.firstPerson)this.controls.update();const offset=this.settings.shake?new T.Vector3((Math.random()-.5)*this.shake,(Math.random()-.5)*this.shake,0):new T.Vector3();this.camera.position.add(offset);this.renderer.render(this.scene,this.camera);this.camera.position.sub(offset);this.shake*=Math.exp(-dt*8)}
 }
 export class Effects{
  constructor(scene,settings){this.settings=settings;this.max=360;this.mesh=new T.InstancedMesh(sphere,new T.MeshBasicMaterial({transparent:true,opacity:.45,depthWrite:false}),this.max);this.mesh.frustumCulled=false;scene.add(this.mesh);this.dummy=new T.Object3D();this.color=new T.Color();this.events=[]}

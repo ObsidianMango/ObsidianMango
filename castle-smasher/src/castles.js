@@ -1,4 +1,5 @@
-import {rng,BUILD_PARTS} from './data.js';
+import {partBlocks} from './blueprints.js?v=sibling-walk-7';
+import {rng,BUILD_PARTS} from './data.js?v=sibling-walk-7';
 export function generateCastle(level,index=0,custom=null){
  const blocks=[],r=rng(index*117+23);let structure=0;
  const add=(x,y,z,w,h,d,mat=level.mat,tag='wall',rot=0)=>{blocks.push({x,y,z,w,h,d,mat,tag,rot,structure});};
@@ -9,10 +10,29 @@ export function generateCastle(level,index=0,custom=null){
  const gate=(z=6,h=4)=>{wall(-3.4,z,3,h);wall(3.4,z,3,h);structure++;for(let j=0;j<4;j++)add((j-1.5)*.6,1.2,z,.55,2.4,.45,'wood','gate');add(0,2.65,z,3,.35,.8,'wood','beam');for(let i=0;i<4;i++)add((i-1.5)*1.2,3.2,z,1.15,.75,.8,level.mat,'wall')};
  const barrel=(x,z,y=.6,tag='barrel')=>{structure++;add(x,y,z,.85,1.15,.85,'barrel',tag)};
  const hall=(x,z,w=7,h=4,d=5,base=0)=>{wall(x,z-d/2,Math.round(w/1.23),h,'x',level.mat,'wall',base);wall(x-w/2,z,Math.round(d/1.23),h,'z',level.mat,'wall',base);wall(x+w/2,z,Math.round(d/1.23),h,'z',level.mat,'wall',base);structure++;for(let i=0;i<Math.round(w/1.23);i++){add(x+(i-(Math.round(w/1.23)-1)/2)*1.23,base+h*.96+.1,z,1.2,.35,d,'wood','roof');}for(let i=0;i<3;i++)add(x+(i-1)*1.6,base+2,z-d/2-.45,1.1,1.4,.12,'glass','window')};
- if(custom){for(const p of custom){const v=BUILD_PARTS[p.type];if(!v)continue;const[w,h,d,mat]=v;structure++;if(p.type==='Wall'||p.type==='Tower'){const layers=Math.max(1,Math.round(h/.96));for(let y=0;y<layers;y++)for(let x=0;x<Math.round(w/1.2);x++)add(p.x+(x-(Math.round(w/1.2)-1)/2)*1.2*Math.cos(p.rot||0),p.y-h/2+.47+y*.96,p.z-(x-(Math.round(w/1.2)-1)/2)*1.2*Math.sin(p.rot||0),1.15,.91,d,mat,p.type.toLowerCase(),p.rot||0)}else add(p.x,p.y,p.z,w,h,d,mat,p.type.toLowerCase(),p.rot||0)}return blocks;}
+ if(custom){for(const p of custom)blocks.push(...partBlocks(p,++structure));return blocks;}
  switch(level.layout){
  case 'fort':wall(-5,0,8,4,'z','wood');wall(5,0,8,4,'z','wood');wall(0,-4.5,8,4,'x','wood');gate(4.5,4);tower(-5,-4.5,5,2,'wood');tower(5,-4.5,5,2,'wood');hall(0,-1,4,3,3);break;
- case 'twin':tower(-3,0,level.height,3);tower(3,-1,level.height+2,3);structure++;for(let i=0;i<5;i++)add((i-2)*1.2,6.1,-.5,1.15,.35,2,'wood','bridge');wall(0,-5,8,3);barrel(-3,1.5);barrel(3,.5);break;
+ case 'twin':{
+ // Slender square volumes, close-set silver mullions, dark glazing and flat roofs.
+ // Facade strips are carried by destructible panels rather than static scene decoration.
+ for(const [t,x,z] of [[0,-4.4,0],[1,4.4,-3]]){
+  structure++;const floors=14,unit=level.height/floors;
+  for(let row=0;row<floors;row++){
+   for(let side=0;side<4;side++)for(let j=0;j<3;j++){
+    const q=(j-1)*1.8,front=side<2;
+    add(x+(front?q:side===2?-2.7:2.7),row*unit+unit/2,z+(front?(side===0?-2.7:2.7):q),row===0?.32:1.78,unit-.035,.36,'stone','tower',front?0:Math.PI/2);
+    blocks.at(-1).facade=row>0;blocks.at(-1).band=row===4||row===9||row===13;
+   }
+   if(row%2===1||row===0){for(let i=0;i<3;i++)add(x+(i-1)*1.8,(row+1)*unit-.13,z,1.78,.24,5.3,'wood','floor');}
+  }
+  for(let i=0;i<3;i++)add(x+(i-1)*1.8,level.height+.1,z,1.78,.3,5.8,'stone','roof');
+  if(t===0){add(x,level.height+3,z,.14,5.8,.14,'iron','antenna');add(x,level.height+6.25,z,.06,.7,.06,'stone','antenna');}
+ }
+ // Low shared plaza, with a small pedestrian pavilion between the towers.
+ structure++;for(let i=0;i<5;i++)add((i-2)*1.2,.14,5,1.18,.25,3,'stone','floor');
+ for(const x of[-1.2,1.2]){add(x,1.2,5,.3,2.4,.3,'stone','column');}add(0,2.5,5,3,.25,3,'wood','roof');
+ barrel(-4.4,1.6);barrel(4.4,-1.4);break;}
  case 'citadel':for(const x of[-6,-2,2,6]){structure++;for(let y=0;y<4;y++)add(x,.47+y*.96,0,1.4,.91,1.4,level.mat,'column')}
  structure++;for(let i=0;i<12;i++)add((i-5.5)*1.23,4,0,1.2,.45,6,'wood','floor');for(const x of[-6,6])tower(x,-2,level.height,3,level.mat,4.4);hall(0,-1,8,6,4,4.4);gate(6,5);barrel(-2,0,4.8);barrel(2,0,4.8);break;
  case 'viking':hall(0,0,12,5,7);wall(-8,0,10,3,'z','wood');wall(8,0,10,3,'z','wood');tower(-8,5,6,2,'wood');tower(8,5,6,2,'wood');gate(7,4);break;

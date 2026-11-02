@@ -30,7 +30,7 @@ export const WEAPONS=[
 export const LEVELS=[
  {name:'Training Fort',tag:'THE FIRST CRACK',theme:'meadow',mat:'wood',layout:'fort',height:4,ammo:6,goal:45,hint:'Aim low. Remove the front wall’s timber supports.',bonus:'Open the gate',target:'gate'},
  {name:'Stonewall Keep',tag:'MORTAR & MAYHEM',theme:'meadow',mat:'stone',layout:'keep',height:6,ammo:7,goal:55,hint:'The red barrels beside the gate are an opportunity.',bonus:'Ignite a barrel',target:'barrel'},
- {name:'Twin Towers',tag:'DOMINO THEORY',theme:'meadow',mat:'stone',layout:'twin',height:10,ammo:6,goal:50,hint:'Breach one tower at its base. Let gravity do the rest.',bonus:'Topple both towers',target:'tower'},
+ {name:'Sibling Towers',tag:'DOMINO THEORY',theme:'meadow',mat:'stone',layout:'twin',height:42,ammo:6,goal:50,hint:'Tall silver façades, exposed lobby columns. Aim at the supports.',bonus:'Topple both towers',target:'tower'},
  {name:'Riverfront Castle',tag:'A BRIDGE TOO FRAGILE',theme:'river',mat:'stone',layout:'bridge',height:7,ammo:7,goal:55,hint:'The drawbridge beams connect the gatehouse.',bonus:'Break the drawbridge',target:'bridge'},
  {name:'Mountain Citadel',tag:'DOWNHILL FROM HERE',theme:'mountain',mat:'stone',layout:'citadel',height:9,ammo:7,goal:55,hint:'Strike the cliffside columns to release the upper keep.',bonus:'Destroy a column',target:'column'},
  {name:'Royal Palace',tag:'RENOVATION BY FORCE',theme:'royal',mat:'stone',layout:'palace',height:8,ammo:8,goal:60,hint:'Glass balconies and timber floors are weak links.',bonus:'Find the royal treasury',target:'treasure'},
@@ -42,6 +42,6 @@ export const LEVELS=[
  {name:'Imperial Mega Castle',tag:'THE FINAL FALL',theme:'royal',mat:'reinforced',layout:'mega',height:10,ammo:12,goal:65,hint:'Work inward through the layered defenses. Chain the powder stores.',bonus:'Discover the chicken kingdom',target:'secret'}
 ];
 export const MEDALS=['Stone Smasher','Tower Toppler','Wall Breaker','Demolition Genius','Chain Reaction King','One-Shot Wonder','Total Annihilation','Medieval Menace'];
-export const BUILD_PARTS={Wall:[3.6,2.4,.8,'stone'],Tower:[2.4,4.8,2.4,'stone'],Floor:[3.6,.4,3.6,'wood'],Gate:[2.4,2.4,.5,'wood'],Beam:[3.6,.4,.4,'wood'],Column:[.8,3.6,.8,'reinforced'],Barrel:[.8,1.2,.8,'barrel'],Glass:[2.4,2.4,.3,'glass'],Treasure:[.8,.6,.7,'treasure']};
+export const BUILD_PARTS={Wall:[3.6,2.4,.8,'stone'],Tower:[3.6,4.8,3.6,'stone'],Floor:[3.6,.3,3.6,'wood'],Roof:[3.6,.3,3.6,'wood'],Stairs:[1.8,2.7,6,'stone'],Gate:[3.6,2.4,.6,'stone'],Beam:[3.6,.4,.4,'wood'],Column:[.8,3.6,.8,'reinforced'],Barrel:[.8,1.2,.8,'barrel'],Glass:[2.4,2.4,.3,'glass'],Treasure:[.8,.6,.7,'treasure']};
 export const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export function rng(seed=1){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
