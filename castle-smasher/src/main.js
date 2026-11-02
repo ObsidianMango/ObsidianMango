@@ -1,5 +1,5 @@
 import * as T from '../vendor/three.module.js';
-import {Walker} from './walk.js?v=sibling-walk-7';
+import {Walker} from './walk.js?v=sibling-walk-7a';
 import {starterCastle} from './blueprints.js?v=sibling-walk-7';
 import {SiegeControls} from './controls.js?v=sibling-walk-7';
 import {attackPosition,castleBearing} from './attack-position.js?v=sibling-walk-7';

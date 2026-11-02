@@ -6,8 +6,8 @@ export function clearHeadroom(sim,p){
 }
 export function walkSpawn(sim,kind='sideline'){
  if(kind==='sideline')return{x:18,y:sim.terrain==='mountain'?0:0,z:18};
- const surfaces=sim.entities.filter(e=>e.b&&e.mesh.visible&&['floor','roof','balcony','stairs'].includes(e.b.tag)&&Math.abs(e.body.rotation().x)+Math.abs(e.body.rotation().z)<.08).map(e=>{const p=e.body.translation();return{x:p.x,y:p.y+e.b.h/2+.06,z:p.z};}).filter(p=>p.y>2&&clearHeadroom(sim,p));
- surfaces.sort((a,b)=>kind==='roof'?b.y-a.y:a.y-b.y||Math.abs(a.x)-Math.abs(b.x));
+ const surfaces=sim.entities.filter(e=>e.b&&e.mesh.visible&&['floor','roof','balcony','stairs'].includes(e.b.tag)&&Math.abs(e.body.rotation().x)+Math.abs(e.body.rotation().z)<.08).map(e=>{const p=e.body.translation();return{x:p.x,y:p.y+e.b.h/2+.06,z:p.z,tag:e.b.tag};}).filter(p=>p.y>2&&clearHeadroom(sim,p));
+ surfaces.sort((a,b)=>kind==='roof'?b.y-a.y:((['floor','balcony'].includes(a.tag)?0:1)-(['floor','balcony'].includes(b.tag)?0:1))||a.y-b.y||Math.abs(a.x)-Math.abs(b.x));
  if((kind==='upper'||kind==='roof')&&surfaces.length)return surfaces[0];
  for(const z of[2,0,7,10])for(const x of[0,2,-2,6,-6]){const p={x,y:0,z};if(clearHeadroom(sim,p))return p;}
  return walkSpawn(sim);
