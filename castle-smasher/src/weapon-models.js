@@ -96,10 +96,3 @@ export function animateSiegeModel(root,dt,yaw,elevation,shot){const s=root.userD
  else if(s.kind==='tower')p.rotation.x=-.65+(shot>0?Math.sin(t*Math.PI)*.5:0);
 }
 
-export function createHoverPlatform(){
- const g=new T.Group();g.name='Developer hover platform';
- block(g,0,-.3,.3,6.2,.3,8.1,C.iron,true);block(g,0,-.12,.3,5.8,.08,7.7,C.steel,true);
- for(const side of[-1,1]){block(g,side*3,-.05,.3,.12,.18,8,C.brass,true);for(const z of[-3,3.6]){rod(g,[side*2.7,-.3,z],[side*2.7,-.9,z],.46,C.iron,true,.55,16);hoop(g,side*2.7,-.9,z,.43,.07,C.brass,'y');const jet=shape(g,new T.ConeGeometry(.3,1.1,10),0x56d8f5,side*2.7,-1.4,z,false,0x258cba);jet.rotation.x=Math.PI;ball(g,side*2.7,-.98,z,.18,0xc4f6ff,10,0x52bcf3);}}
- for(const z of[-3.65,4.25])for(let i=0;i<8;i++){const mark=block(g,(i-3.5)*.66,-.11,z,.32,.045,.22,i%2?C.brass:C.black,true);mark.rotation.y=.3;}
- return finish(g);
-}

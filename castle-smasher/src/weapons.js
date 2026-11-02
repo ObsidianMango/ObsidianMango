@@ -1,6 +1,6 @@
 import * as T from '../vendor/three.module.js';
 import {box} from './render.js';
-import {createSiegeModel,createProjectileModel,animateSiegeModel,slingAngle,RELEASE_TIME,SHOT_CYCLE,createHoverPlatform} from './weapon-models.js?v=scoop-launch-3';
+import {createSiegeModel,createProjectileModel,animateSiegeModel,slingAngle,RELEASE_TIME,SHOT_CYCLE} from './weapon-models.js?v=attack-position-5';
 import R from '../vendor/rapier.mjs';
 import {WEAPONS} from './data.js';
 export const ORIGIN=new T.Vector3(0,2.1,24);
@@ -10,10 +10,10 @@ export const projectileVisual=createProjectileModel;
 export class Arsenal{
  constructor(view,sim){this.view=view;this.sim=sim;this.index=0;this.animation=0;this.model=null;this.platformPosition=new T.Vector3(0,0,24);this.devPlatform=false;this.launch=null;this.shotStart=-Infinity;this.build();sim.beforeStep=()=>this.updateLaunch();sim.onReset=()=>{this.launch=null;this.shotStart=-Infinity;};sim.onCluster=p=>{const pos=new T.Vector3().copy(p.body.translation()),v=p.body.linvel();for(let i=0;i<6;i++){const w={...WEAPONS[7],radius:.35,mass:4,blast:2.5,damage:130};this.sim.projectile(w,pos.clone().add(new T.Vector3((i%3-1)*.7,Math.floor(i/3)*.6,0)),{x:v.x+(i%3-1)*6,y:v.y+3+Math.floor(i/3)*4,z:v.z-3},projectileVisual(w))}}}
  select(i){this.index=i;this.build()}
- build(){if(this.launch)for(const e of this.launch.entities)if(e.inSling)this.sim.hideProjectile(e);this.launch=null;this.shotStart=-Infinity;const g=this.view.weapon;g.traverse(o=>{if(o.isMesh){if(o.geometry!==box)o.geometry.dispose();o.material.dispose()}});g.clear();g.position.copy(this.platformPosition);this.model=createSiegeModel(this.index,{golden:this.golden,weapon:WEAPONS[this.index]});g.add(this.model);if(this.devPlatform)g.add(createHoverPlatform());this.animation=0;}
+ build(){if(this.launch)for(const e of this.launch.entities)if(e.inSling)this.sim.hideProjectile(e);this.launch=null;this.shotStart=-Infinity;const g=this.view.weapon;g.traverse(o=>{if(o.isMesh){if(o.geometry!==box)o.geometry.dispose();o.material.dispose()}});g.clear();g.position.copy(this.platformPosition);this.model=createSiegeModel(this.index,{golden:this.golden,weapon:WEAPONS[this.index]});g.add(this.model);this.animation=0;}
 
  setPosition(x,height,z){this.platformPosition.set(x,height,z);this.view.weapon.position.copy(this.platformPosition);}
- setDevPlatform(enabled){this.devPlatform=enabled;}
+ setDevPlatform(){this.devPlatform=false;}
  spawnPosition(w){return this.platformPosition.clone().add(new T.Vector3(0,w.type==='ram'?.8:w.type==='tower'?2.5:2.1,0));}
  get throwing(){return ['catapult','triple','trebuchet'].includes(this.model.userData.kind)}
  scoopPosition(slot,yaw,elevation,elapsed=RELEASE_TIME){const s=this.model.userData,a=s.loaded[slot]||s.loaded[0];return a.position.clone().applyAxisAngle(new T.Vector3(1,0,0),slingAngle(elapsed,elevation,a.position)).add(s.pivot.position).applyAxisAngle(new T.Vector3(0,1,0),-yaw*Math.PI/180).add(this.view.weapon.position);}
