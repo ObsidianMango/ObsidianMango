@@ -26,14 +26,14 @@ import {tunedConfig,vehicleKey,paintVehicle,disposeVehiclePaint} from './garage-
 import {createDemolitionContracts} from './demolition-contracts.js';
 import {createBikeDynamics} from './bike-dynamics.js';
 import {createWorldBoundary} from './world-boundary.js';
-import {createStreetLife} from './street-life.js';
+import {createStreetLife} from './street-life.js?v=club-door1';
 import {createDestructionLoop} from './destruction-loop.js';
 import {createSky} from './scenery-detail.js';
 import {createXboxControls} from './xbox-controls.js';
 import {buildGoldenVehicle} from './golden-fleet.js';
 import {buildMonsterTruck} from './monster-truck.js';
 import {createVehicleMotion,motorForce} from './vehicle-motion.js';
-import {SECRET_LEVEL,DISTRICTS,buildSecretCity} from './secret-city.js';
+import {SECRET_LEVEL,DISTRICTS,buildSecretCity} from './secret-city.js?v=club-door1';
 import {createDestructionObjective,createBarrelEffects} from './destruction-objective.js';
 import {buildDetailedVehicle} from './detailed-vehicles.js';
 import {createRunScoring} from './run-scoring.js';
@@ -82,7 +82,8 @@ const failures=createVanFailures({random:rand,onLoosePart:()=>{syncCar();const p
 let seed=842,totalLost=0,levelIndex=0,parkingHold=0,parkingState=null,bumps=0,lastDirection=0,reverseTravel=0,selectedGear=1;
 let saves=[];try{saves=JSON.parse(progressStorage.getItem('parkside-chaos-saves-v1')||'[]');if(!Array.isArray(saves))saves=[];}catch{}
 function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
-const baseComplete=()=>completedThrough(saves,8),goldUnlocked=()=>completedThrough(saves,ORIGINAL_LOT_COUNT),unlocked=i=>i===LOTS.length?goldUnlocked():isLotUnlocked(i,saves),isSecret=()=>levelIndex===LOTS.length;
+const clubArrival=new URLSearchParams(location.search).get('from')==='after-hours';
+const baseComplete=()=>completedThrough(saves,8),goldUnlocked=()=>completedThrough(saves,ORIGINAL_LOT_COUNT),unlocked=i=>i===LOTS.length?(goldUnlocked()||clubArrival):isLotUnlocked(i,saves),isSecret=()=>levelIndex===LOTS.length;
 let completionNext=null,goalFocus='park',destructionClock=0;
 const levelDestruction=createLevelDestruction({onAward:(kind,points)=>{scoring.bonus(points);streetLife.economy.earn(kind==='building'?30:kind==='car'?12:3);},onMedal:p=>{
  const previous=saves[levelIndex]||{},old=previous.destruction||0;
@@ -410,5 +411,24 @@ createFrameLoop({frame,quality,now:()=>performance.now(),request:requestAnimatio
 // Read-only state inspection plus deterministic integration hooks for local development.
 window.roadster={getState:()=>({edition:'evolution',title:'Parker Destroy',goal:goalFocus,destructionMedal:isSecret()?null:levelDestruction.getInfo(),medals:saves.map(s=>({parking:s?.stars||0,destruction:s?.destruction||0})),tossHoop:tossHoop.getInfo(),levelMode,timings:metrics.snapshot(),simulation:simulationClock.getInfo(),wheelRendering:wheelRenderInfo(car),multiplayer:duel.info(),maybachDummy:maybachDummy.getInfo(),performance:quality.getInfo(),semiTrailer:semiTrailer.getInfo(),power:view().group.userData.powerGrid?.getInfo()||null,cityRendering:cityShells?.getInfo(),trafficRendering:trafficLOD?.getInfo(),contracts:contracts?.getInfo(),upgrades:streetLife.economy.upgradeInfo(vehicleKey(car)),vehiclePower:spec.power,streetLife:streetLife.getInfo(),state,health,distance,time,speed,forwardSpeed,position:{...chassis.position},vehicle:spec.id,partsLost:totalLost,golden:!!spec.golden,monster:!!spec.monster,goldUnlocked:goldUnlocked(),driverSide:car.root.userData.driverSide,penalty,attached:car.assemblies.filter(p=>p.userData.attached).map(p=>p.name),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,level:levelIndex,secretUnlocked:goldUnlocked(),secret:isSecret(),destruction:isSecret()?objective?.getInfo():null,bonusUnlocked:baseComplete(),noBrakes:!!spec.noBrakes,parking:parkingState,parkingHold,bumps,gear:selectedGear,firstPerson,boundary:boundary.getInfo(),orbitMode,orbitYaw,orbitPitch,orbitDistance,controller:controller.getState(),pedals:{gas:input.gas||0,brake:input.brake||0},mode:isSecret()?'destruction':mode,steering:steer,wheelAngle,wheelVisualOmega:visualWheelOmega.slice(0,vehicle.wheelInfos.length),wheelVisualAngle:visualWheelAngle.slice(0,vehicle.wheelInfos.length),wheelSlip:visualWheelSlip.slice(0,vehicle.wheelInfos.length),score:runScore,scoring:scoring.snapshot(time),failure:failures.snapshot(),dimensions:{halfWidth:spec.halfWidth||1.27,halfLength:spec.halfLength||2.4,track:spec.track,front:spec.front,rear:spec.rear,radius:spec.radius},route:{cleared:gateProgress,total:isSecret()?0:3,next:lot().gates[gateProgress]||null},endless:isSecret()?destructionLoop?.getInfo():null,effects:{sparks:sparks.length,sparkPool:sparkPool.length,sparkLimit:72},memory:renderer.info.memory||null,secretDetail:secretView?.detail.getInfo()||null,environment:environment.getInfo(),terrain:terrain.getInfo(),parkedTraffic:traffic.getInfo(),pedestrians:crowd.getInfo(),replay:director.getInfo()}),start,renderer,scene,camera};
 if(location.hostname==='localhost'||location.hostname==='127.0.0.1')window.roadster.test={levelDestruction,setGoalFocus,finishLevelDestruction,tossHoop,semiTrailer,duel,duelUI,maybachDummy,quality,get trafficLOD(){return trafficLOD;},get cityShells(){return cityShells;},boundary,togglePerspective,setFootCamera:(yaw,pitch=.28)=>{orbitYaw=yaw;orbitPitch=pitch;camInit=false;},streetLife,environment,terrain,lots,scoring,failures,chassis,world,vehicle,obstacles,crowd,traffic,get car(){return car;},get objective(){return objective;},get destructionLoop(){return destructionLoop;},get contracts(){return contracts;},get spec(){return spec;},get secretView(){return secretView;},selectVehicle,detach,explode,restore,recover,step:physics,loadLevel,assessParking,setGoldenMode,handleHit,finish,setCamera,setGear:v=>selectedGear=v,director,continueWreck,startReplay,updateWheel,updateVisualWheelSpin,setMode:v=>mode=v,setState:v=>state=v,teleport:(x,z,yaw=0,v=0)=>{chassis.position.set(view().ox+x,Math.max(1,spec.offset+.15),z);chassis.quaternion.setFromEuler(0,yaw,0);const f=chassis.quaternion.vmult(forwardAxis,physicsForward);chassis.velocity.set(f.x*v,0,f.z*v);chassis.angularVelocity.setZero();chassis.aabbNeedsUpdate=true;chassis.wakeUp();resetVehicleMotion();},input:keys};
+
+function arriveFromAfterHours(){
+ if(!clubArrival)return;
+ if(!loadLevel(LOTS.length))return;
+ start();streetLife.refreshDoors();
+ const club=view().buildings.find(b=>b.type==='club');
+ if(!club?.door){notify('Club entrance unavailable');return}
+ const door=club.door,nx=door.nx,nz=door.nz;
+ chassis.position.set(door.x+nx*10,Math.max(1.05,spec.offset+.2),door.z+nz*10);
+ chassis.velocity.setZero();chassis.angularVelocity.setZero();chassis.aabbNeedsUpdate=true;resetVehicleMotion();
+ if(streetLife.exitVehicle()){
+  streetLife.body.position.set(door.x+nx*2.1,1.05,door.z+nz*2.1);
+  streetLife.body.velocity.setZero();streetLife.body.aabbNeedsUpdate=true;
+  orbitYaw=Math.atan2(nx,nz);camInit=false;
+ }
+ notify('Outside Mango After Hours · enter the club door to return',5);
+}
+arriveFromAfterHours();
+
 }
 
