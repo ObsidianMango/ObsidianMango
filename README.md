@@ -39,6 +39,7 @@ If you like nostalgia, pixel art, dark humor, and weirdly useful tools, you’re
 
 | **App Name**            | **Links**                                                                 | **Description**                                         |
 |-------------------------|---------------------------------------------------------------------------|---------------------------------------------------------|
+| **Mango Windows 3.1** | 🖥️ [Open the desktop](https://obsidianmango.github.io/ObsidianMango/mango-desktop/) | Interactive Windows 3.1 Program Manager with 241 organized app/game shortcuts, saved settings, search, Favorites, custom groups and phone controls. |
 | **Magic Aquarium Life** | 🐠 [Open the life counter](https://obsidianmango.github.io/ObsidianMango/aquarium-health/) | Commander life aquarium with feeding, growing fish and squid, a pearl shop, hunting piranhas, and shark attacks after heavy damage. |
 | **MangoWarz Classic** | 🥭 [Play the complete game](https://obsidianmango.github.io/ObsidianMango/mangowarz-classic/) | Full 30-day strategy edition with seeded markets, travel, finance, encounters, police combat, saves, original art, and offline PWA support. |
 | **MangoWarz** | 🥭 [Play](https://obsidianmango.github.io/ObsidianMango/mangowarz.html) | Mobile-first retro street-trading game with cities, price swings, inventory, and a scrolling news ticker. |
