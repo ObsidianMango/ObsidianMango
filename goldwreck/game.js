@@ -1,5 +1,6 @@
-import { Yard } from './scene.js';
-import { jobs, getJob, buildJob, key, medalFor, strike } from './jobs.js';
+import { Yard } from './scene.js?v=2';
+import { jobs, getJob, buildJob, key, medalFor, strike, explode } from './jobs.js?v=2';
+import { advance, isRemote, launch, redirect, remotes } from './ordnance.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -14,7 +15,7 @@ const toolButtons = $$('[data-tool]');
 const viewButtons = $$('[data-view]');
 const tools = toolButtons.map(button => button.dataset.tool);
 const views = viewButtons.map(button => button.dataset.view);
-const toolsByKey = { '1': 'hammer', '2': 'drill', '3': 'blast' };
+const toolsByKey = Object.fromEntries(tools.map((tool, i) => [String(i + 1), tool]));
 const storageKey = 'goldwreck.progress.v1';
 const number = new Intl.NumberFormat();
 const coarsePointer = matchMedia('(pointer: coarse)');
@@ -66,7 +67,7 @@ function play(sound, loot = 0) {
     } else if (sound === 'win') {
       [392, 494, 587, 784].forEach((hz, i) => tone(hz, hz * .99, .25, 'triangle', .10, i * .085));
     } else {
-      const heavy = sound === 'blast';
+      const heavy = ['blast', 'grenade', 'drone', 'tank'].includes(sound);
       const drill = sound === 'drill';
       tone(heavy ? 115 : drill ? 290 : 182, heavy ? 32 : drill ? 65 : 48, heavy ? .29 : .13, drill ? 'sawtooth' : 'triangle', .18);
       tone(heavy ? 46 : 91, 27, heavy ? .33 : .095, 'sine', .17);
@@ -92,8 +93,9 @@ function reset(index, contract = saved.contract) {
   const job = getJob(index, contract);
   const voxels = buildJob(job);
   run = {
-    index, job, hits: job.hits, score: 0, gold: 0, scans: 3, combo: 0, tool: 'hammer', ended: false,
-    stock: { hammer: Infinity, drill: job.drills, blast: job.charges },
+    index, job, hits: job.hits, score: 0, gold: 0, combo: 0, tool: 'hammer', ended: false,
+    stock: { hammer: Infinity, drill: job.drills, blast: job.charges, grenade: 10, drone: 6, tank: 5 },
+    munitions: new Set(), remote: null,
     initialBlocks: voxels.length,
     cells: new Map(voxels.map(voxel => [key(voxel.x, voxel.y, voxel.z), voxel])),
   };
@@ -107,7 +109,6 @@ function reset(index, contract = saved.contract) {
   $('#job-name').textContent = job.name;
   goldBar.setAttribute('aria-valuemax', job.gold);
   $('.gold-progress em').style.left = `calc(${job.quota / job.gold * 100}% - 1px)`;
-  $('#aim-hint').textContent = coarsePointer.matches ? 'Tap blocks to smash · Drag to rotate' : 'Click blocks to smash · Drag to rotate';
   setView('iso', true);
   renderStats();
 }
@@ -117,25 +118,31 @@ function scoreKey() {
 }
 
 function renderStats() {
-  const { job, gold, hits, score, scans, ended, tool, stock } = run;
+  const { job, gold, hits, score, ended, tool, stock, remote, munitions } = run;
   $('#gold').textContent = gold;
   $('#total').textContent = `/ ${job.gold}`;
   $('#hits').textContent = hits;
   $('#score').textContent = number.format(score);
-  $('#scans').textContent = scans;
+  $('#scans').textContent = yard.scanActive ? 'On' : 'Off';
+  $('#aim-hint').textContent = remote ? (coarsePointer.matches ? 'Tap to steer' : 'Click to steer')
+    : coarsePointer.matches ? 'Tap blocks to smash · Drag to rotate' : 'Click blocks to smash · Drag to rotate';
+  $('#remote-bar').hidden = !remote;
+  $('#remote-status').textContent = remote ? `${remotes[remote.type].label} · ${remote.waiting ? 'Holding' : 'Moving'}` : '';
+  $('#follow').setAttribute('aria-pressed', Boolean(yard.following));
   $('#cleared').textContent = `${Math.floor((1 - run.cells.size / run.initialBlocks) * 100)}%`;
   $('#quota').textContent = gold >= job.quota ? 'Quota met' : `Quota ${job.quota} gold`;
   const best = saved.scores[scoreKey()]?.score;
   $('#best').textContent = best ? `Best ${number.format(best)}` : 'Best —';
   goldBar.setAttribute('aria-valuenow', gold);
   goldBar.querySelector('i').style.width = `${gold / job.gold * 100}%`;
-  $('#cash').disabled = gold < job.quota || ended;
-  $('#scanner').disabled = !scans || ended || !hits;
-  $('#scanner').classList.toggle('active', yard.scanUntil > performance.now());
+  $('#cash').disabled = gold < job.quota || ended || Boolean(munitions.size);
+  $('#scanner').disabled = ended;
+  $('#scanner').setAttribute('aria-pressed', yard.scanActive);
+  $('#scanner').classList.toggle('active', yard.scanActive);
   for (const button of toolButtons) {
     const id = button.dataset.tool;
     button.setAttribute('aria-pressed', tool === id);
-    button.disabled = !stock[id] || ended || !hits;
+    button.disabled = !stock[id] || ended || !hits || Boolean(remote);
     button.querySelector('b').textContent = id === 'hammer' ? '∞' : stock[id];
   }
 }
@@ -159,19 +166,18 @@ function popup(voxel, label, gold = false) {
 }
 
 function scan() {
-  if (!run.scans || !run.hits || run.ended || modal.open) return;
-  run.scans--;
-  yard.scan(run.cells);
-  play('scan');
-  notify('Gold marked for 7 seconds');
+  if (run.ended || modal.open) return;
+  if (yard.scanActive) {
+    yard.clearScan();
+  } else {
+    yard.scan(run.cells);
+    play('scan');
+  }
   renderStats();
-  setTimeout(() => {
-    if (performance.now() >= yard.scanUntil) $('#scanner').classList.remove('active');
-  }, 7020);
 }
 
 function chooseTool(id) {
-  if (run.ended || !run.hits || !run.stock[id]) return;
+  if (run.ended || !run.hits || !run.stock[id] || run.remote) return;
   run.tool = id;
   renderStats();
 }
@@ -183,40 +189,89 @@ function setView(view, immediate = false) {
 }
 
 function shoot(x, y) {
-  if (run.ended || !run.hits || modal.open) return;
+  if (run.ended || modal.open || (!run.hits && !run.remote)) return;
   const path = yard.aim(x, y, run.cells);
-  if (!path.length) return;
+  if (run.remote) {
+    const target = yard.aimPoint(path);
+    if (target) {
+      redirect(run.remote, target);
+      renderStats();
+    }
+    return;
+  }
+
   const tool = run.tool;
-  const before = run.gold;
+  const projectile = tool === 'grenade' || isRemote(tool);
+  const target = projectile ? yard.aimPoint(path) : path[0]?.voxel;
+  if (!target) return;
   run.hits--;
   run.stock[tool]--;
-  const { target, broken, damaged, collapsed } = strike(run.cells, path, tool);
+  if (!run.stock[tool]) run.tool = 'hammer';
+  if (!projectile) {
+    showImpact(strike(run.cells, path, tool), tool);
+    return;
+  }
+
+  const item = launch(tool, target, run.job, yard.azimuth);
+  run.munitions.add(item);
+  yard.drawOrdnance(item);
+  if (isRemote(tool)) run.remote = item;
+  renderStats();
+}
+
+function showImpact({ target, broken, damaged, collapsed, blasts }, tool) {
+  const before = run.gold;
   damaged.forEach(voxel => yard.damage(voxel));
   const loot = broken.filter(voxel => voxel.kind === 'gold').length;
   run.gold += loot;
   run.combo = loot ? Math.min(5, run.combo + 1) : 0;
   const points = broken.length * 7 + loot * 400 * Math.max(1, run.combo) + collapsed * 8;
   run.score += points;
-  if (broken.length) yard.destroy(broken, target, run.cells, tool);
+  yard.destroy(broken, target, run.cells, tool, blasts);
   if (loot) {
     const combo = run.combo > 1 ? ` · ${run.combo}× streak` : '';
     popup(target, `+${loot} GOLD${combo}`, true);
   } else if (collapsed > 3) {
     popup(target, `${collapsed} BLOCK COLLAPSE`);
+  } else if (blasts.length > 1) {
+    popup(target, `${blasts.length} BARREL CHAIN`);
   } else if (broken.length) {
     popup(target, `+${number.format(points)}`);
   }
-  play(tool, loot);
-  if (!run.stock[tool]) run.tool = 'hammer';
-  if (before < run.job.quota && run.gold >= run.job.quota && run.gold < run.job.gold) notify('Quota met · Cash out or keep digging');
+  play(blasts.length && (tool === 'hammer' || tool === 'drill') ? 'blast' : tool, loot);
+  if (run.gold >= run.job.gold && before < run.job.gold) {
+    notify('All gold recovered · Cash out or keep smashing');
+  } else if (before < run.job.quota && run.gold >= run.job.quota) {
+    notify('Quota met · Cash out or keep digging');
+  }
   renderStats();
   yard.highlight(lastAim ? yard.aim(lastAim.x, lastAim.y, run.cells)[0]?.voxel : null);
-  if (run.gold >= run.job.gold || !run.hits) {
-    settleTimeout = setTimeout(() => {
-      if (!modal.open) finish();
-    }, 850);
+  if (!run.hits && !run.munitions.size) {
+    clearTimeout(settleTimeout);
+    settleTimeout = setTimeout(() => { if (!modal.open) finish(); }, 850);
   }
 }
+
+function detonate(item) {
+  if (!item || run.ended || modal.open || !run.munitions.delete(item)) return;
+  if (run.remote === item) run.remote = null;
+  yard.removeOrdnance(item);
+  const { x, y, z } = item.position;
+  showImpact(explode(run.cells, { x, y: y + .5, z }, item.type), item.type);
+}
+
+yard.simulate = dt => {
+  if (!run || run.ended || modal.open) return;
+  for (const item of run.munitions) {
+    const wasWaiting = item.waiting;
+    if (advance(item, dt, run.cells)) {
+      detonate(item);
+    } else {
+      if (item.type !== 'tank' || !item.waiting || !wasWaiting) yard.drawOrdnance(item);
+      if (item === run.remote && item.waiting !== wasWaiting) renderStats();
+    }
+  }
+};
 
 function openModal(title) {
   $('#modal-title').textContent = title;
@@ -234,7 +289,7 @@ function action(label, callback, primary = false) {
 }
 
 function finish() {
-  if (run.ended) return;
+  if (run.ended || run.munitions.size) return;
   clearTimeout(settleTimeout);
   const { job, gold, index, hits } = run;
   const medal = medalFor(gold, job.gold, job.quota);
@@ -302,15 +357,16 @@ function jobBoard() {
 function showHelp() {
   openModal('How to play');
   body.innerHTML = `
-    <p>Smash the building to recover hidden gold. Meet the quota and cash out, or go after every stash for a gold medal. Find gold on consecutive hits to build a scoring streak.</p>
+    <p>Smash the building to recover hidden gold. Cash out at quota, go for every stash, or keep smashing until your hits run out.</p>
     <dl class="help-grid">
       <dt>Click / tap</dt><dd>Hit a block. Drag to orbit the site.</dd>
       <dt>Arrows / Space</dt><dd>Aim and hit when the site has focus.</dd>
-      <dt>1 / 2 / 3</dt><dd>Hammer, drill, and explosive charge.</dd>
-      <dt>R</dt><dd>Mark the remaining stashes for 7 seconds.</dd>
+      <dt>1–6</dt><dd>Select a tool, grenade, drone, or track bot.</dd>
+      <dt>R</dt><dd>Toggle gold markers.</dd>
+      <dt>F</dt><dd>Detonate the active drone or bot.</dd>
       <dt>V / Q / E</dt><dd>Change view or rotate the camera.</dd>
     </dl>
-    <p>Drills bore through layers along your line of aim. Charges damage blocks around the impact. Disconnected sections come down, including any gold inside.</p>`;
+    <p>Grenades arc toward your target. Tap or click again after launching a drone or bot to steer it. Remotes explode on impact or when you detonate them. Drive a bot through an open doorway for a blast from inside.</p>`;
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
   actions.append(action('Back to site', () => modal.close(), true));
@@ -390,6 +446,8 @@ document.addEventListener('keydown', event => {
     }
   } else if (!event.repeat && toolsByKey[input]) {
     chooseTool(toolsByKey[input]);
+  } else if (!event.repeat && input === 'f' && run.remote) {
+    detonate(run.remote);
   } else if (!event.repeat && input === 'r') {
     scan();
   } else if (!event.repeat && input === 'v') {
@@ -411,6 +469,11 @@ for (const button of $$('[data-turn]')) {
 $('#retry').addEventListener('click', () => reset(run.index, run.job.contract));
 $('#cash').addEventListener('click', finish);
 $('#scanner').addEventListener('click', scan);
+$('#detonate').addEventListener('click', () => detonate(run.remote));
+$('#follow').addEventListener('click', () => {
+  yard.follow(yard.following ? null : run.remote);
+  renderStats();
+});
 $('#jobs-button').addEventListener('click', jobBoard);
 $('#help').addEventListener('click', showHelp);
 $('#close-modal').addEventListener('click', () => modal.close());
@@ -421,7 +484,7 @@ $('#sound').addEventListener('click', () => {
   play('scan');
 });
 modal.addEventListener('close', () => {
-  if (!run.ended && (run.gold >= run.job.gold || !run.hits)) finish();
+  if (!run.ended && !run.hits && !run.munitions.size) finish();
 });
 arena.addEventListener('contextmenu', event => event.preventDefault());
 

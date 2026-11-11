@@ -1,6 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js';
-import { SoftwareRenderer } from './software.js';
-import { key, palettes, randomFrom } from './jobs.js';
+import { SoftwareRenderer } from './software.js?v=2';
+import { key, palettes, randomFrom } from './jobs.js?v=2';
 
 const box = new THREE.BoxGeometry();
 const blockMaterial = new THREE.MeshLambertMaterial();
@@ -11,6 +11,21 @@ const shade = new THREE.Color();
 const rayBounds = new THREE.Box3(new THREE.Vector3(-14.5, 0, -10.5), new THREE.Vector3(14.5, 20, 10.5));
 const rayEntry = new THREE.Vector3();
 const point = new THREE.Vector3();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -.5);
+const remoteTarget = new THREE.Vector3();
+const hulls = {
+  grenade: [[0, 0, 0, .52, .51, .55, 0x3c5d35], [0, .28, 0, .26, .17, .24, 0xf0ac54],
+    [0, .41, 0, .12, .1, .11, 0xff6140]],
+  drone: [[0, 0, 0, .66, .31, .82, 0x263e35], [0, .2, .29, .38, .17, .35, 0x69d2a0],
+    [0, -.20, .05, .37, .24, .42, 0xe4844b], [0, 0, .33, 1.57, .12, .18, 0x465f50],
+    [0, 0, -.32, 1.57, .12, .18, 0x465f50],
+    ...[-.68, .68].flatMap(x => [-.34, .34].flatMap(z => [[x, .06, z, .26, .18, .25, 0x36463b],
+      [x, .19, z, .65, .045, .17, 0xb6c4a2], [x, .19, z, .17, .045, .65, 0xb6c4a2]]))],
+  tank: [[0, 0, 0, .96, .40, 1.39, 0x62734a], [0, .27, 0, .59, .25, .71, 0x324639],
+    [0, .36, .45, .19, .12, .64, 0x465c47], [0, .08, .67, .56, .25, .22, 0xe47e48],
+    ...[-.49, .49].flatMap(x => [[x, -.10, 0, .28, .40, 1.58, 0x293832],
+      ...[-.55, -.29, 0, .29, .55].map(z => [x * 1.25, -.10, z, .08, .21, .17, 0x879579])])],
+};
 const maxDebris = 580;
 const tau = Math.PI * 2;
 const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.55);
@@ -132,6 +147,10 @@ export class Yard {
     this.scene.fog = new THREE.Fog(0x44574d, 42, 92);
     this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, .2, 150);
     this.look = new THREE.Vector3();
+    this.focus = new THREE.Vector3();
+    this.following = null;
+    this.ordnance = new Map();
+    this.scanActive = false;
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this.azimuth = .63;
@@ -237,6 +256,9 @@ export class Yard {
       }
     }
     this.clearScan();
+    for (const item of this.ordnance.keys()) this.removeOrdnance(item);
+    this.following = null;
+    this.camera.zoom = 1;
     this.debris.length = 0;
     this.debrisMesh.count = 0;
     for (const ring of this.rings) {
@@ -268,19 +290,21 @@ export class Yard {
     let nuggetIndex = 0;
     for (const cell of cells) {
       const isGold = cell.kind === 'gold';
-      cell.color = new THREE.Color(isGold ? 0xffb12c : palette[cell.kind]).multiplyScalar(cell.shade);
+      cell.color = new THREE.Color(isGold ? 0xffb12c : cell.kind === 'powder' ? 0xf27642 : palette[cell.kind]).multiplyScalar(cell.shade);
       if (isGold) {
         this.blocks.setMatrixAt(cell.id, hiddenMatrix);
         this.blocks.setColorAt(cell.id, cell.color);
         cell.nuggetIndex = nuggetIndex++;
         setBox(this.nuggets, cell.nuggetIndex, cell.x, cell.y - .52, cell.z, .82, .68, .82, cell.color);
       } else {
-        const size = cell.kind === 'glass' ? .925 : .965;
-        setBox(this.blocks, cell.id, cell.x, cell.y - .5, cell.z, size, size, size, cell.color);
+        const size = cell.kind === 'glass' ? .925 : cell.kind === 'powder' ? .71 : .965;
+        const height = cell.kind === 'powder' ? .79 : size;
+        setBox(this.blocks, cell.id, cell.x, cell.y - 1 + height / 2, cell.z, size, height, size, cell.color);
       }
     }
     this.renderer.shadowMap.needsUpdate = true;
     this.setView('iso', true);
+    this.focus.copy(this.look);
   }
 
   buildGround(job) {
@@ -344,6 +368,54 @@ export class Yard {
     return trace(this.raycaster.ray, cells);
   }
 
+  aimPoint(path) {
+    const voxel = path[0]?.voxel;
+    if (voxel) return { x: voxel.x, y: voxel.y - .5, z: voxel.z };
+    if (!this.raycaster.ray.intersectPlane(groundPlane, point)) return null;
+    if (Math.abs(point.x) > this.job.w / 2 + 4 || Math.abs(point.z) > this.job.d / 2 + 5) return null;
+    return { x: point.x, y: point.y, z: point.z };
+  }
+
+  drawOrdnance(item) {
+    const parts = hulls[item.type];
+    let mesh = this.ordnance.get(item);
+    if (!mesh) {
+      mesh = batch(this.scene, box, blockMaterial, parts.length);
+      this.ordnance.set(item, mesh);
+      parts.forEach((part, i) => mesh.setColorAt(i, shade.set(part[6])));
+    }
+    const { position, type } = item;
+    const yaw = item.yaw + (type === 'grenade' ? item.age * 10 : 0);
+    const sine = Math.sin(yaw);
+    const cosine = Math.cos(yaw);
+    const hover = type === 'drone' ? Math.sin(item.age * 13) * .055 : 0;
+    parts.forEach(([x, y, z, sx, sy, sz], i) => {
+      dummy.position.set(position.x + x * cosine + z * sine, position.y + y + hover, position.z + z * cosine - x * sine);
+      dummy.rotation.set(type === 'grenade' ? item.age * 11 : 0, yaw, 0);
+      dummy.scale.set(sx, sy, sz);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    this.dirty = true;
+  }
+
+  removeOrdnance(item) {
+    const mesh = this.ordnance.get(item);
+    if (mesh) {
+      this.scene.remove(mesh);
+      mesh.dispose();
+      this.ordnance.delete(item);
+      this.dirty = true;
+    }
+    if (this.following === item) this.following = null;
+  }
+
+  follow(item) {
+    this.following = item;
+    this.dirty = true;
+  }
+
   highlight(voxel) {
     this.outline.visible = Boolean(voxel);
     if (voxel) this.outline.position.set(voxel.x, voxel.y - .5, voxel.z);
@@ -357,12 +429,13 @@ export class Yard {
 
   scan(cells) {
     this.clearScan();
-    this.scanUntil = performance.now() + 7000;
+    this.scanActive = true;
     for (const cell of cells.values()) {
       if (cell.kind !== 'gold') continue;
       const sprite = new THREE.Sprite(this.markerMaterial);
       sprite.position.set(cell.x, cell.y - .46, cell.z);
       sprite.renderOrder = 6;
+      sprite.scale.setScalar(.86);
       this.scene.add(sprite);
       this.markers.set(cell.id, sprite);
     }
@@ -372,7 +445,7 @@ export class Yard {
   clearScan() {
     for (const sprite of this.markers.values()) this.scene.remove(sprite);
     this.markers.clear();
-    this.scanUntil = 0;
+    this.scanActive = false;
     this.dirty = true;
   }
 
@@ -383,8 +456,9 @@ export class Yard {
     this.dirty = true;
   }
 
-  destroy(cells, origin, remaining, tool) {
+  destroy(cells, origin, remaining, tool, blasts = []) {
     const gold = cells.filter(cell => cell.kind === 'gold');
+    const explosive = ['blast', 'grenade', 'drone', 'tank'].includes(tool);
     for (const cell of cells) {
       if (cell.kind === 'gold') {
         this.nuggets.setMatrixAt(cell.nuggetIndex, hiddenMatrix);
@@ -407,25 +481,34 @@ export class Yard {
     for (let i = 0; i < cells.length; i += Math.max(1, Math.ceil(cells.length / 185))) {
       const cell = cells[i];
       if (cell.kind === 'gold') continue;
-      this.addDebris(cell, origin, false, tool === 'blast' ? 1.55 : 1);
+      this.addDebris(cell, origin, false, explosive ? 1.55 : 1);
       if (cells.length < 38) this.addDebris(cell, origin, false, .8);
     }
     for (const cell of gold) {
       for (let i = 0; i < 12; i++) this.addDebris(cell, origin, true, 1);
     }
     if (this.debris.length > maxDebris) this.debris.splice(0, this.debris.length - maxDebris);
-    this.shake = this.reduceMotion ? 0 : Math.min(.55, .06 + cells.length * .002 + (tool === 'blast' ? .18 : 0));
-    if (tool === 'blast' || gold.length) {
-      const mesh = new THREE.Mesh(this.ringGeometry, new THREE.MeshBasicMaterial({
-        color: gold.length ? 0xffcb56 : 0xf78b5b, transparent: true, opacity: .75, side: THREE.DoubleSide, depthWrite: false,
-      }));
-      mesh.userData.ring = true;
-      mesh.rotation.x = -Math.PI / 2;
-      mesh.position.set(origin.x, origin.y - .55, origin.z);
-      this.scene.add(mesh);
-      this.rings.push({ mesh, age: 0 });
-    }
+    if (explosive) this.shockwave(origin, tool === 'tank' ? 1.55 : 1.16, gold.length ? 0xffcc55 : 0xff8b57);
+    if (!explosive && gold.length) this.shockwave(origin, .85, 0xffcc55);
+    for (const barrel of blasts) this.shockwave(barrel, .85, 0xffa75e);
+    this.shake = this.reduceMotion ? 0 : Math.min(.65, .06 + cells.length * .002 + (explosive ? .22 : 0));
     this.dirty = true;
+  }
+
+  shockwave(origin, strength, color) {
+    const mesh = new THREE.Mesh(this.ringGeometry, new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: .75, side: THREE.DoubleSide, depthWrite: false,
+    }));
+    mesh.userData.ring = true;
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(origin.x, origin.y - .48, origin.z);
+    this.scene.add(mesh);
+    this.rings.push({ mesh, strength, age: 0 });
+    for (let i = 0; i < 18; i++) {
+      shade.set(i % 3 ? 0xffae45 : 0xff6639);
+      this.addDebris({ ...origin, color: shade.clone() }, origin, false, strength * 1.45);
+    }
+    if (this.debris.length > maxDebris) this.debris.splice(0, this.debris.length - maxDebris);
   }
 
   addDebris(cell, origin, gold, strength) {
@@ -447,41 +530,49 @@ export class Yard {
   }
 
   frame(now) {
-    const dt = Math.min(.04, (now - this.lastFrame) / 1000);
+    const elapsed = (now - this.lastFrame) / 1000;
+    const dt = Math.min(.04, elapsed);
     this.lastFrame = now;
+    this.simulate?.(Math.min(.16, elapsed));
+    const desired = this.following
+      ? remoteTarget.set(this.following.position.x, this.following.position.y + 1.1, this.following.position.z)
+      : this.look;
+    const zoom = this.following ? 1.62 : 1;
+    const refocus = this.focus.distanceToSquared(desired) > .0001 || Math.abs(this.camera.zoom - zoom) > .001;
+    if (refocus) {
+      const ease = this.reduceMotion ? 1 : 1 - Math.exp(-8 * dt);
+      this.focus.lerp(desired, ease);
+      this.camera.zoom += (zoom - this.camera.zoom) * ease;
+      this.camera.updateProjectionMatrix();
+    }
     const motion = Math.abs(this.goalAzimuth - this.azimuth) + Math.abs(this.goalTilt - this.tilt) > .0002;
     if (motion) {
       const easing = 1 - Math.exp(-15 * dt);
       this.azimuth += (this.goalAzimuth - this.azimuth) * easing;
       this.tilt += (this.goalTilt - this.tilt) * easing;
     }
-    if (this.dirty || motion || this.debris.length || this.rings.length || this.scanUntil || this.shake > 0) {
+    if (this.dirty || motion || refocus || this.debris.length || this.rings.length || this.shake > 0) {
       this.dirty = false;
       const y = Math.sin(this.tilt) * 43;
       const r = Math.cos(this.tilt) * 43;
       const kick = this.view === 'top' ? 0 : this.shake * Math.sin(now * .091);
       this.shake = Math.max(0, this.shake - dt * 2.4);
       this.camera.position.set(
-        this.look.x + Math.sin(this.azimuth) * r,
-        this.look.y + y,
-        this.look.z + Math.cos(this.azimuth) * r,
+        this.focus.x + Math.sin(this.azimuth) * r,
+        this.focus.y + y,
+        this.focus.z + Math.cos(this.azimuth) * r,
       );
-      this.camera.lookAt(this.look);
+      this.camera.lookAt(this.focus);
       this.camera.translateX(kick);
       this.camera.translateY(kick * .24);
       this.camera.updateMatrixWorld();
-      this.updateEffects(now, dt);
+      this.updateEffects(dt);
       this.renderer.render(this.scene, this.camera);
     }
     requestAnimationFrame(time => this.frame(time));
   }
 
-  updateEffects(now, dt) {
-    if (this.scanUntil && now >= this.scanUntil) this.clearScan();
-    if (this.scanUntil) {
-      const pulse = this.reduceMotion ? .88 : .87 + Math.sin(now * .012) * .11;
-      for (const sprite of this.markers.values()) sprite.scale.setScalar(pulse);
-    }
+  updateEffects(dt) {
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const ring = this.rings[i];
       ring.age += dt;
@@ -490,7 +581,7 @@ export class Yard {
         ring.mesh.material.dispose();
         this.rings.splice(i, 1);
       } else {
-        ring.mesh.scale.setScalar(.35 + ring.age * 10);
+        ring.mesh.scale.setScalar((.35 + ring.age * 10) * ring.strength);
         ring.mesh.material.opacity = .76 * (1 - ring.age / .46);
       }
     }

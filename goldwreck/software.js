@@ -152,7 +152,7 @@ export class SoftwareRenderer {
     for (const mesh of overlays) {
       const { x, y, z } = mesh.position;
       const [px, py] = this.transform(x, y, z);
-      const scale = this.width / (camera.right - camera.left) * mesh.scale.x;
+      const scale = this.width * camera.zoom / (camera.right - camera.left) * mesh.scale.x;
       if (mesh.isSprite) {
         ctx.drawImage(mesh.material.map.image, px - scale / 2, py - scale / 2, scale, scale);
       } else if (mesh.isLineSegments) {

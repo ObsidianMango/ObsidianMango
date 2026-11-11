@@ -1,9 +1,9 @@
 export const jobs = [
-  { name: 'The Pawn Shop', sign: 'PAWN', theme: 0, w: 13, d: 9, h: 7, gold: 6, quota: 4, hits: 22, drills: 3, charges: 3, seed: 802 },
-  { name: 'Dockside Freight', sign: 'FREIGHT', theme: 1, w: 17, d: 9, h: 8, gold: 8, quota: 5, hits: 25, drills: 4, charges: 3, seed: 616 },
-  { name: 'Bullion Exchange', sign: 'BULLION', theme: 2, w: 15, d: 11, h: 11, gold: 9, quota: 6, hits: 28, drills: 4, charges: 4, seed: 330 },
-  { name: 'Lucky Seven Hotel', sign: 'LUCKY 7', theme: 3, w: 13, d: 11, h: 13, gold: 10, quota: 7, hits: 30, drills: 5, charges: 4, seed: 966 },
-  { name: 'Foundry No. 9', sign: 'FOUNDRY', theme: 4, w: 17, d: 11, h: 9, gold: 11, quota: 8, hits: 32, drills: 5, charges: 5, seed: 281 },
+  { name: 'The Pawn Shop', sign: 'PAWN', theme: 0, w: 13, d: 9, h: 7, gold: 6, quota: 3, hits: 36, drills: 7, charges: 7, seed: 802 },
+  { name: 'Dockside Freight', sign: 'FREIGHT', theme: 1, w: 17, d: 9, h: 8, gold: 8, quota: 4, hits: 39, drills: 8, charges: 8, seed: 616 },
+  { name: 'Bullion Exchange', sign: 'BULLION', theme: 2, w: 15, d: 11, h: 11, gold: 9, quota: 5, hits: 42, drills: 9, charges: 8, seed: 330 },
+  { name: 'Lucky Seven Hotel', sign: 'LUCKY 7', theme: 3, w: 13, d: 11, h: 13, gold: 10, quota: 5, hits: 45, drills: 9, charges: 9, seed: 966 },
+  { name: 'Foundry No. 9', sign: 'FOUNDRY', theme: 4, w: 17, d: 11, h: 9, gold: 11, quota: 6, hits: 48, drills: 10, charges: 10, seed: 281 },
 ];
 
 export const materials = {
@@ -15,6 +15,7 @@ export const materials = {
   steel: { hp: 2 },
   crate: { hp: 1 },
   gold: { hp: 1 },
+  powder: { hp: 1 },
 };
 
 export const palettes = [
@@ -149,6 +150,12 @@ export function buildJob(job) {
     if (y + 1 < job.h) put(x, y + 1, z, shell);
   }
   for (const location of used) put(...location.split(',').map(Number), 'gold');
+  const barrelSites = [[0, 2, zMax - 2], [0, 2, -zMax + 1], [-xMax + 1, 2, 0], [xMax - 1, 2, 0],
+    [-2, 5, 1], [2, 5, -1], [-2, 8, 1], [2, 8, -1], [0, 11, 0]];
+  for (const [x, y, z] of barrelSites) {
+    const base = cells.get(key(x, y - 1, z));
+    if (y < job.h && base && !cells.has(key(x, y, z))) put(x, y, z, 'powder');
+  }
   for (let z = -zMax + 1; z < zMax; z++) {
     for (let x = -xMax + 1; x < xMax; x++) {
       if (random() < .065 && !cells.has(key(x, 2, z))) put(x, 2, z, 'crate');
@@ -186,33 +193,59 @@ export function medalFor(recovered, total, quota) {
   return recovered >= quota ? 1 : 0;
 }
 
+const impactRadius = { hammer: 1.46, blast: 3.85, grenade: 3.5, drone: 4.25, tank: 5.15, powder: 2.95 };
+
 export function strike(cells, trace, tool) {
-  const target = trace[0].voxel;
+  return resolveImpact(cells, trace[0].voxel, tool, trace);
+}
+
+export function explode(cells, target, tool) {
+  return resolveImpact(cells, target, tool);
+}
+
+function resolveImpact(cells, target, tool, trace = []) {
   const broken = [];
-  const damaged = [];
+  const damaged = new Set();
+  const blasts = [];
   function hit(cell, power) {
     cell.hp -= power;
     if (cell.hp > 0) {
-      damaged.push(cell);
-    } else {
-      cells.delete(key(cell.x, cell.y, cell.z));
-      broken.push(cell);
+      damaged.add(cell);
+      return;
+    }
+    damaged.delete(cell);
+    cells.delete(key(cell.x, cell.y, cell.z));
+    broken.push(cell);
+    if (cell.kind === 'powder') blasts.push(cell);
+  }
+
+  function hitArea(center, radius, strength) {
+    const squared = radius * radius;
+    const core = squared * .72;
+    for (const cell of cells.values()) {
+      const distance = (cell.x - center.x) ** 2 + (cell.y - center.y) ** 2 + (cell.z - center.z) ** 2;
+      if (distance <= squared) hit(cell, distance <= core ? strength : 1);
     }
   }
 
   if (tool === 'drill') {
     for (const { voxel, distance } of trace) {
-      if (distance > 7.4) break;
+      if (distance > 8) break;
       hit(voxel, 2);
     }
   } else {
-    const radius = tool === 'blast' ? 2.95 : 1.05;
-    for (const cell of cells.values()) {
-      const distance = Math.hypot(cell.x - target.x, cell.y - target.y, cell.z - target.z);
-      if (distance <= radius) hit(cell, distance === 0 || (tool === 'blast' && distance < 2.3) ? 2 : 1);
-    }
+    hitArea(target, impactRadius[tool], 2);
   }
-  const fallen = unsupported(cells);
-  for (const cell of fallen) cells.delete(key(cell.x, cell.y, cell.z));
-  return { target, broken: broken.concat(fallen), damaged, collapsed: fallen.length };
+
+  let nextBlast = 0;
+  let collapsed = 0;
+  while (true) {
+    while (nextBlast < blasts.length) hitArea(blasts[nextBlast++], impactRadius.powder, 2);
+    const fallen = unsupported(cells);
+    if (!fallen.length) break;
+    collapsed += fallen.length;
+    for (const cell of fallen) hit(cell, cell.hp);
+    if (nextBlast === blasts.length) break;
+  }
+  return { target, broken, damaged: [...damaged], collapsed, blasts };
 }
