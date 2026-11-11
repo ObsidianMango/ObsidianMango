@@ -147,6 +147,7 @@ export class Yard {
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     Object.assign(sun.shadow.camera, { left: -23, right: 23, top: 23, bottom: -23, near: .5, far: 85 });
+    sun.shadow.camera.updateProjectionMatrix();
     sun.shadow.normalBias = .045;
     sun.shadow.bias = -.0003;
     this.scene.add(sun);
