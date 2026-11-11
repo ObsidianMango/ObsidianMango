@@ -1,9 +1,11 @@
+import { detachUnsupported } from './collapse.js';
+
 export const jobs = [
-  { name: 'The Pawn Shop', sign: 'PAWN', theme: 0, w: 13, d: 9, h: 7, gold: 6, quota: 3, hits: 36, drills: 7, charges: 7, seed: 802 },
-  { name: 'Dockside Freight', sign: 'FREIGHT', theme: 1, w: 17, d: 9, h: 8, gold: 8, quota: 4, hits: 39, drills: 8, charges: 8, seed: 616 },
-  { name: 'Bullion Exchange', sign: 'BULLION', theme: 2, w: 15, d: 11, h: 11, gold: 9, quota: 5, hits: 42, drills: 9, charges: 8, seed: 330 },
-  { name: 'Lucky Seven Hotel', sign: 'LUCKY 7', theme: 3, w: 13, d: 11, h: 13, gold: 10, quota: 5, hits: 45, drills: 9, charges: 9, seed: 966 },
-  { name: 'Foundry No. 9', sign: 'FOUNDRY', theme: 4, w: 17, d: 11, h: 9, gold: 11, quota: 6, hits: 48, drills: 10, charges: 10, seed: 281 },
+  { name: 'Border Checkpoint', sign: 'CHECKPOINT', theme: 0, w: 13, d: 9, h: 7, troops: 4, hits: 36, drills: 7, charges: 7, seed: 802 },
+  { name: 'Freight Depot', sign: 'FREIGHT', theme: 1, w: 17, d: 9, h: 8, troops: 5, hits: 39, drills: 8, charges: 8, seed: 616 },
+  { name: 'Municipal Block', sign: 'MUNICIPAL', theme: 2, w: 15, d: 11, h: 11, troops: 6, hits: 42, drills: 9, charges: 8, seed: 330 },
+  { name: 'Observation Post', sign: 'OBSERVATION', theme: 3, w: 13, d: 11, h: 13, troops: 7, hits: 45, drills: 9, charges: 9, seed: 966 },
+  { name: 'Industrial Works', sign: 'FOUNDRY', theme: 4, w: 17, d: 11, h: 9, troops: 7, hits: 48, drills: 10, charges: 10, seed: 281 },
 ];
 
 export const materials = {
@@ -14,24 +16,17 @@ export const materials = {
   glass: { hp: 1 },
   steel: { hp: 2 },
   crate: { hp: 1 },
-  gold: { hp: 1 },
+  beam: { hp: 2 },
+  sandbag: { hp: 2 },
   powder: { hp: 1 },
 };
 
 export const palettes = [
-  { brick: 0xb45d42, trim: 0xefd0a0, roof: 0x36726a, floor: 0x956d51, glass: 0x47978e, steel: 0x596665, crate: 0xa76b35 },
-  { brick: 0x4d8284, trim: 0xf4bf69, roof: 0x45636a, floor: 0x7e7259, glass: 0x7ebbb2, steel: 0x466771, crate: 0xa86736 },
+  { brick: 0x89715b, trim: 0xc4ad82, roof: 0x5d6e55, floor: 0x8c7657, glass: 0x527673, steel: 0x596665, crate: 0x92714c },
+  { brick: 0x577779, trim: 0xb5aa80, roof: 0x46575a, floor: 0x7e7259, glass: 0x719994, steel: 0x466771, crate: 0x9b7049 },
   { brick: 0xd2ab7a, trim: 0xf4deac, roof: 0x427469, floor: 0xa98161, glass: 0x589d9e, steel: 0x79827a, crate: 0x937046 },
-  { brick: 0x95647f, trim: 0xf5b87d, roof: 0x557770, floor: 0x906f69, glass: 0x77a6a8, steel: 0x5b536f, crate: 0xaa663c },
+  { brick: 0x896b66, trim: 0xbca183, roof: 0x566961, floor: 0x906f69, glass: 0x728d8d, steel: 0x565963, crate: 0x9a6f50 },
   { brick: 0x786b5e, trim: 0xefae4c, roof: 0x975342, floor: 0x7f6958, glass: 0x799f83, steel: 0x506b62, crate: 0xa46a39 },
-];
-
-const stashSites = [
-  [[-4, 2, 0], [4, 2, 1], [0, 2, -2], [-4, 5, -1], [4, 5, -1], [0, 5, 1]],
-  [[-6, 2, 1], [-3, 2, -1], [0, 2, -2], [3, 2, 1], [6, 2, -1], [-5, 5, -1], [0, 5, -1], [5, 5, 1]],
-  [[-5, 2, 2], [-2, 2, -2], [2, 2, -3], [5, 2, -2], [-5, 5, -2], [0, 5, 1], [5, 5, 1], [-3, 8, 0], [3, 8, -1]],
-  [[-4, 2, 1], [0, 2, -2], [4, 2, 1], [-4, 5, -2], [4, 5, 1], [-4, 8, 1], [0, 8, -2], [4, 8, 0], [-3, 11, -1], [3, 11, 1]],
-  [[-6, 2, 2], [-3, 2, -2], [0, 2, 1], [3, 2, -3], [6, 2, 1], [-5, 5, -2], [0, 5, 2], [5, 5, 0], [-4, 8, 1], [0, 8, -1], [4, 8, 1]],
 ];
 
 export function randomFrom(seed) {
@@ -48,8 +43,8 @@ export function getJob(index, contract = 1) {
   return { ...base, name: `Contract ${contract}`, seed: base.seed + contract * 913, contract };
 }
 
-export const key = (x, y, z) => `${x},${y},${z}`;
-export const neighbors = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+export { key } from './collapse.js';
+import { key } from './collapse.js';
 
 export function buildJob(job) {
   const cells = new Map();
@@ -73,11 +68,13 @@ export function buildJob(job) {
           const pane = !band && y > 1 && !corner && (side ? Math.abs(z) % 4 !== 2 : Math.abs(x) % 4 !== 2);
           const strong = corner && (job.theme === 2 || job.theme === 4) && !band;
           const foundation = y === 1 && (front ? Math.abs(x) <= doorWidth + 1 : corner);
-          put(x, y, z, strong || foundation ? 'steel' : pane ? 'glass' : band || corner ? 'trim' : 'brick');
+          const lintel = front && y === 4 && Math.abs(x) <= doorWidth + 1;
+          put(x, y, z, lintel ? 'beam' : strong || foundation ? 'steel' : pane ? 'glass' : band || corner ? 'trim' : 'brick');
         } else if (band) {
-          put(x, y, z, 'floor');
-        } else if (Math.abs(x) === xMax - 3 && (z === -zMax + 2 || z === zMax - 2)) {
-          put(x, y, z, job.theme === 2 ? 'steel' : 'brick');
+          const reinforced = job.theme === 4 && y === 4 && z >= zMax - 3 && Math.abs(x) <= 2;
+          put(x, y, z, reinforced ? 'beam' : 'floor');
+        } else if (x % 4 === 0 && z % 4 === 0 && !(x === 0 && z > 0)) {
+          put(x, y, z, job.theme === 2 || job.theme === 4 ? 'steel' : 'brick');
         }
       }
     }
@@ -89,7 +86,7 @@ export function buildJob(job) {
       const rise = Math.max(0, 3 - Math.floor(Math.abs(x) / 2));
       for (let z = -zMax; z <= zMax; z++) {
         for (let extra = 1; extra <= rise; extra++) {
-          if (extra === rise || Math.abs(z) === zMax) put(x, job.h + extra, z, extra === rise ? 'roof' : 'brick');
+          put(x, job.h + extra, z, extra === rise ? 'roof' : 'brick');
         }
       }
     } else {
@@ -113,8 +110,8 @@ export function buildJob(job) {
   if (job.theme === 0 || job.theme === 3) {
     const awningY = 4;
     for (let x = -xMax + 1; x < xMax; x++) {
-      put(x, awningY, zMax + 1, x % 2 ? 'trim' : 'roof');
-      if (Math.abs(x) < xMax - 1) put(x, awningY, zMax + 2, x % 2 ? 'trim' : 'roof');
+      put(x, awningY, zMax + 1, 'roof');
+      if (Math.abs(x) < xMax - 1) put(x, awningY, zMax + 2, 'beam');
     }
   }
   if (job.theme === 0 || job.theme === 4) {
@@ -126,30 +123,14 @@ export function buildJob(job) {
     }
   }
 
-  const flip = job.contract && random() < .5 ? -1 : 1;
-  const used = new Set();
-  for (const [originalX, y, originalZ] of stashSites[job.theme]) {
-    let x = originalX * flip;
-    let z = originalZ;
-    if (job.contract) {
-      const tryX = Math.max(2 - xMax, Math.min(xMax - 2, x + Math.floor(random() * 3) - 1));
-      const tryZ = Math.max(2 - zMax, Math.min(zMax - 2, z + Math.floor(random() * 3) - 1));
-      const occupied = stashSites[job.theme].some(([sx, sy, sz]) => sx * flip === tryX && sy === y && sz === tryZ);
-      if (!occupied && !used.has(key(tryX, y, tryZ))) {
-        x = tryX;
-        z = tryZ;
-      }
+  for (const side of [-1, 1]) {
+    for (let offset = 0; offset < 4; offset++) {
+      const x = side * (xMax - offset);
+      put(x, 1, zMax + 3, 'sandbag');
+      if (offset < 3) put(x, 2, zMax + 3, 'sandbag');
     }
-    used.add(key(x, y, z));
-    const shell = job.theme >= 2 && random() > .49 ? 'steel' : 'crate';
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        put(x + dx, y, z + dz, shell);
-      }
-    }
-    if (y + 1 < job.h) put(x, y + 1, z, shell);
   }
-  for (const location of used) put(...location.split(',').map(Number), 'gold');
+
   const barrelSites = [[0, 2, zMax - 2], [0, 2, -zMax + 1], [-xMax + 1, 2, 0], [xMax - 1, 2, 0],
     [-2, 5, 1], [2, 5, -1], [-2, 8, 1], [2, 8, -1], [0, 11, 0]];
   for (const [x, y, z] of barrelSites) {
@@ -165,45 +146,17 @@ export function buildJob(job) {
   return [...cells.values()].map((cell, id) => ({ ...cell, id, hp: materials[cell.kind].hp, shade: .87 + random() * .24 }));
 }
 
-export function unsupported(cells) {
-  const supported = new Set();
-  const queue = [];
-  for (const cell of cells.values()) {
-    if (cell.y === 1) {
-      supported.add(cell.id);
-      queue.push(cell);
-    }
-  }
-  for (let i = 0; i < queue.length; i++) {
-    const { x, y, z } = queue[i];
-    for (const [dx, dy, dz] of neighbors) {
-      const next = cells.get(key(x + dx, y + dy, z + dz));
-      if (next && !supported.has(next.id)) {
-        supported.add(next.id);
-        queue.push(next);
-      }
-    }
-  }
-  return [...cells.values()].filter(cell => !supported.has(cell.id));
-}
-
-export function medalFor(recovered, total, quota) {
-  if (recovered >= total) return 3;
-  if (recovered >= Math.ceil((total + quota) / 2)) return 2;
-  return recovered >= quota ? 1 : 0;
-}
-
-const impactRadius = { hammer: 1.46, blast: 3.85, grenade: 3.5, drone: 4.25, tank: 5.15, powder: 2.95 };
+export const impactRadius = { hammer: 1.46, blast: 3.85, grenade: 3.5, drone: 4.25, tank: 5.15, powder: 2.95 };
 
 export function strike(cells, trace, tool) {
   return resolveImpact(cells, trace[0].voxel, tool, trace);
 }
 
-export function explode(cells, target, tool) {
-  return resolveImpact(cells, target, tool);
+export function explode(cells, target, tool, radius = impactRadius[tool]) {
+  return resolveImpact(cells, target, tool, [], radius);
 }
 
-function resolveImpact(cells, target, tool, trace = []) {
+function resolveImpact(cells, target, tool, trace = [], radius = impactRadius[tool]) {
   const broken = [];
   const damaged = new Set();
   const blasts = [];
@@ -234,18 +187,11 @@ function resolveImpact(cells, target, tool, trace = []) {
       hit(voxel, 2);
     }
   } else {
-    hitArea(target, impactRadius[tool], 2);
+    hitArea(target, radius, 2);
   }
 
-  let nextBlast = 0;
-  let collapsed = 0;
-  while (true) {
-    while (nextBlast < blasts.length) hitArea(blasts[nextBlast++], impactRadius.powder, 2);
-    const fallen = unsupported(cells);
-    if (!fallen.length) break;
-    collapsed += fallen.length;
-    for (const cell of fallen) hit(cell, cell.hp);
-    if (nextBlast === blasts.length) break;
-  }
-  return { target, broken, damaged: [...damaged], collapsed, blasts };
+  for (let i = 0; i < blasts.length; i++) hitArea(blasts[i], impactRadius.powder, 2);
+  const falling = detachUnsupported(cells);
+  for (const group of falling) for (const cell of group) damaged.delete(cell);
+  return { target, broken, damaged: [...damaged], falling, blasts };
 }

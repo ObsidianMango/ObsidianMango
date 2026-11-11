@@ -1,7 +1,7 @@
-import { key } from './jobs.js?v=2';
+import { key } from './collapse.js';
 
 export const remotes = {
-  drone: { label: 'Flight drone', speed: 11.5, lift: 1.05 },
+  drone: { label: 'FPV drone', speed: 11.5, lift: 1.05 },
   tank: { label: 'Track bot', speed: 7.1, lift: .42 },
 };
 export const isRemote = type => Object.hasOwn(remotes, type);

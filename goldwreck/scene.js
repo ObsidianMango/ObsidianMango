@@ -1,10 +1,10 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js';
-import { SoftwareRenderer } from './software.js?v=2';
-import { key, palettes, randomFrom } from './jobs.js?v=2';
+import { SoftwareRenderer } from './software.js?v=3';
+import { key, palettes, randomFrom } from './jobs.js?v=3';
 
 const box = new THREE.BoxGeometry();
 const blockMaterial = new THREE.MeshLambertMaterial();
-const goldMaterial = new THREE.MeshStandardMaterial({ roughness: .32, metalness: .36, emissive: 0xc37918, emissiveIntensity: .25 });
+
 const hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 const dummy = new THREE.Object3D();
 const shade = new THREE.Color();
@@ -13,6 +13,16 @@ const rayEntry = new THREE.Vector3();
 const point = new THREE.Vector3();
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -.5);
 const remoteTarget = new THREE.Vector3();
+const soldierBounds = new THREE.Box3();
+const soldierParts = [
+  [-.125, .23, 0, .20, .41, .24, 0x455044], [.125, .23, 0, .20, .41, .24, 0x455044],
+  [-.125, .067, .05, .21, .13, .31, 0x302f29], [.125, .067, .05, .21, .13, .31, 0x302f29],
+  [0, .64, 0, .50, .51, .30, 0x798161], [0, .66, .13, .42, .34, .12, 0x555c3c],
+  [-.32, .66, .03, .17, .36, .19, 0x747c56], [.32, .66, .04, .17, .36, .19, 0x747c56],
+  [0, 1.025, .015, .32, .27, .29, 0xbc986e], [0, 1.163, .01, .37, .15, .34, 0x495647],
+  [-.374, .73, .08, .07, .09, .16, 0xdeb8a0], [.22, .64, .28, .12, .12, .65, 0x313630],
+];
+const rubbleLimit = 190;
 const hulls = {
   grenade: [[0, 0, 0, .52, .51, .55, 0x3c5d35], [0, .28, 0, .26, .17, .24, 0xf0ac54],
     [0, .41, 0, .12, .1, .11, 0xff6140]],
@@ -58,7 +68,7 @@ function signTexture(text) {
   ctx.lineWidth = 4;
   ctx.strokeRect(5, 5, 246, 54);
   ctx.fillStyle = '#ffdb91';
-  ctx.font = 'bold 40px monospace';
+  ctx.font = 'bold 36px monospace';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
   ctx.fillText(text, 128, 34, 226);
@@ -82,12 +92,12 @@ function markerTexture() {
   ctx.strokeStyle = '#181911';
   ctx.lineWidth = 8;
   ctx.stroke();
-  ctx.fillStyle = '#36291a';
+  ctx.fillStyle = '#411f22';
   ctx.fill();
-  ctx.strokeStyle = '#ffce5a';
+  ctx.strokeStyle = '#ff9e90';
   ctx.lineWidth = 4;
   ctx.stroke();
-  ctx.fillStyle = '#ffe390';
+  ctx.fillStyle = '#ffd1c4';
   ctx.fillRect(28, 20, 8, 24);
   ctx.fillRect(20, 28, 24, 8);
   return new THREE.CanvasTexture(canvas);
@@ -97,6 +107,7 @@ function trace(ray, cells) {
   if (!ray.intersectBox(rayBounds, rayEntry)) return [];
   const start = rayBounds.containsPoint(ray.origin) ? ray.origin : rayEntry;
   point.copy(start).addScaledVector(ray.direction, .0001);
+  const offset = point.distanceTo(ray.origin);
   const positions = [point.x + .5, point.y + 1, point.z + .5];
   const steps = [ray.direction.x, ray.direction.y, ray.direction.z];
   const cell = positions.map(Math.floor);
@@ -113,7 +124,7 @@ function trace(ray, cells) {
     const voxel = cells.get(key(...cell));
     if (voxel) {
       first ??= distance;
-      found.push({ voxel, distance: distance - first });
+      found.push({ voxel, distance: distance - first, rayDistance: distance + offset });
     }
     const axis = cross[0] <= cross[1] && cross[0] <= cross[2] ? 0 : cross[1] <= cross[2] ? 1 : 2;
     distance = cross[axis];
@@ -150,6 +161,8 @@ export class Yard {
     this.focus = new THREE.Vector3();
     this.following = null;
     this.ordnance = new Map();
+    this.infantry = new Map();
+    this.falling = new Map();
     this.scanActive = false;
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
@@ -178,6 +191,9 @@ export class Yard {
     this.debris = [];
     this.debrisMesh = batch(this.scene, box, blockMaterial, maxDebris);
     this.debrisMesh.count = 0;
+    this.rubble = batch(this.scene, box, blockMaterial, rubbleLimit);
+    this.rubble.count = 0;
+    this.rubbleCursor = 0;
     this.outline = new THREE.LineSegments(
       new THREE.EdgesGeometry(box),
       new THREE.LineBasicMaterial({ color: 0xffe5a0, transparent: true, opacity: 1, depthTest: false }),
@@ -245,7 +261,7 @@ export class Yard {
     this.dirty = true;
   }
 
-  load(job, cells) {
+  load(job, cells, squad) {
     for (const object of [...this.world.children]) {
       this.world.remove(object);
       if (object.isInstancedMesh) object.dispose();
@@ -257,6 +273,14 @@ export class Yard {
     }
     this.clearScan();
     for (const item of this.ordnance.keys()) this.removeOrdnance(item);
+    for (const person of this.infantry.keys()) this.removeInfantry(person);
+    for (const mesh of this.falling.values()) {
+      this.scene.remove(mesh);
+      mesh.dispose();
+    }
+    this.falling.clear();
+    this.rubble.count = 0;
+    this.rubbleCursor = 0;
     this.following = null;
     this.camera.zoom = 1;
     this.debris.length = 0;
@@ -282,26 +306,15 @@ export class Yard {
     this.blocks.userData.structure = job;
     this.blocks.castShadow = true;
     this.blocks.receiveShadow = true;
-    const nuggets = cells.filter(cell => cell.kind === 'gold');
-    this.nuggets = batch(this.world, box, goldMaterial, nuggets.length);
-    this.nuggets.castShadow = true;
-    this.nuggets.receiveShadow = true;
     const palette = palettes[job.theme];
-    let nuggetIndex = 0;
     for (const cell of cells) {
-      const isGold = cell.kind === 'gold';
-      cell.color = new THREE.Color(isGold ? 0xffb12c : cell.kind === 'powder' ? 0xf27642 : palette[cell.kind]).multiplyScalar(cell.shade);
-      if (isGold) {
-        this.blocks.setMatrixAt(cell.id, hiddenMatrix);
-        this.blocks.setColorAt(cell.id, cell.color);
-        cell.nuggetIndex = nuggetIndex++;
-        setBox(this.nuggets, cell.nuggetIndex, cell.x, cell.y - .52, cell.z, .82, .68, .82, cell.color);
-      } else {
-        const size = cell.kind === 'glass' ? .925 : cell.kind === 'powder' ? .71 : .965;
-        const height = cell.kind === 'powder' ? .79 : size;
-        setBox(this.blocks, cell.id, cell.x, cell.y - 1 + height / 2, cell.z, size, height, size, cell.color);
-      }
+      const color = cell.kind === 'powder' ? 0xf27642 : cell.kind === 'sandbag' ? 0x919467 : cell.kind === 'beam' ? palette.trim : palette[cell.kind];
+      cell.color = new THREE.Color(color).multiplyScalar(cell.shade);
+      const size = cell.kind === 'glass' ? .925 : cell.kind === 'powder' ? .71 : .965;
+      const height = cell.kind === 'powder' ? .79 : cell.kind === 'sandbag' ? .83 : size;
+      setBox(this.blocks, cell.id, cell.x, cell.y - 1 + height / 2, cell.z, size, height, cell.kind === 'sandbag' ? .63 : size, cell.color);
     }
+    for (const person of squad) this.drawInfantry(person);
     this.renderer.shadowMap.needsUpdate = true;
     this.setView('iso', true);
     this.focus.copy(this.look);
@@ -427,17 +440,69 @@ export class Yard {
     return { x: (point.x * .5 + .5) * this.width, y: (.5 - point.y * .5) * this.height };
   }
 
-  scan(cells) {
+  aimInfantry(squad, range = Infinity) {
+    const ray = this.raycaster.ray;
+    let closest = null;
+    for (const person of squad) {
+      soldierBounds.min.set(person.x - .42, person.y, person.z - .40);
+      soldierBounds.max.set(person.x + .42, person.y + 1.24, person.z + .40);
+      if (!ray.intersectBox(soldierBounds, point)) continue;
+      const distance = ray.origin.distanceTo(point);
+      if (distance >= range) continue;
+      range = distance;
+      closest = person;
+    }
+    return closest;
+  }
+
+  drawInfantry(person) {
+    let mesh = this.infantry.get(person);
+    if (!mesh) {
+      mesh = batch(this.scene, box, blockMaterial, soldierParts.length);
+      this.infantry.set(person, mesh);
+      soldierParts.forEach((part, i) => mesh.setColorAt(i, shade.set(part[6])));
+    }
+    const sine = Math.sin(person.yaw);
+    const cosine = Math.cos(person.yaw);
+    const stride = person.next ? Math.sin(person.phase) * .075 : 0;
+    soldierParts.forEach(([x, y, z, sx, sy, sz], i) => {
+      const step = i < 4 ? stride * (x > 0 ? 1 : -1) : 0;
+      dummy.position.set(person.x + x * cosine + (z + step) * sine, person.y + y, person.z + (z + step) * cosine - x * sine);
+      dummy.rotation.set(0, person.yaw, 0);
+      dummy.scale.set(sx, sy, sz);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    this.markers.get(person.id)?.position.set(person.x, person.y + .79, person.z);
+    this.dirty = true;
+  }
+
+  removeInfantry(person) {
+    const mesh = this.infantry.get(person);
+    if (mesh) {
+      this.scene.remove(mesh);
+      mesh.dispose();
+      this.infantry.delete(person);
+    }
+    const marker = this.markers.get(person.id);
+    if (marker) {
+      this.scene.remove(marker);
+      this.markers.delete(person.id);
+    }
+    this.dirty = true;
+  }
+
+  scan(squad) {
     this.clearScan();
     this.scanActive = true;
-    for (const cell of cells.values()) {
-      if (cell.kind !== 'gold') continue;
+    for (const person of squad) {
       const sprite = new THREE.Sprite(this.markerMaterial);
-      sprite.position.set(cell.x, cell.y - .46, cell.z);
+      sprite.position.set(person.x, person.y + .79, person.z);
       sprite.renderOrder = 6;
-      sprite.scale.setScalar(.86);
+      sprite.scale.setScalar(.91);
       this.scene.add(sprite);
-      this.markers.set(cell.id, sprite);
+      this.markers.set(person.id, sprite);
     }
     this.dirty = true;
   }
@@ -450,46 +515,78 @@ export class Yard {
   }
 
   damage(cell) {
-    if (cell.kind === 'gold') return;
     this.blocks.setColorAt(cell.id, shade.copy(cell.color).multiplyScalar(.57));
     this.blocks.instanceColor.needsUpdate = true;
     this.dirty = true;
   }
 
-  destroy(cells, origin, remaining, tool, blasts = []) {
-    const gold = cells.filter(cell => cell.kind === 'gold');
-    const explosive = ['blast', 'grenade', 'drone', 'tank'].includes(tool);
-    for (const cell of cells) {
-      if (cell.kind === 'gold') {
-        this.nuggets.setMatrixAt(cell.nuggetIndex, hiddenMatrix);
-        const sprite = this.markers.get(cell.id);
-        if (sprite) {
-          this.scene.remove(sprite);
-          this.markers.delete(cell.id);
-        }
-      } else {
-        this.blocks.setMatrixAt(cell.id, hiddenMatrix);
-      }
+  hideBlocks(cells) {
+    for (const cell of cells) this.blocks.setMatrixAt(cell.id, hiddenMatrix);
+    this.blocks.instanceMatrix.needsUpdate = true;
+  }
+
+  drawChunk(chunk, pointFor) {
+    let mesh = this.falling.get(chunk);
+    if (!mesh) {
+      this.hideBlocks(chunk.cells);
+      mesh = batch(this.scene, box, blockMaterial, chunk.cells.length);
+      this.falling.set(chunk, mesh);
+      chunk.cells.forEach((cell, i) => mesh.setColorAt(i, cell.color));
     }
+    chunk.cells.forEach((cell, i) => {
+      const { x, y, z } = pointFor(chunk, cell);
+      dummy.position.set(x, y, z);
+      dummy.rotation.set(chunk.ax, 0, chunk.az, 'ZXY');
+      dummy.scale.setScalar(cell.kind === 'powder' ? .73 : .955);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    this.dirty = true;
+  }
+
+  landChunk(chunk, contact, pointFor) {
+    const mesh = this.falling.get(chunk);
+    this.scene.remove(mesh);
+    mesh.dispose();
+    this.falling.delete(chunk);
+    const stride = Math.max(1, Math.ceil(chunk.cells.length / 48));
+    for (let i = 0; i < chunk.cells.length; i += stride) {
+      const cell = chunk.cells[i];
+      const position = pointFor(chunk, cell);
+      this.addDebris({ ...position, y: Math.min(position.y + .5, contact.y + 1), color: cell.color }, contact, .55);
+      if (contact.surface > 0) continue;
+      const size = .24 + Math.random() * .42;
+      const id = this.rubbleCursor++ % rubbleLimit;
+      dummy.position.set(position.x + (Math.random() - .5) * 1.3, size * .39, position.z + (Math.random() - .5) * 1.3);
+      dummy.rotation.set(Math.random() * .6, Math.random() * 6, Math.random() * .45);
+      dummy.scale.set(size, size * .66, size * .78);
+      dummy.updateMatrix();
+      this.rubble.setMatrixAt(id, dummy.matrix);
+      this.rubble.setColorAt(id, cell.color);
+    }
+    this.rubble.count = Math.min(this.rubbleCursor, rubbleLimit);
+    this.rubble.instanceMatrix.needsUpdate = true;
+    if (this.rubble.instanceColor) this.rubble.instanceColor.needsUpdate = true;
+    if (this.debris.length > maxDebris) this.debris.splice(0, this.debris.length - maxDebris);
+    this.dirty = true;
+  }
+
+  destroy(cells, origin, remaining, tool, blasts = []) {
+    const explosive = ['blast', 'grenade', 'drone', 'tank'].includes(tool);
+    this.hideBlocks(cells);
     if (this.sign.visible) {
       const backing = [-2, -1, 0, 1, 2].filter(x => remaining.has(key(x, this.signY, this.signZ)));
       if (backing.length <= 2) this.sign.visible = false;
     }
-    this.blocks.instanceMatrix.needsUpdate = true;
-    this.nuggets.instanceMatrix.needsUpdate = true;
     this.renderer.shadowMap.needsUpdate = true;
-    for (let i = 0; i < cells.length; i += Math.max(1, Math.ceil(cells.length / 185))) {
+    for (let i = 0; i < cells.length; i += Math.max(1, Math.ceil(cells.length / 150))) {
       const cell = cells[i];
-      if (cell.kind === 'gold') continue;
-      this.addDebris(cell, origin, false, explosive ? 1.55 : 1);
-      if (cells.length < 38) this.addDebris(cell, origin, false, .8);
-    }
-    for (const cell of gold) {
-      for (let i = 0; i < 12; i++) this.addDebris(cell, origin, true, 1);
+      this.addDebris(cell, origin, explosive ? 1.55 : 1);
+      if (cells.length < 38) this.addDebris(cell, origin, .8);
     }
     if (this.debris.length > maxDebris) this.debris.splice(0, this.debris.length - maxDebris);
-    if (explosive) this.shockwave(origin, tool === 'tank' ? 1.55 : 1.16, gold.length ? 0xffcc55 : 0xff8b57);
-    if (!explosive && gold.length) this.shockwave(origin, .85, 0xffcc55);
+    if (explosive) this.shockwave(origin, tool === 'tank' ? 1.55 : 1.16, 0xff8b57);
     for (const barrel of blasts) this.shockwave(barrel, .85, 0xffa75e);
     this.shake = this.reduceMotion ? 0 : Math.min(.65, .06 + cells.length * .002 + (explosive ? .22 : 0));
     this.dirty = true;
@@ -506,26 +603,26 @@ export class Yard {
     this.rings.push({ mesh, strength, age: 0 });
     for (let i = 0; i < 18; i++) {
       shade.set(i % 3 ? 0xffae45 : 0xff6639);
-      this.addDebris({ ...origin, color: shade.clone() }, origin, false, strength * 1.45);
+      this.addDebris({ ...origin, color: shade.clone() }, origin, strength * 1.45);
     }
     if (this.debris.length > maxDebris) this.debris.splice(0, this.debris.length - maxDebris);
   }
 
-  addDebris(cell, origin, gold, strength) {
+  addDebris(cell, origin, strength) {
     const random = Math.random;
     this.debris.push({
       x: cell.x + (random() - .5) * .7,
       y: cell.y - .5 + (random() - .5) * .45,
       z: cell.z + (random() - .5) * .7,
       vx: ((cell.x - origin.x) * .68 + (random() - .5) * 5.8) * strength,
-      vy: (2 + random() * (gold ? 8 : 5)) * strength,
+      vy: (2 + random() * 5) * strength,
       vz: ((cell.z - origin.z) * .68 + (random() - .5) * 5.8) * strength,
       spin: (random() - .5) * 13,
       angle: random() * 5,
-      size: (gold ? .12 : .20) + random() * (gold ? .19 : .32),
+      size: .20 + random() * .32,
       age: 0,
-      life: (gold ? .78 : .52) + random() * .65,
-      color: gold ? shade.clone().setHex(random() < .5 ? 0xffc137 : 0xffe483) : cell.color,
+      life: .52 + random() * .65,
+      color: cell.color,
     });
   }
 
