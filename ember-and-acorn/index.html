@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#21152a">
 <meta name="description" content="Tend an autumn farm by day and wield starlight beneath a ruined abbey. A pixelated 3D adventure.">
 <title>Ember &amp; Acorn</title>
@@ -11,8 +11,9 @@
 :root{color-scheme:dark;--ink:#21152a;--paper:#fff0cf;--gold:#f3c274;--line:#71533f}
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--paper);font:14px ui-monospace,"Courier New",monospace}
-body{user-select:none;-webkit-user-select:none}
-button{font:inherit;color:inherit;cursor:pointer;touch-action:none;border:2px solid var(--line);background:#2d2137;box-shadow:inset 0 0 0 2px #1d1326,0 3px #150e1b;border-radius:4px}
+html,body{overscroll-behavior:none;touch-action:manipulation}
+body{position:fixed;inset:0;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;border:2px solid var(--line);background:#2d2137;box-shadow:inset 0 0 0 2px #1d1326,0 3px #150e1b;border-radius:4px}
 button:hover,button:focus-visible{border-color:var(--gold);outline:none}
 button:active{transform:translateY(2px)}
 [hidden]{display:none!important}
@@ -46,7 +47,11 @@ button:active{transform:translateY(2px)}
 #aim:before,#aim:after{content:"";position:absolute;background:#fff1ce}
 #aim:before{width:12px;height:2px;top:5px}
 #aim:after{width:2px;height:12px;left:5px}
-#overlay{position:absolute;inset:0;display:grid;place-items:center;padding:16px;background:#170e2270;overflow:auto}
+#actions button{touch-action:none}
+#enemy{position:absolute;top:max(76px,calc(env(safe-area-inset-top) + 58px));right:max(16px,env(safe-area-inset-right));min-width:118px;padding:6px 8px;background:#291a30e8;border:1px solid #8e596b;text-align:center;font-size:11px}
+#enemy meter{display:block;width:100%;height:8px;margin-top:3px;accent-color:#da7f92}
+#enemy meter::-webkit-meter-optimum-value{background:#da7f92}
+#overlay{touch-action:pan-y;overscroll-behavior:contain;position:absolute;inset:0;display:grid;place-items:center;padding:16px;background:#170e2270;overflow:auto}
 .panel{width:min(100%,430px);margin:auto;border:2px solid #b78c58;outline:3px solid #24172d;box-shadow:inset 0 0 0 5px #302035,0 12px 30px #160b20ae;background:#22172ded;text-align:center;padding:25px 22px}
 .panel h1,.panel h2{margin:0 0 12px;color:#ffdc97;font:700 clamp(26px,7vw,46px)/1 Georgia,serif;text-shadow:2px 3px #733d3b}
 .panel h2{font-size:30px}
@@ -56,9 +61,20 @@ button:active{transform:translateY(2px)}
 .panel .primary{background:#804834;border-color:#e0aa62;color:#fff3d1}
 .panel small{display:block;color:#c3adbf;line-height:1.5;margin-top:11px}
 #bagList{margin:5px 0 18px;text-align:left}
+button:disabled{cursor:default;opacity:.48}
+.sheet{width:min(100%,550px)}
+.sheet h2{margin-bottom:8px}
+.sheet button{padding:7px 9px;font-size:12px}
+.rows{display:grid;gap:4px;margin:10px 0 15px;text-align:left}
+.rows h3{margin:8px 0 1px;color:#f3be71;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.rows .row{min-height:34px;display:flex;gap:6px;align-items:center;justify-content:space-between;border-bottom:1px solid #594052}
+.rows .row span{font-size:12px;line-height:1.35}
+.rows .row button{white-space:nowrap}
+#atlasCanvas{width:100%;max-height:34vh;object-fit:contain;image-rendering:pixelated;display:block;margin:8px auto 10px;background:#32283a;border:1px solid #8c6c53}
 #bagList div{display:flex;justify-content:space-between;padding:8px 1px;border-bottom:1px solid #594052}
 @media (pointer:coarse){#touch{display:block}#hints{display:none}#prompt{bottom:max(123px,calc(env(safe-area-inset-bottom) + 108px))}}
 @media (max-width:420px){#tools button{padding:8px}#tools{gap:4px}#top,#quest{left:12px}#tools{right:12px}}
+@media (max-width:600px){#enemy{top:50%;right:auto;left:50%;transform:translate(-50%,-60px)}}
 @media (max-height:480px){#quest{top:70px}#hints{white-space:normal;width:max-content;max-width:90%;text-align:center}#toast{top:31%}#stick{width:75px;height:75px;bottom:15px}#actions{bottom:15px}#prompt{bottom:92px}.panel{padding:13px 18px}.panel p{margin-bottom:6px}.panel small{margin-top:4px}}
 </style>
 </head>
@@ -68,16 +84,19 @@ button:active{transform:translateY(2px)}
 <div id="screenGrain" aria-hidden="true"></div>
 <div id="hud" hidden>
   <div id="top"><span id="place"></span><div id="hearts" aria-label="Health"></div><span id="wallet"></span></div>
-  <div id="tools"><button id="view">View</button><button id="bag">Bag</button><button id="menu" aria-label="Pause">☰</button></div>
-  <div id="quest"></div>
+  <div id="tools"><button id="view">View</button><button id="bag">Bag</button><button id="map">Map</button><button id="menu" aria-label="Pause">☰</button></div>
+  <div id="quest"></div><div id="enemy" hidden><span id="enemyName"></span><meter id="enemyHp" min="0" aria-label="Monster health"></meter></div>
   <div id="marker" hidden></div><div id="toast" role="status" hidden></div><div id="prompt" hidden></div><div id="aim" hidden></div>
-  <div id="hints">WASD Move · Drag Look · E Use · Space Cast · V View</div>
+  <div id="hints">WASD Move · Drag Look · E Use · Space Cast · M Map · V View</div>
   <div id="touch"><div id="stick" aria-label="Move"><div id="nub"></div></div><div id="actions"><button id="use">USE</button><button id="cast">CAST</button></div></div>
 </div>
 <div id="overlay">
-  <section class="panel" id="title"><div class="crest" aria-hidden="true">✦</div><h1>Ember &amp; Acorn</h1><p>Grow sunroots in an autumn hamlet. Follow the lanterns to the abbey and find what stole its light.</p><button class="primary" id="start">Enter the hamlet</button><small id="titleControls"></small></section>
+  <section class="panel" id="title"><div class="crest" aria-hidden="true">✦</div><h1>Ember &amp; Acorn</h1><p>Tend your farm, cook what you forage, and follow the old roads into a valley of ruins, wild magic, and monsters.</p><button class="primary" id="start">Enter the hamlet</button><small id="titleControls"></small></section>
   <section class="panel" id="pause" hidden><h2>Paused</h2><button class="primary" id="resume">Resume</button><button id="sound">Sound on</button><button id="dither">Dither on</button><button id="quit">Title screen</button></section>
-  <section class="panel" id="inventory" hidden><h2>Satchel</h2><div id="bagList"></div><button class="primary" id="closeBag">Back</button></section>
+  <section class="panel sheet" id="inventory" hidden><h2>Satchel</h2><div class="rows" id="bagList"></div><button class="primary" id="closeBag">Back</button></section>
+  <section class="panel sheet" id="atlas" hidden><h2>Valley Map</h2><canvas id="atlasCanvas" width="224" height="170" aria-label="Map of the valley"></canvas><div class="rows" id="atlasList"></div><button class="primary" id="closeAtlas">Back</button></section>
+  <section class="panel sheet" id="market" hidden><h2>Hamlet Market</h2><div class="rows" id="marketList"></div><button class="primary" id="closeMarket">Back</button></section>
+  <section class="panel sheet" id="cooking" hidden><h2>Cookfire</h2><div class="rows" id="cookList"></div><button class="primary" id="closeCook">Back</button></section>
   <section class="panel" id="ending" hidden><div class="crest" aria-hidden="true">✦</div><h2>The sky clears</h2><p>Light pours through the rose window. The abbey’s ember is burning again.</p><button class="primary" id="continue">Keep exploring</button></section>
   <section class="panel" id="unsupported" hidden><h2>3D graphics unavailable</h2><p>Open this page in a browser with WebGL enabled to play.</p></section>
 </div>
@@ -93,7 +112,7 @@ const coarse = matchMedia("(pointer:coarse)").matches;
 $("titleControls").textContent = coarse ? "Left stick to walk · Drag the scene to look" : "WASD to walk · Drag or use the arrow keys to look";
 function panel(name) {
   $("overlay").hidden = !name;
-  for (const id of ["title","pause","inventory","ending","unsupported"]) $(id).hidden = id !== name;
+  for (const id of ["title","pause","inventory","atlas","market","cooking","ending","unsupported"]) $(id).hidden = id !== name;
 }
 if (!gl && !raster) { panel("unsupported"); return; }
 
@@ -250,9 +269,115 @@ const amber=[0xd48724,0xa65c23,0xec9f29,0xf6b83f,0xb87626];
 const birch=[0xddb238,0xf8c44d,0xa98625,0xc3a337,0xeabb39];
 const pick=(array,random) => array[Math.floor(random()*array.length)];
 
+const bounds={left:-112,right:112,north:-144,south:96};
+const home={id:"home",name:"Acorn Hamlet",x:0,z:3,y:2.2,color:0xefbd68};
+const kitchen={x:-3,z:3.5};
+const regions=[
+  {id:"orchard",name:"Goldleaf Orchard",x:49,z:-10,color:0xeab34b,ground:[0x8e843b,0xa3974c,0x8f923d],leaves:amber,food:"apple",foe:"boar",gift:"squash",landmark:"mill"},
+  {id:"bramble",name:"Bramblewood",x:-51,z:-14,color:0xd17e60,ground:[0x625e39,0x71673f,0x797048],leaves:rust,food:"berry",foe:"boar",gift:"bean",landmark:"grove"},
+  {id:"fen",name:"Cinderfen",x:-76,z:-69,color:0x94b987,ground:[0x5f7251,0x6c7754,0x647d5c],leaves:[0x5f704e,0x758c53,0x879852,0xa4964f],food:"mushroom",foe:"slime",gift:"bean",landmark:"pond"},
+  {id:"ridge",name:"Frostcap Ridge",x:69,z:-75,color:0xa3c7e2,ground:[0x97adb2,0x859b9f,0xb7c9cc],leaves:[0x4d7775,0x678f8c,0x9db7b7,0xc3d2ca],food:"plum",foe:"frost",gift:"cabbage",landmark:"watchtower"},
+  {id:"falls",name:"Mossvale Falls",x:0,z:-108,color:0x93caa4,ground:[0x648547,0x708e4b,0x789957],leaves:[0x3f7852,0x60914e,0x7c9e52,0xa9ad4e],food:"cress",foe:"golem",gift:"cabbage",landmark:"falls"},
+  {id:"barrow",name:"Ashen Barrow",x:-10,z:59,color:0xce8b9f,ground:[0x776158,0x816851,0x756151],leaves:[0x70465c,0x895069,0x985966,0xac766b],food:"mushroom",foe:"golem",gift:"squash",landmark:"ring"}
+];
+const places=[home,...regions];
+const byPlace=Object.fromEntries(places.map(p=>[p.id,p]));
+const crops={
+  sunroot:{name:"Sunroot",time:24,color:0xe8903d,leaf:0x98aa49,price:3,heal:1},
+  squash:{name:"Ember squash",time:40,color:0xf3a141,leaf:0x738d42,price:6,heal:1},
+  bean:{name:"Moonbean",time:34,color:0xaf8ccb,leaf:0x688d82,price:5,heal:1},
+  cabbage:{name:"Frost cabbage",time:48,color:0xa9d5a6,leaf:0x67947a,price:7,heal:2}
+};
+const foods={
+  ...crops,
+  apple:{name:"Goldleaf apple",color:0xef8841,price:3,heal:1},
+  berry:{name:"Brambleberry",color:0xc74f79,price:2,heal:1},
+  mushroom:{name:"Cinder mushroom",color:0xe18b78,price:4,heal:1},
+  plum:{name:"Frostplum",color:0x987ac8,price:4,heal:2},
+  cress:{name:"Mossvale cress",color:0x83c978,price:3,heal:1},
+  tart:{name:"Orchard tart",color:0xf2b367,price:0,heal:3},
+  stew:{name:"Trail stew",color:0xea9b54,price:0,heal:5}
+};
+const recipes={
+  tart:{apple:1,berry:1},
+  stew:{sunroot:1,mushroom:1,cress:1}
+};
+const homePlotCount=plots.length;
+for(const region of [byPlace.orchard,byPlace.falls]) {
+  for(let i=0;i<6;i++) plots.push({x:region.x-5-i%3*1.65,z:region.z+6+Math.floor(i/3)*1.7,region:region.id});
+}
+const trailPoints=[
+  [[-2,-10],[-27,-12],[-51,-14],[-66,-40],[-76,-69],[-51,-91],[0,-108]],
+  [[2,-10],[26,-10],[49,-10],[61,-34],[69,-75],[40,-97],[0,-108]],
+  [[0,-32],[11,-43],[10,-69],[0,-108]],
+  [[0,0],[1,15],[-5,37],[-10,59]],
+  [[-10,59],[15,51],[36,31],[49,-10]],
+  [[-10,59],[-35,35],[-45,12],[-51,-14]]
+];
+const trails=trailPoints.flatMap(points=>points.slice(1).map(([x,z],i)=>{
+  const [a,b]=points[i], dx=x-a,dz=z-b;
+  return {x:a,z:b,dx,dz,len:dx*dx+dz*dz};
+}));
+function onTrail(x,z,r) {
+  return trails.some(t=>{
+    const dx=x-t.x,dz=z-t.z,f=clamp((dx*t.dx+dz*t.dz)/t.len,0,1);
+    return (dx-t.dx*f)**2+(dz-t.dz*f)**2<r*r;
+  });
+}
+function regionAt(x,z) {
+  let nearest=home,best=Infinity;
+  for(const place of places) {
+    const d=(x-place.x)**2+(z-place.z)**2;
+    if(d<best) {best=d;nearest=place;}
+  }
+  return nearest;
+}
+function inHamlet(x,z) {return x>=-24&&x<24&&z>=-44&&z<12;}
+const pools=[
+  {x:-85,z:-78,rx:8,rz:6,color:0x486a61},
+  {x:-63,z:-78,rx:6,rz:10,color:0x55786c},
+  {x:-88,z:-57,rx:8,rz:5,color:0x587a66},
+  {x:12,z:-116,rx:8,rz:12,color:0x4c8d89},
+  {x:54,z:18,rx:9,rz:8,color:0x648d73}
+];
+function waterAt(x,z) {
+  return pools.find(p=>((x-p.x)/p.rx)**2+((z-p.z)/p.rz)**2<1);
+}
+const nodes=[];
+for(const region of regions) {
+  const random=rng(region.x*13-region.z*7);
+  for(let i=0;i<14;i++) {
+    const a=i*2.399, r=6+(i%6)*3.1+random()*1.6;
+    const x=region.x+Math.cos(a)*r, z=region.z+Math.sin(a)*r;
+    if(waterAt(x,z)||onTrail(x,z,2.6)||plots.some(p=>Math.hypot(p.x-x,p.z-z)<2)) continue;
+    nodes.push({id:region.id+"-"+i,x,z,food:region.food,phase:random()*TAU});
+  }
+}
+const caches=regions.flatMap(region=>[
+  {id:region.id+"-east",region,x:region.x+16,z:region.z-7,gold:7},
+  {id:region.id+"-west",region,x:region.x-13,z:region.z+15,gold:5}
+]).filter(cache=>!waterAt(cache.x,cache.z)&&!plots.some(p=>distance(p,cache)<1.8));
+const foes={
+  wisp:{name:"Abbey wisp",hp:2,speed:1.38,range:7.2,radius:.58,color:0x6946a2,gold:0},
+  boar:{name:"Bramble boar",hp:3,speed:2.85,range:10,radius:.79,color:0xa8644b,gold:3},
+  slime:{name:"Fen slime",hp:2,speed:1.7,range:9,radius:.68,color:0x82ab57,gold:2,drop:"mushroom"},
+  frost:{name:"Frost wisp",hp:3,speed:1.55,range:13,radius:.62,color:0x639bc5,gold:4,drop:"plum",ranged:true},
+  golem:{name:"Moss golem",hp:5,speed:1.85,range:11,radius:.91,color:0x788866,gold:5},
+  warden:{name:"Barrow Warden",hp:15,speed:2.15,range:17,radius:1.27,color:0x955579,gold:30,ranged:true}
+};
+const wildSpawns=[];
+for(const region of regions) {
+  for(let i=0;i<7;i++) {
+    const a=i*TAU/7+.18,r=i%2?17:11;
+    const x=region.x+Math.cos(a)*r,z=region.z+Math.sin(a)*r;
+    if(!waterAt(x,z)) wildSpawns.push({id:region.id+"-"+i,x,z,region:region.id,type:region.foe});
+  }
+}
+wildSpawns.push({id:"warden",x:-10,z:45,region:"barrow",type:"warden"});
+
 function pathCenter(z) { return Math.sin((z+6)*.16)*1.85; }
 function isPath(x,z) {
-  return Math.abs(x-pathCenter(z)) < (z<-27?2.0:1.6) ||
+  return onTrail(x,z,1.55) || Math.abs(x-pathCenter(z)) < (z<-27?2.0:1.6) ||
     (z<-8.3 && z>-11.8 && x>-10.5 && x<8.7);
 }
 function isGarden(x,z) { return x>-10.4 && x<-4.65 && z<-3.6 && z>-9.4; }
@@ -343,36 +468,29 @@ function tower(m,x,z,h,random) {
 }
 function buildFarm() {
   const m=new Mesh(), random=rng(571);
-  for(let z=-69;z<=14;z++) for(let x=-46;x<=46;x++) {
+  for(let z=-44;z<12;z++) for(let x=-24;x<24;x++) {
     const path=isPath(x,z), pond=isPond(x,z), garden=isGarden(x,z);
     const color=pick(pond?[0x477e76,0x508b7f,0x528274,0x559088]:path?[0x9d7949,0xa98751,0xac8850,0xb38c56,0xa07d48]:garden?[0x664635,0x775039,0x6b4935]:grassColors,random);
-    m.quad([x-.5,0,z-.5],[x+.5,0,z-.5],[x+.5,0,z+.5],[x-.5,0,z+.5],color);
-    if (x<-26||x>26||z<-45||z>8) continue;
+    m.quad([x,0,z],[x+1,0,z],[x+1,0,z+1],[x,0,z+1],color);
     for(let i=0;i<(software?(path?2:1):path?5:3);i++) {
-      const a=x+random()-.5,b=z+random()-.5,w=.06+random()*.18;
+      const a=x+random(),b=z+random(),w=.06+random()*.18;
       m.quad([a,.012,b],[a+w,.012,b],[a+w,.012,b+w*.65],[a,.012,b+w*.65],pick(pond?[0x659e90,0x407165]:rust,random),.88);
     }
     if(!path&&!pond&&!garden) for(let i=0;i<(software?1:4);i++) {
-      const a=x+random()-.5,b=z+random()-.5, h=.08+random()*.39, c=pick(goldGrass,random);
+      const a=x+random(),b=z+random(), h=.08+random()*.39, c=pick(goldGrass,random);
       m.tri([a-.055,.016,b],[a+.06,.016,b],[a+.04,h,b+.08],c);
       m.tri([a,.016,b-.05],[a,.016,b+.07],[a+.04,h*.89,b+.04],c,.83);
       if(random()<.09 && !software) m.box(a,h*.82,b,.08,.08,.08,0xffd775);
     }
   }
-  for(let i=0;i<31;i++) {
-    const x=-55+i*3.8, z=-56-random()*12, h=4+random()*11;
-    m.tri([x-9,0,z],[x+9,0,z],[x+random()*4-2,h,z],pick([0x836e75,0x8d7479,0x9a7c78,0x75697a],random));
-  }
   const trees=[[-9,2,1.06,rust],[7,-.5,1.27,rust],[-12,-4,1.2,amber],[9,-5,1.2,amber],[-13,-11,1.35,rust],[14,-11,1.17,rust],[-7,-14,1.15,amber],[7.5,-17,1.48,rust],[-7,-24,1.4,rust],[9,-25,1.27,amber],[-7,-32,1.2,birch],[10,-32,1.36,rust],[-4,-20,.9,birch],[11,-3,1.0,birch]];
   for(let i=0;i<(software?23:41);i++) {
     const side=i%2===0?-1:1;
-    trees.push([side*(13+random()*18),8-random()*55,.82+random()*.72,pick([amber,rust,birch],random)]);
+    const x=side*(13+random()*9), z=8-random()*48, size=.82+random()*.72, color=pick([amber,rust,birch],random);
+    if(!onTrail(x,z,2.1)) trees.push([x,z,size,color]);
   }
   for(const [x,z,s,c] of trees) { tree(m,x,z,s,c,random); wall("farm",x,z,s*.42,s*.44); }
-  for(const {x,z} of plots) {
-    m.box(x,.035,z,1.39,.13,1.4,0x4c322c);
-    for(let i=-1;i<=1;i++) m.box(x+i*.40,.14,z,.25,.085,1.25,0x76513b);
-  }
+  for(const {x,z} of plots.slice(0,homePlotCount)) bedMesh(m,x,z);
   for(const z of [-3.4,-9.7]) {
     for(const x of [-10.1,-8.3,-6.5,-4.7]) m.box(x,0,z,.17,.81,.18,0x775039);
     for(const y of [.21,.54]) m.box(-7.4,y,z,5.6,.12,.11,0x9d693e);
@@ -493,35 +611,221 @@ function transform(eye,{forward,right,up},aspect) {
     -dot(right,eye)*sx,-dot(up,eye)*sy,dot(forward,eye)*depth+offset,-dot(forward,eye)
   ]);
 }
+const chunkSize=16;
+const chunkCache=new Map();
+const chunkScenery=new Map();
+const chunkKey=(x,z)=>Math.floor(x/chunkSize)+","+Math.floor(z/chunkSize);
+function scenery(x,z,type,detail) {
+  const key=chunkKey(x,z);
+  if(!chunkScenery.has(key)) chunkScenery.set(key,[]);
+  chunkScenery.get(key).push({x,z,type,detail});
+}
+for(const region of regions) scenery(region.x,region.z,"camp",region);
+scenery(kitchen.x,kitchen.z,"kitchen",home);
+for(const p of plots.slice(homePlotCount)) scenery(p.x,p.z,"bed",p);
+const landscapeRng=rng(75900);
+for(let iz=-9;iz<6;iz++) for(let ix=-7;ix<7;ix++) {
+  for(let i=0;i<15;i++) {
+    const x=ix*16+1+landscapeRng()*14,z=iz*16+1+landscapeRng()*14;
+    const region=regionAt(x,z), roll=landscapeRng();
+    if(inHamlet(x,z)||onTrail(x,z,2.7)||waterAt(x,z)||distance({x,z},region)<7||
+       plots.some(p=>distance(p,{x,z})<1.7)||nodes.some(n=>distance(n,{x,z})<1.2)||caches.some(c=>distance(c,{x,z})<1.7)||
+       wildSpawns.some(e=>distance(e,{x,z})<1.8)) continue;
+    const size=.7+landscapeRng()*.85;
+    const type=roll<(region.id==="bramble"?.77:.44)?"tree":roll<.74?"rock":"grass";
+    scenery(x,z,type,{region,size,seed:Math.floor(landscapeRng()*2147483647)});
+  }
+}
+function bedMesh(m,x,z) {
+  m.box(x,.035,z,1.39,.13,1.4,0x4c322c);
+  for(let i=-1;i<=1;i++) m.box(x+i*.40,.14,z,.25,.085,1.25,0x76513b);
+}
+function campMesh(m,x,z,region) {
+  m.box(x,.05,z,1.65,.29,1.65,0x807675,.31);
+  m.box(x,.32,z,1.16,.22,1.10,0xa0978b,.31);
+  m.box(x,.54,z,.79,2.06,.66,0x716477,.31);
+  m.box(x,2.57,z,.59,.24,.54,0x95818d,.31);
+  m.box(x,1.22,z+.375,.30,.42,.085,region.color,.31);
+  m.box(x,1.57,z+.375,.12,.28,.085,region.color,.31);
+  campfire(m,x+3.3,z+1.4);
+  for(const dir of [-1,1]) {
+    m.box(x+dir*2,.13,z+3,.26,.74,.26,0x694934);
+    m.box(x+dir*2,.64,z+3,.36,.27,.36,region.color);
+  }
+  const [a,b]=[x,z-9];
+  if(region.landmark==="mill") {
+    m.box(a,0,b,4,6.2,4,0xb69868);
+    roof(m,a,b,4.8,4.8,6,2,0xa65544);
+    m.box(a,0,b+2,.87,1.8,.13,0x5f463f);
+  }
+  if(region.landmark==="grove") {
+    const random=rng(444);
+    for(const off of [-5,0,5]) tree(m,a+off,b+Math.abs(off)*.2,1.75,rust,random);
+  }
+  if(region.landmark==="pond") {
+    for(let i=0;i<12;i++) {
+      const dx=i%2?-1.45:1.45, zz=b+i*.49;
+      m.box(a,0,zz,2.65,.28,.42,0x805b45);
+      m.box(a+dx,.23,zz,.12,i%4<2?.66:.23,.13,0x705143);
+    }
+  }
+  if(region.landmark==="watchtower") {
+    m.box(a,0,b,4.3,8.2,4.3,0x7e8c9a);
+    m.box(a,7.55,b,4.9,.62,4.9,0xaebcc3);
+    for(const i of [-1.94,1.94]) for(const j of [-1.94,1.94]) m.box(a+i,8.1,b+j,.8,1,.8,0xc2d5d8);
+    for(let j=0;j<6;j++) m.box(a,1+j*.97,b+2.16,.42,.55,.04,0x4f6171);
+  }
+  if(region.landmark==="falls") {
+    for(let i=0;i<11;i++) {
+      const dx=i-5,h=3.4+Math.cos(i*2)*1.1;
+      m.box(a+11+dx,0,b-3,1.08,h,4.2,0x667d6d);
+      if(Math.abs(dx)<3) m.box(a+11+dx,.05,b-.8,1.04,h-.4,.25,i%2?0x76b9b9:0x92d0c7);
+    }
+  }
+  if(region.landmark==="ring") {
+    for(let i=0;i<12;i++) {
+      const angle=i*TAU/12;
+      m.box(a+Math.cos(angle)*6,0,b+Math.sin(angle)*6,.72,1.85+i%3*.65,1.10,0x746273,angle);
+    }
+    arch(m,a,b-8,3.6,2.3,.65,0x7d6375,true);
+    for(const side of [-1,1]) m.box(a+side*2,0,b-8,.5,2.4,.65,0x7d6375);
+  }
+}
+function campfire(m,x,z) {
+  for(let i=0;i<7;i++) {
+    const a=i*TAU/7;
+    m.box(x+Math.cos(a)*.49,.01,z+Math.sin(a)*.49,.33,.18,.30,0x796466,a);
+  }
+  for(const a of [.35,1.8]) m.box(x,.13,z,.83,.16,.20,0x603e3c,a);
+}
+function makeChunk(ix,iz) {
+  const m=new Mesh(), random=rng(Math.imul(ix+44,198409)+Math.imul(iz+61,827011));
+  const ox=ix*chunkSize,oz=iz*chunkSize;
+  for(let j=0;j<chunkSize;j+=2) for(let i=0;i<chunkSize;i+=2) {
+    const x=ox+i,z=oz+j;
+    if(inHamlet(x,z)) continue;
+    const region=regionAt(x+1,z+1),pool=waterAt(x+1,z+1),path=onTrail(x+1,z+1,1.95);
+    const color=pool?pool.color:path?0xa1855f:pick(region.ground||grassColors,random);
+    m.quad([x,-.025,z],[x+2,-.025,z],[x+2,-.025,z+2],[x,-.025,z+2],color,.94+random()*.12);
+    for(let n=0;n<(software?2:4);n++) {
+      const a=x+.15+random()*1.7,b=z+.15+random()*1.7,h=.08+random()*.32;
+      if(pool||path) {
+        m.quad([a,.012,b],[a+.27,.012,b],[a+.29,.012,b+.08],[a,.012,b+.08],pool?0x78a09a:0xb39564,.8+random()*.3);
+      } else {
+        m.tri([a-.06,.01,b],[a+.07,.01,b],[a+.07,h,b+.06],pick(region.leaves||goldGrass,random),1.15);
+        if(!software) m.tri([a,.01,b-.06],[a,.01,b+.08],[a+.08,h,b+.06],color,1.27);
+      }
+    }
+  }
+  for(const {x,z,type,detail} of chunkScenery.get(ix+","+iz)||[]) {
+    if(type==="camp") {campMesh(m,x,z,detail);continue;}
+    if(type==="kitchen") {campfire(m,x,z);continue;}
+    if(type==="bed") {bedMesh(m,x,z);continue;}
+    const {region,size,seed}=detail;
+    const local=rng(seed);
+    if(type==="tree") {
+      if(region.id==="ridge") {
+        m.box(x,0,z,size*.34,size*5.1,size*.32,0x665a52);
+        for(let j=0;j<6;j++) {
+          const w=(2.8-j*.38)*size,y=(1.8+j*.60)*size;
+          m.box(x,y,z,w,size*.53,w,pick(region.leaves,local),j*.21);
+          m.box(x,y+.47*size,z,w*.84,.12*size,w*.84,0xc5d7d5,j*.21);
+        }
+      } else {
+        m.box(x,0,z,size*.36,size*4.45,size*.41,0x654737,.12);
+        for(let j=0;j<(software?9:18);j++) {
+          const a=j*2.399,r=size*(.3+local()*1.4);
+          m.box(x+Math.cos(a)*r,size*(3.0+local()*2.0),z+Math.sin(a)*r,size*(.75+local()*.85),size*(.48+local()*.59),size*(.75+local()*.85),pick(region.leaves||amber,local),j*.08);
+        }
+      }
+    } else if(type==="rock") {
+      m.box(x,0,z,size*.88,size*.54,size,region.id==="ridge"?0x83939e:0x77736a,.41);
+      m.box(x-.08,size*.45,z,size*.67,size*.23,size*.74,region.id==="ridge"?0xbdc9cd:0x918976,.41);
+    } else {
+      for(let j=0;j<5;j++) {
+        const a=x+(local()-.5)*1.4,b=z+(local()-.5)*1.4;
+        m.tri([a-.08,.03,b],[a+.12,.03,b],[a+.07,size*.55,b+.11],pick(region.leaves||goldGrass,local),1.28);
+      }
+    }
+  }
+  return m.upload();
+}
+function outdoorMeshes(view) {
+  const [x,,z]=view.eye;
+  const reach=software?46:58;
+  const meshes=[];
+  if(x>-24-reach&&x<24+reach&&z>-44-reach&&z<12+reach) meshes.push(staticWorlds.farm);
+  for(let iz=Math.max(-9,Math.floor((z-reach)/16));iz<=Math.min(5,Math.floor((z+reach)/16));iz++) {
+    for(let ix=Math.max(-7,Math.floor((x-reach)/16));ix<=Math.min(6,Math.floor((x+reach)/16));ix++) {
+      const dx=ix*16+8-x,dz=iz*16+8-z;
+      if(dx*dx+dz*dz>(reach+8)**2||dx*view.look.forward[0]+dz*view.look.forward[2]<-16) continue;
+      const key=ix+","+iz;
+      let mesh=chunkCache.get(key);
+      if(mesh) chunkCache.delete(key);
+      else mesh=makeChunk(ix,iz);
+      chunkCache.set(key,mesh);
+      meshes.push(mesh);
+    }
+  }
+  // Both local players can stand at opposite ends of the map.
+  while(chunkCache.size>88) {
+    const key=chunkCache.keys().next().value, oldest=chunkCache.get(key);
+    if(gl) gl.deleteBuffer(oldest.buffer);
+    chunkCache.delete(key);
+  }
+  return meshes;
+}
+
 const staticWorlds={farm:buildFarm(),abbey:buildAbbey()};
 const dynamicBuffer=gl?.createBuffer();
 const avatarBuffers=[gl?.createBuffer(),gl?.createBuffer()];
 
-const initialSave=() => ({
-  gold:0,roots:0,seeds:9,opened:false,ember:false,shards:0,muted:false,dither:true,
-  crops:plots.map((_,i) => ({age:i<3?26:0,kind:i<3?"crop":"empty"}))
+function freshCrop(i) {
+  return {age:i<3?26:0,kind:i<3?"crop":"empty",plant:"sunroot"};
+}
+const initialSave=()=>({
+  gold:0,opened:false,ember:false,shards:0,muted:false,dither:true,
+  crops:plots.map((_,i)=>freshCrop(i)),
+  seedStock:{sunroot:9,squash:3,bean:3,cabbage:2},foodStock:{},selected:"sunroot",
+  discovered:{home:true},wards:{},kills:{},nodeReady:{},openedCaches:{},worldAge:0,warden:false,route:null
 });
 const storageKey="ember-acorn-save-v1";
 function load() {
+  const defaults=initialSave();
   try {
     const data=JSON.parse(localStorage.getItem(storageKey));
-    if (data && Array.isArray(data.crops) && data.crops.length===plots.length) return {...initialSave(),...data};
-  } catch {}
-  return initialSave();
+    if(!data||!Array.isArray(data.crops)) return defaults;
+    const loaded={...defaults,...data};
+    loaded.crops=plots.map((_,i)=>({...freshCrop(i),...data.crops[i]}));
+    loaded.seedStock=data.seedStock||{...defaults.seedStock,sunroot:data.seeds??9};
+    loaded.foodStock=data.foodStock||{sunroot:data.roots??0};
+    delete loaded.seeds;
+    delete loaded.roots;
+    return loaded;
+  } catch {return defaults;}
 }
 const state=load();
 $("screenGrain").hidden=!state.dither;
 function save() {
-  try { localStorage.setItem(storageKey,JSON.stringify(state)); } catch {}
+  try {localStorage.setItem(storageKey,JSON.stringify(state));} catch {}
+}
+const count=(store,id)=>store[id]||0;
+function give(store,id,amount=1) {store[id]=count(store,id)+amount;}
+function produceValue() {
+  return Object.entries(state.foodStock).reduce((sum,[id,n])=>sum+(foods[id]?.price||0)*n,0);
 }
 let area="farm", active=false, currentPanel="title", elapsed=0, toastEnd=0, saveClock=0;
 const player={x:0,z:2.9,yaw:0,pitch:.035,hp:5,first:false,walk:0,step:0,immune:0,cooldown:0,id:0};
 const partner={x:1.65,z:3.55,yaw:0,pitch:.035,hp:5,first:false,walk:0,step:0,immune:0,cooldown:0,id:1};
 let coop=false;
 const players=[player,partner];
-const projectiles=[], particles=[];
-let enemies=[];
+const projectiles=[], enemyShots=[], particles=[];
 const enemySpawns=[[-3,-10],[3,-13],[.7,-19],[-3,-24],[3,-29],[0,-34]];
+function makeEnemy(spawn,i,hp=foes[spawn.type].hp) {
+  return {...spawn,homeX:spawn.x,homeZ:spawn.z,hp,maxHp:hp,phase:i*1.9,flash:0,hitDelay:0,respawn:0,yaw:0,windup:0,charge:0};
+}
+const overworldEnemies=wildSpawns.filter(s=>s.type!=="warden"||!state.warden).map((spawn,i)=>makeEnemy(spawn,i));
+let enemies=overworldEnemies;
 function openPanel(name) {
   currentPanel=name;
   panel(name);
@@ -531,23 +835,50 @@ function openPanel(name) {
   drag=null;
   resetStick();
 }
-function changeArea(next) {
-  area=next;
+function relocate(place,yaw=0) {
   for(const p of players) {
-    p.x=p.id*1.2;
-    p.z=next==="abbey"?-2.8:-35.1+p.id*.6;
-    p.yaw=next==="abbey"?0:PI;
-    p.pitch=next==="abbey"?.06:.025;
-    p.immune=0;
+    p.x=place.x+p.id*1.2;
+    p.z=place.z+p.id*.6;
+    if(blocked(p.x,p.z)) {p.x=place.x;p.z=place.z;}
+    p.yaw=yaw;
+    p.pitch=.04;
+    p.immune=1.6;
     p.cooldown=0;
   }
   projectiles.length=0;
+  enemyShots.length=0;
   particles.length=0;
-  enemies=next==="abbey"?enemySpawns.map(([x,z],i) => ({x,z,homeX:x,homeZ:z,hp:i>3?3:2,phase:i*1.9,flash:0,hitDelay:0})): [];
+}
+function changeArea(next,fallen=false) {
+  area=next;
+  enemies=next==="abbey"?enemySpawns.map(([x,z],i)=>makeEnemy({x,z,type:"wisp"},i,i>3?3:2)):overworldEnemies;
+  const destination=next==="abbey"?{x:0,z:-2.8}:fallen?home:{x:0,z:-35.1};
+  relocate(destination,next==="abbey"||fallen?0:PI);
   if(next==="farm") for(const p of players) p.hp=5;
-  notify(next==="abbey"?"Hollowbell Abbey":"Acorn Hamlet");
+  notify(next==="abbey"?"Hollowbell Abbey":home.name);
   sound("gate");
   save();
+}
+function travel(place) {
+  if(area!=="farm"||!state.discovered[place.id]) return;
+  const destination=place===home?home:{x:place.x,z:place.z+3.2};
+  relocate(destination);
+  state.route=null;
+  openPanel(null);
+  notify(place.name);
+  sound("gate");
+  save();
+}
+function discover(p) {
+  if(area!=="farm") return;
+  for(const region of regions) {
+    if(state.discovered[region.id]||distance(p,region)>10.5) continue;
+    state.discovered[region.id]=true;
+    if(state.route===region.id) state.route=null;
+    notify(region.name+" discovered · fast travel unlocked");
+    sound("gate");
+    save();
+  }
 }
 
 let audio;
@@ -579,83 +910,123 @@ function notify(message) {
   $("toast").hidden=false;
   toastEnd=elapsed+2.8;
 }
-function nearestAction(p) {
-  const reach=2.0;
-  if(area==="farm") {
-    if(distance(p,shop)<2.5) return {type:"sell",label:state.roots?"Sell sunroots":"Market · 3 coins per sunroot"};
-    if(distance(p,gate)<2.65) return {type:"gate",label:state.opened?"Enter Hollowbell Abbey":"Open abbey · 12 coins"};
-    let nearest=-1, best=reach;
-    plots.forEach((tile,i) => {
-      const d=distance(tile,p);
-      if(d<best) { best=d;nearest=i; }
-    });
-    if(nearest>=0) {
-      const crop=state.crops[nearest];
-      const label=crop.kind==="empty"?"Plant sunroot":crop.age>=24?"Harvest sunroot":crop.kind==="watered"?"Sunroot is growing":"Water sunroot";
-      return {type:"crop",label,index:nearest};
-    }
-    return null;
-  }
-  if(distance(p,exit)<2.35) return {type:"exit",label:"Return to the hamlet"};
-  if(distance(p,shrine)<2.65) return {type:"shrine",label:state.ember?"The ember is alight":state.shards>=3?"Restore the ember":"Ember altar · "+state.shards+"/3 shards"};
-  return null;
-}
 function burst(x,y,z,colors,count=16,speed=2) {
   for(let i=0;i<count;i++) {
     const a=Math.random()*TAU, v=Math.random()*speed, life=.3+Math.random()*.53;
     particles.push({x,y,z,vx:Math.cos(a)*v,vy:.5+Math.random()*speed,vz:Math.sin(a)*v,life,max:life,c:colors[i%colors.length]});
   }
 }
+function nearestAction(p) {
+  if(area==="farm") {
+    if(distance(p,shop)<2.5) return {type:"sell",label:"Trade at the market"};
+    if(distance(p,gate)<2.65) return {type:"gate",label:state.opened?"Enter Hollowbell Abbey":"Open abbey · 12 coins"};
+    if(distance(p,kitchen)<1.7) return {type:"cook",label:"Cook at the fire"};
+    for(const region of regions) {
+      if(distance(p,{x:region.x+3.3,z:region.z+1.4})<1.7) return {type:"cook",label:"Cook at the fire"};
+      if(distance(p,region)<2.15) {
+        const ready=count(state.kills,region.id)>=2;
+        const label=state.wards[region.id]?"Rest at the waystone":ready?"Light the waystone":"Waystone · "+count(state.kills,region.id)+"/2 monsters";
+        return {type:"ward",label,region};
+      }
+    }
+    let action=null,best=1.75;
+    for(const [index,tile] of plots.entries()) {
+      const d=distance(p,tile);
+      if(d>=best) continue;
+      const crop=state.crops[index], plant=crops[crop.plant], ripe=crop.age>=plant.time;
+      const label=crop.kind==="empty"?"Plant "+crops[state.selected].name:ripe?"Harvest "+plant.name:crop.kind==="watered"?plant.name+" is growing":"Water "+plant.name;
+      action={type:"crop",label,index};
+      best=d;
+    }
+    for(const node of nodes) {
+      const d=distance(p,node);
+      if(d>=best||count(state.nodeReady,node.id)>state.worldAge) continue;
+      action={type:"forage",label:"Gather "+foods[node.food].name,node};
+      best=d;
+    }
+    for(const cache of caches) {
+      const d=distance(p,cache);
+      if(d>=best||state.openedCaches[cache.id]) continue;
+      action={type:"cache",label:"Open trail chest",cache};
+      best=d;
+    }
+    return action;
+  }
+  if(distance(p,exit)<2.35) return {type:"exit",label:"Return to the hamlet"};
+  if(distance(p,shrine)<2.65) return {type:"shrine",label:state.ember?"The ember is alight":state.shards>=3?"Restore the ember":"Ember altar · "+state.shards+"/3 shards"};
+  return null;
+}
+function tendPlot(index) {
+  const crop=state.crops[index], tile=plots[index], plant=crops[crop.plant];
+  if(crop.kind==="empty") {
+    const seed=state.selected, species=crops[seed];
+    if(!count(state.seedStock,seed)) {notify("Buy "+species.name+" seeds at the market");return;}
+    give(state.seedStock,seed,-1);
+    Object.assign(crop,{age:0,kind:"crop",plant:seed});
+    sound("grow");
+    burst(tile.x,.24,tile.z,[0xafd65f,species.color],8);
+  } else if(crop.age>=plant.time) {
+    give(state.foodStock,crop.plant);
+    give(state.seedStock,crop.plant);
+    crop.kind="empty";
+    crop.age=0;
+    sound("harvest");
+    burst(tile.x,.52,tile.z,[plant.color,0xffdb72,plant.leaf]);
+    notify(plant.name+" harvested");
+  } else if(crop.kind==="crop") {
+    crop.kind="watered";
+    crop.age=Math.max(crop.age,plant.time*.72);
+    burst(tile.x,.56,tile.z,[0x72b6c5,0xa7d5d8],10);
+    sound("grow");
+  } else notify(plant.name+" · "+Math.ceil(plant.time-crop.age)+" seconds");
+}
 function use(p) {
   if(!active||currentPanel) return;
   const a=nearestAction(p);
   if(!a) return;
-  if(a.type==="crop") {
-    const crop=state.crops[a.index], tile=plots[a.index];
-    if(crop.kind==="empty") {
-      if(!state.seeds) { notify("Pick up more seeds at the stall"); return; }
-      state.seeds--;
-      crop.age=0;
-      crop.kind="crop";
-      sound("grow");
-      burst(tile.x,.24,tile.z,[0xafd65f,0xe0b65c],8);
-    } else if(crop.age>=24) {
-      state.roots++;
-      state.seeds++;
-      crop.kind="empty";
-      crop.age=0;
-      sound("harvest");
-      burst(tile.x,.52,tile.z,[0xf3a340,0xffdb72,0x8eab51]);
-      notify("Sunroot harvested");
-    } else if(crop.kind==="crop") {
-      crop.kind="watered";
-      crop.age=Math.max(crop.age,17);
-      burst(tile.x,.56,tile.z,[0x72b6c5,0xa7d5d8],10);
-      sound("grow");
-    } else {
-      notify("Ready in "+Math.ceil(24-crop.age)+" seconds");
-    }
+  if(a.type==="crop") tendPlot(a.index);
+  if(a.type==="sell") {updateMarket();openPanel("market");return;}
+  if(a.type==="cook") {updateCooking();openPanel("cooking");return;}
+  if(a.type==="forage") {
+    const {node}=a, food=foods[node.food];
+    give(state.foodStock,node.food);
+    state.nodeReady[node.id]=state.worldAge+36;
+    notify(food.name+" gathered");
+    burst(node.x,.45,node.z,[food.color,0xffd17e],12);
+    sound("harvest");
   }
-  if(a.type==="sell") {
-    if(!state.roots) {
-      if(!state.seeds) { state.seeds=3; notify("The merchant gives you 3 seeds"); }
-      else notify("Bring sunroots to sell for 3 coins each");
-    } else {
-      const value=state.roots*3;
-      state.gold+=value;
-      state.roots=0;
-      notify("Sold sunroots for "+value+" coins");
-      sound("sell");
-      burst(shop.x,1.4,shop.z,[0xf3aa44,0xffde7c],19);
-    }
+  if(a.type==="cache") {
+    const {cache}=a, seed=cache.region.gift;
+    state.openedCaches[cache.id]=true;
+    state.gold+=cache.gold;
+    give(state.seedStock,seed,2);
+    give(state.foodStock,cache.region.food);
+    notify("Chest opened · "+cache.gold+" coins and "+crops[seed].name+" seeds");
+    burst(cache.x,.6,cache.z,[0xf0b75c,cache.region.color],19);
+    sound("sell");
+  }
+  if(a.type==="ward") {
+    const {region}=a;
+    if(state.wards[region.id]) {
+      p.hp=5;
+      notify("Restored to full health");
+    } else if(count(state.kills,region.id)>=2) {
+      state.wards[region.id]=true;
+      p.hp=5;
+      state.gold+=12;
+      give(state.seedStock,region.gift,3);
+      burst(region.x,1.6,region.z,[region.color,0xffdd9e],36);
+      sound("restore");
+      notify("Waystone lit · 12 coins and 3 "+crops[region.gift].name+" seeds");
+    } else notify("Defeat two monsters around "+region.name);
   }
   if(a.type==="gate") {
-    if(!state.opened && state.gold<12) { notify("The abbey key costs 12 coins"); return; }
-    if(!state.opened) { state.opened=true; state.gold-=12; }
+    if(!state.opened && state.gold<12) {notify("The abbey key costs 12 coins");return;}
+    if(!state.opened) {state.opened=true;state.gold-=12;}
     changeArea("abbey");
   }
   if(a.type==="exit") changeArea("farm");
-  if(a.type==="shrine" && !state.ember && state.shards>=3) {
+  if(a.type==="shrine"&&!state.ember&&state.shards>=3) {
     state.ember=true;
     burst(0,2,-43.8,[0xffe69a,0x8e91ef,0xffb666],52,4);
     sound("restore");
@@ -664,11 +1035,29 @@ function use(p) {
   save();
   syncHud();
 }
-
 function blocked(x,z,r=.28) {
-  const range=area==="farm"?[-26,26,-44,9]:[-7.34,7.34,-45.05,1.38];
-  if(x-r<range[0]||x+r>range[1]||z-r<range[2]||z+r>range[3]||(area==="farm"&&isPond(x,z))) return true;
-  return colliders[area].some(b => Math.abs(x-b.x)<b.w/2+r && Math.abs(z-b.z)<b.d/2+r);
+  if(area==="abbey") {
+    if(x-r<-7.34||x+r>7.34||z-r<-45.05||z+r>1.38) return true;
+    return colliders.abbey.some(b=>Math.abs(x-b.x)<b.w/2+r&&Math.abs(z-b.z)<b.d/2+r);
+  }
+  if(x-r<bounds.left||x+r>bounds.right||z-r<bounds.north||z+r>bounds.south||isPond(x,z)||waterAt(x,z)) return true;
+  if(x>-26&&x<26&&z>-46&&z<14&&colliders.farm.some(b=>Math.abs(x-b.x)<b.w/2+r&&Math.abs(z-b.z)<b.d/2+r)) return true;
+  for(const region of regions) {
+    if(Math.abs(x-region.x)<.50+r&&Math.abs(z-region.z)<.50+r) return true;
+    if((region.landmark==="mill"||region.landmark==="watchtower")&&Math.abs(x-region.x)<2.2+r&&Math.abs(z-region.z+9)<2.2+r) return true;
+    if(region.landmark==="falls"&&Math.abs(x-region.x-11)<5.6+r&&Math.abs(z-region.z+12)<2.1+r) return true;
+  }
+  for(let iz=Math.floor((z-r-.8)/16);iz<=Math.floor((z+r+.8)/16);iz++) {
+    for(let ix=Math.floor((x-r-.8)/16);ix<=Math.floor((x+r+.8)/16);ix++) {
+      const objects=chunkScenery.get(ix+","+iz);
+      if(objects?.some(o=>{
+        if(o.type!=="tree"&&o.type!=="rock") return false;
+        const radius=o.detail.size*(o.type==="tree"?.21:.47)+r;
+        return Math.abs(x-o.x)<radius&&Math.abs(z-o.z)<radius;
+      })) return true;
+    }
+  }
+  return false;
 }
 function walk(p,dx,dz,r) {
   if(!blocked(p.x+dx,p.z,r)) p.x+=dx;
@@ -692,61 +1081,110 @@ function cast(p) {
   sound("cast");
 }
 function hurt(p,e) {
-  if(p.immune>0) return;
+  if(p.immune>0) return false;
   p.hp--;
   p.immune=1.3;
   burst(p.x,.8,p.z,[0xd85e65,0xef996b],10);
   sound("hurt");
   if(p.hp<=0) {
-    changeArea("farm");
-    notify("You wake outside the abbey. Your shards are safe.");
-    return;
+    changeArea("farm",true);
+    notify("You wake in Acorn Hamlet. Your haul is safe.");
+    return true;
   }
   const a=Math.atan2(p.x-e.x,p.z-e.z);
   walk(p,Math.sin(a)*.38,Math.cos(a)*.38);
+  return false;
+}
+function enemyVolley(e) {
+  const angles=e.type==="warden"&&e.hp<8?[-.23,0,.23]:[0];
+  for(const angle of angles) {
+    const yaw=e.yaw+angle, vx=Math.sin(yaw)*6.4, vz=-Math.cos(yaw)*6.4;
+    enemyShots.push({x:e.x+vx*.11,z:e.z+vz*.11,vx,vz,life:2.15,color:e.type==="warden"?0xe87b9b:0xa9daef});
+  }
+}
+function updateEnemy(e,dt) {
+  const def=foes[e.type];
+  if(e.hp<=0) {
+    if(area==="farm"&&e.type!=="warden"&&state.worldAge>=e.respawn) Object.assign(e,{hp:e.maxHp,x:e.homeX,z:e.homeZ,hitDelay:0,windup:0,charge:0});
+    return false;
+  }
+  e.flash=Math.max(0,e.flash-dt);
+  e.hitDelay=Math.max(0,e.hitDelay-dt);
+  const target=coop&&distance(e,partner)<distance(e,player)?partner:player;
+  const d=distance(e,target);
+  if(d>32&&distance(e,{x:e.homeX,z:e.homeZ})<.4) return false;
+  const pursuing=d<def.range&&Math.hypot(e.x-e.homeX,e.z-e.homeZ)<20;
+  if(e.windup>0) {
+    e.windup=Math.max(0,e.windup-dt);
+    if(e.windup>0) return false;
+    if(def.ranged) enemyVolley(e);
+    else e.charge=.56;
+  }
+  if(e.charge>0) {
+    e.charge=Math.max(0,e.charge-dt);
+    walk(e,Math.sin(e.yaw)*5.8*dt,-Math.cos(e.yaw)*5.8*dt,.28);
+    if(distance(e,target)<1.05&&hurt(target,e)) return true;
+    return false;
+  }
+  const dx=(pursuing?target.x:e.homeX)-e.x,dz=(pursuing?target.z:e.homeZ)-e.z;
+  const length=Math.hypot(dx,dz);
+  if(length>.22) e.yaw=Math.atan2(dx,-dz);
+  if(pursuing&&e.hitDelay<=0&&d>2&&d<(def.ranged?10:5.2)&&(def.ranged||e.type==="boar")) {
+    e.windup=e.type==="warden"?.78:.55;
+    e.hitDelay=e.type==="warden"?2.4:2.8;
+  } else if(length>.22&&(!pursuing||!def.ranged||d>4)) {
+    const stride=(pursuing?def.speed:.85)*dt;
+    walk(e,dx/length*stride,dz/length*stride,.23);
+  }
+  if(pursuing&&d<def.radius+.16&&e.hitDelay<=0) {
+    e.hitDelay=.88;
+    return hurt(target,e);
+  }
+  return false;
+}
+function defeat(e) {
+  if(e.type==="wisp") {
+    if(!state.ember&&state.shards<3) {
+      state.shards++;
+      notify("Ember shard · "+state.shards+"/3");
+    }
+  } else {
+    const def=foes[e.type];
+    e.respawn=state.worldAge+70;
+    state.gold+=def.gold;
+    give(state.kills,e.region);
+    if(def.drop) give(state.foodStock,def.drop);
+    if(e.type==="warden") {
+      state.warden=true;
+      give(state.seedStock,"cabbage",5);
+      notify("Barrow Warden defeated · 30 coins and 5 Frost cabbage seeds");
+    } else notify(def.name+" defeated · "+def.gold+" coins"+(def.drop?" + "+foods[def.drop].name:""));
+  }
+  save();
+  sound("shard");
 }
 function updateCombat(dt) {
-  for(const e of enemies) {
-    if(e.hp<=0) continue;
-    e.flash=Math.max(0,e.flash-dt);
-    e.hitDelay=Math.max(0,e.hitDelay-dt);
-    const target=coop&&distance(e,partner)<distance(e,player)?partner:player;
-    const d=distance(e,target);
-    const pursuit=d<7.2;
-    const tx=pursuit?target.x:e.homeX, tz=pursuit?target.z:e.homeZ;
-    const vx=tx-e.x, vz=tz-e.z, length=Math.hypot(vx,vz);
-    if(length>.22) {
-      const stride=(pursuit?1.38:.78)*dt;
-      walk(e,vx/length*stride,vz/length*stride,.23);
-    }
-    if(d<.66 && e.hitDelay<=0) {
-      e.hitDelay=.88;
-      hurt(target,e);
-      if(area!=="abbey") return;
-    }
+  for(const e of enemies) if(updateEnemy(e,dt)) return;
+  for(let i=enemyShots.length-1;i>=0;i--) {
+    const s=enemyShots[i];
+    s.life-=dt;s.x+=s.vx*dt;s.z+=s.vz*dt;
+    const hit=distance(player,s)<.54?player:coop&&distance(partner,s)<.54?partner:null;
+    if(hit||s.life<=0||blocked(s.x,s.z,.05)) enemyShots.splice(i,1);
+    if(hit&&hurt(hit,s)) return;
   }
   for(const shot of projectiles) {
     shot.life-=dt;
-    shot.x+=shot.vx*dt;
-    shot.z+=shot.vz*dt;
+    shot.x+=shot.vx*dt;shot.z+=shot.vz*dt;
     if(shot.life<=0) continue;
     for(const e of enemies) {
-      if(e.hp<=0||distance(e,shot)>.64) continue;
-      e.hp--;
-      e.flash=.18;
-      shot.life=0;
-      burst(e.x,.65,e.z,[0xb6a0f8,0xd87ca2,0x7355bc],e.hp>0?12:25);
-      if(e.hp===0) {
-        if(!state.ember&&state.shards<3) {
-          state.shards++;
-          notify("Ember shard · "+Math.min(state.shards,3)+"/3");
-          save();
-        }
-        sound("shard");
-      } else sound("hit");
+      if(e.hp<=0||distance(e,shot)>foes[e.type].radius+.09) continue;
+      e.hp--;e.flash=.18;shot.life=0;
+      burst(e.x,.65,e.z,[foes[e.type].color,0xd87ca2,0x7355bc],e.hp>0?12:25);
+      if(e.hp===0) defeat(e);
+      else sound("hit");
       break;
     }
-    if(shot.life>0 && blocked(shot.x,shot.z,.03)) {
+    if(shot.life>0&&blocked(shot.x,shot.z,.03)) {
       shot.life=0;
       burst(shot.x,shot.y,shot.z,[0x9172d3,0xcf9add],6,1.1);
     }
@@ -807,21 +1245,117 @@ function merchant(m,t) {
     m.box(x+side*.36,.91,z+.23,.17,.15,.35,0xd19867);
   }
 }
+function closeToPlayers(x,z,r) {
+  return Math.hypot(x-player.x,z-player.z)<r||(coop&&Math.hypot(x-partner.x,z-partner.z)<r);
+}
 function cropMesh(m,t) {
   for(const [i,p] of plots.entries()) {
     const crop=state.crops[i];
-    if(crop.kind==="empty") continue;
-    const growth=clamp(crop.age/24,.08,1);
+    if(crop.kind==="empty"||!closeToPlayers(p.x,p.z,28)) continue;
+    const species=crops[crop.plant], growth=clamp(crop.age/species.time,.08,1);
+    const tall=crop.plant==="bean";
+    if(tall) {
+      m.box(p.x-.38,.18,p.z-.26,.06,1.25,.06,0x9b7753);
+      m.box(p.x+.38,.18,p.z-.26,.06,1.25,.06,0x9b7753);
+      m.box(p.x,1.24,p.z-.26,.83,.06,.06,0x9b7753);
+    }
     for(let j=0;j<3;j++) {
-      const x=p.x+(j-1)*.33, z=p.z+Math.sin(i+j*4)*.23;
-      const height=.12+growth*(.34+j*.038);
-      m.box(x,.22,z,.07,height,.07,0x668442);
+      const x=p.x+(j-1)*.33,z=p.z+Math.sin(i+j*4)*.23;
+      const h=.10+growth*(tall?1+j*.045:.34+j*.038), y=.22+h*.36;
+      m.box(x,.22,z,.062,h,.066,species.leaf);
       for(const side of [-1,1]) {
         const sway=Math.sin(t*2+x+z)*.045;
-        m.rod([x,.26+height*.37,z],[x+side*height*.55+sway,.24+height,z+side*.12],.10+growth*.05,j===1?0x9aa842:0x7c963d);
+        m.rod([x,y,z],[x+side*h*(tall?.24:.55)+sway,.24+h,z+side*.12],.10+growth*.05,species.leaf);
       }
-      if(growth>.74) m.box(x,.24,z,.23*growth,.18*growth,.24*growth,0xe8903d,.3+j*.5);
+      if(growth>.68) {
+        const w=crop.plant==="squash"?.38:crop.plant==="cabbage"?.32:.22;
+        m.box(x,tall?.20+h*.64:.24,z,w*growth,(tall?.26:w*.68)*growth,w*growth,species.color,.3+j*.5);
+      }
     }
+  }
+}
+function flame(m,x,z,t) {
+  const wobble=Math.sin(t*10+x)*.07;
+  m.box(x+wobble,.20,z,.37,.26,.35,0xf27d3f,t);
+  m.box(x-wobble,.36,z,.23,.26,.21,0xffc651,-t);
+  m.box(x+wobble,.57,z,.10,.18,.10,0xffde7f,t);
+  for(let i=0;i<3;i++) {
+    const f=(t*.9+i/3)%1;
+    m.box(x+Math.sin(t*2+i)*.22,.58+f*.9,z+Math.sin(i*2)*.14,.04,.07,.04,i?0xffb85b:0xf17649);
+  }
+}
+function forageMesh(m,node,t) {
+  const {x,z,food,phase}=node, c=foods[food].color;
+  const height=food==="apple"?1.18:food==="plum"?.81:.36;
+  const woody=food==="apple"||food==="plum";
+  if(woody) {
+    m.box(x,0,z,.12,height,.13,0x795039);
+    for(let i=0;i<5;i++) {
+      const a=i*2.399,r=.31+(i%2)*.13;
+      m.box(x+Math.cos(a)*r,height-.16+(i%3)*.15,z+Math.sin(a)*r,.57,.37,.54,food==="apple"?0xa79041:0x738d85,a);
+    }
+  }
+  for(let i=0;i<5;i++) {
+    const a=i*2.399+phase,r=.14+(i%3)*.17;
+    const xx=x+Math.cos(a)*r,zz=z+Math.sin(a)*r;
+    if(food==="mushroom") {
+      m.box(xx,.01,zz,.095,.24+(i%3)*.10,.09,0xf0cbac,a);
+      m.box(xx,.24+(i%3)*.10,zz,.27,.13,.26,c,a);
+    } else if(woody) {
+      m.box(xx,height-.17+(i%2)*.17,zz,.18,.17,.17,c,a);
+    } else {
+      const y=.27+Math.sin(i*4)*.1;
+      m.rod([x,.02,z],[xx,y,zz],.11,0x688b4c);
+      m.box(xx,y,zz,.16,.12,.13,c,a);
+    }
+  }
+  const spark=.18+.65*(.5+.5*Math.sin(t*2.5+phase));
+  m.box(x+.06,height+.16+spark*.32,z,.05,.055,.05,0xffe3a6,t);
+}
+function wildModel(m,e,t) {
+  if(e.type==="wisp") {wisp(m,e,t);return;}
+  const {x,z,yaw}=e, def=foes[e.type], c=e.flash>0||e.windup>0&&Math.floor(t*18)%2?0xf1c9aa:def.color;
+  const cs=Math.cos(yaw), sn=Math.sin(yaw);
+  const s=e.type==="warden"?1.48:1;
+  const box=(a,y,b,w,h,d,color)=>m.box(x+(a*cs-b*sn)*s,y*s,z+(a*sn+b*cs)*s,w*s,h*s,d*s,color,-yaw);
+  const bounce=Math.sin(t*5+e.phase);
+  box(0,.012,0,def.radius,.018,def.radius*.82,0x534047);
+  if(e.type==="boar") {
+    box(0,.31,0,.88,.56,.90,c);
+    box(0,.47,-.58,.64,.44,.56,c);
+    box(0,.44,-.92,.39,.24,.23,0xd68d77);
+    for(const side of [-1,1]) {
+      box(side*.23,.81,-.54,.16,.25,.17,c);
+      box(side*.27,.62,-.837,.10,.083,.06,0x251c31);
+      box(side*.28,.41,-.88,.10,.19,.14,0xe8d5a2);
+      for(const z of [-.32,.31]) box(side*.26,.06,z+bounce*side*.08,.16,.30,.16,0x66464b);
+    }
+    return;
+  }
+  if(e.type==="slime") {
+    box(0,.03,0,1.03-bounce*.09,.36+bounce*.09,.87,c);
+    box(0,.28,0,.81,.28+bounce*.12,.68,c);
+    for(const side of [-1,1]) box(side*.19,.30,-.39,.11,.10,.09,0x354137);
+    return;
+  }
+  if(e.type==="frost") {
+    const y=.52+bounce*.13;
+    box(0,y,0,.64,.62,.60,c);
+    box(0,y+.56,0,.35,.30,.35,0x9ed5e7);
+    for(const side of [-1,1]) {
+      box(side*.47,y+.22,0,.21,.32,.23,0xa0cddd);
+      box(side*.17,y+.28,-.31,.10,.13,.08,0xdaf6ed);
+    }
+    return;
+  }
+  box(0,.42,0,.86,.75,.61,c);
+  box(0,1.07,0,.60,.52,.54,e.type==="warden"?0x6e5369:0x8e9470);
+  box(0,.67,-.33,.28,.26,.08,e.type==="warden"?0xe67c98:0xb5c77b);
+  for(const side of [-1,1]) {
+    box(side*.53,.48+bounce*side*.085,.03,.29,.63,.39,c);
+    box(side*.24,.03,bounce*side*.12,.27,.44,.32,c);
+    box(side*.125,1.28,-.28,.091,.098,.054,e.type==="warden"?0xffac92:0xd9dca1);
+    if(e.type==="warden") box(side*.27,1.45,0,.15,.34,.18,0xb29b90);
   }
 }
 function wisp(m,e,t) {
@@ -843,12 +1377,45 @@ function wisp(m,e,t) {
 }
 function dynamicMesh(t) {
   const m=new Mesh();
-  if(area==="farm") { cropMesh(m,t); merchant(m,t); }
-  else {
-    for(const e of enemies) if(e.hp>0) wisp(m,e,t);
+  if(area==="farm") {
+    cropMesh(m,t);
+    if(closeToPlayers(shop.x,shop.z,40)) merchant(m,t);
+    if(closeToPlayers(kitchen.x,kitchen.z,31)) flame(m,kitchen.x,kitchen.z,t);
+    for(const region of regions) {
+      if(!closeToPlayers(region.x,region.z,34)) continue;
+      flame(m,region.x+3.3,region.z+1.4,t);
+      if(state.wards[region.id]) m.box(region.x,2.9+Math.sin(t*3)*.09,region.z,.29,.30,.29,region.color,t);
+      if(region.id==="orchard") {
+        const x=region.x,z=region.z-6.83;
+        for(let i=0;i<4;i++) {
+          const a=t*.62+i*PI*.5;
+          m.rod([x,4.75,z],[x+Math.cos(a)*2.65,4.75+Math.sin(a)*2.65,z+.035],.20,0xb29573);
+          const v=a+.25;
+          m.quad([x+Math.cos(a)*.86,4.75+Math.sin(a)*.86,z],[x+Math.cos(a)*2.56,4.75+Math.sin(a)*2.56,z],[x+Math.cos(v)*2.56,4.75+Math.sin(v)*2.56,z],[x+Math.cos(v)*.86,4.75+Math.sin(v)*.86,z],0xd6bd89);
+        }
+        m.box(x,4.57,z,.38,.38,.32,0x765a50);
+      }
+    }
+    for(const cache of caches) {
+      const {x,z,id}=cache;
+      if(!closeToPlayers(x,z,34)) continue;
+      const opened=state.openedCaches[id];
+      m.box(x,.04,z,.67,.34,.46,0x90603c);
+      m.box(x,.06,z,.70,.075,.48,0x6e493e);
+      m.box(x,opened?.38:.37,z+(opened?-.18:0),.71,opened?.28:.11,opened?.10:.48,0xb48352);
+      for(const d of [-.23,.23]) m.box(x+d,.13,z+.237,.056,.255,.022,0xc19758);
+      m.box(x,.22,z+.249,.115,.13,.035,opened?0x695456:0xf2c36c);
+    }
+    for(const node of nodes) if(count(state.nodeReady,node.id)<=state.worldAge&&closeToPlayers(node.x,node.z,32)) forageMesh(m,node,t);
+  } else {
     const y=1.56+Math.sin(t*3)*.09, c=state.ember?0xffc873:0x8d68c3;
     m.box(0,y,-43.8,.38,.39,.38,c,t*1.7);
     m.box(0,y+.37,-43.8,.24,.20,.24,c,-t*1.3);
+  }
+  for(const e of enemies) if(e.hp>0&&closeToPlayers(e.x,e.z,34)) wildModel(m,e,t);
+  for(const s of enemyShots) {
+    m.box(s.x,.78,s.z,.20,.23,.20,s.color,t*6);
+    m.box(s.x-s.vx*.025,.84,s.z-s.vz*.025,.11,.11,.11,s.color,-t*6);
   }
   for(const lamp of lamps) {
     if(lamp.area!==area) continue;
@@ -985,7 +1552,7 @@ function renderRaster(view,left,top,w,h,world,dynamic,t) {
   }
   const fog=room?[51,31,56]:[190+Number(state.ember)*18,125+Number(state.ember)*18,91];
   const cx=w*.5, cy=h*.5, near=.095;
-  for(const mesh of [staticWorlds[world],...dynamic]) {
+  for(const mesh of [...(world==="farm"?outdoorMeshes(view):[staticWorlds.abbey]),...dynamic]) {
     const data=mesh.data;
     for(let i=0;i<data.length;i+=18) {
       const ax=data[i]-eye[0],ay=data[i+1]-eye[1],az=data[i+2]-eye[2];
@@ -1073,7 +1640,7 @@ function renderPane(view,x,y,w,h,world,dynamic,now) {
   gl.uniform1f(wu.clock,now);
   gl.uniform1f(wu.clearSky,restored);
   gl.uniform1f(wu.filterOn,Number(state.dither));
-  drawMesh(staticWorlds[world]);
+  for(const mesh of world==="farm"?outdoorMeshes(view):[staticWorlds.abbey]) drawMesh(mesh);
   for(const mesh of dynamic) drawMesh(mesh);
 }
 function positionMarker(view,width,height) {
@@ -1081,9 +1648,11 @@ function positionMarker(view,width,height) {
   let goal=null;
   if(active&&!currentPanel&&!coop) {
     if(area==="farm") {
-      goal=state.opened||state.gold>=12?{...gate,y:4.3,label:"Abbey"}:
-        state.gold+state.roots*3>=12?{...shop,y:2.9,label:"Market"}:
-          {x:-6.25,z:-5.45,y:1.2,label:"Sunroot beds"};
+      const route=byPlace[state.route];
+      if(route) goal={...route,y:2.8,label:route.name};
+      else if(!state.ember&&regionAt(player.x,player.z)===home) goal=state.opened||state.gold>=12?{...gate,y:4.3,label:"Abbey"}:
+        state.gold+produceValue()>=12?{...shop,y:2.9,label:"Market"}:
+          {x:-6.25,z:-5.45,y:1.2,label:"Farm beds"};
     } else if(state.shards>=3&&!state.ember) goal={...shrine,y:2.8,label:"Altar"};
   }
   label.hidden=!goal||distance(goal,player)<2.7;
@@ -1144,16 +1713,37 @@ const heartPixels=[
   " 233333332 ","  2333332  ","   23332   ","    232    ","     2     "
 ];
 let hudStamp="";
+function visibleEnemy() {
+  if(coop||currentPanel) return null;
+  let best=null,limit=14;
+  for(const e of enemies) {
+    const d=distance(player,e);
+    if(e.hp<=0||d>=limit) continue;
+    const angle=Math.atan2(e.x-player.x,player.z-e.z);
+    if(Math.abs(angleDiff(angle,player.yaw))>.52) continue;
+    best=e;limit=d;
+  }
+  return best;
+}
 function syncHud() {
   const a=nearestAction(player), b=coop?nearestAction(partner):null;
-  const quest=state.ember?"The abbey’s ember is burning again.":
-    !state.opened?(state.gold>=12?"Follow the lanterns to the abbey gate.":"Grow and sell sunroots to earn 12 coins. ("+state.gold+"/12)"):
-    state.shards<3?"Defeat wisps and gather ember shards. ("+state.shards+"/3)":"Bring the shards to the altar at the end of the abbey.";
-  const info=[area,player.hp,partner.hp,state.gold,state.roots,state.seeds,quest,a?.label,b?.label,coop].join("|");
+  const region=area==="farm"?regionAt(player.x,player.z):null;
+  const wards=Object.keys(state.wards).length;
+  const quest=area==="abbey"?(state.ember?"The abbey’s ember is burning again.":state.shards<3?"Defeat wisps and gather ember shards. ("+state.shards+"/3)":"Bring the shards to the altar."):
+    region!==home?"Light the valley’s waystones. ("+wards+"/6)"+(region.id==="barrow"&&!state.warden?" · Hunt the Barrow Warden.":""):
+    state.ember?"Explore the valley and light its waystones. ("+wards+"/6)":state.opened||state.gold>=12?"Follow the lanterns to Hollowbell Abbey.":"Earn 12 coins to unlock the abbey. ("+state.gold+"/12)";
+  const foe=visibleEnemy();
+  const info=[area,region?.id,player.hp,partner.hp,state.gold,quest,a?.label,b?.label,coop,foe?.type,foe?.hp,foe?.maxHp].join("|");
   if(info===hudStamp) return;
   hudStamp=info;
-  $("place").textContent=area==="farm"?"Acorn Hamlet":"Hollowbell Abbey";
+  $("place").textContent=region?.name||"Hollowbell Abbey";
   $("wallet").textContent=state.gold+" coins"+(coop?" · P2 "+partner.hp+"/5 HP":"");
+  $("enemy").hidden=!foe;
+  if(foe) {
+    $("enemyName").textContent=foes[foe.type].name;
+    $("enemyHp").max=foe.maxHp;
+    $("enemyHp").value=foe.hp;
+  }
   $("hearts").setAttribute("aria-label",player.hp+" of 5 hearts");
   for(const [i,ctx] of hearts.entries()) {
     ctx.clearRect(0,0,12,11);
@@ -1167,16 +1757,137 @@ function syncHud() {
   $("prompt").textContent=prompt;
   $("prompt").hidden=!prompt;
 }
+function heading(label) {
+  const h=document.createElement("h3");h.textContent=label;return h;
+}
+function control(label,action,disabled=false) {
+  const button=document.createElement("button");
+  button.type="button";button.textContent=label;button.disabled=disabled;
+  button.addEventListener("click",action);
+  return button;
+}
+function row(text,controls=[]) {
+  const line=document.createElement("div"), name=document.createElement("span"), buttons=document.createElement("section");
+  line.className="row";name.textContent=text;buttons.append(...controls);line.append(name,buttons);
+  return line;
+}
+function eat(id,p) {
+  if(!count(state.foodStock,id)||p.hp>=5) return;
+  give(state.foodStock,id,-1);
+  p.hp=Math.min(5,p.hp+foods[id].heal);
+  sound("grow");
+  save();
+  updateBag();
+  syncHud();
+}
 function updateBag() {
-  const items=[["Coins",state.gold],["Sunroots",state.roots],["Seeds",state.seeds],["Ember shards",state.shards]];
-  if(state.opened) items.push(["Abbey key","Found"]);
-  const list=$("bagList");
-  list.replaceChildren(...items.map(([name,value])=>{
-    const line=document.createElement("div"), n=document.createElement("span"), v=document.createElement("b");
-    n.textContent=name;v.textContent=value;line.append(n,v);return line;
+  const list=$("bagList"), contents=[row(state.gold+" coins · "+state.shards+" ember shards"),heading("Planting seeds")];
+  for(const [id,c] of Object.entries(crops)) {
+    const selected=state.selected===id;
+    contents.push(row(c.name+" ×"+count(state.seedStock,id),[control(selected?"Selected":"Select",()=>{
+      state.selected=id;save();updateBag();
+    },selected)]));
+  }
+  contents.push(heading("Food"));
+  const carried=Object.entries(foods).filter(([id])=>count(state.foodStock,id));
+  if(!carried.length) contents.push(row("No food in your bag"));
+  for(const [id,f] of carried) {
+    const buttons=[control(coop?"Eat P1":"Eat",()=>eat(id,player),player.hp>=5)];
+    if(coop) buttons.push(control("Eat P2",()=>eat(id,partner),partner.hp>=5));
+    contents.push(row(f.name+" ×"+count(state.foodStock,id)+" · +"+f.heal+" HP",buttons));
+  }
+  list.replaceChildren(...contents);
+}
+function showBag() {updateBag();openPanel("inventory");}
+function sellProduce() {
+  const value=produceValue();
+  if(!value) return;
+  for(const [id,f] of Object.entries(foods)) if(f.price) delete state.foodStock[id];
+  state.gold+=value;
+  sound("sell");
+  notify("Sold produce for "+value+" coins");
+  save();
+  syncHud();
+  updateMarket();
+}
+function updateMarket() {
+  const value=produceValue();
+  const contents=[row(state.gold+" coins",[control("Sell produce · "+value+"c",sellProduce,!value)]),heading("Seeds")];
+  for(const [id,plant] of Object.entries(crops)) {
+    const cost=Math.max(1,plant.price-2);
+    contents.push(row(plant.name+" ×"+count(state.seedStock,id),[control("Buy 1 · "+cost+"c",()=>{
+      if(state.gold<cost) return;
+      state.gold-=cost;give(state.seedStock,id);save();sound("sell");syncHud();updateMarket();
+    },state.gold<cost)]));
+  }
+  if(!count(state.seedStock,"sunroot")&&!value&&state.gold===0) {
+    contents.push(row("Starter seeds",[control("Take 3",()=>{
+      give(state.seedStock,"sunroot",3);save();updateMarket();
+    })]));
+  }
+  $("marketList").replaceChildren(...contents);
+}
+function canCook(ingredients) {
+  return Object.entries(ingredients).every(([id,n])=>count(state.foodStock,id)>=n);
+}
+function cookRecipe(id) {
+  const ingredients=recipes[id];
+  if(!canCook(ingredients)) return;
+  for(const [food,amount] of Object.entries(ingredients)) give(state.foodStock,food,-amount);
+  give(state.foodStock,id);
+  save();sound("harvest");notify(foods[id].name+" cooked");updateCooking();
+}
+function updateCooking() {
+  $("cookList").replaceChildren(...Object.entries(recipes).map(([id,ingredients])=>{
+    const detail=Object.entries(ingredients).map(([food,amount])=>foods[food].name+" "+count(state.foodStock,food)+"/"+amount).join(" · ");
+    return row(foods[id].name+" · +"+foods[id].heal+" HP / "+detail,[control("Cook",()=>cookRecipe(id),!canCook(ingredients))]);
   }));
 }
-function showBag() { updateBag();openPanel("inventory"); }
+function drawAtlas() {
+  const map=$("atlasCanvas"), ctx=map.getContext("2d");
+  const width=map.width,height=map.height,pad=8;
+  const mx=x=>pad+(x-bounds.left)/(bounds.right-bounds.left)*(width-pad*2);
+  const mz=z=>pad+(z-bounds.north)/(bounds.south-bounds.north)*(height-pad*2);
+  const color=hex=>"#"+hex.toString(16).padStart(6,"0");
+  ctx.fillStyle="#352b3b";ctx.fillRect(0,0,width,height);
+  for(let z=bounds.north;z<bounds.south;z+=4) for(let x=bounds.left;x<bounds.right;x+=4) {
+    const region=regionAt(x,z), pool=waterAt(x,z);
+    ctx.fillStyle=pool?color(pool.color):color((region.ground||grassColors)[Math.abs((x*31+z*29)>>2)%3]);
+    ctx.fillRect(Math.floor(mx(x)),Math.floor(mz(z)),5,4);
+  }
+  ctx.strokeStyle="#d6af75";ctx.lineWidth=1.35;
+  for(const path of trailPoints) {
+    ctx.beginPath();
+    for(const [i,[x,z]] of path.entries()) i?ctx.lineTo(mx(x),mz(z)):ctx.moveTo(mx(x),mz(z));
+    ctx.stroke();
+  }
+  for(const p of places) {
+    const x=mx(p.x),y=mz(p.z);
+    ctx.fillStyle="#322638";ctx.fillRect(x-3,y-3,7,7);
+    ctx.fillStyle=state.discovered[p.id]?color(p.color):"#b9ab95";ctx.fillRect(x-2,y-2,5,5);
+    if(state.wards[p.id]) {ctx.fillStyle="#ffecab";ctx.fillRect(x-1,y-1,3,3);}
+  }
+  ctx.fillStyle="#332538";ctx.fillRect(mx(gate.x)-2,mz(gate.z)-2,5,5);
+  ctx.fillStyle="#dcb0ca";ctx.fillRect(mx(gate.x)-1,mz(gate.z)-1,3,3);
+  const here=area==="farm"?player:gate;
+  ctx.strokeStyle="#fff3cc";ctx.lineWidth=1.3;ctx.strokeRect(mx(here.x)-4,mz(here.z)-4,9,9);
+  ctx.fillStyle="#fff3cc";ctx.font="9px monospace";ctx.fillText("N",width-13,12);
+}
+function updateAtlas() {
+  drawAtlas();
+  const contents=places.map(p=>{
+    const found=Boolean(state.discovered[p.id]), routed=state.route===p.id;
+    const status=p===home?"":state.wards[p.id]?" · Lit":found?" · Discovered":" · Unvisited";
+    return row(p.name+status,[
+      control(routed?"Marked":"Mark",()=>{
+        state.route=routed?null:p.id;save();openPanel(null);
+      },area!=="farm"),
+      control("Travel",()=>travel(p),!found||area!=="farm")
+    ]);
+  });
+  $("atlasList").replaceChildren(...contents);
+}
+function showAtlas() {updateAtlas();openPanel("atlas");}
 function setView(p) { p.first=!p.first; }
 function showPause() {
   $("sound").textContent=state.muted?"Sound off":"Sound on";
@@ -1192,7 +1903,7 @@ function start(withPartner) {
   }
   coop=withPartner;
   active=true;
-  $("hints").textContent=coop?"P1 · WASD / Q,R / E / Space    P2 · Arrows / J,L / Enter / Right Shift":"WASD Move · Drag Look · E Use · Space Cast · V View";
+  $("hints").textContent=coop?"P1 · WASD / Q,R / E / Space    P2 · Arrows / J,L / Enter / Right Shift":"WASD Move · Drag Look · E Use · Space Cast · M Map · V View";
   $("start").textContent="Continue solo";
   openPanel(null);
   syncHud();
@@ -1210,12 +1921,13 @@ window.addEventListener("keydown",event=>{
     return;
   }
   if(!active||currentPanel) return;
-  if(motionKeys.has(code)||["Space","KeyE","KeyB","KeyV","KeyN","Enter","ShiftRight"].includes(code)) event.preventDefault();
+  if(motionKeys.has(code)||["Space","KeyE","KeyB","KeyM","KeyV","KeyN","Enter","ShiftRight"].includes(code)) event.preventDefault();
   keys.add(code);
   if(event.repeat) return;
   if(code==="KeyE") use(player);
   if(code==="KeyV") setView(player);
   if(code==="KeyB") showBag();
+  if(code==="KeyM") showAtlas();
   if(coop&&code==="Enter") use(partner);
   if(coop&&code==="KeyN") setView(partner);
 });
@@ -1228,6 +1940,22 @@ document.addEventListener("visibilitychange",()=>{
   }
 });
 window.addEventListener("pagehide",save);
+
+// Safari can promote repeated taps and pinch gestures to viewport zoom.
+function preventZoom(event) {if(event.cancelable) event.preventDefault();}
+for(const name of ["gesturestart","gesturechange","gestureend","dblclick"]) {
+  document.addEventListener(name,preventZoom,{passive:false});
+}
+let lastTap=null;
+document.addEventListener("touchend",event=>{
+  const surface=event.target.closest?.("#scene,#stick,#actions");
+  const point=event.changedTouches[0], previous=lastTap;
+  if(!surface||!point||event.touches.length) {lastTap=null;return;}
+  lastTap={surface,x:point.clientX,y:point.clientY,time:event.timeStamp};
+  if(previous&&previous.surface===surface&&event.timeStamp-previous.time<350&&
+    Math.hypot(point.clientX-previous.x,point.clientY-previous.y)<28) preventZoom(event);
+},{passive:false,capture:true});
+window.addEventListener("blur",()=>{lastTap=null;drag=null;});
 
 let stickId=null, stickX=0, stickY=0;
 function resetStick() {
@@ -1266,9 +1994,15 @@ for(const name of ["pointerup","pointercancel","lostpointercapture"]) canvas.add
 $("cast").addEventListener("pointerdown",e=>{casting=true;$("cast").setPointerCapture(e.pointerId);cast(player);});
 for(const name of ["pointerup","pointercancel","lostpointercapture"]) $("cast").addEventListener(name,()=>casting=false);
 $("cast").addEventListener("click",e=>{if(!e.detail)cast(player);});
-$("use").addEventListener("click",()=>use(player));
+$("use").addEventListener("pointerdown",e=>{
+  if(e.button!==0) return;
+  e.preventDefault();
+  use(player);
+});
+$("use").addEventListener("click",e=>{if(!e.detail) use(player);});
 $("view").addEventListener("click",()=>setView(player));
 $("bag").addEventListener("click",showBag);
+$("map").addEventListener("click",showAtlas);
 $("menu").addEventListener("click",showPause);
 $("start").addEventListener("click",()=>start(false));
 if(!coarse) {
@@ -1286,7 +2020,7 @@ $("dither").addEventListener("click",()=>{
   save();
   showPause();
 });
-$("closeBag").addEventListener("click",()=>openPanel(null));
+for(const id of ["closeBag","closeAtlas","closeMarket","closeCook"]) $(id).addEventListener("click",()=>openPanel(null));
 $("continue").addEventListener("click",()=>{openPanel(null);notify("The sky clears");});
 $("quit").addEventListener("click",()=>{save();openPanel("title");});
 
@@ -1300,7 +2034,7 @@ function movePlayer(p,dt) {
     p.pitch=clamp(p.pitch+(has("ArrowUp")-has("ArrowDown"))*dt,-.68,.52);
   }
   p.yaw+=turn*1.85*dt;
-  const magnitude=Math.hypot(x,z), stride=4.65*dt/Math.max(1,magnitude);
+  const magnitude=Math.hypot(x,z), stride=(area==="farm"?6.4:4.65)*dt/Math.max(1,magnitude);
   const sn=Math.sin(p.yaw), cs=Math.cos(p.yaw);
   walk(p,(x*cs+z*sn)*stride,(x*sn-z*cs)*stride);
   p.walk=mix(p.walk,Math.min(1,magnitude),Math.min(1,dt*10));
@@ -1312,8 +2046,11 @@ function movePlayer(p,dt) {
 function update(dt) {
   movePlayer(player,dt);
   if(coop) movePlayer(partner,dt);
+  discover(player);
+  if(coop) discover(partner);
   updateCombat(dt);
-  for(const c of state.crops) if(c.kind!=="empty") c.age=Math.min(26,c.age+dt);
+  state.worldAge+=dt;
+  for(const c of state.crops) if(c.kind!=="empty") c.age=Math.min(crops[c.plant].time,c.age+dt);
   for(let i=particles.length-1;i>=0;i--) {
     const p=particles[i];
     p.life-=dt;
@@ -1327,12 +2064,15 @@ function update(dt) {
   if(saveClock>8) {saveClock=0;save();}
   syncHud();
 }
-let last=performance.now();
+let last=performance.now(), lastRender=-Infinity;
 function frame(now) {
   const dt=clamp((now-last)/1000,0,.045);
   last=now;elapsed+=dt;
   if(active&&!currentPanel) update(dt);
-  render(elapsed);
+  if(!software||now-lastRender>=27) {
+    render(elapsed);
+    lastRender=now;
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
