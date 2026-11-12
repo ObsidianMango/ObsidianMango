@@ -46,30 +46,64 @@ export class SoftwareRenderer {
     this.domElement.height = Math.round(height * this.ratio);
   }
 
-  transform(x, y, z, m = this.view.elements) {
+  clipCoordinates(x, y, z, m = this.view.elements) {
     return [
-      (m[0] * x + m[4] * y + m[8] * z + m[12] + 1) * this.width * .5,
-      (1 - (m[1] * x + m[5] * y + m[9] * z + m[13])) * this.height * .5,
+      m[0] * x + m[4] * y + m[8] * z + m[12],
+      m[1] * x + m[5] * y + m[9] * z + m[13],
       m[2] * x + m[6] * y + m[10] * z + m[14],
+      m[3] * x + m[7] * y + m[11] * z + m[15],
     ];
   }
 
-  pushBoxes(mesh, output, camera) {
+  screen([x, y, z, w]) {
+    return [(x / w + 1) * this.width * .5, (1 - y / w) * this.height * .5, z / w, w];
+  }
+
+  transform(x, y, z, m) {
+    return this.screen(this.clipCoordinates(x, y, z, m));
+  }
+
+  clipFace(vertices) {
+    const points = [];
+    const near = .13;
+    for (let i = 0; i < vertices.length; i++) {
+      const a = vertices[i];
+      const b = vertices[(i + 1) % vertices.length];
+      if (a[3] >= near) points.push(this.screen(a));
+      if ((a[3] >= near) === (b[3] >= near)) continue;
+      const t = (near - a[3]) / (b[3] - a[3]);
+      points.push(this.screen(a.map((value, axis) => value + (b[axis] - value) * t)));
+    }
+    return points;
+  }
+
+  pushBoxes(mesh, output, direction, camera) {
     const m = mesh.instanceMatrix.array;
+    const perspective = camera.isPerspectiveCamera;
     for (let i = 0; i < mesh.count; i++) {
       const offset = i * 16;
       if (!m[offset] && !m[offset + 1] && !m[offset + 2]) continue;
       matrix.fromArray(m, offset);
       combined.multiplyMatrices(this.view, matrix);
-      const projected = corners.map(([x, y, z]) => this.transform(x, y, z, combined.elements));
-      if (projected.every(p => p[0] < 0) || projected.every(p => p[0] > this.width)
-        || projected.every(p => p[1] < 0) || projected.every(p => p[1] > this.height)) continue;
+      const vertices = corners.map(([x, y, z]) => this.clipCoordinates(x, y, z, combined.elements));
+      if (perspective && vertices.every(p => p[3] < .13)) continue;
+      const projected = perspective ? null : vertices.map(p => this.screen(p));
+      if (projected && (projected.every(p => p[0] < 0) || projected.every(p => p[0] > this.width)
+        || projected.every(p => p[1] < 0) || projected.every(p => p[1] > this.height))) continue;
+      const dx = perspective ? camera.position.x - m[offset + 12] : direction[0];
+      const dy = perspective ? camera.position.y - m[offset + 13] : direction[1];
+      const dz = perspective ? camera.position.z - m[offset + 14] : direction[2];
       mesh.getColorAt(i, tint);
       for (const [a, b, c, d, axis, sign, light] of faces) {
-        const dot = camera[0] * m[offset + axis * 4] + camera[1] * m[offset + axis * 4 + 1] + camera[2] * m[offset + axis * 4 + 2];
+        const axisOffset = offset + axis * 4;
+        const dot = dx * m[axisOffset] + dy * m[axisOffset + 1] + dz * m[axisOffset + 2];
         if (dot * sign <= .00001) continue;
-        const points = [projected[a], projected[b], projected[c], projected[d]];
-        const depth = (points[0][2] + points[2][2]) * .5;
+        const points = perspective
+          ? this.clipFace([vertices[a], vertices[b], vertices[c], vertices[d]])
+          : [projected[a], projected[b], projected[c], projected[d]];
+        if (points.length < 3 || perspective && (points.every(p => p[0] < 0) || points.every(p => p[0] > this.width)
+          || points.every(p => p[1] < 0) || points.every(p => p[1] > this.height))) continue;
+        const depth = perspective ? points.reduce((sum, p) => sum + p[3], 0) / points.length : (points[0][2] + points[2][2]) * .5;
         output.push({ depth, points, fill: painted(tint, light) });
       }
     }
@@ -104,6 +138,7 @@ export class SoftwareRenderer {
     ctx.fillStyle = '#405448';
     ctx.fillRect(0, 0, this.width, this.height);
     this.view.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    const perspective = camera.isPerspectiveCamera;
     const direction = camera.matrixWorld.elements.slice(8, 11);
     const ground = [];
     const blocks = [];
@@ -111,9 +146,9 @@ export class SoftwareRenderer {
     let world;
     scene.traverseVisible(mesh => {
       if (mesh.isInstancedMesh && mesh.count) {
-        this.pushBoxes(mesh, mesh.userData.ground ? ground : blocks, direction);
+        this.pushBoxes(mesh, mesh.userData.ground && !perspective ? ground : blocks, direction, camera);
         if (mesh.userData.structure) world = mesh;
-      } else if (mesh.userData.sign && direction[2] > .01) {
+      } else if (mesh.userData.sign && !perspective && direction[2] > .01) {
         const { x, y, z } = mesh.position;
         const { width, height } = mesh.geometry.parameters;
         const image = mesh.material.map.image;
@@ -135,7 +170,7 @@ export class SoftwareRenderer {
       }
     });
     this.draw(ground);
-    if (world) {
+    if (world && !perspective && !world.userData.structure.sites) {
       const job = world.userData.structure;
       const spread = ctx.createRadialGradient(0, 0, .2, 0, 0, 1);
       spread.addColorStop(0, '#11171366');
@@ -151,8 +186,11 @@ export class SoftwareRenderer {
     this.draw(blocks);
     for (const mesh of overlays) {
       const { x, y, z } = mesh.position;
-      const [px, py] = this.transform(x, y, z);
-      const scale = this.width * camera.zoom / (camera.right - camera.left) * mesh.scale.x;
+      const [px, py, , depth] = this.transform(x, y, z);
+      if (perspective && (depth < .25 || mesh.isLineSegments)) continue;
+      const scale = perspective
+        ? Math.min(88, this.width * camera.projectionMatrix.elements[0] * .5 * mesh.scale.x / depth)
+        : this.width * camera.zoom / (camera.right - camera.left) * mesh.scale.x;
       if (mesh.isSprite) {
         ctx.drawImage(mesh.material.map.image, px - scale / 2, py - scale / 2, scale, scale);
       } else if (mesh.isLineSegments) {

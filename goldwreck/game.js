@@ -1,8 +1,9 @@
-import { Yard } from './scene.js?v=3';
-import { jobs, getJob, buildJob, key, impactRadius, strike, explode } from './jobs.js?v=3';
-import { advance, isRemote, launch, redirect, remotes } from './ordnance.js?v=3';
-import { fallingChunk, fall, chunkPoint } from './collapse.js';
-import { garrison, updateInfantry } from './infantry.js';
+import { Yard } from './scene.js?v=4';
+import { jobs, getJob, buildJob, key, impactRadius, strike, explode } from './jobs.js?v=4';
+import { advance, isRemote, launch, redirect, remotes } from './ordnance.js?v=4';
+import { fallingChunk, fall, chunkPoint } from './collapse.js?v=4';
+import { garrison, updateInfantry } from './infantry.js?v=4';
+import { terrainFor, groundAt } from './terrain.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -96,23 +97,25 @@ function reset(index, contract = saved.contract) {
   $('#feedback').replaceChildren();
   if (modal.open) modal.close();
   const job = getJob(index, contract);
-  const voxels = buildJob(job);
+  const terrain = terrainFor(job);
+  const voxels = buildJob(job, terrain);
   const cells = new Map(voxels.map(voxel => [key(voxel.x, voxel.y, voxel.z), voxel]));
-  const squad = garrison(job, cells);
+  const squad = garrison(job, cells, terrain);
   run = {
     index, job, hits: job.hits, score: 0, combo: 0, tool: 'drone', ended: false,
-    stock: { hammer: Infinity, drill: job.drills, blast: job.charges, grenade: 10, drone: 6, tank: 5 },
-    munitions: new Set(), chunks: new Set(), remote: null, squad: new Set(squad),
+    stock: { hammer: Infinity, drill: job.drills, blast: job.charges, grenade: job.sites ? 14 : 10, drone: job.sites ? 10 : 6, tank: job.sites ? 7 : 5 },
+    munitions: new Set(), chunks: new Set(), remote: null, fpvArmed: false, terrain, squad: new Set(squad),
     initialBlocks: voxels.length, cells,
   };
-  yard.load(job, voxels, squad);
+  yard.load(job, voxels, squad, terrain);
+  selectSector(0, 0);
   yard.scan(run.squad);
   keyboardAim = [.5, .53];
   crosshair.hidden = true;
   lastAim = null;
   pointer = null;
   viewport.classList.remove('dragging');
-  $('#job-index').textContent = job.contract ? 'ENDLESS OP' : `OP 0${index + 1} / 0${jobs.length}`;
+  $('#job-index').textContent = job.contract ? 'ENDLESS OP' : `OP ${String(index + 1).padStart(2, '0')} / ${jobs.length}`;
   $('#job-name').textContent = job.name;
   missionBar.setAttribute('aria-valuemax', job.troops);
   setView('iso', true);
@@ -137,6 +140,13 @@ function renderStats() {
   $('#remote-bar').hidden = !remote;
   $('#remote-status').textContent = remote ? `${remotes[remote.type].label} · ${remote.waiting ? 'Holding' : 'Moving'}` : '';
   $('#follow').setAttribute('aria-pressed', Boolean(yard.following));
+  $('#fpv-toggle').setAttribute('aria-pressed', Boolean(yard.fpv || run.fpvArmed));
+  $('#fpv-toggle').disabled = ended || (remote ? remote.type !== 'drone' : !hits || !stock.drone);
+  for (const button of viewButtons) button.setAttribute('aria-pressed', !yard.fpv && button.dataset.view === yard.view);
+  $('#fpv-controls').hidden = !yard.fpv;
+  $('#fpv-reticle').hidden = !yard.fpv;
+  $('#sector-bar').hidden = !job.sites || Boolean(yard.fpv);
+  if (run.fpvArmed && !remote) $('#aim-hint').textContent = 'Aim and tap to launch FPV';
   $('#cleared').textContent = `${Math.floor((1 - run.cells.size / run.initialBlocks) * 100)}%`;
   $('#objective').textContent = remaining ? 'Russian infantry' : 'Position clear';
   const best = saved.scores[scoreKey()]?.score;
@@ -187,10 +197,16 @@ function scan() {
 function chooseTool(id) {
   if (run.ended || !run.hits || !run.stock[id] || run.remote) return;
   run.tool = id;
+  if (id !== 'drone') run.fpvArmed = false;
   renderStats();
 }
 
 function setView(view, immediate = false) {
+  if (yard.fpv) {
+    yard.setFPV(null);
+    run.fpvArmed = false;
+    renderStats();
+  }
   yard.setView(view, immediate);
   yard.highlight(null);
   for (const button of viewButtons) button.setAttribute('aria-pressed', button.dataset.view === view);
@@ -219,7 +235,7 @@ function shoot(x, y) {
   if (run.remote) {
     const target = person ? { ...visiblePoint, y: visiblePoint.y - .5 } : yard.aimPoint(path);
     if (target) {
-      redirect(run.remote, target);
+      redirect(run.remote, target, run.terrain);
       renderStats();
     }
     return;
@@ -240,10 +256,20 @@ function shoot(x, y) {
     return;
   }
 
-  const item = launch(tool, target, run.job, yard.azimuth);
+  const item = launch(tool, target, run.job, yard.azimuth, run.terrain);
   run.munitions.add(item);
   yard.drawOrdnance(item);
-  if (isRemote(tool)) run.remote = item;
+  if (isRemote(tool)) {
+    run.remote = item;
+    if (tool === 'drone' && run.fpvArmed) {
+      const at = item.position;
+      at.y = Math.max(4.3, at.y);
+      while (run.cells.has(key(Math.round(at.x), Math.floor(at.y + 1), Math.round(at.z)))) at.y++;
+      item.waiting = true;
+      yard.setFPV(item);
+    }
+    run.fpvArmed = false;
+  }
   renderStats();
 }
 
@@ -321,7 +347,7 @@ yard.simulate = dt => {
   if (!run || run.ended || modal.open) return;
   for (const item of run.munitions) {
     const wasWaiting = item.waiting;
-    const hitStructure = advance(item, dt, run.cells);
+    const hitStructure = advance(item, dt, run.cells, run.terrain);
     const { x, y, z } = item.position;
     const hitPerson = isRemote(item.type) && [...run.squad].some(person => Math.hypot(x - person.x, y - person.y - .62, z - person.z) < .63);
     if (hitStructure || hitPerson) {
@@ -332,7 +358,7 @@ yard.simulate = dt => {
     }
   }
   for (const chunk of [...run.chunks]) {
-    const contact = fall(chunk, dt, run.cells);
+    const contact = fall(chunk, dt, run.cells, (x, z) => groundAt(run.terrain, x, z));
     if (!contact) {
       yard.drawChunk(chunk, chunkPoint);
       continue;
@@ -346,7 +372,7 @@ yard.simulate = dt => {
     }
   }
   for (const person of run.squad) {
-    const result = updateInfantry(person, dt, run.cells, run.job);
+    const result = updateInfantry(person, dt, run.cells, run.job, run.terrain);
     if (result === 'move') yard.drawInfantry(person);
     if (result === 'down') {
       removeInfantry(person);
@@ -384,7 +410,9 @@ function finish() {
     run.score = score;
     const previous = saved.scores[scoreKey()];
     saved.scores[scoreKey()] = { score: Math.max(previous?.score || 0, score), medal: Math.max(previous?.medal || 0, medal) };
-    if (index < jobs.length) saved.unlocked = Math.max(saved.unlocked, index + 1);
+    if (index === saved.unlocked && index < jobs.length) {
+      while (saved.unlocked < jobs.length && saved.scores[saved.unlocked]) saved.unlocked++;
+    }
     if (job.contract) saved.contract = Math.max(saved.contract, job.contract + 1);
     save();
     play('win');
@@ -430,9 +458,9 @@ function jobBoard() {
     const title = document.createElement('strong');
     const status = document.createElement('span');
     title.textContent = job.name;
-    button.disabled = index > saved.unlocked;
+    button.disabled = index > saved.unlocked && !job.sites;
     const record = saved.scores[index === jobs.length ? 'endless' : index];
-    status.textContent = button.disabled ? 'Locked' : record ? `${'★'.repeat(record.medal)}  ${number.format(record.score)}` : index === run.index ? 'Current' : 'Play';
+    status.textContent = button.disabled ? 'Locked' : record ? `${'★'.repeat(record.medal)}  ${number.format(record.score)}` : index === run.index ? 'Current' : job.sites ? `${job.w} × ${job.d}` : 'Play';
     button.append(title, status);
     list.append(button);
   });
@@ -451,7 +479,7 @@ function showHelp() {
       <dt>F</dt><dd>Detonate the active drone or bot.</dd>
       <dt>V / Q / E</dt><dd>Change view or rotate the camera.</dd>
     </dl>
-    <p>Destroy supports to bring down floors and walls. Tap again to steer a drone or bot, then detonate it or let it hit the target. Follow zooms the camera in on the remote.</p>`;
+    <p>Destroy supports to bring down floors and walls. Tap again to steer a drone or bot, then detonate it or let it hit the target. Choose FPV for the drone’s camera. Use the flight buttons or W/A/D and Q/E. Larger maps have sector buttons for a closer view.</p>`;
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
   actions.append(action('Back to mission', () => modal.close(), true));
@@ -515,11 +543,53 @@ viewport.addEventListener('pointerleave', () => {
 });
 viewport.addEventListener('blur', () => { crosshair.hidden = true; });
 
+function selectSector(x, z) {
+  if (x || z) setView('top');
+  yard.setSector(x, z);
+  for (const button of $$('[data-sector]')) button.setAttribute('aria-pressed', button.dataset.sector === `${x},${z}`);
+}
+
+function toggleFPV() {
+  if (run.remote?.type === 'drone') {
+    yard.follow(null);
+    yard.setFPV(yard.fpv ? null : run.remote);
+  } else if (!run.remote && run.stock.drone && run.hits && !run.ended) {
+    run.tool = 'drone';
+    run.fpvArmed = !run.fpvArmed;
+  }
+  renderStats();
+}
+
+function pilot(action) {
+  const drone = yard.fpv;
+  if (!drone || modal.open) return;
+  if (action === 'left' || action === 'right') {
+    drone.yaw += action === 'left' ? -.40 : .40;
+    drone.waiting = true;
+  } else {
+    const { x, y, z } = drone.position;
+    const limitX = run.job.w / 2 + 6, limitZ = run.job.d / 2 + 6;
+    const target = { x, y, z };
+    if (action === 'forward') {
+      target.x = Math.max(-limitX, Math.min(limitX, x + Math.sin(drone.yaw) * 7));
+      target.z = Math.max(-limitZ, Math.min(limitZ, z + Math.cos(drone.yaw) * 7));
+    } else {
+      target.y = Math.min(23, y + (action === 'up' ? 1.6 : -1.6));
+    }
+    redirect(drone, target, run.terrain);
+  }
+  renderStats();
+}
+
+const flightKeys = { w: 'forward', a: 'left', d: 'right', q: 'down', e: 'up' };
 const movement = { ArrowUp: [0, -.018], ArrowDown: [0, .018], ArrowLeft: [-.018, 0], ArrowRight: [.018, 0] };
 document.addEventListener('keydown', event => {
   if (modal.open || event.altKey || event.ctrlKey || event.metaKey) return;
   const input = event.key.toLowerCase();
-  if (event.target === viewport && movement[event.key]) {
+  if (yard.fpv && flightKeys[input] && !event.repeat) {
+    event.preventDefault();
+    pilot(flightKeys[input]);
+  } else if (event.target === viewport && movement[event.key]) {
     event.preventDefault();
     keyboardAim = keyboardAim.map((value, i) => Math.min(.97, Math.max(.03, value + movement[event.key][i])));
     showKeyboardAim();
@@ -556,9 +626,13 @@ $('#end-mission').addEventListener('click', finish);
 $('#scanner').addEventListener('click', scan);
 $('#detonate').addEventListener('click', () => detonate(run.remote));
 $('#follow').addEventListener('click', () => {
+  yard.setFPV(null);
   yard.follow(yard.following ? null : run.remote);
   renderStats();
 });
+$('#fpv-toggle').addEventListener('click', toggleFPV);
+for (const button of $$('[data-flight]')) button.addEventListener('click', () => pilot(button.dataset.flight));
+for (const button of $$('[data-sector]')) button.addEventListener('click', () => selectSector(...button.dataset.sector.split(',').map(Number)));
 $('#jobs-button').addEventListener('click', jobBoard);
 $('#help').addEventListener('click', showHelp);
 $('#close-modal').addEventListener('click', () => modal.close());
@@ -574,4 +648,6 @@ modal.addEventListener('close', () => {
 arena.addEventListener('contextmenu', event => event.preventDefault());
 
 soundLabel();
-reset(Math.min(saved.unlocked, jobs.length));
+const requested = Number(new URLSearchParams(location.search).get('mission')) - 1;
+const chosen = Number.isInteger(requested) && requested >= 0 && (requested <= saved.unlocked || jobs[requested]?.sites) && requested < jobs.length;
+reset(chosen ? requested : Math.min(saved.unlocked, jobs.length));

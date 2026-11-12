@@ -101,7 +101,7 @@ export function chunkPoint(chunk, cell) {
   };
 }
 
-export function fall(chunk, dt, standing) {
+export function fall(chunk, dt, standing, groundAt = () => 0) {
   const steps = Math.max(1, Math.ceil(dt / .022));
   const step = dt / steps;
   for (let i = 0; i < steps; i++) {
@@ -119,9 +119,10 @@ export function fall(chunk, dt, standing) {
       const x = Math.round(point.x);
       const z = Math.round(point.z);
       const y = Math.floor(bottom) + 1;
-      const obstacle = bottom > 0 && standing.get(key(x, y, z));
-      if (bottom > 0 && !obstacle) continue;
-      const surface = obstacle ? obstacle.y : 0;
+      const ground = groundAt(x, z);
+      const obstacle = bottom > ground && standing.get(key(x, y, z));
+      if (bottom > ground && !obstacle) continue;
+      const surface = obstacle ? obstacle.y : ground;
       if (!contact || surface > contact.surface) contact = { x: point.x, y: surface + .5, z: point.z, surface, obstacle };
     }
     if (contact) {

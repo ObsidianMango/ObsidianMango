@@ -1,3 +1,4 @@
+import { fields, buildField, terrainFor } from './terrain.js';
 import { detachUnsupported } from './collapse.js';
 
 export const jobs = [
@@ -6,6 +7,7 @@ export const jobs = [
   { name: 'Municipal Block', sign: 'MUNICIPAL', theme: 2, w: 15, d: 11, h: 11, troops: 6, hits: 42, drills: 9, charges: 8, seed: 330 },
   { name: 'Observation Post', sign: 'OBSERVATION', theme: 3, w: 13, d: 11, h: 13, troops: 7, hits: 45, drills: 9, charges: 9, seed: 966 },
   { name: 'Industrial Works', sign: 'FOUNDRY', theme: 4, w: 17, d: 11, h: 9, troops: 7, hits: 48, drills: 10, charges: 10, seed: 281 },
+  ...fields,
 ];
 
 export const materials = {
@@ -46,12 +48,17 @@ export function getJob(index, contract = 1) {
 export { key } from './collapse.js';
 import { key } from './collapse.js';
 
-export function buildJob(job) {
+export function buildJob(job, terrain = terrainFor(job)) {
   const cells = new Map();
   const random = randomFrom(job.seed);
   const xMax = (job.w - 1) / 2;
   const zMax = (job.d - 1) / 2;
-  const put = (x, y, z, kind) => cells.set(key(x, y, z), { x, y, z, kind });
+  const put = (x, y, z, kind, palette) => cells.set(key(x, y, z), { x, y, z, kind, palette });
+  const finalize = () => [...cells.values()].map((cell, id) => ({ ...cell, id, hp: materials[cell.kind].hp, shade: .87 + random() * .24 }));
+  if (job.sites) {
+    buildField(job, terrain, put);
+    return finalize();
+  }
   for (let y = 1; y <= job.h; y++) {
     for (let z = -zMax; z <= zMax; z++) {
       for (let x = -xMax; x <= xMax; x++) {
@@ -143,7 +150,7 @@ export function buildJob(job) {
     }
   }
 
-  return [...cells.values()].map((cell, id) => ({ ...cell, id, hp: materials[cell.kind].hp, shade: .87 + random() * .24 }));
+  return finalize();
 }
 
 export const impactRadius = { hammer: 1.46, blast: 3.85, grenade: 3.5, drone: 4.25, tank: 5.15, powder: 2.95 };

@@ -1,4 +1,5 @@
 import { key } from './collapse.js';
+import { groundAt } from './terrain.js';
 
 export const remotes = {
   drone: { label: 'FPV drone', speed: 11.5, lift: 1.05 },
@@ -6,27 +7,31 @@ export const remotes = {
 };
 export const isRemote = type => Object.hasOwn(remotes, type);
 
-export function launch(type, target, job, yaw) {
+export function launch(type, target, job, yaw, terrain) {
   const end = { ...target };
   const zEdge = job.d / 2;
   let position;
   if (type === 'tank') {
-    position = { x: 0, y: remotes.tank.lift, z: zEdge + 4 };
-    end.y = remotes.tank.lift;
+    position = { x: job.sites ? target.x : 0, y: remotes.tank.lift,
+      z: job.sites ? Math.min(zEdge + 4, target.z + 9) : zEdge + 4 };
+    end.y = groundAt(terrain, end.x, end.z) + remotes.tank.lift;
   } else {
-    if (type === 'drone') end.y = Math.max(remotes.drone.lift, end.y);
-    const distance = (Math.abs(Math.sin(yaw)) * job.w + Math.abs(Math.cos(yaw)) * job.d) / 2 + 5;
+    if (type === 'drone') end.y = Math.max(groundAt(terrain, end.x, end.z) + .48, end.y);
+    const distance = job.sites ? 11 : (Math.abs(Math.sin(yaw)) * job.w + Math.abs(Math.cos(yaw)) * job.d) / 2 + 5;
     position = {
-      x: Math.sin(yaw) * distance,
-      y: type === 'grenade' ? Math.max(1.3, target.y * .46) : Math.max(remotes.drone.lift, target.y),
-      z: Math.cos(yaw) * distance,
+      x: (job.sites ? target.x : 0) + Math.sin(yaw) * distance,
+      y: type === 'grenade' ? Math.max(1.3, target.y * .46) : Math.max(remotes.drone.lift, target.y + (job.sites ? 1 : 0)),
+      z: (job.sites ? target.z : 0) + Math.cos(yaw) * distance,
     };
   }
-  return { type, position, start: { ...position }, end, age: 0, yaw, waiting: false };
+  if (type === 'tank') position.y += groundAt(terrain, position.x, position.z);
+  const heading = Math.atan2(end.x - position.x, end.z - position.z);
+  return { type, position, start: { ...position }, end, age: 0, yaw: heading, waiting: false };
 }
 
-export function redirect(item, target) {
-  item.end = { ...target, y: item.type === 'tank' ? remotes.tank.lift : Math.max(remotes.drone.lift, target.y) };
+export function redirect(item, target, terrain) {
+  const ground = groundAt(terrain, target.x, target.z);
+  item.end = { ...target, y: item.type === 'tank' ? ground + remotes.tank.lift : Math.max(ground + .48, target.y) };
   item.waiting = false;
 }
 
@@ -40,7 +45,7 @@ function obstructed(position, type, cells) {
   return cells.has(key(x, Math.floor(position.y + 1), z));
 }
 
-export function advance(item, dt, cells) {
+export function advance(item, dt, cells, terrain) {
   item.age += dt;
   const { position, start, end, type } = item;
   if (type === 'grenade') {
@@ -51,10 +56,10 @@ export function advance(item, dt, cells) {
     return t >= 1;
   }
 
-  if (item.age >= 14) return true;
+  if (item.age >= (type === 'drone' ? 28 : 18)) return true;
   if (item.waiting) return false;
   const dx = end.x - position.x;
-  const dy = end.y - position.y;
+  const dy = type === 'tank' ? 0 : end.y - position.y;
   const dz = end.z - position.z;
   const distance = Math.hypot(dx, dy, dz);
   if (distance < .04) {
@@ -69,7 +74,9 @@ export function advance(item, dt, cells) {
     position.x += dx * step / substeps;
     position.y += dy * step / substeps;
     position.z += dz * step / substeps;
-    if (obstructed(position, type, cells)) return true;
+    const ground = groundAt(terrain, position.x, position.z);
+    if (type === 'tank') position.y = ground + remotes.tank.lift;
+    if (position.y < ground + .17 || obstructed(position, type, cells)) return true;
   }
   item.waiting = step === 1;
   return false;

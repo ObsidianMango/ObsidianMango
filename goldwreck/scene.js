@@ -1,6 +1,8 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js';
-import { SoftwareRenderer } from './software.js?v=3';
-import { key, palettes, randomFrom } from './jobs.js?v=3';
+import { SoftwareRenderer } from './software.js?v=4';
+import { key, palettes, randomFrom } from './jobs.js?v=4';
+
+import { fieldGround, groundAt } from './terrain.js';
 
 const box = new THREE.BoxGeometry();
 const blockMaterial = new THREE.MeshLambertMaterial();
@@ -8,7 +10,7 @@ const blockMaterial = new THREE.MeshLambertMaterial();
 const hiddenMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 const dummy = new THREE.Object3D();
 const shade = new THREE.Color();
-const rayBounds = new THREE.Box3(new THREE.Vector3(-14.5, 0, -10.5), new THREE.Vector3(14.5, 20, 10.5));
+
 const rayEntry = new THREE.Vector3();
 const point = new THREE.Vector3();
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -.5);
@@ -103,11 +105,12 @@ function markerTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
-function trace(ray, cells) {
+function trace(ray, cells, rayBounds, groundDistance) {
   if (!ray.intersectBox(rayBounds, rayEntry)) return [];
   const start = rayBounds.containsPoint(ray.origin) ? ray.origin : rayEntry;
   point.copy(start).addScaledVector(ray.direction, .0001);
   const offset = point.distanceTo(ray.origin);
+  if (offset > groundDistance) return [];
   const positions = [point.x + .5, point.y + 1, point.z + .5];
   const steps = [ray.direction.x, ray.direction.y, ray.direction.z];
   const cell = positions.map(Math.floor);
@@ -120,7 +123,7 @@ function trace(ray, cells) {
   const found = [];
   let distance = 0;
   let first = null;
-  for (let i = 0; i < 106; i++) {
+  for (let i = 0; i < 260; i++) {
     const voxel = cells.get(key(...cell));
     if (voxel) {
       first ??= distance;
@@ -128,7 +131,7 @@ function trace(ray, cells) {
     }
     const axis = cross[0] <= cross[1] && cross[0] <= cross[2] ? 0 : cross[1] <= cross[2] ? 1 : 2;
     distance = cross[axis];
-    if (distance > 63 || (first !== null && distance - first > 8)) break;
+    if (distance + offset > groundDistance || distance > 190 || (first !== null && distance - first > 8)) break;
     cell[axis] += Math.sign(steps[axis]);
     cross[axis] += delta[axis];
   }
@@ -156,7 +159,11 @@ export class Yard {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x44574d);
     this.scene.fog = new THREE.Fog(0x44574d, 42, 92);
-    this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, .2, 150);
+    this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, .2, 270);
+    this.fpvCamera = new THREE.PerspectiveCamera(66, 1, .12, 170);
+    this.fpv = null;
+    this.sector = [0, 0];
+    this.rayBounds = new THREE.Box3();
     this.look = new THREE.Vector3();
     this.focus = new THREE.Vector3();
     this.following = null;
@@ -174,7 +181,7 @@ export class Yard {
     this.shake = 0;
     this.reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.scene.add(new THREE.HemisphereLight(0xd6e8df, 0x5b6252, 1.65));
-    const sun = new THREE.DirectionalLight(0xffe5b9, 2.6);
+    const sun = this.sun = new THREE.DirectionalLight(0xffe5b9, 2.6);
     sun.position.set(-18, 28, 19);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -220,6 +227,8 @@ export class Yard {
     this.width = Math.max(1, this.element.clientWidth);
     this.height = Math.max(1, this.element.clientHeight);
     this.renderer.setSize(this.width, this.height, false);
+    this.fpvCamera.aspect = this.width / this.height;
+    this.fpvCamera.updateProjectionMatrix();
     this.updateFraming();
   }
 
@@ -232,14 +241,31 @@ export class Yard {
     const span = overhead ? this.job.d + 7 : (this.job.h + skyline) * (front ? .92 : .79)
       + this.job.d * (front ? .21 : .53) + 3.2;
     const across = this.job.w + (overhead || front ? 5 : 7);
-    const vertical = Math.max(span, across / aspect);
+    const fieldSpan = this.job.sites ? Math.max((overhead ? this.job.d * 1.10 + 8 : front ? span : (this.job.d * .81 + this.job.w * .59) * .59 + 11), (across + (overhead || front ? 0 : this.job.d * .25)) / aspect) : 0;
+    const vertical = Math.max(span, across / aspect, fieldSpan);
     this.camera.left = -vertical * aspect / 2;
     this.camera.right = vertical * aspect / 2;
     this.camera.top = vertical / 2;
     this.camera.bottom = -vertical / 2;
     this.camera.updateProjectionMatrix();
-    this.look.set(0, overhead ? 1 : this.job.h * .50 + skyline * .23, .38);
+    this.look.set(this.sector[0] * this.job.w * .23, overhead ? 1 : this.job.h * .50 + skyline * .23,
+      this.sector[1] * this.job.d * .23 + .38);
     this.dirty = true;
+  }
+
+  setSector(x, z) {
+    this.sector = [x, z];
+    this.updateFraming();
+  }
+
+  setFPV(item) {
+    this.fpv = item;
+    this.highlight(null);
+    this.dirty = true;
+  }
+
+  get viewingCamera() {
+    return this.fpv ? this.fpvCamera : this.camera;
   }
 
   setView(view, immediate = false) {
@@ -261,7 +287,7 @@ export class Yard {
     this.dirty = true;
   }
 
-  load(job, cells, squad) {
+  load(job, cells, squad, terrain) {
     for (const object of [...this.world.children]) {
       this.world.remove(object);
       if (object.isInstancedMesh) object.dispose();
@@ -283,6 +309,8 @@ export class Yard {
     this.rubbleCursor = 0;
     this.following = null;
     this.camera.zoom = 1;
+    this.fpv = null;
+    this.sector = [0, 0];
     this.debris.length = 0;
     this.debrisMesh.count = 0;
     for (const ring of this.rings) {
@@ -293,6 +321,14 @@ export class Yard {
     this.outline.visible = false;
     this.shake = 0;
     this.job = job;
+    this.terrain = terrain;
+    this.orbitRadius = job.sites ? Math.max(49, job.w * .82 + 18) : 43;
+    this.rayBounds.min.set(-job.w / 2 - 12, -3, -job.d / 2 - 12);
+    this.rayBounds.max.set(job.w / 2 + 12, 24, job.d / 2 + 12);
+    const shadowExtent = Math.max(23, Math.hypot(job.w, job.d) * .57);
+    const shadow = this.sun.shadow.camera;
+    Object.assign(shadow, { left: -shadowExtent, right: shadowExtent, top: shadowExtent, bottom: -shadowExtent, far: 120 });
+    shadow.updateProjectionMatrix();
     this.buildGround(job);
     this.signZ = (job.d - 1) / 2;
     this.signY = job.h === 7 ? 5 : job.theme === 3 ? 5 : job.h - 1;
@@ -300,14 +336,15 @@ export class Yard {
     this.sign = new THREE.Mesh(face, new THREE.MeshBasicMaterial({ map: signTexture(job.sign), toneMapped: false }));
     this.sign.position.set(0, this.signY - .38, this.signZ + .49);
     this.sign.userData.sign = true;
+    this.sign.visible = !job.sites;
     this.world.add(this.sign);
 
     this.blocks = batch(this.world, box, blockMaterial, cells.length);
     this.blocks.userData.structure = job;
     this.blocks.castShadow = true;
     this.blocks.receiveShadow = true;
-    const palette = palettes[job.theme];
     for (const cell of cells) {
+      const palette = palettes[cell.palette ?? job.theme];
       const color = cell.kind === 'powder' ? 0xf27642 : cell.kind === 'sandbag' ? 0x919467 : cell.kind === 'beam' ? palette.trim : palette[cell.kind];
       cell.color = new THREE.Color(color).multiplyScalar(cell.shade);
       const size = cell.kind === 'glass' ? .925 : cell.kind === 'powder' ? .71 : .965;
@@ -326,47 +363,51 @@ export class Yard {
     const random = randomFrom(job.theme + 883);
     const blocks = [];
     const add = (x, y, z, w, h, d, color) => blocks.push([x, y, z, w, h, d, color]);
-    add(0, -.65, 0, 170, .8, 170, 0x4d6654);
-    add(0, -.26, .5, 52, .16, 41, 0x586059);
-    add(0, -.085, .15, x * 2 + 4.9, .17, z * 2 + 5.8, 0x777a66);
-    add(0, -.135, z + 6.2, 52, .11, 5.5, 0x3d4642);
-    add(0, -.10, z + 3.27, 42, .08, .22, 0xaaa48a);
-    add(0, -.10, z + 9.11, 42, .08, .20, 0xaaa48a);
-    for (let i = -7; i <= 7; i++) add(i * 3.3, -.065, z + 6.18, 1.75, .027, .12, 0xc09851);
-    for (let i = -4; i <= 4; i++) {
-      add(i * 2.5, -.01, z + 2.82, .06, .026, .78, 0xaeab93);
-      add(i * 2.6, -.01, -z - 2.1, .1, .026, .58, 0xafa992);
-    }
-    for (let dz = -z - 3; dz <= z + 2; dz++) {
-      add(-x - 2.43, .01, dz, .20, .06, .82, dz % 2 ? 0xab934e : 0x4b5143);
-      add(x + 2.43, .01, dz, .20, .06, .82, dz % 2 ? 0xab934e : 0x4b5143);
-    }
-    for (let i = 0; i < 85; i++) {
-      const gx = (random() - .5) * 50;
-      const gz = (random() - .5) * 37;
-      if (Math.abs(gx) < x + 3 && Math.abs(gz) < z + 3 || gz > z + 3 && gz < z + 9.3) continue;
-      add(gx, -.16, gz, .12 + random() * .65, .06, .25 + random() * .55, random() < .55 ? 0x626b61 : 0x4a554d);
-    }
-    for (const side of [-1, 1]) {
-      for (let i = 0; i < 3; i++) {
-        const gx = side * (x + 4.2 + i * 1.9);
-        const gz = -z - 1.5 - i * .45;
-        add(gx, .05, gz, 1.4, .31, 1.12, 0x77745d);
-        add(gx, .32, gz, 1.1, .39, .86, i % 2 ? 0x536b4b : 0x62774c);
-        add(gx + .16, .62, gz - .12, .72, .42, .57, 0x688252);
+    if (job.sites) {
+      fieldGround(job, this.terrain, add);
+    } else {
+      add(0, -.65, 0, 170, .8, 170, 0x4d6654);
+      add(0, -.26, .5, 52, .16, 41, 0x586059);
+      add(0, -.085, .15, x * 2 + 4.9, .17, z * 2 + 5.8, 0x777a66);
+      add(0, -.135, z + 6.2, 52, .11, 5.5, 0x3d4642);
+      add(0, -.10, z + 3.27, 42, .08, .22, 0xaaa48a);
+      add(0, -.10, z + 9.11, 42, .08, .20, 0xaaa48a);
+      for (let i = -7; i <= 7; i++) add(i * 3.3, -.065, z + 6.18, 1.75, .027, .12, 0xc09851);
+      for (let i = -4; i <= 4; i++) {
+        add(i * 2.5, -.01, z + 2.82, .06, .026, .78, 0xaeab93);
+        add(i * 2.6, -.01, -z - 2.1, .1, .026, .58, 0xafa992);
       }
-      const gx = side * (x + 2.05);
-      add(gx, .1, z + 2.25, .48, .24, .45, 0x687164);
-      add(gx, 1.42, z + 2.25, .17, 2.8, .16, 0x495c54);
-      add(gx - side * .38, 2.80, z + 2.25, .90, .19, .19, 0x647267);
-      add(gx - side * .76, 2.76, z + 2.25, .35, .21, .31, 0xf4d390);
-    }
-    for (let i = 0; i < 12; i++) {
-      const gx = -19 + i * 3.4;
-      add(gx, .36, -z - 4.8, .1, 1.0, .14, 0x6d7561);
-      if (i < 11) {
-        add(gx + 1.7, .16, -z - 4.8, 3.32, .10, .08, 0x758174);
-        add(gx + 1.7, .65, -z - 4.8, 3.32, .10, .08, 0x758174);
+      for (let dz = -z - 3; dz <= z + 2; dz++) {
+        add(-x - 2.43, .01, dz, .20, .06, .82, dz % 2 ? 0xab934e : 0x4b5143);
+        add(x + 2.43, .01, dz, .20, .06, .82, dz % 2 ? 0xab934e : 0x4b5143);
+      }
+      for (let i = 0; i < 85; i++) {
+        const gx = (random() - .5) * 50;
+        const gz = (random() - .5) * 37;
+        if (Math.abs(gx) < x + 3 && Math.abs(gz) < z + 3 || gz > z + 3 && gz < z + 9.3) continue;
+        add(gx, -.16, gz, .12 + random() * .65, .06, .25 + random() * .55, random() < .55 ? 0x626b61 : 0x4a554d);
+      }
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 3; i++) {
+          const gx = side * (x + 4.2 + i * 1.9);
+          const gz = -z - 1.5 - i * .45;
+          add(gx, .05, gz, 1.4, .31, 1.12, 0x77745d);
+          add(gx, .32, gz, 1.1, .39, .86, i % 2 ? 0x536b4b : 0x62774c);
+          add(gx + .16, .62, gz - .12, .72, .42, .57, 0x688252);
+        }
+        const gx = side * (x + 2.05);
+        add(gx, .1, z + 2.25, .48, .24, .45, 0x687164);
+        add(gx, 1.42, z + 2.25, .17, 2.8, .16, 0x495c54);
+        add(gx - side * .38, 2.80, z + 2.25, .90, .19, .19, 0x647267);
+        add(gx - side * .76, 2.76, z + 2.25, .35, .21, .31, 0xf4d390);
+      }
+      for (let i = 0; i < 12; i++) {
+        const gx = -19 + i * 3.4;
+        add(gx, .36, -z - 4.8, .1, 1.0, .14, 0x6d7561);
+        if (i < 11) {
+          add(gx + 1.7, .16, -z - 4.8, 3.32, .10, .08, 0x758174);
+          add(gx + 1.7, .65, -z - 4.8, 3.32, .10, .08, 0x758174);
+        }
       }
     }
     const ground = batch(this.world, box, blockMaterial, blocks.length);
@@ -377,16 +418,28 @@ export class Yard {
 
   aim(px, py, cells) {
     this.mouse.set(px / this.width * 2 - 1, 1 - py / this.height * 2);
-    this.raycaster.setFromCamera(this.mouse, this.camera);
-    return trace(this.raycaster.ray, cells);
+    this.raycaster.setFromCamera(this.mouse, this.viewingCamera);
+    const ray = this.raycaster.ray;
+    this.groundTarget = null;
+    let range = Infinity;
+    for (const level of [0, -1, -2]) {
+      groundPlane.constant = -level;
+      if (!ray.intersectPlane(groundPlane, point) || groundAt(this.terrain, point.x, point.z) !== level) continue;
+      const distance = point.distanceTo(ray.origin);
+      if (distance >= range) continue;
+      range = distance;
+      this.groundTarget = { x: point.x, y: level + .45, z: point.z };
+    }
+    this.aimRange = range;
+    return trace(ray, cells, this.rayBounds, range);
   }
 
   aimPoint(path) {
     const voxel = path[0]?.voxel;
     if (voxel) return { x: voxel.x, y: voxel.y - .5, z: voxel.z };
-    if (!this.raycaster.ray.intersectPlane(groundPlane, point)) return null;
-    if (Math.abs(point.x) > this.job.w / 2 + 4 || Math.abs(point.z) > this.job.d / 2 + 5) return null;
-    return { x: point.x, y: point.y, z: point.z };
+    const target = this.groundTarget;
+    if (!target || Math.abs(target.x) > this.job.w / 2 + 4 || Math.abs(target.z) > this.job.d / 2 + 5) return null;
+    return target;
   }
 
   drawOrdnance(item) {
@@ -422,6 +475,7 @@ export class Yard {
       this.dirty = true;
     }
     if (this.following === item) this.following = null;
+    if (this.fpv === item) this.setFPV(null);
   }
 
   follow(item) {
@@ -436,12 +490,13 @@ export class Yard {
   }
 
   project(voxel) {
-    point.set(voxel.x, voxel.y - .15, voxel.z).project(this.camera);
+    point.set(voxel.x, voxel.y - .15, voxel.z).project(this.viewingCamera);
     return { x: (point.x * .5 + .5) * this.width, y: (.5 - point.y * .5) * this.height };
   }
 
   aimInfantry(squad, range = Infinity) {
     const ray = this.raycaster.ray;
+    range = Math.min(range, this.aimRange);
     let closest = null;
     for (const person of squad) {
       soldierBounds.min.set(person.x - .42, person.y, person.z - .40);
@@ -500,7 +555,7 @@ export class Yard {
       const sprite = new THREE.Sprite(this.markerMaterial);
       sprite.position.set(person.x, person.y + .79, person.z);
       sprite.renderOrder = 6;
-      sprite.scale.setScalar(.91);
+      sprite.scale.setScalar(this.job.sites ? Math.min(2.2, this.job.w * .041) : .91);
       this.scene.add(sprite);
       this.markers.set(person.id, sprite);
     }
@@ -558,7 +613,7 @@ export class Yard {
       if (contact.surface > 0) continue;
       const size = .24 + Math.random() * .42;
       const id = this.rubbleCursor++ % rubbleLimit;
-      dummy.position.set(position.x + (Math.random() - .5) * 1.3, size * .39, position.z + (Math.random() - .5) * 1.3);
+      dummy.position.set(position.x + (Math.random() - .5) * 1.3, groundAt(this.terrain, position.x, position.z) + size * .39, position.z + (Math.random() - .5) * 1.3);
       dummy.rotation.set(Math.random() * .6, Math.random() * 6, Math.random() * .45);
       dummy.scale.set(size, size * .66, size * .78);
       dummy.updateMatrix();
@@ -634,7 +689,7 @@ export class Yard {
     const desired = this.following
       ? remoteTarget.set(this.following.position.x, this.following.position.y + 1.1, this.following.position.z)
       : this.look;
-    const zoom = this.following ? 1.62 : 1;
+    const zoom = this.following ? 1.62 : this.sector.some(Boolean) ? 1.93 : 1;
     const refocus = this.focus.distanceToSquared(desired) > .0001 || Math.abs(this.camera.zoom - zoom) > .001;
     if (refocus) {
       const ease = this.reduceMotion ? 1 : 1 - Math.exp(-8 * dt);
@@ -648,10 +703,10 @@ export class Yard {
       this.azimuth += (this.goalAzimuth - this.azimuth) * easing;
       this.tilt += (this.goalTilt - this.tilt) * easing;
     }
-    if (this.dirty || motion || refocus || this.debris.length || this.rings.length || this.shake > 0) {
+    if (this.dirty || this.fpv || motion || refocus || this.debris.length || this.rings.length || this.shake > 0) {
       this.dirty = false;
-      const y = Math.sin(this.tilt) * 43;
-      const r = Math.cos(this.tilt) * 43;
+      const y = Math.sin(this.tilt) * this.orbitRadius;
+      const r = Math.cos(this.tilt) * this.orbitRadius;
       const kick = this.view === 'top' ? 0 : this.shake * Math.sin(now * .091);
       this.shake = Math.max(0, this.shake - dt * 2.4);
       this.camera.position.set(
@@ -664,7 +719,22 @@ export class Yard {
       this.camera.translateY(kick * .24);
       this.camera.updateMatrixWorld();
       this.updateEffects(dt);
-      this.renderer.render(this.scene, this.camera);
+      const pilot = this.fpv;
+      if (pilot) {
+        const { x, y, z } = pilot.position;
+        const dx = Math.sin(pilot.yaw);
+        const dz = Math.cos(pilot.yaw);
+        const pitch = pilot.waiting ? -.06 : Math.max(-.58, Math.min(.52, (pilot.end.y - y) / Math.max(1.5, Math.hypot(pilot.end.x - x, pilot.end.z - z))));
+        this.fpvCamera.position.set(x + dx * .22, y + .10, z + dz * .22);
+        this.fpvCamera.lookAt(x + dx * 8, y + pitch * 8, z + dz * 8);
+        this.fpvCamera.updateMatrixWorld();
+      }
+      this.scene.fog.near = pilot ? 28 : this.orbitRadius + (this.job.sites ? 19 : -1);
+      this.scene.fog.far = pilot ? 105 : this.orbitRadius + (this.job.sites ? 115 : 49);
+      const hull = this.ordnance.get(pilot);
+      if (hull) hull.visible = false;
+      this.renderer.render(this.scene, this.viewingCamera);
+      if (hull) hull.visible = true;
     }
     requestAnimationFrame(time => this.frame(time));
   }
@@ -691,8 +761,9 @@ export class Yard {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.z += p.vz * dt;
-      if (p.y < .12) {
-        p.y = .12;
+      const floor = groundAt(this.terrain, p.x, p.z) + .12;
+      if (p.y < floor) {
+        p.y = floor;
         p.vy *= -.24;
         p.vx *= .76;
         p.vz *= .76;
