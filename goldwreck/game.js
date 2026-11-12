@@ -1,11 +1,11 @@
-import { Yard } from './scene.js?v=5';
+import { Yard } from './scene.js?v=6';
 import { jobs, getJob, buildJob, key, impactRadius, strike, explode } from './jobs.js?v=4';
 import { advance, flightCollision, isRemote, launch, redirect, remotes } from './ordnance.js?v=5';
 import { fallingChunk, fall, chunkPoint } from './collapse.js?v=4';
 import { garrison, updateInfantry } from './infantry.js?v=4';
 import { terrainFor, groundAt } from './terrain.js';
-import { advanceFlight, releaseControl, takeControl } from './flight.js';
-import { flightSticks } from './sticks.js';
+import { advanceFlight, clamp, guideFlight, releaseControl, takeControl } from './flight.js?v=6';
+import { flightControls } from './sticks.js?v=6';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -32,25 +32,37 @@ let pointer;
 let lastAim;
 let keyboardAim = [.5, .53];
 let nextTelemetry = 0;
-const sticks = flightSticks($('#fpv-left'), $('#fpv-right'), () => yard.fpv?.flight);
-const flightHUD = ['throttle', 'altitude', 'speed', 'battery'].map(id => $('#fpv-' + id));
+const sticks = flightControls($('#fpv-move'), $('#fpv-climb'), $('#fpv-descend'), () => yard.fpv?.flight);
+const flightHUD = ['altitude', 'speed', 'battery'].map(id => $('#fpv-' + id));
 
 function telemetry(item) {
   const altitude = item.position.y - groundAt(run.terrain, item.position.x, item.position.z);
   const speed = Math.hypot(item.flight.velocity.x, item.flight.velocity.y, item.flight.velocity.z);
-  const values = [`${Math.round(item.flight.throttle * 100)}%`, `${Math.round(altitude)} m`,
+  const values = [`${altitude.toFixed(1)} m`,
     `${Math.round(speed)} m/s`, `${Math.max(0, Math.ceil(item.expires - item.age))} s`];
   flightHUD.forEach((field, i) => {
     if (field.textContent !== values[i]) field.textContent = values[i];
   });
+  const status = item.flight.destination ? 'Flying to point' : speed > .22 ? 'Flying'
+    : item.flight.blocked ? 'Hovering · Obstacle' : 'Hovering';
+  const label = `FPV · ${status}`;
+  const remoteStatus = $('#remote-status');
+  if (remoteStatus.textContent !== label) remoteStatus.textContent = label;
 }
 
 function setPilot(item) {
   if (yard.fpv) releaseControl(yard.fpv);
   sticks.clear();
+  if (pointer) {
+    const id = pointer.id;
+    pointer = null;
+    viewport.classList.remove('dragging');
+    if (viewport.hasPointerCapture(id)) viewport.releasePointerCapture(id);
+  }
   if (item) {
+    const { position } = item;
+    while (flightCollision(position, run.job, run.cells, run.terrain) && position.y < 24) position.y += .28;
     takeControl(item);
-    sticks.draw(item.flight.throttle);
     telemetry(item);
     nextTelemetry = 0;
     lastAim = null;
@@ -168,7 +180,7 @@ function renderStats() {
   $('#aim-hint').textContent = remote ? (coarsePointer.matches ? 'Tap to steer' : 'Click to steer')
     : coarsePointer.matches ? 'Tap to attack · Drag to orbit' : 'Click to attack · Drag to orbit';
   $('#remote-bar').hidden = !remote;
-  $('#remote-status').textContent = remote ? `${remotes[remote.type].label} · ${remote.flight ? 'Piloting' : remote.waiting ? 'Holding' : 'Moving'}` : '';
+  $('#remote-status').textContent = remote ? `${remotes[remote.type].label} · ${remote.flight ? 'Hovering' : remote.waiting ? 'Holding' : 'Moving'}` : '';
   $('#follow').setAttribute('aria-pressed', Boolean(yard.following));
   $('#fpv-toggle').setAttribute('aria-pressed', Boolean(yard.fpv || run.fpvArmed));
   $('#fpv-toggle').disabled = ended || (remote ? remote.type !== 'drone' : !hits || !stock.drone);
@@ -177,8 +189,7 @@ function renderStats() {
   arena.classList.toggle('flying', Boolean(flight));
   $('#fpv-controls').hidden = !flight;
   $('#fpv-telemetry').hidden = !flight;
-  $('#fpv-mode').textContent = flight?.mode === 'acro' ? 'Acro' : 'Angle';
-  $('#fpv-mode').setAttribute('aria-pressed', flight?.mode === 'acro');
+  if (flight) telemetry(yard.fpv);
   $('#fpv-reticle').hidden = !yard.fpv;
   $('#sector-bar').hidden = !job.sites || Boolean(yard.fpv);
   if (run.fpvArmed && !remote) $('#aim-hint').textContent = 'Aim and tap to launch FPV';
@@ -263,14 +274,15 @@ function highlightAim(x, y) {
 }
 
 function shoot(x, y) {
-  if (yard.fpv || run.ended || modal.open || (!run.hits && !run.remote)) return;
+  if (run.ended || modal.open || (!run.hits && !run.remote)) return;
   const tool = run.tool;
   const { path, person } = aim(x, y, !run.remote && tool === 'drill');
   const visiblePoint = person && infantryAim(person);
   if (run.remote) {
     const target = person ? { ...visiblePoint, y: visiblePoint.y - .5 } : yard.aimPoint(path);
     if (target) {
-      redirect(run.remote, target, run.terrain);
+      if (yard.fpv) guideFlight(run.remote, target);
+      else redirect(run.remote, target, run.terrain);
       renderStats();
     }
     return;
@@ -391,7 +403,8 @@ yard.simulate = dt => {
   for (const item of run.munitions) {
     const wasWaiting = item.waiting;
     const impact = item.flight
-      ? advanceFlight(item, dt, sticks.sample(item.flight, dt), at => flightCollision(at, run.job, run.cells, run.terrain) || hitsInfantry(at))
+      ? advanceFlight(item, dt, sticks.sample(), at => at.y < groundAt(run.terrain, at.x, at.z) + .5 ||
+        flightCollision(at, run.job, run.cells, run.terrain))
       : advance(item, dt, run.cells, run.terrain) || (isRemote(item.type) && hitsInfantry(item.position));
     if (item.flight && item.age >= nextTelemetry) {
       nextTelemetry = item.age + .085;
@@ -527,7 +540,7 @@ function showHelp() {
       <dt>F</dt><dd>Detonate the active drone or bot.</dd>
       <dt>V / Q / E</dt><dd>Change view or rotate the camera.</dd>
     </dl>
-    <p>Destroy supports to bring down floors and walls. Tap again to steer a drone or bot, then detonate it or let it hit the target. Choose FPV and tap a launch point for manual flight. Left stick sets throttle and yaw. Right stick pitches and rolls. On a keyboard use ↑/↓ for throttle, Q/E for yaw, W/S for pitch, and A/D for roll. Angle self-levels. Acro holds your attitude when you center the sticks. Larger maps have sector buttons for a closer view.</p>`;
+    <p>Destroy supports to bring down floors and walls. Tap again to steer a drone or bot, then detonate it or let it hit the target. Choose FPV and tap a launch point. The stick moves the drone. Drag the view to look around or tap a spot to fly there. Rise and Lower adjust altitude. Let go to stop and hover. On keyboard, use W/A/S/D to move, Q/E to turn, and ↑/↓ for altitude. Larger maps have sector buttons for a closer view.</p>`;
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
   actions.append(action('Back to mission', () => modal.close(), true));
@@ -550,23 +563,29 @@ function showKeyboardAim() {
 }
 
 viewport.addEventListener('pointerdown', event => {
-  if (yard.fpv || !event.isPrimary || event.button !== 0 || modal.open) return;
-  pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, moved: false };
+  if (pointer || (!yard.fpv && !event.isPrimary) || event.button !== 0 || modal.open) return;
+  pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false };
   viewport.setPointerCapture(event.pointerId);
   viewport.focus({ preventScroll: true });
   crosshair.hidden = true;
 });
 viewport.addEventListener('pointermove', event => {
-  if (yard.fpv || !event.isPrimary || modal.open) return;
+  if ((!yard.fpv && !event.isPrimary) || modal.open) return;
   if (pointer?.id === event.pointerId) {
     if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > 7) pointer.moved = true;
     if (pointer.moved) {
       viewport.classList.add('dragging');
-      yard.turn((event.clientX - pointer.lastX) * .009, true);
-      yard.highlight(null);
+      if (yard.fpv) {
+        yard.fpv.yaw -= (event.clientX - pointer.lastX) * .006;
+        yard.fpv.flight.pitch = clamp(yard.fpv.flight.pitch - (event.clientY - pointer.lastY) * .006, -.85, .68);
+      } else {
+        yard.turn((event.clientX - pointer.lastX) * .009, true);
+        yard.highlight(null);
+      }
       pointer.lastX = event.clientX;
+      pointer.lastY = event.clientY;
     }
-  } else if (event.pointerType === 'mouse') {
+  } else if (!yard.fpv && event.pointerType === 'mouse') {
     crosshair.hidden = true;
     lastAim = eventPosition(event);
     if (!run.ended) highlightAim(lastAim.x, lastAim.y);
@@ -580,7 +599,8 @@ viewport.addEventListener('pointerup', event => {
   viewport.classList.remove('dragging');
 });
 for (const event of ['lostpointercapture', 'pointercancel']) {
-  viewport.addEventListener(event, () => {
+  viewport.addEventListener(event, event => {
+    if (pointer?.id !== event.pointerId) return;
     pointer = null;
     viewport.classList.remove('dragging');
   });
@@ -660,12 +680,6 @@ $('#follow').addEventListener('click', () => {
   renderStats();
 });
 $('#fpv-toggle').addEventListener('click', toggleFPV);
-$('#fpv-mode').addEventListener('click', () => {
-  const flight = yard.fpv?.flight;
-  if (!flight) return;
-  flight.mode = flight.mode === 'angle' ? 'acro' : 'angle';
-  renderStats();
-});
 for (const button of $$('[data-sector]')) button.addEventListener('click', () => selectSector(...button.dataset.sector.split(',').map(Number)));
 $('#jobs-button').addEventListener('click', jobBoard);
 $('#help').addEventListener('click', showHelp);

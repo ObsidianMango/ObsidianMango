@@ -1,58 +1,63 @@
-import { clamp, hoverThrottle } from './flight.js';
+import { clamp, nudgeAltitude } from './flight.js?v=6';
 
-const keys = new Set(['w', 's', 'a', 'd', 'q', 'e', 'arrowup', 'arrowdown']);
+const keys = new Set(['w', 's', 'a', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
 
-export function flightSticks(left, right, currentFlight) {
+export function flightControls(movePad, climb, descend, currentFlight) {
   const held = new Set();
-  const axes = { yaw: 0, pitch: 0, roll: 0 };
   const pointers = new Map();
+  let side = 0;
+  let forward = 0;
 
-  function draw(throttle = hoverThrottle, display = axes) {
-    left.style.setProperty('--stick-x', display.yaw * 35 + '%');
-    left.style.setProperty('--stick-y', (1 - 2 * throttle) * 35 + '%');
-    right.style.setProperty('--stick-x', display.roll * 35 + '%');
-    right.style.setProperty('--stick-y', -display.pitch * 35 + '%');
+  function draw(x = side, y = forward) {
+    movePad.style.setProperty('--stick-x', x * 35 + '%');
+    movePad.style.setProperty('--stick-y', -y * 35 + '%');
   }
 
-  for (const pad of [left, right]) {
-    function move(event) {
-      const flight = currentFlight();
-      if (!flight || pointers.get(pad) !== event.pointerId) return;
-      const rect = pad.getBoundingClientRect();
-      const x = clamp((event.clientX - rect.left - rect.width / 2) / (rect.width * .35), -1, 1);
-      const y = clamp((event.clientY - rect.top - rect.height / 2) / (rect.height * .35), -1, 1);
-      if (pad === left) {
-        axes.yaw = x;
-        flight.throttle = (1 - y) / 2;
-      } else {
-        axes.roll = x;
-        axes.pitch = -y;
-      }
-      draw(flight.throttle);
-    }
+  function move(event) {
+    if (pointers.get(movePad)?.id !== event.pointerId) return;
+    const rect = movePad.getBoundingClientRect();
+    const x = clamp((event.clientX - rect.left - rect.width / 2) / (rect.width * .35), -1, 1);
+    const y = clamp((rect.top + rect.height / 2 - event.clientY) / (rect.height * .35), -1, 1);
+    const radius = Math.hypot(x, y);
+    const scale = radius > .13 ? Math.min(1, (radius - .13) / .87) / radius : 0;
+    side = x * scale;
+    forward = y * scale;
+    draw();
+  }
+
+  movePad.addEventListener('pointermove', move);
+  for (const [pad, lift] of [[movePad, 0], [climb, 1], [descend, -1]]) {
     pad.addEventListener('pointerdown', event => {
       if (!currentFlight() || event.button !== 0 || pointers.has(pad)) return;
       event.preventDefault();
-      pointers.set(pad, event.pointerId);
+      pointers.set(pad, { id: event.pointerId, start: performance.now() });
       pad.setPointerCapture(event.pointerId);
       pad.dataset.engaged = 'true';
-      move(event);
+      if (!lift) move(event);
     });
-    pad.addEventListener('pointermove', move);
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
       pad.addEventListener(type, event => {
-        if (pointers.get(pad) !== event.pointerId) return;
+        const pointer = pointers.get(pad);
+        if (pointer?.id !== event.pointerId) return;
         pointers.delete(pad);
         delete pad.dataset.engaged;
-        if (pad === left) axes.yaw = 0;
-        else axes.roll = axes.pitch = 0;
-        draw(currentFlight()?.throttle);
+        const flight = currentFlight();
+        if (lift && flight && type === 'pointerup' && performance.now() - pointer.start < 165) {
+          nudgeAltitude(flight, lift * .9);
+        }
+        if (!lift) {
+          side = forward = 0;
+          draw();
+        }
       });
     }
+    if (lift) pad.addEventListener('click', event => {
+      const flight = currentFlight();
+      if (flight && event.detail === 0) nudgeAltitude(flight, lift * .9);
+    });
   }
 
   return {
-    draw,
     press(key) {
       if (!keys.has(key)) return false;
       held.add(key);
@@ -61,24 +66,24 @@ export function flightSticks(left, right, currentFlight) {
     release(key) { held.delete(key); },
     clear() {
       held.clear();
-      for (const [pad, id] of pointers) {
+      for (const [pad, { id }] of pointers) {
         delete pad.dataset.engaged;
         if (pad.hasPointerCapture(id)) pad.releasePointerCapture(id);
       }
       pointers.clear();
-      axes.yaw = axes.pitch = axes.roll = 0;
-      draw(currentFlight()?.throttle);
+      side = forward = 0;
+      draw();
     },
-    sample(flight, dt) {
-      const axis = (plus, minus) => Number(held.has(plus)) - Number(held.has(minus));
-      flight.throttle = clamp(flight.throttle + axis('arrowup', 'arrowdown') * dt * .48, 0, 1);
-      const input = {
-        yaw: clamp(axes.yaw + axis('e', 'q'), -1, 1),
-        pitch: clamp(axes.pitch + axis('w', 's'), -1, 1),
-        roll: clamp(axes.roll + axis('d', 'a'), -1, 1),
+    sample() {
+      const axis = (plus, minus) => Number(plus) - Number(minus);
+      const x = clamp(side + axis(held.has('d'), held.has('a')), -1, 1);
+      const y = clamp(forward + axis(held.has('w'), held.has('s')), -1, 1);
+      draw(x, y);
+      return {
+        side: x, forward: y,
+        lift: axis(pointers.has(climb) || held.has('arrowup'), pointers.has(descend) || held.has('arrowdown')),
+        turn: axis(held.has('e') || held.has('arrowright'), held.has('q') || held.has('arrowleft')),
       };
-      draw(flight.throttle, input);
-      return input;
     },
   };
 }
