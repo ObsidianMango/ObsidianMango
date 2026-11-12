@@ -4,12 +4,12 @@ const ceiling = 40;
 
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-export function takeControl(item) {
+export function takeControl(item, duration = 110) {
   item.flight = {
-    pitch: -.12, altitude: item.position.y, destination: null,
+    pitch: item.type === 'tank' ? -.16 : -.12, altitude: item.position.y, destination: null,
     velocity: { x: 0, y: 0, z: 0 }, blocked: false,
   };
-  item.expires ??= item.age + 110;
+  item.expires ??= item.age + duration;
   item.waiting = false;
 }
 
@@ -22,7 +22,7 @@ export function releaseControl(item) {
 export function guideFlight(item, target) {
   const { position, flight } = item;
   const dx = target.x - position.x;
-  const dy = target.y - position.y;
+  const dy = item.type === 'tank' ? 0 : target.y - position.y;
   const dz = target.z - position.z;
   const distance = Math.hypot(dx, dy, dz);
   if (distance < .8) return;
@@ -101,6 +101,50 @@ export function advanceFlight(item, elapsed, input, blocked) {
       flight.destination = null;
       flight.blocked = true;
     }
+  }
+  return false;
+}
+
+export function advanceTrack(item, elapsed, input, blocked, surface) {
+  item.age += elapsed;
+  if (item.age >= item.expires) return true;
+  const { flight, position } = item;
+  if (Math.abs(input.forward) + Math.abs(input.side) + Math.abs(input.turn) > .03) {
+    flight.destination = null;
+    flight.blocked = false;
+  }
+  const steps = Math.max(1, Math.ceil(elapsed * 60));
+  const dt = elapsed / steps;
+  for (let i = 0; i < steps; i++) {
+    let throttle = input.forward;
+    let steer = -clamp(input.side + input.turn, -1, 1) * 2.5;
+    const target = flight.destination;
+    if (target) {
+      const dx = target.x - position.x;
+      const dz = target.z - position.z;
+      const distance = Math.hypot(dx, dz);
+      const angle = Math.atan2(dx, dz) - item.yaw;
+      const turn = Math.atan2(Math.sin(angle), Math.cos(angle));
+      steer = clamp(turn * 7, -3, 3);
+      throttle = Math.max(0, Math.cos(turn)) * Math.min(1, distance * .8);
+      if (distance < .17) flight.destination = null;
+    }
+    item.yaw += steer * dt;
+    const speed = throttle * (throttle < 0 ? 3.4 : 7.2);
+    const vx = Math.sin(item.yaw) * speed;
+    const vz = Math.cos(item.yaw) * speed;
+    const damping = 1 - Math.exp(-(throttle ? 12 : 27) * dt);
+    flight.velocity.x += (vx - flight.velocity.x) * damping;
+    flight.velocity.z += (vz - flight.velocity.z) * damping;
+    const movedX = moveAxis(position, 'x', flight.velocity.x * dt, blocked);
+    const movedZ = moveAxis(position, 'z', flight.velocity.z * dt, blocked);
+    if (!movedX) flight.velocity.x = 0;
+    if (!movedZ) flight.velocity.z = 0;
+    if (!movedX || !movedZ) {
+      flight.blocked = true;
+      flight.destination = null;
+    }
+    position.y += (surface(position) - position.y) * (1 - Math.exp(-18 * dt));
   }
   return false;
 }

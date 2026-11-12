@@ -1,4 +1,4 @@
-import { clamp, nudgeAltitude } from './flight.js?v=6';
+import { clamp, nudgeAltitude } from './flight.js?v=8';
 
 const keys = new Set(['w', 's', 'a', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
 

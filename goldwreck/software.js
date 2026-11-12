@@ -80,9 +80,19 @@ export class SoftwareRenderer {
   pushBoxes(mesh, output, direction, camera) {
     const m = mesh.instanceMatrix.array;
     const perspective = camera.isPerspectiveCamera;
+    const city = mesh.userData.structure?.front;
+    const v = this.view.elements;
+    const margin = city ? Math.max(Math.hypot(v[0], v[4], v[8]), Math.hypot(v[1], v[5], v[9])) + (perspective ? 1 : 0) : 0;
     for (let i = 0; i < mesh.count; i++) {
       const offset = i * 16;
       if (!m[offset] && !m[offset + 1] && !m[offset + 2]) continue;
+      if (city) {
+        const tx = m[offset + 12], ty = m[offset + 13], tz = m[offset + 14];
+        const w = perspective ? v[3] * tx + v[7] * ty + v[11] * tz + v[15] : 1;
+        const x = v[0] * tx + v[4] * ty + v[8] * tz + v[12];
+        const y = v[1] * tx + v[5] * ty + v[9] * tz + v[13];
+        if (w < -1 || Math.abs(x) > w + margin || Math.abs(y) > w + margin) continue;
+      }
       matrix.fromArray(m, offset);
       combined.multiplyMatrices(this.view, matrix);
       const vertices = corners.map(([x, y, z]) => this.clipCoordinates(x, y, z, combined.elements));

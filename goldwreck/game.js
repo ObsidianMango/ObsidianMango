@@ -1,11 +1,12 @@
-import { Yard } from './scene.js?v=7';
-import { jobs, getJob, buildJob, key, impactRadius, strike, explode } from './jobs.js?v=7';
-import { advance, flightCollision, isRemote, launch, redirect, remotes } from './ordnance.js?v=7';
+import { districtCenter, fronts, frontSupply, frontVehicles, patrol } from './fronts.js?v=8';
+import { Yard } from './scene.js?v=8';
+import { jobs, getJob, buildJob, key, impactRadius, strike, explode } from './jobs.js?v=8';
+import { advance, flightCollision, isRemote, launch, placeTrackPilot, redirect, remotes, trackCollision } from './ordnance.js?v=8';
 import { fallingChunk, fall, chunkPoint } from './collapse.js?v=7';
-import { garrison, updateInfantry } from './infantry.js?v=7';
-import { terrainFor, groundAt } from './terrain.js';
-import { advanceFlight, clamp, guideFlight, releaseControl, takeControl } from './flight.js?v=6';
-import { flightControls } from './sticks.js?v=6';
+import { garrison, updateInfantry } from './infantry.js?v=8';
+import { terrainFor, groundAt } from './terrain.js?v=8';
+import { advanceFlight, advanceTrack, clamp, guideFlight, releaseControl, takeControl } from './flight.js?v=8';
+import { flightControls } from './sticks.js?v=8';
 
 import { arcadeModes, challengeSquad, convoySeconds, deckHeight, fuelRadius, spawnConvoy, updateTruck } from './arcade.js?v=7';
 import { Replays } from './replay.js?v=7';
@@ -47,6 +48,7 @@ const sticks = flightControls($('#fpv-move'), $('#fpv-climb'), $('#fpv-descend')
 const flightHUD = ['altitude', 'speed', 'battery'].map(id => $('#fpv-' + id));
 
 function telemetry(item) {
+  const tracked = item.type === 'tank';
   const altitude = item.position.y - groundAt(run.terrain, item.position.x, item.position.z);
   const speed = Math.hypot(item.flight.velocity.x, item.flight.velocity.y, item.flight.velocity.z);
   const values = [`${altitude.toFixed(1)} m`,
@@ -54,9 +56,11 @@ function telemetry(item) {
   flightHUD.forEach((field, i) => {
     if (field.textContent !== values[i]) field.textContent = values[i];
   });
-  const status = item.flight.destination ? 'Flying to point' : speed > .22 ? 'Flying'
-    : item.flight.blocked ? 'Hovering · Obstacle' : 'Hovering';
-  const label = `FPV · ${status}`;
+  const resting = tracked ? 'Stopped' : 'Hovering';
+  const moving = tracked ? 'Driving' : 'Flying';
+  const status = item.flight.destination ? `${moving} to point` : speed > .22 ? moving
+    : item.flight.blocked ? `${resting} · Obstacle` : resting;
+  const label = `${tracked ? 'Track bot' : 'FPV'} · ${status}`;
   const remoteStatus = $('#remote-status');
   if (remoteStatus.textContent !== label) remoteStatus.textContent = label;
 }
@@ -72,8 +76,8 @@ function setPilot(item) {
   }
   if (item) {
     const { position } = item;
-    while (flightCollision(position, run.job, run.cells, run.terrain) && position.y < 24) position.y += .28;
-    takeControl(item);
+    while (item.type === 'drone' && flightCollision(position, run.job, run.cells, run.terrain) && position.y < 24) position.y += .28;
+    takeControl(item, run.job.front ? 180 : 110);
     telemetry(item);
     nextTelemetry = 0;
     lastAim = null;
@@ -156,12 +160,12 @@ function reset(index, contract = saved.contract, mode = null) {
   replays.reset();
   const arcade = arcadeModes[mode];
   const base = getJob(arcade?.base ?? index, contract);
-  const job = arcade ? { ...base, name: arcade.name, mode, hits: arcade.hits ?? base.hits,
+  const job = mode === 'front' ? fronts[index] : arcade ? { ...base, name: arcade.name, mode, hits: arcade.hits ?? base.hits,
     troops: mode === 'convoy' ? 0 : mode === 'bunker' ? 3 : mode === 'trench' ? 4 : base.troops } : base;
   const stock = { hammer: Infinity, drill: job.drills, blast: job.charges, grenade: job.sites ? 14 : 10,
     drone: job.sites ? 10 : 6, tank: job.sites ? 7 : 5 };
   if (arcade?.tool) for (const tool of tools) stock[tool] = tool === arcade.tool ? arcade.hits : 0;
-  if (mode === 'sandbox') for (const tool of tools) stock[tool] = Infinity;
+  if (mode === 'sandbox' || job.front) for (const tool of tools) stock[tool] = Infinity;
   const terrain = terrainFor(job);
   const voxels = buildJob(job, terrain);
   const cells = new Map(voxels.map(voxel => [key(voxel.x, voxel.y, voxel.z), voxel]));
@@ -169,37 +173,43 @@ function reset(index, contract = saved.contract, mode = null) {
   run = {
     index, job, hits: mode === 'sandbox' ? Infinity : job.hits, score: 0, tool: arcade?.tool ?? (mode === 'convoy' ? 'hammer' : 'drone'), ended: false, stock,
     combo: 0, bestCombo: 0, comboTime: 0, slow: 0, shot: 0,
+    assets: job.front ? frontVehicles(job) : null,
+    depots: job.front ? new Map(frontSupply().map(point => [key(point.x, point.y, point.z), point])) : null,
+    patrolTime: 0,
     convoy: mode === 'convoy' ? spawnConvoy() : null, gaps: new Map(),
     stopped: 0, escaped: 0, crashCount: 0, truckCauses: new Set(),
     munitions: new Set(), chunks: new Set(), remote: null, fpvArmed: false, terrain, squad: new Set(squad),
     initialBlocks: voxels.length, cells,
   };
   yard.load(job, voxels, squad, terrain);
-  if (run.convoy) for (const truck of run.convoy) yard.drawOrdnance(truck);
+  for (const truck of run.assets ?? run.convoy ?? []) yard.drawOrdnance(truck);
   selectSector(0, 0);
-  yard.scan(run.squad);
+  showRecon();
   keyboardAim = [.5, .53];
   crosshair.hidden = true;
   lastAim = null;
   pointer = null;
   viewport.classList.remove('dragging');
-  $('.console').classList.toggle('arcade', Boolean(arcade));
-  $('#briefing').textContent = arcade?.briefing ?? 'Recon marks moving infantry. Take out the supports to drop the floors above them.';
-  $('#job-index').textContent = arcade ? (mode === 'sandbox' ? 'FREE PLAY' : 'CHALLENGE') : job.contract ? 'ENDLESS OP' : `OP ${String(index + 1).padStart(2, '0')} / ${jobs.length}`;
+  $('.console').classList.toggle('arcade', Boolean(arcade || job.front));
+  $('#briefing').textContent = job.front ? 'Destroy the nine supply depots and nine patrol vehicles marked in gold. Gold also requires clearing the troops. Drag to pan and use the district grid to jump across the city.' : arcade?.briefing ?? 'Recon marks moving infantry. Take out the supports to drop the floors above them.';
+  $('#job-index').textContent = job.front ? 'CITY FRONT' : arcade ? (mode === 'sandbox' ? 'FREE PLAY' : 'CHALLENGE') : job.contract ? 'ENDLESS OP' : `OP ${String(index + 1).padStart(2, '0')} / ${jobs.length}`;
   $('#job-name').textContent = job.name;
-  missionBar.setAttribute('aria-valuemax', run.convoy ? 3 : job.troops);
-  missionBar.setAttribute('aria-label', run.convoy ? 'Trucks stopped' : 'Hostiles down');
+  buildDistrictGrid();
+  missionBar.setAttribute('aria-valuemax', job.front ? 18 : run.convoy ? 3 : job.troops);
+  missionBar.setAttribute('aria-label', job.front ? 'Objectives destroyed' : run.convoy ? 'Trucks stopped' : 'Hostiles down');
   setView('iso', true);
   renderStats();
 }
 
 function scoreKey() {
+  if (run.job.front) return `city-front-${run.index}`;
   return run.job.mode ?? (run.job.contract ? 'endless' : run.index);
 }
 
 function renderStats() {
   const { job, hits, score, ended, tool, stock, remote, squad } = run;
   const remaining = run.convoy?.size ?? squad.size;
+  const assetsLeft = job.front ? run.depots.size + run.assets.size : null;
   const total = run.convoy ? 3 : job.troops;
   const downed = run.convoy ? run.stopped : total - remaining;
   const sandbox = job.mode === 'sandbox';
@@ -210,31 +220,43 @@ function renderStats() {
   $('#combo-label').textContent = run.combo > 1 ? `×${run.combo} chain` : '';
   $('#score').textContent = number.format(score);
   $('#scans').textContent = yard.scanActive ? 'On' : 'Off';
-  $('#aim-hint').textContent = remote ? (coarsePointer.matches ? 'Tap to steer' : 'Click to steer')
+  $('#aim-hint').textContent = job.front && !remote ? 'Tap to attack · Drag to pan' : remote ? (coarsePointer.matches ? 'Tap to steer' : 'Click to steer')
     : coarsePointer.matches ? 'Tap to attack · Drag to orbit' : 'Click to attack · Drag to orbit';
   $('#remote-bar').hidden = !remote;
   $('#remote-status').textContent = remote ? `${remotes[remote.type].label} · ${remote.flight ? 'Hovering' : remote.waiting ? 'Holding' : 'Moving'}` : '';
   $('#follow').setAttribute('aria-pressed', Boolean(yard.following));
   $('#fpv-toggle').setAttribute('aria-pressed', Boolean(yard.fpv || run.fpvArmed));
-  $('#fpv-toggle').disabled = ended || (remote ? remote.type !== 'drone' : !hits || !stock.drone);
+  $('#fpv-toggle').disabled = ended || (!remote && (!hits || (!stock.drone && !stock.tank)));
   for (const button of viewButtons) button.setAttribute('aria-pressed', !yard.fpv && button.dataset.view === yard.view);
   const flight = yard.fpv?.flight;
   arena.classList.toggle('flying', Boolean(flight));
   $('#fpv-controls').hidden = !flight;
   $('#fpv-telemetry').hidden = !flight;
+  arena.classList.toggle('driving', yard.fpv?.type === 'tank');
+  $('#fpv-alt-readout').hidden = yard.fpv?.type === 'tank';
+  $('#fpv-lift').hidden = yard.fpv?.type === 'tank';
+  $('#fpv-tap').textContent = yard.fpv?.type === 'tank' ? 'Tap to drive' : 'Tap to fly';
   if (flight) telemetry(yard.fpv);
   $('#fpv-reticle').hidden = !yard.fpv;
-  $('#sector-bar').hidden = !job.sites || Boolean(yard.fpv);
-  if (run.fpvArmed && !remote) $('#aim-hint').textContent = 'Aim and tap to launch FPV';
+  $('#sector-bar').hidden = !job.sites || job.front || Boolean(yard.fpv);
+  $('#city-nav').hidden = !job.front || Boolean(yard.fpv);
+  $('#front-counts').hidden = !job.front;
+  if (job.front) {
+    $('#front-counts').textContent = `${run.depots.size} depots · ${run.assets.size} vehicles`;
+    updateDistrictGrid();
+  }
+  if (run.fpvArmed && !remote) $('#aim-hint').textContent = `Tap to launch ${tool === 'tank' ? 'track bot' : 'FPV drone'}`;
   $('#cleared').textContent = `${Math.floor((1 - run.cells.size / run.initialBlocks) * 100)}%`;
-  if (run.convoy) refreshConvoyStatus();
+  if (job.front) $('#objective').textContent = assetsLeft ? 'Front objectives' : 'Front secured';
+  else if (run.convoy) refreshConvoyStatus();
   else $('#objective').textContent = sandbox ? 'Free play' : remaining ? 'Russian infantry' : 'Position clear';
   const best = saved.scores[scoreKey()]?.score;
   $('#best').textContent = best ? `Best ${number.format(best)}` : 'Best —';
-  missionBar.setAttribute('aria-valuenow', downed);
-  missionBar.querySelector('i').style.width = `${downed / total * 100}%`;
+  const progress = job.front ? 18 - assetsLeft : downed;
+  missionBar.setAttribute('aria-valuenow', progress);
+  missionBar.querySelector('i').style.width = `${progress / (job.front ? 18 : total) * 100}%`;
   $('#end-mission').hidden = sandbox;
-  $('#end-mission').disabled = Boolean(remaining) || ended || pendingWork();
+  $('#end-mission').disabled = Boolean(assetsLeft ?? remaining) || ended || pendingWork();
   $('#scanner').disabled = ended;
   $('#scanner').setAttribute('aria-pressed', yard.scanActive);
   $('#scanner').classList.toggle('active', yard.scanActive);
@@ -273,12 +295,18 @@ function popup(voxel, label, target = false) {
   setTimeout(() => div.remove(), 950);
 }
 
+function showRecon() {
+  yard.scan(run.squad);
+  for (const [id, depot] of run.depots ?? []) yard.markAsset(id, depot, .35);
+  for (const truck of run.assets ?? []) yard.markAsset(truck.marker, truck.position, 1.48);
+}
+
 function scan() {
   if (run.ended || modal.open) return;
   if (yard.scanActive) {
     yard.clearScan();
   } else {
-    yard.scan(run.squad);
+    showRecon();
     play('scan');
   }
   renderStats();
@@ -287,7 +315,7 @@ function scan() {
 function chooseTool(id) {
   if (run.ended || !run.hits || !run.stock[id] || run.remote) return;
   run.tool = id;
-  if (id !== 'drone') run.fpvArmed = false;
+  if (!isRemote(id)) run.fpvArmed = false;
   renderStats();
 }
 
@@ -305,7 +333,8 @@ function setView(view, immediate = false) {
 function aim(x, y, throughCover = false) {
   const path = yard.aim(x, y, run.cells);
   const range = (path[0]?.rayDistance ?? Infinity) + (throughCover ? 8 : 0);
-  return { path, person: yard.aimInfantry(run.squad, range), truck: run.convoy && yard.aimTruck(run.convoy, range) };
+  const vehicles = run.convoy ?? run.assets;
+  return { path, person: yard.aimInfantry(run.squad, range), truck: vehicles && yard.aimTruck(vehicles, range) };
 }
 
 function infantryAim(person) {
@@ -358,10 +387,13 @@ function shoot(x, y) {
   yard.drawOrdnance(item);
   if (isRemote(tool)) {
     run.remote = item;
-    if (tool === 'drone' && run.fpvArmed) {
+    if (run.fpvArmed) {
       const at = item.position;
-      at.y = Math.max(6.5, at.y);
-      while (run.cells.has(key(Math.round(at.x), Math.floor(at.y + 1), Math.round(at.z)))) at.y++;
+      if (tool === 'tank') placeTrackPilot(item, target, run.job, run.cells, run.terrain);
+      else {
+        at.y = Math.max(6.5, at.y);
+        while (run.cells.has(key(Math.round(at.x), Math.floor(at.y + 1), Math.round(at.z)))) at.y++;
+      }
       item.waiting = true;
       setPilot(item);
     }
@@ -386,7 +418,7 @@ function maybeSettle() {
 function removeInfantry(person) {
   if (!run.squad.delete(person)) return;
   yard.removeInfantry(person);
-  if (!run.squad.size && run.job.mode !== 'sandbox') notify('Position clear · End mission or keep demolishing');
+  if (!run.squad.size && !run.job.front && run.job.mode !== 'sandbox') notify('Position clear · End mission or keep demolishing');
 }
 
 function scoreEvent(points, links) {
@@ -400,13 +432,13 @@ function scoreEvent(points, links) {
 }
 
 function stopTruck(truck, shot, crashed = false) {
-  if (!run.convoy.delete(truck)) return;
+  if (!(run.convoy ?? run.assets).delete(truck)) return;
   run.stopped++;
   if (crashed) run.crashCount++;
   run.truckCauses.add(shot);
   yard.removeOrdnance(truck);
   const target = truckPoint(truck);
-  const radius = truck.type === 'fuel-truck' ? fuelRadius : 2.4;
+  const radius = truck.type === 'fuel-truck' ? fuelRadius : truck.type === 'armor-truck' ? 3.1 : 2.4;
   scoreEvent(900, 1);
   popup(target, crashed ? 'BRIDGE CRASH' : 'TRUCK STOPPED', true);
   showImpact(explode(run.cells, target, 'fuel', radius), 'fuel', { radius, shot });
@@ -416,9 +448,18 @@ function showImpact({ target, broken, damaged, falling, blasts }, tool, {
   person: direct = null, truck: directTruck = null, radius = impactRadius[tool], shot = run.shot,
 } = {}) {
   damaged.forEach(voxel => yard.damage(voxel));
-  const areas = [[target, radius ?? 0], ...blasts.map(barrel => [barrel, impactRadius.powder])];
+  const areas = [[target, radius ?? 0], ...blasts.map(barrel => [barrel, impactRadius[barrel.kind]])];
   const inRange = at => areas.some(([center, reach]) => reach > 0 &&
     Math.hypot(at.x - center.x, at.y - center.y, at.z - center.z) <= reach);
+  for (const barrel of blasts) {
+    if (barrel.kind !== 'supply') continue;
+    const id = key(barrel.x, barrel.y, barrel.z);
+    if (run.depots?.delete(id)) {
+      yard.removeAssetMarker(id);
+      scoreEvent(1000, 1);
+      popup(barrel, 'DEPOT DESTROYED', true);
+    }
+  }
   let downed = 0;
   for (const person of run.squad) {
     if (person === direct || inRange(infantryAim(person))) {
@@ -459,8 +500,9 @@ function showImpact({ target, broken, damaged, falling, blasts }, tool, {
     popup(target, `+${number.format(points)}`);
   }
   if (tool !== 'crush' || broken.length || downed) play(blasts.length && (tool === 'hammer' || tool === 'drill') ? 'blast' : tool, downed);
-  if (run.convoy) {
-    for (const truck of [...run.convoy]) {
+  const vehicles = run.convoy ?? run.assets;
+  if (vehicles) {
+    for (const truck of [...vehicles]) {
       if (truck === directTruck || inRange(truckPoint(truck))) stopTruck(truck, truck.drop ?? shot);
     }
   }
@@ -480,8 +522,9 @@ function detonate(item) {
 }
 
 function hitsTarget({ x, y, z }) {
-  if (run.convoy) {
-    for (const truck of run.convoy) {
+  const vehicles = run.convoy ?? run.assets;
+  if (vehicles) {
+    for (const truck of vehicles) {
       const at = truckPoint(truck);
       if (Math.abs(x - at.x) < 1.65 && Math.hypot(y - at.y, z - at.z) < 1) return true;
     }
@@ -515,12 +558,28 @@ yard.simulate = dt => {
     }
     refreshConvoyStatus();
   }
+  if (run.assets?.size) {
+    run.patrolTime += dt;
+    if (run.patrolTime >= .08) {
+      for (const truck of run.assets) {
+        patrol(truck, run.patrolTime);
+        yard.drawOrdnance(truck);
+      }
+      run.patrolTime = 0;
+    }
+  }
   for (const item of run.munitions) {
     const wasWaiting = item.waiting;
-    const impact = item.flight
-      ? advanceFlight(item, dt, sticks.sample(), at => at.y < groundAt(run.terrain, at.x, at.z) + .5 ||
-        flightCollision(at, run.job, run.cells, run.terrain))
-      : advance(item, dt, run.cells, run.terrain) || (isRemote(item.type) && hitsTarget(item.position));
+    let impact;
+    if (item.flight && item.type === 'tank') {
+      impact = advanceTrack(item, dt, sticks.sample(), at => trackCollision(at, run.job, run.cells),
+        at => groundAt(run.terrain, at.x, at.z) + remotes.tank.lift);
+    } else if (item.flight) {
+      impact = advanceFlight(item, dt, sticks.sample(), at => at.y < groundAt(run.terrain, at.x, at.z) + .5 ||
+        flightCollision(at, run.job, run.cells, run.terrain));
+    } else {
+      impact = advance(item, dt, run.cells, run.terrain) || (isRemote(item.type) && hitsTarget(item.position));
+    }
     if (item.flight && item.age >= nextTelemetry) {
       nextTelemetry = item.age + .085;
       telemetry(item);
@@ -580,16 +639,17 @@ function finish() {
   clearTimeout(settleTimeout);
   const { job, squad, index, hits, convoy, stopped, escaped } = run;
   const singleCollapse = Boolean(convoy && stopped === 3 && run.crashCount && run.truckCauses.size === 1 && !run.truckCauses.has(0));
-  const won = convoy ? stopped === 3 : !squad.size;
-  const medal = !won ? 0 : convoy ? (singleCollapse ? 3 : run.shot <= 4 ? 2 : 1)
+  const won = job.front ? !run.assets.size && !run.depots.size : convoy ? stopped === 3 : !squad.size;
+  if (job.front && !won) return;
+  const medal = !won ? 0 : job.front ? (!squad.size ? 3 : squad.size <= job.troops / 2 ? 2 : 1) : convoy ? (singleCollapse ? 3 : run.shot <= 4 ? 2 : 1)
     : hits >= job.hits * .65 ? 3 : hits >= job.hits * .32 ? 2 : 1;
   run.ended = true;
   if (medal) {
-    const score = run.score + hits * 60 + (medal === 3 ? 700 : 0);
+    const score = run.score + (Number.isFinite(hits) ? hits * 60 : 0) + (medal === 3 ? 700 : 0);
     run.score = score;
     const previous = saved.scores[scoreKey()];
     saved.scores[scoreKey()] = { score: Math.max(previous?.score || 0, score), medal: Math.max(previous?.medal || 0, medal) };
-    if (!job.mode && index === saved.unlocked && index < jobs.length) {
+    if (!job.front && !job.mode && index === saved.unlocked && index < jobs.length) {
       while (saved.unlocked < jobs.length && saved.scores[saved.unlocked]) saved.unlocked++;
     }
     if (job.contract) saved.contract = Math.max(saved.contract, job.contract + 1);
@@ -600,17 +660,17 @@ function finish() {
   yard.highlight(null);
   renderStats();
 
-  openModal(convoy ? (won ? 'Convoy stopped' : 'Convoy escaped') : (won ? 'Position clear' : 'Mission incomplete'));
+  openModal(job.front ? 'Front secured' : convoy ? (won ? 'Convoy stopped' : 'Convoy escaped') : (won ? 'Position clear' : 'Mission incomplete'));
   const summary = document.createElement('p');
   const stars = '★'.repeat(medal);
-  summary.textContent = convoy
+  summary.textContent = job.front ? `${stars} · All depots and vehicles destroyed. ${job.troops - squad.size}/${job.troops} troops cleared.` : convoy
     ? won ? `${stars} · ${singleCollapse ? 'All three trucks stopped in one collapse.' : 'All three trucks stopped.'}`
       : `${escaped} of 3 trucks escaped. Hit a bridge pier earlier to cut off the convoy.`
     : won ? `${stars} · All hostiles down.`
       : `${squad.size} hostile${squad.size === 1 ? '' : 's'} remain. Use Recon to locate the squad.`;
   const stats = document.createElement('div');
   stats.className = 'result-stats';
-  const goal = convoy ? ['TRUCKS STOPPED', `${stopped}/3`] : ['HOSTILES DOWN', `${job.troops - squad.size}/${job.troops}`];
+  const goal = job.front ? ['OBJECTIVES', '18/18'] : convoy ? ['TRUCKS STOPPED', `${stopped}/3`] : ['HOSTILES DOWN', `${job.troops - squad.size}/${job.troops}`];
   for (const [label, value] of [goal, ['BEST CHAIN', `×${run.bestCombo}`], ['SCORE', number.format(run.score)]]) {
     const tile = document.createElement('div');
     const title = document.createElement('span');
@@ -622,9 +682,13 @@ function finish() {
   }
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
-  actions.append(action('Retry', () => reset(index, job.contract, job.mode), !won));
+  actions.append(action('Retry', () => reset(index, job.contract, job.front ? 'front' : job.mode), !won));
   if (replays.ready()) actions.append(action('Watch replay', () => showReplay(finishSummary)));
-  if (won && !job.mode) {
+  if (job.front) {
+    actions.append(index < fronts.length - 1
+      ? action('Next front', () => reset(index + 1, saved.contract, 'front'), true)
+      : action('City fronts', frontBoard, true));
+  } else if (won && !job.mode) {
     const label = index === jobs.length - 1 ? 'Endless missions' : 'Next mission';
     actions.append(action(label, () => reset(Math.min(index + 1, jobs.length)), true));
   } else {
@@ -633,7 +697,7 @@ function finish() {
   body.append(summary, stats, actions);
 
   function finishSummary() {
-    openModal(convoy ? (won ? 'Convoy stopped' : 'Convoy escaped') : (won ? 'Position clear' : 'Mission incomplete'));
+    openModal(job.front ? 'Front secured' : convoy ? (won ? 'Convoy stopped' : 'Convoy escaped') : (won ? 'Position clear' : 'Mission incomplete'));
     body.append(summary, stats, actions);
   }
 }
@@ -655,6 +719,79 @@ function showReplay(back) {
     restart.disabled = true;
     replays.play(canvas, () => modal.open && canvas.isConnected, () => { restart.disabled = false; });
   }
+}
+
+let districtButtons = [];
+
+function districtIndex(at) {
+  return Math.max(0, Math.min(2, Math.round(at.z / 38) + 1)) * 3 +
+    Math.max(0, Math.min(2, Math.round(at.x / 42) + 1));
+}
+
+function buildDistrictGrid() {
+  const grid = $('#district-grid');
+  grid.replaceChildren();
+  districtButtons = [];
+  $('#district-name').textContent = 'Whole city';
+  if (!run.job.front) return;
+  districtButtons = run.job.districts.map((name, index) => {
+    const button = action(String(index + 1), () => {
+      yard.follow(null);
+      yard.setMap(...districtCenter(index), 3.45);
+      refreshMap();
+    });
+    button.dataset.district = index;
+    grid.append(button);
+    return button;
+  });
+  refreshMap();
+}
+
+function updateDistrictGrid() {
+  const counts = Array(9).fill(0);
+  for (const depot of run.depots.values()) counts[districtIndex(depot)]++;
+  for (const vehicle of run.assets) counts[districtIndex(vehicle.position)]++;
+  districtButtons.forEach((button, index) => {
+    const name = run.job.districts[index];
+    const label = `${name} · ${counts[index]} objectives left`;
+    button.dataset.clear = counts[index] === 0;
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  });
+}
+
+function refreshMap() {
+  if (!run.job.front) return;
+  const current = yard.mapZoom > 1.2 ? districtIndex({ x: yard.panCenter[0], z: yard.panCenter[1] }) : -1;
+  $('#district-name').textContent = run.job.districts[current] ?? 'Whole city';
+  districtButtons.forEach((button, index) => button.setAttribute('aria-pressed', index === current));
+  $('#map-out').disabled = yard.mapZoom <= 1;
+  $('#map-in').disabled = yard.mapZoom >= 7;
+}
+
+function changeMapZoom(factor) {
+  yard.follow(null);
+  yard.setMap(...yard.panCenter, yard.mapZoom * factor);
+  refreshMap();
+}
+
+function frontBoard() {
+  openModal('City Fronts');
+  const list = document.createElement('div');
+  list.className = 'job-list arcade-list';
+  fronts.forEach((front, index) => {
+    const button = action('', () => reset(index, saved.contract, 'front'));
+    const title = document.createElement('strong');
+    const status = document.createElement('span');
+    const best = saved.scores[`city-front-${index}`];
+    title.textContent = front.name;
+    status.textContent = best ? `${'★'.repeat(best.medal)} ${number.format(best.score)}` : '9 districts';
+    button.append(title, status);
+    list.append(button);
+  });
+  const intro = document.createElement('p');
+  intro.textContent = 'Unlimited equipment. Destroy depots and patrol vehicles across the city. Clear the troops to earn gold.';
+  body.append(intro, list);
 }
 
 function jobBoard() {
@@ -684,7 +821,9 @@ function jobBoard() {
     button.append(title, status);
     list.append(button);
   });
-  body.append(arcade, list);
+  const city = action('City Fronts', frontBoard, true);
+  city.classList.add('city-board-link');
+  body.append(city, arcade, list);
 }
 
 function showHelp() {
@@ -700,7 +839,7 @@ function showHelp() {
       <dt>V / Q / E</dt><dd>Change view or rotate the camera.</dd>
     </dl>
     <p>Hit barrels or keep debris falling to build a scoring chain. Open Missions for Bridge Breaker, the two-charge bunker, Trench Run, and the unlimited-ammo Sandbox.</p>
-    <p>Destroy supports to bring down floors and walls. Tap again to steer a drone or bot, then detonate it or let it hit the target. Choose FPV and tap a launch point. The stick moves the drone. Drag the view to look around or tap a spot to fly there. Rise and Lower adjust altitude. Let go to stop and hover. On keyboard, use W/A/S/D to move, Q/E to turn, and ↑/↓ for altitude. Larger maps have sector buttons for a closer view.</p>`;
+    <p>Destroy supports to bring down floors and walls. Tap again to steer a drone or bot, then detonate it or let it hit the target. Select the FPV drone or Track bot, turn on FPV, then tap a launch point. The stick moves the drone. Drag the view to look around or tap a spot to fly there. Rise and Lower adjust altitude. Let go to stop and hover. On keyboard, use W/A/S/D to move, Q/E to turn, and ↑/↓ for altitude. Track bot FPV steers left and right with the stick and follows the terrain. City Fronts have map zoom, drag to pan, and a district grid.</p>`;
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
   actions.append(action('Back to mission', () => modal.close(), true));
@@ -723,6 +862,12 @@ function showKeyboardAim() {
 }
 
 viewport.addEventListener('pointerdown', event => {
+  if (run.job.front && !yard.fpv && pointer && event.pointerType === 'touch' && !pointer.pinch) {
+    pointer.pinch = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    pointer.moved = true;
+    viewport.setPointerCapture(event.pointerId);
+    return;
+  }
   if (pointer || (!yard.fpv && !event.isPrimary) || event.button !== 0 || modal.open) return;
   pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false };
   viewport.setPointerCapture(event.pointerId);
@@ -730,7 +875,22 @@ viewport.addEventListener('pointerdown', event => {
   crosshair.hidden = true;
 });
 viewport.addEventListener('pointermove', event => {
-  if ((!yard.fpv && !event.isPrimary) || modal.open) return;
+  if (modal.open) return;
+  if (pointer?.pinch) {
+    const second = pointer.pinch;
+    const before = Math.hypot(pointer.lastX - second.x, pointer.lastY - second.y);
+    if (event.pointerId === second.id) {
+      second.x = event.clientX;
+      second.y = event.clientY;
+    } else if (event.pointerId === pointer.id) {
+      pointer.lastX = event.clientX;
+      pointer.lastY = event.clientY;
+    } else return;
+    const after = Math.hypot(pointer.lastX - second.x, pointer.lastY - second.y);
+    if (before > 10 && after > 10) changeMapZoom(after / before);
+    return;
+  }
+  if (!yard.fpv && !event.isPrimary) return;
   if (pointer?.id === event.pointerId) {
     if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > 7) pointer.moved = true;
     if (pointer.moved) {
@@ -738,6 +898,11 @@ viewport.addEventListener('pointermove', event => {
       if (yard.fpv) {
         yard.fpv.yaw -= (event.clientX - pointer.lastX) * .006;
         yard.fpv.flight.pitch = clamp(yard.fpv.flight.pitch - (event.clientY - pointer.lastY) * .006, -.85, .68);
+      } else if (run.job.front && !event.shiftKey) {
+        if (yard.following) yard.follow(null);
+        yard.moveMap(event.clientX - pointer.lastX, event.clientY - pointer.lastY);
+        refreshMap();
+        yard.highlight(null);
       } else {
         yard.turn((event.clientX - pointer.lastX) * .009, true);
         yard.highlight(null);
@@ -752,6 +917,10 @@ viewport.addEventListener('pointermove', event => {
   }
 });
 viewport.addEventListener('pointerup', event => {
+  if (pointer?.pinch?.id === event.pointerId) {
+    pointer.pinch = null;
+    return;
+  }
   if (pointer?.id !== event.pointerId) return;
   const { x, y } = eventPosition(event);
   if (!pointer.moved && x >= 0 && x <= yard.width && y >= 0 && y <= yard.height) shoot(x, y);
@@ -760,6 +929,10 @@ viewport.addEventListener('pointerup', event => {
 });
 for (const event of ['lostpointercapture', 'pointercancel']) {
   viewport.addEventListener(event, event => {
+    if (pointer?.pinch?.id === event.pointerId) {
+      pointer.pinch = null;
+      return;
+    }
     if (pointer?.id !== event.pointerId) return;
     pointer = null;
     viewport.classList.remove('dragging');
@@ -778,11 +951,12 @@ function selectSector(x, z) {
 }
 
 function toggleFPV() {
-  if (run.remote?.type === 'drone') {
+  if (run.remote) {
     yard.follow(null);
     setPilot(yard.fpv ? null : run.remote);
-  } else if (!run.remote && run.stock.drone && run.hits && !run.ended) {
-    run.tool = 'drone';
+  } else if (run.hits && !run.ended) {
+    if (!isRemote(run.tool)) run.tool = run.stock.drone ? 'drone' : 'tank';
+    if (!run.stock[run.tool]) return;
     run.fpvArmed = !run.fpvArmed;
   }
   renderStats();
@@ -830,7 +1004,7 @@ for (const button of $$('[data-turn]')) {
     yard.highlight(null);
   });
 }
-$('#retry').addEventListener('click', () => reset(run.index, run.job.contract, run.job.mode));
+$('#retry').addEventListener('click', () => reset(run.index, run.job.contract, run.job.front ? 'front' : run.job.mode));
 $('#end-mission').addEventListener('click', finish);
 $('#watch-replay').addEventListener('click', () => showReplay());
 $('#sandbox-button').addEventListener('click', () => reset(arcadeModes.sandbox.base, saved.contract, 'sandbox'));
@@ -843,6 +1017,19 @@ $('#follow').addEventListener('click', () => {
 });
 $('#fpv-toggle').addEventListener('click', toggleFPV);
 for (const button of $$('[data-sector]')) button.addEventListener('click', () => selectSector(...button.dataset.sector.split(',').map(Number)));
+$('#front-button').addEventListener('click', frontBoard);
+$('#map-in').addEventListener('click', () => changeMapZoom(1.55));
+$('#map-out').addEventListener('click', () => changeMapZoom(1 / 1.55));
+$('#map-all').addEventListener('click', () => {
+  yard.follow(null);
+  yard.setMap(0, 0, 1);
+  refreshMap();
+});
+viewport.addEventListener('wheel', event => {
+  if (!run.job.front || yard.fpv || modal.open) return;
+  event.preventDefault();
+  changeMapZoom(Math.exp(clamp(-event.deltaY, -160, 160) * .002));
+}, { passive: false });
 $('#jobs-button').addEventListener('click', jobBoard);
 $('#help').addEventListener('click', showHelp);
 $('#close-modal').addEventListener('click', () => modal.close());
@@ -862,5 +1049,7 @@ const params = new URLSearchParams(location.search);
 const requested = Number(params.get('mission')) - 1;
 const mode = params.get('mode');
 const chosen = Number.isInteger(requested) && requested >= 0 && (requested <= saved.unlocked || jobs[requested]?.sites) && requested < jobs.length;
-if (Object.hasOwn(arcadeModes, mode)) reset(arcadeModes[mode].base, saved.contract, mode);
+const requestedFront = Number(params.get('front')) - 1;
+if (Number.isInteger(requestedFront) && fronts[requestedFront]) reset(requestedFront, saved.contract, 'front');
+else if (Object.hasOwn(arcadeModes, mode)) reset(arcadeModes[mode].base, saved.contract, mode);
 else reset(chosen ? requested : Math.min(saved.unlocked, jobs.length));

@@ -1,6 +1,7 @@
+import { districtCenter } from './fronts.js?v=8';
 import { key } from './collapse.js';
-import { randomFrom } from './jobs.js?v=7';
-import { groundAt } from './terrain.js';
+import { randomFrom } from './jobs.js?v=8';
+import { groundAt } from './terrain.js?v=8';
 
 const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
@@ -31,6 +32,13 @@ export function garrison(job, cells, terrain) {
   for (let i = 0; i < job.troops; i++) {
     const options = trenches.length && i % 3 === 0 ? trenches : levels[i % levels.length];
     let index = Math.floor(random() * options.length);
+    if (job.front) {
+      const [x, z] = districtCenter(i % 9);
+      const local = options.map((at, index) => ({ at, index })).filter(({ at }) =>
+        Math.abs(at.x - x) < 20 && Math.abs(at.z - z) < 17 &&
+        !squad.some(person => person.y === at.y && Math.hypot(person.x - at.x, person.z - at.z) < 4));
+      if (local.length) index = local[Math.floor(random() * local.length)].index;
+    }
     for (let tries = 0; tries < options.length; tries++) {
       const at = options[index];
       if (!squad.some(person => person.y === at.y && Math.hypot(person.x - at.x, person.z - at.z) < (job.sites ? 6 : 2.4))) break;

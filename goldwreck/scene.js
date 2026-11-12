@@ -1,8 +1,8 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js';
-import { SoftwareRenderer } from './software.js?v=4';
-import { key, palettes, randomFrom } from './jobs.js?v=7';
+import { SoftwareRenderer } from './software.js?v=8';
+import { key, palettes, randomFrom } from './jobs.js?v=8';
 
-import { fieldGround, groundAt } from './terrain.js';
+import { fieldGround, groundAt } from './terrain.js?v=8';
 
 const box = new THREE.BoxGeometry();
 const blockMaterial = new THREE.MeshLambertMaterial();
@@ -48,6 +48,8 @@ const truckParts = [
 hulls['cargo-truck'] = [...truckParts, [0, .83, -.48, 1.43, .94, 1.66, 0x777c54]];
 hulls['fuel-truck'] = [...truckParts, [0, .81, -.51, 1.38, .76, 1.73, 0xaf6244],
   [0, 1.22, -.51, .99, .23, 1.67, 0xc4784d], [0, 1.39, -.55, .29, .18, .27, 0x4b5040]];
+hulls['armor-truck'] = [...truckParts, [0, .68, -.23, 1.6, .72, 2.35, 0x667156],
+  [0, 1.13, -.24, 1.03, .43, 1.1, 0x7f896b], [0, 1.26, .65, .25, .20, 1.68, 0x424c3d]];
 const maxDebris = 580;
 const tau = Math.PI * 2;
 const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.55);
@@ -90,7 +92,7 @@ function signTexture(text) {
   return texture;
 }
 
-function markerTexture() {
+function markerTexture(asset = false) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 64;
   const ctx = canvas.getContext('2d');
@@ -104,14 +106,21 @@ function markerTexture() {
   ctx.strokeStyle = '#181911';
   ctx.lineWidth = 8;
   ctx.stroke();
-  ctx.fillStyle = '#411f22';
+  ctx.fillStyle = asset ? '#3e351b' : '#411f22';
   ctx.fill();
-  ctx.strokeStyle = '#ff9e90';
+  ctx.strokeStyle = asset ? '#ffcc65' : '#ff9e90';
   ctx.lineWidth = 4;
   ctx.stroke();
-  ctx.fillStyle = '#ffd1c4';
-  ctx.fillRect(28, 20, 8, 24);
-  ctx.fillRect(20, 28, 24, 8);
+  ctx.fillStyle = asset ? '#ffe2a2' : '#ffd1c4';
+  if (asset) {
+    ctx.fillRect(23, 23, 18, 18);
+    ctx.clearRect(28, 28, 8, 8);
+    ctx.fillStyle = '#3e351b';
+    ctx.fillRect(28, 28, 8, 8);
+  } else {
+    ctx.fillRect(28, 20, 8, 24);
+    ctx.fillRect(20, 28, 24, 8);
+  }
   return new THREE.CanvasTexture(canvas);
 }
 
@@ -169,7 +178,7 @@ export class Yard {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x44574d);
     this.scene.fog = new THREE.Fog(0x44574d, 42, 92);
-    this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, .2, 270);
+    this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, .2, 450);
     this.replayCamera = new THREE.PerspectiveCamera(52, 1, .2, 200);
     this.fpvCamera = new THREE.PerspectiveCamera(66, 1, .12, 170);
     this.fpv = null;
@@ -222,6 +231,9 @@ export class Yard {
     this.scene.add(this.outline);
     this.markerMaterial = new THREE.SpriteMaterial({ map: markerTexture(), depthTest: false, depthWrite: false, transparent: true, toneMapped: false });
     this.markers = new Map();
+    this.assetMarkers = new Map();
+    this.assetMaterial = this.markerMaterial.clone();
+    this.assetMaterial.map = markerTexture(true);
     this.rings = [];
     this.ringGeometry = new THREE.RingGeometry(.90, 1, 24);
     this.width = 1;
@@ -252,16 +264,35 @@ export class Yard {
     const span = overhead ? this.job.d + 7 : (this.job.h + skyline) * (front ? .92 : .79)
       + this.job.d * (front ? .21 : .53) + 3.2;
     const across = this.job.w + (overhead || front ? 5 : 7);
-    const fieldSpan = this.job.sites ? Math.max((overhead ? this.job.d * 1.10 + 8 : front ? span : (this.job.d * .81 + this.job.w * .59) * .59 + 11), (across + (overhead || front ? 0 : this.job.d * .25)) / aspect) : 0;
+    const fieldSpan = this.job.sites ? Math.max((overhead ? this.job.d * 1.10 + 8 : front ? span : (this.job.d * .81 + this.job.w * .59) * .59 + 11), (across + (overhead || front ? 0 : this.job.d * (this.job.front ? .43 : .25))) / aspect) : 0;
     const vertical = Math.max(span, across / aspect, fieldSpan);
     this.camera.left = -vertical * aspect / 2;
     this.camera.right = vertical * aspect / 2;
     this.camera.top = vertical / 2;
     this.camera.bottom = -vertical / 2;
     this.camera.updateProjectionMatrix();
-    this.look.set(this.sector[0] * this.job.w * .23, overhead ? 1 : this.job.h * .50 + skyline * .23,
-      this.sector[1] * this.job.d * .23 + .38);
+    const [x, z] = this.job.front ? this.panCenter : [
+      this.sector[0] * this.job.w * .23, this.sector[1] * this.job.d * .23 + .38,
+    ];
+    this.look.set(x, overhead ? 1 : this.job.h * .50 + skyline * .23, z);
     this.dirty = true;
+  }
+
+  moveMap(dx, dy) {
+    const scale = (this.camera.top - this.camera.bottom) / (this.height * this.camera.zoom);
+    const x = this.panCenter[0] - scale * (dx * Math.cos(this.azimuth) + dy * Math.sin(this.azimuth));
+    const z = this.panCenter[1] + scale * (dx * Math.sin(this.azimuth) - dy * Math.cos(this.azimuth));
+    this.setMap(x, z, this.mapZoom, true);
+  }
+
+  setMap(x, z, zoom, immediate = false) {
+    this.panCenter = [
+      Math.max(-this.job.w / 2, Math.min(this.job.w / 2, x)),
+      Math.max(-this.job.d / 2, Math.min(this.job.d / 2, z)),
+    ];
+    this.mapZoom = Math.max(1, Math.min(7, zoom));
+    this.updateFraming();
+    if (immediate) this.focus.copy(this.look);
   }
 
   setSector(x, z) {
@@ -322,6 +353,8 @@ export class Yard {
     this.camera.zoom = 1;
     this.fpv = null;
     this.sector = [0, 0];
+    this.panCenter = [0, 0];
+    this.mapZoom = 1;
     this.debris.length = 0;
     this.debrisMesh.count = 0;
     for (const ring of this.rings) {
@@ -356,7 +389,7 @@ export class Yard {
     this.blocks.receiveShadow = true;
     for (const cell of cells) {
       const palette = palettes[cell.palette ?? job.theme];
-      const color = cell.kind === 'deck' ? 0x4d5351 : cell.kind === 'powder' ? 0xf27642 : cell.kind === 'sandbag' ? 0x919467 : cell.kind === 'beam' ? palette.trim : palette[cell.kind];
+      const color = cell.kind === 'supply' ? 0xffaa43 : cell.kind === 'deck' ? 0x4d5351 : cell.kind === 'powder' ? 0xf27642 : cell.kind === 'sandbag' ? 0x919467 : cell.kind === 'beam' ? palette.trim : palette[cell.kind];
       cell.color = new THREE.Color(color).multiplyScalar(cell.shade);
       const size = cell.kind === 'glass' ? .925 : cell.kind === 'powder' ? .71 : .965;
       const height = cell.kind === 'powder' ? .79 : cell.kind === 'sandbag' ? .83 : size;
@@ -501,6 +534,7 @@ export class Yard {
       parts.forEach((part, i) => mesh.setColorAt(i, shade.set(part[6])));
     }
     const { position, type } = item;
+    this.assetMarkers.get(item.marker)?.position.set(position.x, position.y + 1.48, position.z);
     const yaw = item.yaw + (type === 'grenade' ? item.age * 10 : 0);
     const sine = Math.sin(yaw);
     const cosine = Math.cos(yaw);
@@ -524,6 +558,7 @@ export class Yard {
       this.ordnance.delete(item);
       this.dirty = true;
     }
+    if (item.marker) this.removeAssetMarker(item.marker);
     if (this.following === item) this.following = null;
     if (this.fpv === item) this.setFPV(null);
   }
@@ -612,7 +647,25 @@ export class Yard {
     this.dirty = true;
   }
 
+  markAsset(id, at, height) {
+    const sprite = new THREE.Sprite(this.assetMaterial);
+    sprite.position.set(at.x, at.y + height, at.z);
+    sprite.scale.setScalar(3);
+    sprite.renderOrder = 7;
+    this.scene.add(sprite);
+    this.assetMarkers.set(id, sprite);
+    this.dirty = true;
+  }
+
+  removeAssetMarker(id) {
+    const sprite = this.assetMarkers.get(id);
+    if (sprite) this.scene.remove(sprite);
+    this.assetMarkers.delete(id);
+    this.dirty = true;
+  }
+
   clearScan() {
+    for (const id of this.assetMarkers.keys()) this.removeAssetMarker(id);
     for (const sprite of this.markers.values()) this.scene.remove(sprite);
     this.markers.clear();
     this.scanActive = false;
@@ -741,7 +794,7 @@ export class Yard {
     const desired = this.following
       ? remoteTarget.set(this.following.position.x, this.following.position.y + 1.1, this.following.position.z)
       : this.look;
-    const zoom = this.following ? 1.62 : this.sector.some(Boolean) ? 1.93 : 1;
+    const zoom = this.following ? (this.job.front ? 4.3 : 1.62) : this.job.front ? this.mapZoom : this.sector.some(Boolean) ? 1.93 : 1;
     const refocus = this.focus.distanceToSquared(desired) > .0001 || Math.abs(this.camera.zoom - zoom) > .001;
     if (refocus) {
       const ease = this.reduceMotion ? 1 : 1 - Math.exp(-8 * dt);
@@ -777,7 +830,7 @@ export class Yard {
         const { pitch } = pilot.flight;
         const fx = Math.sin(pilot.yaw);
         const fz = Math.cos(pilot.yaw);
-        this.fpvCamera.position.set(x + fx * .23, y + .10, z + fz * .23);
+        this.fpvCamera.position.set(x + fx * .23, y + (pilot.type === 'tank' ? .65 : .10), z + fz * .23);
         this.fpvCamera.up.set(0, 1, 0);
         remoteTarget.set(fx * Math.cos(pitch), Math.sin(pitch), fz * Math.cos(pitch)).add(this.fpvCamera.position);
         this.fpvCamera.lookAt(remoteTarget);

@@ -1,3 +1,5 @@
+import { districtCenter, frontSites, frontTrenches } from './fronts.js?v=8';
+
 const field = (name, w, d, theme, sites, trench, seed) => ({
   name, w, d, theme, sites, trench, seed, h: 9, troops: w > 60 ? 12 : w > 40 ? 9 : 7,
   hits: w > 60 ? 68 : w > 40 ? 58 : 48, drills: 12, charges: 14,
@@ -22,6 +24,22 @@ export const fields = [
 ];
 
 export function terrainFor(job) {
+  if (job.front) {
+    const trench = frontTrenches(job);
+    for (const { kind, x, z } of frontSites(job)) {
+      const [w, d] = buildings[kind];
+      for (let dx = -(w - 1) / 2; dx <= (w - 1) / 2; dx++) {
+        for (let dz = -(d - 1) / 2; dz <= (d - 1) / 2; dz++) trench.delete((x + dx) + ',' + (z + dz));
+      }
+    }
+    for (let index = 0; index < job.districts.length; index++) {
+      const [x, z] = districtCenter(index);
+      for (let dx = -7; dx <= 7; dx++) {
+        for (let dz = -1; dz <= 1; dz++) trench.delete((x + dx) + ',' + (z + dz));
+      }
+    }
+    return trench;
+  }
   const trench = new Map();
   if (!job.trench) return trench;
   const half = Math.floor(job.w * .42);
@@ -59,7 +77,7 @@ export function groundAt(terrain, x, z) {
 }
 
 const buildings = {
-  house: [7, 7, 5, 3], barn: [9, 7, 6, 0], shed: [5, 5, 4, 1],
+  apartment: [11, 9, 12, 2], house: [7, 7, 5, 3], barn: [9, 7, 6, 0], shed: [5, 5, 4, 1],
   bunker: [7, 5, 4, 0], depot: [13, 9, 7, 1], factory: [15, 9, 8, 4],
 };
 
@@ -70,9 +88,11 @@ function sitePositions(job) {
 }
 
 export function buildField(job, terrain, put) {
-  const sites = sitePositions(job);
-  job.sites.forEach((kind, i) => {
-    const [cx, cz] = sites[i];
+  const sites = job.front ? frontSites(job) : job.sites.map((kind, i) => {
+    const [x, z] = sitePositions(job)[i];
+    return { kind, x, z };
+  });
+  sites.forEach(({ kind, x: cx, z: cz }) => {
     const [w, d, h, palette] = buildings[kind];
     const a = (w - 1) / 2, b = (d - 1) / 2;
     const place = (dx, y, dz, material) => put(cx + dx, y, cz + dz, material, palette);
@@ -84,7 +104,7 @@ export function buildField(job, terrain, put) {
           if (doorway && dy <= 3) continue;
           if (doorway && dy === 4) place(dx, dy, dz, 'beam');
           else if (dy === h) place(dx, dy, dz, 'roof');
-          else if (dy === 1 || h >= 7 && dy === 4) place(dx, dy, dz, 'floor');
+          else if (dy === 1 || h >= 7 && (dy === 4 || kind === 'apartment' && (dy === 7 || dy === 10))) place(dx, dy, dz, 'floor');
           else if (edge) {
             const window = kind !== 'bunker' && dy % 3 === 0 && (dz === b || dz === -b) && Math.abs(dx) % 3 === 2;
             place(dx, dy, dz, window ? 'glass' : kind === 'bunker' ? 'steel' : 'brick');
@@ -122,7 +142,9 @@ export function fieldGround(job, terrain, add) {
   const hz = Math.floor(job.d / 2) + 6;
   const surface = (x, z) => {
     const depth = groundAt(terrain, x, z);
-    if (depth < 0) return [depth, depth === -2 ? 0x6d5942 : 0x807155];
+    if (depth < 0) return [depth, depth === -2 ? 0x6d5942 : job.style === 'river' ? 0x456563 : 0x807155];
+    if (job.front && (Math.abs(x - Math.round(x / 42) * 42) <= 2 ||
+      Math.abs(z - Math.round(z / 38) * 38) <= 2)) return [0, 0x65675e];
     if (Math.abs(x) <= 2 || Math.abs(z) === Math.round(job.d * .22)) return [0, 0x81785e];
     return [0, Math.abs(Math.floor(x / 6) + Math.floor(z / 7)) % 2 ? 0x59614a : 0x60674e];
   };

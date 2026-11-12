@@ -1,4 +1,5 @@
-import { fields, buildField, groundAt, terrainFor } from './terrain.js';
+import { buildSupply } from './fronts.js?v=8';
+import { fields, buildField, groundAt, terrainFor } from './terrain.js?v=8';
 import { buildBridge } from './arcade.js?v=7';
 import { detachUnsupported } from './collapse.js?v=7';
 
@@ -23,6 +24,7 @@ export const materials = {
   deck: { hp: 2 },
   sandbag: { hp: 2 },
   powder: { hp: 1 },
+  supply: { hp: 1 },
 };
 
 export const palettes = [
@@ -59,6 +61,7 @@ export function buildJob(job, terrain = terrainFor(job)) {
   const finalize = () => [...cells.values()].map((cell, id) => ({ ...cell, id, hp: materials[cell.kind].hp, shade: .87 + random() * .24 }));
   if (job.sites) {
     buildField(job, terrain, put);
+    if (job.front) buildSupply(put);
     if (job.mode === 'convoy') buildBridge(put);
     if (job.mode === 'sandbox') {
       for (const side of [-1, 1]) {
@@ -165,7 +168,7 @@ export function buildJob(job, terrain = terrainFor(job)) {
   return finalize();
 }
 
-export const impactRadius = { hammer: 1.46, blast: 3.85, grenade: 3.5, drone: 4.25, tank: 5.15, powder: 2.95 };
+export const impactRadius = { hammer: 1.46, blast: 3.85, grenade: 3.5, drone: 4.25, tank: 5.15, powder: 2.95, supply: 5.5 };
 
 export function strike(cells, trace, tool) {
   return resolveImpact(cells, trace[0].voxel, tool, trace);
@@ -188,15 +191,21 @@ function resolveImpact(cells, target, tool, trace = [], radius = impactRadius[to
     damaged.delete(cell);
     cells.delete(key(cell.x, cell.y, cell.z));
     broken.push(cell);
-    if (cell.kind === 'powder') blasts.push(cell);
+    if (cell.kind === 'powder' || cell.kind === 'supply') blasts.push(cell);
   }
 
   function hitArea(center, radius, strength) {
     const squared = radius * radius;
     const core = squared * .72;
-    for (const cell of cells.values()) {
-      const distance = (cell.x - center.x) ** 2 + (cell.y - center.y) ** 2 + (cell.z - center.z) ** 2;
-      if (distance <= squared) hit(cell, distance <= core ? strength : 1);
+    for (let x = Math.ceil(center.x - radius); x <= center.x + radius; x++) {
+      for (let y = Math.max(1, Math.ceil(center.y - radius)); y <= center.y + radius; y++) {
+        for (let z = Math.ceil(center.z - radius); z <= center.z + radius; z++) {
+          const distance = (x - center.x) ** 2 + (y - center.y) ** 2 + (z - center.z) ** 2;
+          if (distance > squared) continue;
+          const cell = cells.get(key(x, y, z));
+          if (cell) hit(cell, distance <= core ? strength : 1);
+        }
+      }
     }
   }
 
@@ -209,7 +218,7 @@ function resolveImpact(cells, target, tool, trace = [], radius = impactRadius[to
     hitArea(target, radius, 2);
   }
 
-  for (let i = 0; i < blasts.length; i++) hitArea(blasts[i], impactRadius.powder, 2);
+  for (let i = 0; i < blasts.length; i++) hitArea(blasts[i], impactRadius[blasts[i].kind], 2);
   const falling = detachUnsupported(cells);
   for (const group of falling) for (const cell of group) damaged.delete(cell);
   return { target, broken, damaged: [...damaged], falling, blasts };

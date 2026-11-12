@@ -1,5 +1,5 @@
 import { key } from './collapse.js';
-import { groundAt } from './terrain.js';
+import { groundAt } from './terrain.js?v=8';
 
 export const remotes = {
   drone: { label: 'FPV drone', speed: 11.5, lift: 1.05 },
@@ -92,4 +92,24 @@ export function advance(item, dt, cells, terrain) {
   }
   item.waiting = step === 1;
   return false;
+}
+
+export function trackCollision(position, job, cells) {
+  if (Math.abs(position.x) > job.w / 2 + 4 || Math.abs(position.z) > job.d / 2 + 4) return true;
+  return hullProbes.some(([dx, , dz]) => obstructed({ x: position.x + dx, z: position.z + dz }, 'tank', cells));
+}
+
+export function placeTrackPilot(item, target, job, cells, terrain) {
+  const heading = item.yaw;
+  for (const offset of [0, .8, -.8, 1.6, -1.6, Math.PI]) {
+    for (const distance of [5, 7, 9, 3, 1]) {
+      const x = target.x - Math.sin(heading + offset) * distance;
+      const z = target.z - Math.cos(heading + offset) * distance;
+      const position = { x, z, y: groundAt(terrain, x, z) + remotes.tank.lift };
+      if (trackCollision(position, job, cells)) continue;
+      item.position = position;
+      item.yaw = heading + offset;
+      return;
+    }
+  }
 }
