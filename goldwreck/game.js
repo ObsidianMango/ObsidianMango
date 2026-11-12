@@ -1,5 +1,5 @@
 import { districtCenter, fronts, frontSupply, frontVehicles, patrol } from './fronts.js?v=8';
-import { Yard } from './scene.js?v=8';
+import { Yard } from './scene.js?v=9';
 import { jobs, getJob, buildJob, key, impactRadius, strike, explode } from './jobs.js?v=8';
 import { advance, flightCollision, isRemote, launch, placeTrackPilot, redirect, remotes, trackCollision } from './ordnance.js?v=8';
 import { fallingChunk, fall, chunkPoint } from './collapse.js?v=7';
@@ -9,7 +9,7 @@ import { advanceFlight, advanceTrack, clamp, guideFlight, releaseControl, takeCo
 import { flightControls } from './sticks.js?v=8';
 
 import { arcadeModes, challengeSquad, convoySeconds, deckHeight, fuelRadius, spawnConvoy, updateTruck } from './arcade.js?v=7';
-import { Replays } from './replay.js?v=7';
+import { DetonationReplay, Replays } from './replay.js?v=9';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -21,6 +21,17 @@ const body = $('#modal-body');
 const missionBar = $('#mission-progress');
 const crosshair = $('#crosshair');
 const replays = new Replays($('#watch-replay'));
+const detonationReplay = new DetonationReplay($('#detonation-replay'), () => {
+  yard.dirty = true;
+  renderStats();
+  viewport.focus({ preventScroll: true });
+});
+yard.rewinding = () => detonationReplay.active;
+yard.captureDetonation = now => {
+  if (document.hidden || modal.open) return;
+  if (detonationReplay.active) detonationReplay.advance(yard, now);
+  else if (yard.fpv) detonationReplay.remember(yard, now, yard.fpv.position);
+};
 yard.recording = () => Boolean(replays.recording);
 yard.captureReplay = now => replays.capture(yard, now);
 yard.timeScale = dt => {
@@ -77,6 +88,7 @@ function setPilot(item) {
   if (item) {
     const { position } = item;
     while (item.type === 'drone' && flightCollision(position, run.job, run.cells, run.terrain) && position.y < 24) position.y += .28;
+    detonationReplay.reset();
     takeControl(item, run.job.front ? 180 : 110);
     telemetry(item);
     nextTelemetry = 0;
@@ -117,6 +129,14 @@ function tone(frequency, end, length, type, volume, delay = 0) {
 }
 
 function play(sound, downed = 0) {
+  if (detonationReplay.active && saved.sound) {
+    detonationReplay.queueSound(() => playSound(sound, downed));
+  } else {
+    playSound(sound, downed);
+  }
+}
+
+function playSound(sound, downed) {
   if (!saved.sound) return;
   try {
     const Audio = window.AudioContext || window.webkitAudioContext;
@@ -157,6 +177,7 @@ function reset(index, contract = saved.contract, mode = null) {
   $('#toast').textContent = '';
   $('#feedback').replaceChildren();
   if (modal.open) modal.close();
+  detonationReplay.reset();
   replays.reset();
   const arcade = arcadeModes[mode];
   const base = getJob(arcade?.base ?? index, contract);
@@ -403,7 +424,7 @@ function shoot(x, y) {
 }
 
 function pendingWork() {
-  return Boolean(run.munitions.size || run.chunks.size || [...run.squad].some(person => person.fallStart !== null));
+  return Boolean(detonationReplay.active || run.munitions.size || run.chunks.size || [...run.squad].some(person => person.fallStart !== null));
 }
 
 function maybeSettle() {
@@ -485,7 +506,7 @@ function showImpact({ target, broken, damaged, falling, blasts }, tool, {
     if (run.convoy) group.forEach(rememberGap);
   }
   const weight = broken.length + collapseSize * 2 + blasts.length * 20 + downed * 15 + (tool === 'fuel' ? 30 : 0);
-  if (weight >= 30) replays.start(target, weight);
+  if (!detonationReplay.active && weight >= 30) replays.start(target, weight);
   if (weight >= 85 && run.slow <= 0 && !yard.reduceMotion && !yard.fpv) run.slow = .85;
   const links = Math.max(1, downed + blasts.length + Number(collapseSize >= 8));
   const points = scoreEvent(broken.length * 7 + downed * 550 + collapseSize * 10 + blasts.length * 120, links);
@@ -514,6 +535,7 @@ function showImpact({ target, broken, damaged, falling, blasts }, tool, {
 
 function detonate(item) {
   if (!item || run.ended || modal.open || !run.munitions.delete(item)) return;
+  if (yard.fpv === item) detonationReplay.begin(yard, item.position);
   if (run.remote === item) run.remote = null;
   if (item.flight) sticks.clear();
   yard.removeOrdnance(item);
@@ -536,7 +558,8 @@ function hitsTarget({ x, y, z }) {
 }
 
 yard.simulate = dt => {
-  if (!run || run.ended || modal.open || document.hidden) return;
+  if (!run || run.ended || modal.open || document.hidden ||
+    detonationReplay.aftermathComplete) return;
   if (run.combo && !run.chunks.size && ![...run.squad].some(person => person.fallStart !== null)) {
     run.comboTime -= dt;
     if (run.comboTime <= 0) {
@@ -619,6 +642,7 @@ yard.simulate = dt => {
 };
 
 function openModal(title) {
+  detonationReplay.close();
   sticks.clear();
   $('#modal-title').textContent = title;
   body.replaceChildren();
@@ -839,7 +863,7 @@ function showHelp() {
       <dt>V / Q / E</dt><dd>Change view or rotate the camera.</dd>
     </dl>
     <p>Hit barrels or keep debris falling to build a scoring chain. Open Missions for Bridge Breaker, the two-charge bunker, Trench Run, and the unlimited-ammo Sandbox.</p>
-    <p>Destroy supports to bring down floors and walls. Tap again to steer a drone or bot, then detonate it or let it hit the target. Select the FPV drone or Track bot, turn on FPV, then tap a launch point. The stick moves the drone. Drag the view to look around or tap a spot to fly there. Rise and Lower adjust altitude. Let go to stop and hover. On keyboard, use W/A/S/D to move, Q/E to turn, and ↑/↓ for altitude. Track bot FPV steers left and right with the stick and follows the terrain. City Fronts have map zoom, drag to pan, and a district grid.</p>`;
+    <p>Destroy supports to bring down floors and walls. Tap again to steer a drone or bot, then detonate it or let it hit the target. Select the FPV drone or Track bot, turn on FPV, then tap a launch point. The stick moves the drone. Drag the view to look around or tap a spot to fly there. Rise and Lower adjust altitude. Let go to stop and hover. On keyboard, use W/A/S/D to move, Q/E to turn, and ↑/↓ for altitude. FPV detonations replay the last three seconds from the map camera. Track bot FPV steers left and right with the stick and follows the terrain. City Fronts have map zoom, drag to pan, and a district grid.</p>`;
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
   actions.append(action('Back to mission', () => modal.close(), true));
@@ -964,6 +988,10 @@ function toggleFPV() {
 
 const movement = { ArrowUp: [0, -.018], ArrowDown: [0, .018], ArrowLeft: [-.018, 0], ArrowRight: [.018, 0] };
 document.addEventListener('keydown', event => {
+  if (detonationReplay.active) {
+    if (event.key === 'Escape') detonationReplay.close();
+    return;
+  }
   if (modal.open || event.altKey || event.ctrlKey || event.metaKey) return;
   const input = event.key.toLowerCase();
   if (yard.fpv && sticks.press(input)) {

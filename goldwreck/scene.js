@@ -511,6 +511,31 @@ export class Yard {
     return closest;
   }
 
+  renderDetonationFrame(target) {
+    const aspect = this.width / this.height;
+    if (!this.detonationRenderer) {
+      this.detonationCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, .2, 450);
+      this.detonationRenderer = new SoftwareRenderer(document.createElement('canvas'));
+    }
+    const renderer = this.detonationRenderer;
+    const width = Math.max(1, Math.round(400 * Math.min(1, aspect)));
+    const height = Math.max(1, Math.round(400 * Math.min(1, 1 / aspect)));
+    if (renderer.width !== width || renderer.height !== height) renderer.setSize(width, height);
+    const camera = this.detonationCamera;
+    const vertical = Math.max(11, 8 / aspect);
+    Object.assign(camera, { left: -vertical * aspect, right: vertical * aspect, top: vertical, bottom: -vertical });
+    const center = new THREE.Vector3(target.x, Math.max(1.8, target.y * .62), target.z);
+    const distance = 46;
+    const reach = Math.cos(this.tilt) * distance;
+    camera.position.set(center.x + Math.sin(this.azimuth) * reach, center.y + Math.sin(this.tilt) * distance,
+      center.z + Math.cos(this.azimuth) * reach);
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    renderer.render(this.scene, camera);
+    return renderer.domElement;
+  }
+
   renderReplayAngle(target) {
     const camera = this.replayCamera;
     const angle = this.azimuth - .23;
@@ -808,7 +833,7 @@ export class Yard {
       this.azimuth += (this.goalAzimuth - this.azimuth) * easing;
       this.tilt += (this.goalTilt - this.tilt) * easing;
     }
-    if (this.dirty || this.fpv || motion || refocus || this.debris.length || this.rings.length || this.shake > 0 || this.recording?.()) {
+    if (this.dirty || this.fpv || motion || refocus || this.debris.length || this.rings.length || this.shake > 0 || this.recording?.() || this.rewinding?.()) {
       this.dirty = false;
       const y = Math.sin(this.tilt) * this.orbitRadius;
       const r = Math.cos(this.tilt) * this.orbitRadius;
@@ -838,6 +863,11 @@ export class Yard {
       }
       this.scene.fog.near = pilot ? 28 : this.orbitRadius + (this.job.sites ? 19 : -1);
       this.scene.fog.far = pilot ? 105 : this.orbitRadius + (this.job.sites ? 115 : 49);
+      this.captureDetonation?.(now);
+      if (this.rewinding?.()) {
+        requestAnimationFrame(time => this.frame(time));
+        return;
+      }
       const hull = this.ordnance.get(pilot);
       if (hull) hull.visible = false;
       if (this.renderer.isWebGLRenderer) this.captureReplay?.(now);
