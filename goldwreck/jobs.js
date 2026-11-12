@@ -1,5 +1,6 @@
-import { fields, buildField, terrainFor } from './terrain.js';
-import { detachUnsupported } from './collapse.js';
+import { fields, buildField, groundAt, terrainFor } from './terrain.js';
+import { buildBridge } from './arcade.js?v=7';
+import { detachUnsupported } from './collapse.js?v=7';
 
 export const jobs = [
   { name: 'Border Checkpoint', sign: 'CHECKPOINT', theme: 0, w: 13, d: 9, h: 7, troops: 4, hits: 36, drills: 7, charges: 7, seed: 802 },
@@ -19,6 +20,7 @@ export const materials = {
   steel: { hp: 2 },
   crate: { hp: 1 },
   beam: { hp: 2 },
+  deck: { hp: 2 },
   sandbag: { hp: 2 },
   powder: { hp: 1 },
 };
@@ -45,8 +47,8 @@ export function getJob(index, contract = 1) {
   return { ...base, name: `Contract ${contract}`, seed: base.seed + contract * 913, contract };
 }
 
-export { key } from './collapse.js';
-import { key } from './collapse.js';
+export { key } from './collapse.js?v=7';
+import { key } from './collapse.js?v=7';
 
 export function buildJob(job, terrain = terrainFor(job)) {
   const cells = new Map();
@@ -57,6 +59,16 @@ export function buildJob(job, terrain = terrainFor(job)) {
   const finalize = () => [...cells.values()].map((cell, id) => ({ ...cell, id, hp: materials[cell.kind].hp, shade: .87 + random() * .24 }));
   if (job.sites) {
     buildField(job, terrain, put);
+    if (job.mode === 'convoy') buildBridge(put);
+    if (job.mode === 'sandbox') {
+      for (const side of [-1, 1]) {
+        for (let z = 4; z <= 10; z += 2) {
+          for (const x of [side * 7, side * 9, side * 11]) {
+            if (!cells.has(key(x, 1, z)) && groundAt(terrain, x, z) === 0) put(x, 1, z, 'powder', 4);
+          }
+        }
+      }
+    }
     return finalize();
   }
   for (let y = 1; y <= job.h; y++) {

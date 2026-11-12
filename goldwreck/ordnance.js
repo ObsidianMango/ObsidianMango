@@ -14,6 +14,7 @@ export function launch(type, target, job, yaw, terrain) {
   if (type === 'tank') {
     position = { x: job.sites ? target.x : 0, y: remotes.tank.lift,
       z: job.sites ? Math.min(zEdge + 4, target.z + 9) : zEdge + 4 };
+    if (job.mode === 'trench' && target.x >= 0) position.z = Math.max(-zEdge - 4, target.z - 9);
     end.y = groundAt(terrain, end.x, end.z) + remotes.tank.lift;
   } else {
     if (type === 'drone') end.y = Math.max(groundAt(terrain, end.x, end.z) + .48, end.y);

@@ -1,7 +1,7 @@
 export const key = (x, y, z) => `${x},${y},${z}`;
 const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const neighbors = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-const spans = { floor: 3, roof: 3, beam: 4, steel: 1, brick: 1, trim: 1, glass: 0, sandbag: 0 };
+const spans = { floor: 3, roof: 3, beam: 4, deck: 4, steel: 1, brick: 1, trim: 1, glass: 0, sandbag: 0 };
 const loadBearing = cell => cell && Object.hasOwn(spans, cell.kind);
 
 export function unsupported(cells) {
@@ -78,7 +78,7 @@ export function fallingChunk(cells, origin) {
   const dx = center.x - origin.x;
   const dz = center.z - origin.z;
   const direction = center.x + center.z >= 0 ? 1 : -1;
-  const mass = cells.reduce((sum, cell) => sum + (cell.kind === 'steel' || cell.kind === 'beam' ? 2.2 : cell.kind === 'glass' ? .35 : 1), 0);
+  const mass = cells.reduce((sum, cell) => sum + (cell.kind === 'steel' || cell.kind === 'beam' || cell.kind === 'deck' ? 2.2 : cell.kind === 'glass' ? .35 : 1), 0);
   return {
     cells, samples, center, position: { ...center }, mass,
     age: 0, vx: Math.tanh(dx / 3) * .72, vy: 0, vz: Math.tanh(dz / 3) * .72,

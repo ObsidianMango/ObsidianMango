@@ -1,6 +1,6 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js';
 import { SoftwareRenderer } from './software.js?v=4';
-import { key, palettes, randomFrom } from './jobs.js?v=4';
+import { key, palettes, randomFrom } from './jobs.js?v=7';
 
 import { fieldGround, groundAt } from './terrain.js';
 
@@ -38,6 +38,16 @@ const hulls = {
     ...[-.49, .49].flatMap(x => [[x, -.10, 0, .28, .40, 1.58, 0x293832],
       ...[-.55, -.29, 0, .29, .55].map(z => [x * 1.25, -.10, z, .08, .21, .17, 0x879579])])],
 };
+const truckParts = [
+  [0, .31, 0, 1.43, .30, 3.08, 0x333a34],
+  [0, .79, .99, 1.39, .88, .84, 0x677053],
+  [0, .96, 1.43, 1.17, .31, .08, 0x769b92],
+  ...[-.66, .66].flatMap(x => [-.99, .95].map(z => [x, .25, z, .33, .46, .48, 0x272b27])),
+  ...[-.5, .5].map(x => [x, .5, 1.46, .21, .16, .09, 0xffe0a4]),
+];
+hulls['cargo-truck'] = [...truckParts, [0, .83, -.48, 1.43, .94, 1.66, 0x777c54]];
+hulls['fuel-truck'] = [...truckParts, [0, .81, -.51, 1.38, .76, 1.73, 0xaf6244],
+  [0, 1.22, -.51, .99, .23, 1.67, 0xc4784d], [0, 1.39, -.55, .29, .18, .27, 0x4b5040]];
 const maxDebris = 580;
 const tau = Math.PI * 2;
 const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.55);
@@ -160,6 +170,7 @@ export class Yard {
     this.scene.background = new THREE.Color(0x44574d);
     this.scene.fog = new THREE.Fog(0x44574d, 42, 92);
     this.camera = new THREE.OrthographicCamera(-10, 10, 10, -10, .2, 270);
+    this.replayCamera = new THREE.PerspectiveCamera(52, 1, .2, 200);
     this.fpvCamera = new THREE.PerspectiveCamera(66, 1, .12, 170);
     this.fpv = null;
     this.sector = [0, 0];
@@ -345,7 +356,7 @@ export class Yard {
     this.blocks.receiveShadow = true;
     for (const cell of cells) {
       const palette = palettes[cell.palette ?? job.theme];
-      const color = cell.kind === 'powder' ? 0xf27642 : cell.kind === 'sandbag' ? 0x919467 : cell.kind === 'beam' ? palette.trim : palette[cell.kind];
+      const color = cell.kind === 'deck' ? 0x4d5351 : cell.kind === 'powder' ? 0xf27642 : cell.kind === 'sandbag' ? 0x919467 : cell.kind === 'beam' ? palette.trim : palette[cell.kind];
       cell.color = new THREE.Color(color).multiplyScalar(cell.shade);
       const size = cell.kind === 'glass' ? .925 : cell.kind === 'powder' ? .71 : .965;
       const height = cell.kind === 'powder' ? .79 : cell.kind === 'sandbag' ? .83 : size;
@@ -365,6 +376,14 @@ export class Yard {
     const add = (x, y, z, w, h, d, color) => blocks.push([x, y, z, w, h, d, color]);
     if (job.sites) {
       fieldGround(job, this.terrain, add);
+      if (job.mode === 'convoy') {
+        for (let x = -18; x <= 18; x += 6) {
+          for (let z = -1; z <= 1; z++) {
+            const depth = -groundAt(this.terrain, x, z);
+            if (depth > 0) add(x, -depth / 2, z, .97, depth, .97, 0x586263);
+          }
+        }
+      }
     } else {
       add(0, -.65, 0, 170, .8, 170, 0x4d6654);
       add(0, -.26, .5, 52, .16, 41, 0x586059);
@@ -440,6 +459,37 @@ export class Yard {
     const target = this.groundTarget;
     if (!target || Math.abs(target.x) > this.job.w / 2 + 4 || Math.abs(target.z) > this.job.d / 2 + 5) return null;
     return target;
+  }
+
+  aimTruck(trucks, range = Infinity) {
+    const ray = this.raycaster.ray;
+    range = Math.min(range, this.aimRange);
+    let closest = null;
+    for (const truck of trucks) {
+      const { x, y, z } = truck.position;
+      soldierBounds.min.set(x - 1.54, y, z - .8);
+      soldierBounds.max.set(x + 1.54, y + 1.52, z + .8);
+      if (!ray.intersectBox(soldierBounds, point)) continue;
+      const distance = ray.origin.distanceTo(point);
+      if (distance >= range) continue;
+      range = distance;
+      closest = truck;
+    }
+    return closest;
+  }
+
+  renderReplayAngle(target) {
+    const camera = this.replayCamera;
+    const angle = this.azimuth - .23;
+    camera.aspect = this.width / this.height;
+    camera.position.set(target.x + Math.sin(angle) * 17, 2.8, target.z + Math.cos(angle) * 17);
+    camera.lookAt(target.x, Math.min(6, Math.max(2.4, target.y * .55)), target.z);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    const highlighted = this.outline.visible;
+    this.outline.visible = false;
+    this.renderer.render(this.scene, camera);
+    this.outline.visible = highlighted;
   }
 
   drawOrdnance(item) {
@@ -628,7 +678,7 @@ export class Yard {
   }
 
   destroy(cells, origin, remaining, tool, blasts = []) {
-    const explosive = ['blast', 'grenade', 'drone', 'tank'].includes(tool);
+    const explosive = ['blast', 'grenade', 'drone', 'tank', 'fuel'].includes(tool);
     this.hideBlocks(cells);
     if (this.sign.visible) {
       const backing = [-2, -1, 0, 1, 2].filter(x => remaining.has(key(x, this.signY, this.signZ)));
@@ -641,7 +691,7 @@ export class Yard {
       if (cells.length < 38) this.addDebris(cell, origin, .8);
     }
     if (this.debris.length > maxDebris) this.debris.splice(0, this.debris.length - maxDebris);
-    if (explosive) this.shockwave(origin, tool === 'tank' ? 1.55 : 1.16, 0xff8b57);
+    if (explosive) this.shockwave(origin, tool === 'tank' || tool === 'fuel' ? 1.55 : 1.16, 0xff8b57);
     for (const barrel of blasts) this.shockwave(barrel, .85, 0xffa75e);
     this.shake = this.reduceMotion ? 0 : Math.min(.65, .06 + cells.length * .002 + (explosive ? .22 : 0));
     this.dirty = true;
@@ -685,7 +735,9 @@ export class Yard {
     const elapsed = (now - this.lastFrame) / 1000;
     const dt = Math.min(.04, elapsed);
     this.lastFrame = now;
-    this.simulate?.(Math.min(.16, elapsed));
+    const realStep = Math.min(.16, elapsed);
+    const timeScale = this.timeScale?.(realStep) ?? 1;
+    this.simulate?.(realStep * timeScale);
     const desired = this.following
       ? remoteTarget.set(this.following.position.x, this.following.position.y + 1.1, this.following.position.z)
       : this.look;
@@ -703,7 +755,7 @@ export class Yard {
       this.azimuth += (this.goalAzimuth - this.azimuth) * easing;
       this.tilt += (this.goalTilt - this.tilt) * easing;
     }
-    if (this.dirty || this.fpv || motion || refocus || this.debris.length || this.rings.length || this.shake > 0) {
+    if (this.dirty || this.fpv || motion || refocus || this.debris.length || this.rings.length || this.shake > 0 || this.recording?.()) {
       this.dirty = false;
       const y = Math.sin(this.tilt) * this.orbitRadius;
       const r = Math.cos(this.tilt) * this.orbitRadius;
@@ -718,7 +770,7 @@ export class Yard {
       this.camera.translateX(kick);
       this.camera.translateY(kick * .24);
       this.camera.updateMatrixWorld();
-      this.updateEffects(dt);
+      this.updateEffects(dt * timeScale);
       const pilot = this.fpv;
       if (pilot) {
         const { x, y, z } = pilot.position;
@@ -735,7 +787,9 @@ export class Yard {
       this.scene.fog.far = pilot ? 105 : this.orbitRadius + (this.job.sites ? 115 : 49);
       const hull = this.ordnance.get(pilot);
       if (hull) hull.visible = false;
+      if (this.renderer.isWebGLRenderer) this.captureReplay?.(now);
       this.renderer.render(this.scene, this.viewingCamera);
+      if (!this.renderer.isWebGLRenderer) this.captureReplay?.(now);
       if (hull) hull.visible = true;
     }
     requestAnimationFrame(time => this.frame(time));

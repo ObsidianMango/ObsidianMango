@@ -1,5 +1,5 @@
 import { key } from './collapse.js';
-import { randomFrom } from './jobs.js?v=4';
+import { randomFrom } from './jobs.js?v=7';
 import { groundAt } from './terrain.js';
 
 const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]];
