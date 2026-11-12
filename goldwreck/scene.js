@@ -15,6 +15,8 @@ const rayEntry = new THREE.Vector3();
 const point = new THREE.Vector3();
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -.5);
 const remoteTarget = new THREE.Vector3();
+const droneAttitude = new THREE.Quaternion();
+const lensTilt = .20;
 const soldierBounds = new THREE.Box3();
 const soldierParts = [
   [-.125, .23, 0, .20, .41, .24, 0x455044], [.125, .23, 0, .20, .41, .24, 0x455044],
@@ -721,12 +723,12 @@ export class Yard {
       this.updateEffects(dt);
       const pilot = this.fpv;
       if (pilot) {
-        const { x, y, z } = pilot.position;
-        const dx = Math.sin(pilot.yaw);
-        const dz = Math.cos(pilot.yaw);
-        const pitch = pilot.waiting ? -.06 : Math.max(-.58, Math.min(.52, (pilot.end.y - y) / Math.max(1.5, Math.hypot(pilot.end.x - x, pilot.end.z - z))));
-        this.fpvCamera.position.set(x + dx * .22, y + .10, z + dz * .22);
-        this.fpvCamera.lookAt(x + dx * 8, y + pitch * 8, z + dz * 8);
+        const { position, flight } = pilot;
+        droneAttitude.set(flight.q.x, flight.q.y, flight.q.z, flight.q.w);
+        this.fpvCamera.position.set(0, .10, .26).applyQuaternion(droneAttitude).add(position);
+        this.fpvCamera.up.set(0, Math.cos(lensTilt), -Math.sin(lensTilt)).applyQuaternion(droneAttitude);
+        remoteTarget.set(0, Math.sin(lensTilt), Math.cos(lensTilt)).applyQuaternion(droneAttitude).add(this.fpvCamera.position);
+        this.fpvCamera.lookAt(remoteTarget);
         this.fpvCamera.updateMatrixWorld();
       }
       this.scene.fog.near = pilot ? 28 : this.orbitRadius + (this.job.sites ? 19 : -1);

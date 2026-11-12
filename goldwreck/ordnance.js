@@ -45,6 +45,17 @@ function obstructed(position, type, cells) {
   return cells.has(key(x, Math.floor(position.y + 1), z));
 }
 
+const hullProbes = [[0,0,0], [.23,0,0], [-.23,0,0], [0,.17,0], [0,-.17,0], [0,0,.23], [0,0,-.23]];
+
+export function flightCollision(position, job, cells, terrain) {
+  const { x, y, z } = position;
+  if (Math.abs(x) > job.w / 2 + 24 || Math.abs(z) > job.d / 2 + 24 || y > 48) return true;
+  return hullProbes.some(([dx, dy, dz]) => {
+    const probe = { x: x + dx, y: y + dy, z: z + dz };
+    return probe.y < groundAt(terrain, probe.x, probe.z) || obstructed(probe, 'drone', cells);
+  });
+}
+
 export function advance(item, dt, cells, terrain) {
   item.age += dt;
   const { position, start, end, type } = item;
@@ -56,7 +67,7 @@ export function advance(item, dt, cells, terrain) {
     return t >= 1;
   }
 
-  if (item.age >= (type === 'drone' ? 28 : 18)) return true;
+  if (item.age >= (item.expires ?? (type === 'drone' ? 28 : 18))) return true;
   if (item.waiting) return false;
   const dx = end.x - position.x;
   const dy = type === 'tank' ? 0 : end.y - position.y;
