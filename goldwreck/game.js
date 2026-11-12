@@ -1,5 +1,5 @@
 import { districtCenter, fronts, frontSupply, frontVehicles, patrol } from './fronts.js?v=8';
-import { Yard } from './scene.js?v=9';
+import { Yard } from './scene.js?v=10';
 import { jobs, getJob, buildJob, key, impactRadius, strike, explode } from './jobs.js?v=8';
 import { advance, flightCollision, isRemote, launch, placeTrackPilot, redirect, remotes, trackCollision } from './ordnance.js?v=8';
 import { fallingChunk, fall, chunkPoint } from './collapse.js?v=7';
@@ -9,7 +9,7 @@ import { advanceFlight, advanceTrack, clamp, guideFlight, releaseControl, takeCo
 import { flightControls } from './sticks.js?v=8';
 
 import { arcadeModes, challengeSquad, convoySeconds, deckHeight, fuelRadius, spawnConvoy, updateTruck } from './arcade.js?v=7';
-import { DetonationReplay, Replays } from './replay.js?v=9';
+import { DetonationReplay, Replays } from './replay.js?v=10';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -27,14 +27,15 @@ const detonationReplay = new DetonationReplay($('#detonation-replay'), () => {
   viewport.focus({ preventScroll: true });
 });
 yard.rewinding = () => detonationReplay.active;
-yard.captureDetonation = now => {
+yard.advanceDetonation = dt => {
   if (document.hidden || modal.open) return;
-  if (detonationReplay.active) detonationReplay.advance(yard, now);
-  else if (yard.fpv) detonationReplay.remember(yard, now, yard.fpv.position);
+  if (detonationReplay.active) detonationReplay.advance(yard, dt);
+  else if (yard.fpv) detonationReplay.remember(yard.fpv, dt);
 };
 yard.recording = () => Boolean(replays.recording);
 yard.captureReplay = now => replays.capture(yard, now);
 yard.timeScale = dt => {
+  if (detonationReplay.active) return detonationReplay.timeScale;
   if (!run || run.slow <= 0 || modal.open || document.hidden) return 1;
   run.slow -= dt;
   return .43;
@@ -129,14 +130,6 @@ function tone(frequency, end, length, type, volume, delay = 0) {
 }
 
 function play(sound, downed = 0) {
-  if (detonationReplay.active && saved.sound) {
-    detonationReplay.queueSound(() => playSound(sound, downed));
-  } else {
-    playSound(sound, downed);
-  }
-}
-
-function playSound(sound, downed) {
   if (!saved.sound) return;
   try {
     const Audio = window.AudioContext || window.webkitAudioContext;
@@ -306,6 +299,7 @@ function notify(message) {
 }
 
 function popup(voxel, label, target = false) {
+  if (detonationReplay.active) return;
   const position = yard.project(voxel);
   const div = document.createElement('div');
   div.className = target ? 'popup target' : 'popup';
@@ -372,7 +366,7 @@ function truckPoint(truck) {
 }
 
 function shoot(x, y) {
-  if (run.ended || modal.open || (!run.hits && !run.remote)) return;
+  if (run.ended || modal.open || detonationReplay.active || (!run.hits && !run.remote)) return;
   const tool = run.tool;
   const { path, person, truck } = aim(x, y, !run.remote && tool === 'drill');
   const visiblePoint = truck ? truckPoint(truck) : person && infantryAim(person);
@@ -507,7 +501,7 @@ function showImpact({ target, broken, damaged, falling, blasts }, tool, {
   }
   const weight = broken.length + collapseSize * 2 + blasts.length * 20 + downed * 15 + (tool === 'fuel' ? 30 : 0);
   if (!detonationReplay.active && weight >= 30) replays.start(target, weight);
-  if (weight >= 85 && run.slow <= 0 && !yard.reduceMotion && !yard.fpv) run.slow = .85;
+  if (!detonationReplay.active && weight >= 85 && run.slow <= 0 && !yard.reduceMotion && !yard.fpv) run.slow = .85;
   const links = Math.max(1, downed + blasts.length + Number(collapseSize >= 8));
   const points = scoreEvent(broken.length * 7 + downed * 550 + collapseSize * 10 + blasts.length * 120, links);
   if (broken.length || tool !== 'crush' || blasts.length) yard.destroy(broken, target, run.cells, tool, blasts);
@@ -534,8 +528,20 @@ function showImpact({ target, broken, damaged, falling, blasts }, tool, {
 }
 
 function detonate(item) {
-  if (!item || run.ended || modal.open || !run.munitions.delete(item)) return;
-  if (yard.fpv === item) detonationReplay.begin(yard, item.position);
+  if (!item || run.ended || modal.open || detonationReplay.active || !run.munitions.has(item)) return;
+  if (yard.fpv === item) {
+    detonationReplay.begin(item, yard.reduceMotion, () => explodeOrdnance(item));
+    yard.frameDetonation(item.position, item.position, 0, null);
+    sticks.clear();
+    yard.setFPV(null);
+    renderStats();
+  } else {
+    explodeOrdnance(item);
+  }
+}
+
+function explodeOrdnance(item) {
+  if (!run.munitions.delete(item)) return;
   if (run.remote === item) run.remote = null;
   if (item.flight) sticks.clear();
   yard.removeOrdnance(item);
@@ -559,7 +565,7 @@ function hitsTarget({ x, y, z }) {
 
 yard.simulate = dt => {
   if (!run || run.ended || modal.open || document.hidden ||
-    detonationReplay.aftermathComplete) return;
+    detonationReplay.approaching) return;
   if (run.combo && !run.chunks.size && ![...run.squad].some(person => person.fallStart !== null)) {
     run.comboTime -= dt;
     if (run.comboTime <= 0) {

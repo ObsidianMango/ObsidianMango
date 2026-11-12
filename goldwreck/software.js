@@ -91,7 +91,7 @@ export class SoftwareRenderer {
         const w = perspective ? v[3] * tx + v[7] * ty + v[11] * tz + v[15] : 1;
         const x = v[0] * tx + v[4] * ty + v[8] * tz + v[12];
         const y = v[1] * tx + v[5] * ty + v[9] * tz + v[13];
-        if (w < -1 || Math.abs(x) > w + margin || Math.abs(y) > w + margin) continue;
+        if (w < -1 || perspective && w > camera.far + 1 || Math.abs(x) > w + margin || Math.abs(y) > w + margin) continue;
       }
       matrix.fromArray(m, offset);
       combined.multiplyMatrices(this.view, matrix);

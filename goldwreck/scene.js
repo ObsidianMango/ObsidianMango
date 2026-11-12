@@ -1,5 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.min.js';
-import { SoftwareRenderer } from './software.js?v=8';
+import { SoftwareRenderer } from './software.js?v=10';
 import { key, palettes, randomFrom } from './jobs.js?v=8';
 
 import { fieldGround, groundAt } from './terrain.js?v=8';
@@ -511,29 +511,34 @@ export class Yard {
     return closest;
   }
 
-  renderDetonationFrame(target) {
-    const aspect = this.width / this.height;
-    if (!this.detonationRenderer) {
-      this.detonationCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, .2, 450);
-      this.detonationRenderer = new SoftwareRenderer(document.createElement('canvas'));
-    }
-    const renderer = this.detonationRenderer;
-    const width = Math.max(1, Math.round(400 * Math.min(1, aspect)));
-    const height = Math.max(1, Math.round(400 * Math.min(1, 1 / aspect)));
-    if (renderer.width !== width || renderer.height !== height) renderer.setSize(width, height);
+  frameDetonation(target, impact, elapsed, blast) {
+    this.detonationCamera ??= new THREE.PerspectiveCamera(49, 1, .2, 66);
     const camera = this.detonationCamera;
-    const vertical = Math.max(11, 8 / aspect);
-    Object.assign(camera, { left: -vertical * aspect, right: vertical * aspect, top: vertical, bottom: -vertical });
-    const center = new THREE.Vector3(target.x, Math.max(1.8, target.y * .62), target.z);
-    const distance = 46;
-    const reach = Math.cos(this.tilt) * distance;
-    camera.position.set(center.x + Math.sin(this.azimuth) * reach, center.y + Math.sin(this.tilt) * distance,
-      center.z + Math.cos(this.azimuth) * reach);
-    camera.lookAt(center);
+    const aspect = this.width / this.height;
+    const progress = Math.min(1, (blast ?? 0) / 2.3);
+    const easing = progress * progress * (3 - 2 * progress);
+    const orbit = this.reduceMotion ? 0 : Math.min(elapsed, 5) * .105;
+    const angle = this.azimuth + .24 - orbit;
+    const distance = (24 + 10 * easing) * Math.max(1, .82 / aspect);
+    const x = target.x + (impact.x - target.x) * .30;
+    const z = target.z + (impact.z - target.z) * .30;
+    const y = Math.max(1.5, target.y * .72);
+    camera.aspect = aspect;
+    camera.position.set(x + Math.sin(angle) * distance * .74, y + distance * .67,
+      z + Math.cos(angle) * distance * .74);
+    remoteTarget.set(x, y, z);
+    camera.lookAt(remoteTarget);
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
-    renderer.render(this.scene, camera);
-    return renderer.domElement;
+  }
+
+  renderDetonation() {
+    const markers = [...this.markers.values(), ...this.assetMarkers.values()];
+    for (const marker of markers) marker.visible = false;
+    this.scene.fog.near = 46;
+    this.scene.fog.far = 150;
+    this.renderer.render(this.scene, this.detonationCamera);
+    for (const marker of markers) marker.visible = true;
   }
 
   renderReplayAngle(target) {
@@ -550,7 +555,7 @@ export class Yard {
     this.outline.visible = highlighted;
   }
 
-  drawOrdnance(item) {
+  drawOrdnance(item, pose = item) {
     const parts = hulls[item.type];
     let mesh = this.ordnance.get(item);
     if (!mesh) {
@@ -558,15 +563,16 @@ export class Yard {
       this.ordnance.set(item, mesh);
       parts.forEach((part, i) => mesh.setColorAt(i, shade.set(part[6])));
     }
-    const { position, type } = item;
+    const { position, age } = pose;
+    const { type } = item;
     this.assetMarkers.get(item.marker)?.position.set(position.x, position.y + 1.48, position.z);
-    const yaw = item.yaw + (type === 'grenade' ? item.age * 10 : 0);
+    const yaw = pose.yaw + (type === 'grenade' ? age * 10 : 0);
     const sine = Math.sin(yaw);
     const cosine = Math.cos(yaw);
-    const hover = type === 'drone' ? Math.sin(item.age * 13) * .055 : 0;
+    const hover = type === 'drone' ? Math.sin(age * 13) * .055 : 0;
     parts.forEach(([x, y, z, sx, sy, sz], i) => {
       dummy.position.set(position.x + x * cosine + z * sine, position.y + y + hover, position.z + z * cosine - x * sine);
-      dummy.rotation.set(type === 'grenade' ? item.age * 11 : 0, yaw, 0);
+      dummy.rotation.set(type === 'grenade' ? age * 11 : 0, yaw, 0);
       dummy.scale.set(sx, sy, sz);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
@@ -814,6 +820,7 @@ export class Yard {
     const dt = Math.min(.04, elapsed);
     this.lastFrame = now;
     const realStep = Math.min(.16, elapsed);
+    this.advanceDetonation?.(Math.min(.8, elapsed));
     const timeScale = this.timeScale?.(realStep) ?? 1;
     this.simulate?.(realStep * timeScale);
     const desired = this.following
@@ -863,17 +870,16 @@ export class Yard {
       }
       this.scene.fog.near = pilot ? 28 : this.orbitRadius + (this.job.sites ? 19 : -1);
       this.scene.fog.far = pilot ? 105 : this.orbitRadius + (this.job.sites ? 115 : 49);
-      this.captureDetonation?.(now);
       if (this.rewinding?.()) {
-        requestAnimationFrame(time => this.frame(time));
-        return;
+        this.renderDetonation();
+      } else {
+        const hull = this.ordnance.get(pilot);
+        if (hull) hull.visible = false;
+        if (this.renderer.isWebGLRenderer) this.captureReplay?.(now);
+        this.renderer.render(this.scene, this.viewingCamera);
+        if (!this.renderer.isWebGLRenderer) this.captureReplay?.(now);
+        if (hull) hull.visible = true;
       }
-      const hull = this.ordnance.get(pilot);
-      if (hull) hull.visible = false;
-      if (this.renderer.isWebGLRenderer) this.captureReplay?.(now);
-      this.renderer.render(this.scene, this.viewingCamera);
-      if (!this.renderer.isWebGLRenderer) this.captureReplay?.(now);
-      if (hull) hull.visible = true;
     }
     requestAnimationFrame(time => this.frame(time));
   }

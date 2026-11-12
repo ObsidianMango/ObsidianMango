@@ -66,14 +66,13 @@ export class Replays {
   }
 }
 
-const rewindTime = 3000;
-const aftermathTime = 2400;
-const rewindStep = 100;
+const leadIn = 3;
+const aftermath = 3.1;
+const sampleInterval = 1 / 30;
 
 export class DetonationReplay {
   constructor(panel, onClose) {
     this.panel = panel;
-    this.context = panel.querySelector('canvas').getContext('2d', { alpha: false });
     this.caption = panel.querySelector('span');
     this.skip = panel.querySelector('button');
     this.onClose = onClose;
@@ -83,87 +82,88 @@ export class DetonationReplay {
 
   reset() {
     this.panel.hidden = true;
-    this.frames = [];
-    this.sounds = [];
-    this.nextFrame = 0;
-    this.blast = null;
+    this.samples = [];
+    this.time = 0;
+    this.shot = null;
   }
 
   get active() {
-    return !this.panel.hidden;
+    return Boolean(this.shot);
   }
 
-  remember(yard, now, target) {
-    if (!this.context || now < this.nextFrame) return;
-    this.nextFrame = now + rewindStep;
-    const source = yard.renderDetonationFrame(target);
-    if (this.context.canvas.width !== source.width || this.context.canvas.height !== source.height) {
-      this.context.canvas.width = source.width;
-      this.context.canvas.height = source.height;
-      this.frames.length = 0;
-      this.cursor = 0;
-      if (this.active) {
+  get approaching() {
+    return this.active && this.shot.blast === null;
+  }
+
+  get timeScale() {
+    if (!this.active) return 1;
+    if (this.approaching) return 0;
+    if (this.shot.reducedMotion) return 1;
+    return .50 + .50 * Math.min(1, this.shot.blast / 1.35);
+  }
+
+  remember(item, dt) {
+    this.time += dt;
+    if (this.time - (this.samples.at(-1)?.time ?? -Infinity) < sampleInterval) return;
+    this.samples.push(this.sample(item));
+    while (this.samples.length > 1 && this.samples[1].time <= this.time - leadIn) this.samples.shift();
+  }
+
+  sample(item) {
+    return { time: this.time, position: { ...item.position }, yaw: item.yaw, age: item.age };
+  }
+
+  begin(item, reducedMotion, detonate) {
+    const impact = this.sample(item);
+    this.samples.push(impact);
+    const duration = Math.min(leadIn, impact.time - this.samples[0].time);
+    this.shot = { item, impact, duration, reducedMotion, detonate, elapsed: 0, blast: null, sampleIndex: 0 };
+    this.panel.hidden = false;
+    this.caption.textContent = 'FPV REPLAY';
+    this.skip.focus({ preventScroll: true });
+  }
+
+  advance(yard, dt) {
+    const shot = this.shot;
+    shot.elapsed += dt;
+    if (this.approaching && shot.elapsed >= shot.duration) {
+      this.trigger();
+    } else if (!this.approaching) {
+      shot.blast += dt;
+      if (shot.blast >= aftermath) {
         this.close();
         return;
       }
     }
-    this.context.drawImage(source, 0, 0);
-    this.frames.push({ now, image: this.context.getImageData(0, 0, source.width, source.height) });
-    if (!this.active) {
-      while (this.frames.length > 1 && this.frames[1].now <= now - rewindTime) this.frames.shift();
+
+    let pose = shot.impact;
+    if (this.approaching) {
+      const sampleTime = shot.impact.time - shot.duration + shot.elapsed;
+      while (this.samples[shot.sampleIndex + 1]?.time < sampleTime) shot.sampleIndex++;
+      const from = this.samples[shot.sampleIndex];
+      const to = this.samples[shot.sampleIndex + 1] ?? from;
+      const t = Math.max(0, Math.min(1, (sampleTime - from.time) / Math.max(.001, to.time - from.time)));
+      const { x, y, z } = from.position;
+      const turn = Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw));
+      pose = {
+        position: { x: x + (to.position.x - x) * t, y: y + (to.position.y - y) * t, z: z + (to.position.z - z) * t },
+        yaw: from.yaw + turn * t, age: from.age + (to.age - from.age) * t,
+      };
+      yard.drawOrdnance(shot.item, pose);
     }
+    yard.frameDetonation(pose.position, shot.impact.position, shot.elapsed, shot.blast);
   }
 
-  begin(yard, target) {
-    const now = performance.now();
-    this.nextFrame = 0;
-    this.remember(yard, now - 1, target);
-    if (!this.frames.length) return;
-    this.blast = { now, target: { ...target } };
-    this.started = null;
-    this.cursor = 0;
-    this.lastImage = null;
-    this.panel.hidden = false;
-    this.skip.focus({ preventScroll: true });
-    this.nextFrame = 0;
-    this.context.putImageData(this.frames[0].image, 0, 0);
-    this.caption.textContent = 'FPV REPLAY · 3s TO BLAST';
-  }
-
-  queueSound(play) {
-    this.sounds.push({ now: performance.now(), play });
-  }
-
-  get aftermathComplete() {
-    return this.active && performance.now() - this.blast.now > aftermathTime;
-  }
-
-  advance(yard, now) {
-    if (!this.active) return;
-    const { target, now: blastTime } = this.blast;
-    if (now <= blastTime + aftermathTime) this.remember(yard, now, target);
-    if (!this.active) return;
-    this.started ??= now;
-    const elapsed = now - this.started;
-    const moment = elapsed - rewindTime;
-    if (moment >= aftermathTime) {
-      this.close();
-      return;
-    }
-    const time = blastTime + moment;
-    while (this.sounds[0]?.now <= time) this.sounds.shift().play();
-    while (this.frames[this.cursor + 1]?.now <= time) this.cursor++;
-    const image = this.frames[this.cursor].image;
-    if (image !== this.lastImage) {
-      this.context.putImageData(image, 0, 0);
-      this.lastImage = image;
-    }
-    const label = moment < 0 ? `FPV REPLAY · ${Math.ceil(-moment / 1000)}s TO BLAST` : 'FPV REPLAY · DETONATION';
-    if (this.caption.textContent !== label) this.caption.textContent = label;
+  trigger() {
+    if (!this.approaching) return;
+    this.shot.blast = 0;
+    this.caption.textContent = 'DETONATION';
+    this.shot.detonate();
   }
 
   close() {
     if (!this.active) return;
+    this.trigger();
     this.reset();
     this.onClose();
   }
