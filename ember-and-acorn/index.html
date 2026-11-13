@@ -1403,7 +1403,7 @@ function updateCombat(dt) {
 
 function wizard(m,p,t) {
   const {x,z,yaw}=p, step=Math.sin(p.step*10)*p.walk;
-  const bob=Math.abs(step)*.065, blue=p.id?0x813b79:0x243f9f, blueLight=p.id?0xb45593:0x4266c1;
+  const bob=Math.abs(step)*.035, blue=p.id?0x813b79:0x243f9f, blueLight=p.id?0xb45593:0x4266c1;
   const trim=0xf6bd4c, shade=p.id?0x58305e:0x22326d, beard=p.id?0xe9a372:0xf6d384;
   const cs=Math.cos(yaw), sn=Math.sin(yaw);
   const point=(a,y,b)=>[x+a*cs-b*sn,y+bob,z+a*sn+b*cs];
@@ -1413,7 +1413,7 @@ function wizard(m,p,t) {
   };
   const rings=(a,b,levels,sides,c)=>{
     const [xx,,zz]=point(a,0,b);
-    m.profile(xx,zz,levels.map(([y,...ring])=>[y+bob,...ring]),sides,c,PI/sides-yaw);
+    m.profile(xx,zz,levels.map(([y,...ring])=>[y+bob,...ring]),sides,c,-yaw);
   };
   const rod=(a,b,w,c)=>m.rod(point(...a),point(...b),w,c);
   if(p.immune>0&&Math.floor(t*14)%2===0) return;
@@ -1425,12 +1425,18 @@ function wizard(m,p,t) {
     box(side*.18,.069,stride-.21,.13,.051,.025,0xac7752);
     box(side*.18,.19,stride+.025,.22,.21,.23,shade);
   }
-  rings(0,0,[[.15,.48,.32],[.36,.45,.31],[.65,.35,.26],[.87,.30,.23],[1.13,.41,.25],[1.23,.31,.20]],8,blue);
-  rings(0,0,[[.145,.486,.324],[.195,.477,.325]],8,trim);
-  rings(0,0,[[.65,.355,.269],[.73,.342,.26]],8,0x734139);
-  rings(0,.01,[[1.06,.414,.267],[1.18,.435,.277],[1.28,.31,.21]],8,blueLight);
+  const hemWave=Math.sin(p.step*10+.65)*p.walk*.045;
+  rings(0,0,[[.17,.43,.31,hemWave,0],[.35,.42,.30,hemWave*.7,0],[.61,.33,.25],[.84,.29,.23],[1.10,.38,.25],[1.25,.27,.20]],12,blue);
+  for(let i=0;i<12;i++) {
+    const a=i*TAU/12, b=a+TAU/12;
+    const at=(angle,y,r,d)=>point(Math.cos(angle)*r+hemWave*(.65-y),y,Math.sin(angle)*d);
+    m.quad(at(a,.20,.435,.317),at(b,.20,.435,.317),at(b,.25,.431,.314),at(a,.25,.431,.314),trim,.85);
+    m.tri(at(a,.27,.427,.309),at(a+.11,.27,.430,.312),at(a+.05,.63,.337,.258),i%2?shade:blueLight,.92);
+  }
+  rings(0,0,[[.65,.344,.263],[.75,.321,.258]],12,0x633e38);
+  rings(0,.01,[[1.08,.405,.27],[1.19,.427,.279],[1.29,.28,.21]],12,shade);
   for(const side of [-1,1]) {
-    const sway=step*side*.15;
+    const sway=step*side*.19;
     rings(side*.413,sway,[[.64,.125,.15],[.80,.151,.15],[1.09,.146,.142],[1.17,.10,.11]],6,blue);
     rings(side*.413,sway,[[.64,.13,.152],[.694,.143,.153]],6,trim);
     box(side*.416,.555,sway,.17,.12,.19,0xd99b69);
@@ -1455,10 +1461,27 @@ function wizard(m,p,t) {
   for(let i=-2;i<=2;i++) {
     rod([i*.063,1.245,-.273],[i*.044-.018,.77+Math.abs(i)*.087,-.293],.025,i%2?0xd2995d:0xffde8e);
   }
-  box(0,1.34,.186,.39,.18,.082,beard);
-  rings(0,0,[[1.53,.568,.446],[1.568,.625,.491],[1.603,.609,.48]],10,trim);
-  rings(0,0,[[1.58,.598,.477],[1.643,.557,.454],[1.68,.319,.286]],10,blueLight);
-  rings(0,0,[[1.65,.305,.272],[1.85,.267,.232,-.03,.02],[2.04,.207,.18,-.09,.04],[2.22,.134,.114,-.173,.065],[2.31,.076,.064,-.273,.11],[2.34,.033,.034,-.357,.151]],8,blue);
+  // Sculpted hair locks fill the nape beneath the brim.
+  for(let i=-3;i<=3;i++) {
+    const a=i*.057, y=1.22+Math.abs(i)*.025, depth=.204+Math.cos(i*.65)*.032;
+    rings(a,depth,[[y,.031,.038],[1.39,.045,.044],[1.52,.032,.033]],5,i%2?0xc59665:beard);
+  }
+  // A curved, asymmetric brim with a contrasting underside and stitched edge.
+  const brim=(a,r,y)=>point(Math.cos(a)*r,y+.042*Math.sin(a*2+.5)+.023*Math.cos(a),Math.sin(a)*r*.79);
+  for(let i=0;i<20;i++) {
+    const a=i*TAU/20,b=(i+1)*TAU/20,r=.59;
+    m.quad(brim(a,.27,1.63),brim(b,.27,1.63),brim(b,r,1.58),brim(a,r,1.58),i%3?blue:blueLight);
+    m.quad(brim(a,r,1.58),brim(b,r,1.58),brim(b,r,1.552),brim(a,r,1.552),trim);
+    m.quad(brim(a,.27,1.602),brim(b,.27,1.602),brim(b,r,1.552),brim(a,r,1.552),shade,.8);
+  }
+  const tipSway=Math.sin(p.step*10-1)*p.walk*.035;
+  rings(0,0,[[1.62,.30,.26],[1.84,.26,.23,-.018,.015],[2.06,.19,.17,-.055,.035],[2.25,.12,.11,-.13,.055],[2.38,.071,.065,-.23+tipSway,.09],[2.40,.037,.034,-.34+tipSway,.12],[2.35,.008,.009,-.41+tipSway,.13]],12,blue);
+  // Rear-facing crescent and stars stay visible in the normal chase camera.
+  for(let i=0;i<9;i++) {
+    const a=-1.2+i*2.4/8,b=-1.2+(i+1)*2.4/8;
+    const moon=(r,t)=>point(-.067+Math.cos(t)*r,1.995+Math.sin(t)*r,.199);
+    m.quad(moon(.083,a),moon(.083,b),moon(.055,b),moon(.055,a),trim);
+  }
   rings(0,0,[[1.694,.305,.272],[1.787,.29,.259,-.017,.008]],8,0x763e38);
   box(-.01,1.707,-.265,.171,.113,.045,trim);
   box(-.01,1.729,-.291,.103,.071,.023,0x5f3535);
@@ -1467,6 +1490,40 @@ function wizard(m,p,t) {
       box(a*sign,y,b,.031,.034,.023,trim);
     }
   }
+  // Layered travelling cape with moving folds, piping and an embroidered sigil.
+  const capePoint=(u,v,offset=0)=>{
+    const width=mix(.30,.425,v), y=mix(1.24,.31,v);
+    const fold=Math.cos(u*PI*4)*.025*v;
+    const flutter=Math.sin(p.step*10-v*3+u)*p.walk*.052*v;
+    return point(u*width+hemWave*v*.7,y+.025*Math.cos(u*PI)*v,.29+.085*v+fold+flutter+offset);
+  };
+  const capeColors=p.id?[0x692e65,0x86417f,0x793a73,0x52274f]:[0x192d65,0x29458a,0x233b7b,0x142554];
+  for(let row=0;row<6;row++) for(let col=0;col<12;col++) {
+    const u=-1+col/6, v=row/6, nextU=u+1/6,nextV=v+1/6;
+    m.quad(capePoint(u,v),capePoint(nextU,v),capePoint(nextU,nextV),capePoint(u,nextV),capeColors[col%4]);
+  }
+  for(let i=0;i<12;i++) {
+    const u=-1+i/6;
+    m.quad(capePoint(u,.94,.004),capePoint(u+1/6,.94,.004),capePoint(u+1/6,1,.004),capePoint(u,1,.004),trim,.88);
+  }
+  for(const side of [-1,1]) for(let i=0;i<6;i++) {
+    const v=i/6;
+    m.quad(capePoint(side,v,.005),capePoint(side*.94,v,.005),capePoint(side*.94,v+1/6,.005),capePoint(side,v+1/6,.005),0xbd914d);
+  }
+  const sigil=(u,v)=>capePoint(u,v,.014);
+  for(let i=0;i<8;i++) {
+    const a=i*TAU/8,b=(i+1)*TAU/8;
+    m.tri(sigil(0,.36),sigil(Math.cos(a)*.29,.36+Math.sin(a)*.13),sigil(Math.cos(a+.20)*.11,.36+Math.sin(a+.20)*.05),trim);
+    m.rod(sigil(Math.cos(a)*.37,.36+Math.sin(a)*.17),sigil(Math.cos(b)*.37,.36+Math.sin(b)*.17),.012,0xb88d52);
+  }
+  // Leather folio and potion harness sit against the hip, clear of the cape.
+  box(-.39,.48,.22,.19,.28,.16,0x553a32);
+  box(-.395,.51,.306,.15,.22,.026,0xc7a476);
+  box(-.395,.47,.329,.205,.045,.027,0x805037);
+  box(-.395,.72,.27,.205,.047,.15,0x805037);
+  box(-.395,.58,.348,.048,.074,.023,trim);
+  rings(.375,.21,[[.43,.058,.06],[.47,.084,.08],[.58,.084,.08],[.62,.043,.041]],8,0x66b6ae);
+  box(.375,.62,.21,.077,.054,.072,0xa78559);
   const grip=step*.13-.13, glow=p.cooldown>.25?0xffcaf7:0xffc45a;
   rod([.51,.15,grip+.03],[.50,1.59,grip-.05],.093,0x975938);
   for(const y of [.62,1.41,1.56]) box(.51,y,grip-.04,.134,.072,.133,trim);
