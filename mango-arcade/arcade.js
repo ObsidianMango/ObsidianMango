@@ -1,4 +1,5 @@
 import { stations, room } from './catalog.js';
+import { stock, bar, clubDoor, club, createInventory } from './nightlife.js';
 import { featured } from './featured.js';
 
 const get = id => document.getElementById(id);
@@ -6,7 +7,9 @@ const view = get('view');
 const directory = get('directory');
 const vending = get('vending');
 const playerDialog = get('player');
-const panels = [directory, vending, playerDialog];
+const barDialog=get('bar');
+const panels = [directory, vending, playerDialog, barDialog];
+const inventory=createInventory();
 const packGrid = get('packs');
 const search = get('set-search');
 const allButton = get('set-all');
@@ -23,12 +26,12 @@ const vendingStation = stations.find(station => station.id === 'vending');
 const keys = new Set();
 const joystick = get('joystick');
 const stick = get('stick');
-const coarse = matchMedia('(pointer:coarse)').matches;
 
 let arcade, current, drag, joystickId, audio, loadingTimer;
 let joystickX=0, joystickY=0;
 let showAll=false, limit=24, dispensing=false, sound=false;
 let allSets, loadingSets, setsFailed=false;
+let toastTimer, effectTimer, busyUntil=0, nextBeat=0, beat=0;
 
 function beep(notes) {
   if (!sound) return;
@@ -67,6 +70,119 @@ get('map-button').onclick=event=>{
 get('directory-button').onclick=()=>open(directory);
 get('interact').onclick=()=>use(current);
 touchUse.onclick=()=>use(current);
+get('use-item').onclick=useHeld;
+get('toss-item').onclick=tossHeld;
+get('cycle-item').onclick=()=>{inventory.next();renderItems();};
+get('bar-done').onclick=()=>barDialog.close();
+
+function notify(message) {
+  const element=get('nightlife-message');
+  element.textContent=message;
+  element.hidden=false;
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{element.hidden=true;},2400);
+}
+
+function renderItems() {
+  const item=inventory.held;
+  get('cash').textContent=`$${inventory.cash}`;
+  get('held-tools').hidden=!item;
+  get('cycle-item').hidden=inventory.count<2;
+  get('use-item').hidden=!item?.remaining;
+  get('use-item').textContent=item?.shape==='pack'?'Smoke':'Drink';
+  get('toss-item').textContent=item?`Toss ${item.remaining ? item.name : item.doses ? 'empty '+item.name.toLowerCase() : item.name}`:'Toss';
+  arcade?.props.held(item);
+}
+
+function useHeld() {
+  if(performance.now()<busyUntil)return;
+  const item=inventory.held;
+  const result=inventory.use();
+  if(!result)return;
+  busyUntil=performance.now()+(result==='puke'?1050:480);
+  arcade?.props.use(result);
+  const count=item.remaining;
+  if(result==='puke'){
+    notify('Too much. You puked.');
+    const fx=get('nightlife-fx');
+    fx.classList.add('sick');
+    clearTimeout(effectTimer);
+    effectTimer=setTimeout(()=>fx.classList.remove('sick'),850);
+    beep([183,143,106]);
+  } else if(result==='smoke'){
+    notify(count?`Lit a cigarette. ${count} left.`:'Lit the last cigarette.');
+    beep([418,468]);
+  } else {
+    notify(count?`${item.name} · ${count} ${count===1?'sip':'sips'} left`:`Finished ${item.name}.`);
+    beep([220,290]);
+  }
+  get('use-item').hidden=!count;
+  if(!count)get('toss-item').textContent=`Toss empty ${item.name.toLowerCase()}`;
+  updateBuzz();
+}
+
+function tossHeld() {
+  if(!arcade){notify('Tossing requires the 3D arcade.');return;}
+  if(performance.now()<busyUntil)return;
+  const item=inventory.toss();
+  if(!item)return;
+  arcade.props.toss(item);
+  renderItems();
+  beep([390,251]);
+}
+
+function updateBuzz() {
+  get('buzz').hidden=inventory.buzz<1;
+  get('buzz-level').value=inventory.buzz;
+}
+
+function buildBar() {
+  for(const item of stock){
+    const row=document.createElement('button');
+    row.type='button';
+    row.className='bar-item';
+    row.style.setProperty('--drink-color',item.color);
+    const name=document.createElement('strong');
+    name.textContent=item.name;
+    const detail=document.createElement('small');
+    detail.textContent=item.detail;
+    const price=document.createElement('b');
+    price.textContent=item.price?`$${item.price}`:'Free';
+    const icon=document.createElement('span');
+    icon.className=`bar-product ${item.shape}`;
+    icon.setAttribute('aria-hidden','true');
+    row.append(icon,name,detail,price);
+    row.onclick=()=>{
+      const bought=inventory.buy(item);
+      get('bar-message').textContent=bought?`${item.name} is in your hand.`:inventory.cash<item.price?'You’re short on cash.':'Your pockets are full.';
+      if(!bought)return;
+      get('bar-cash').textContent=`$${inventory.cash} cash`;
+      renderItems();
+      beep([440,659]);
+    };
+    get('bar-menu').append(row);
+  }
+}
+
+function clubMusic() {
+  if(!sound || !audio || audio.state!=='running' || arcade.player.z<11.3)return;
+  const time=audio.currentTime;
+  if(nextBeat>time)return;
+  nextBeat=time+.242;
+  const offbeat=beat%2;
+  const oscillator=audio.createOscillator();
+  const volume=audio.createGain();
+  oscillator.type=offbeat?'triangle':'sine';
+  oscillator.frequency.setValueAtTime(offbeat?[110,123.47,98,130.81][Math.floor(beat/4)%4]:118,time);
+  if(!offbeat)oscillator.frequency.exponentialRampToValueAtTime(46,time+.12);
+  volume.gain.setValueAtTime(.001,time);
+  volume.gain.exponentialRampToValueAtTime(offbeat?.045:.105,time+.009);
+  volume.gain.exponentialRampToValueAtTime(.001,time+.16);
+  oscillator.connect(volume).connect(audio.destination);
+  oscillator.start(time);
+  oscillator.stop(time+.17);
+  beat++;
+}
 
 function clearInput() {
   keys.clear();
@@ -123,6 +239,26 @@ function play(station, set) {
 function use(station) {
   if(!station || dispensing)return;
   beep([330,440]);
+  if(station.prop){
+    if(!inventory.pick(station.prop.item)){notify('Your pockets are full.');return;}
+    arcade.props.pick(station.prop);
+    renderItems();
+    refreshTarget(null);
+    return;
+  }
+  if(station===bar){
+    get('bar-cash').textContent=`$${inventory.cash} cash`;
+    get('bar-message').textContent='';
+    open(barDialog);
+    return;
+  }
+  if(station===clubDoor){
+    if(!arcade){notify('The dance floor requires the 3D arcade.');return;}
+    directory.close();
+    arcade.enterClub();
+    refreshTarget(null);
+    return;
+  }
   if(station===vendingStation) {
     open(vending);
     renderSets();
@@ -147,7 +283,7 @@ function dispense(set, tile) {
 
 function buildDirectory() {
   const list=get('games');
-  for(const station of stations) {
+  for(const station of [...stations,bar,clubDoor]) {
     const card=document.createElement('div');
     card.className='game';
     const icon=new Image();
@@ -255,12 +391,19 @@ function refreshTarget(station) {
   touchUse.hidden=!station;
   if(!station)return;
   get('target-name').textContent=station.title;
-  get('target-action').textContent=station===vendingStation ? 'Choose a set' : 'Play cabinet';
+  get('target-action').textContent=station.prop?'Pick up':station===bar?'Buy a drink':station===clubDoor?'Enter dance club':station===vendingStation?'Choose a set':'Play cabinet';
 }
 
 window.addEventListener('keydown',event=>{
   if(panels.some(panel=>panel.open) || event.ctrlKey || event.metaKey || event.altKey)return;
   if(event.code==='KeyE' && !event.repeat){if(current)event.preventDefault();use(current);return;}
+  if(!event.repeat && ['KeyF','KeyG','KeyQ'].includes(event.code)){
+    event.preventDefault();
+    if(event.code==='KeyF')useHeld();
+    else if(event.code==='KeyG')tossHeld();
+    else {inventory.next();renderItems();}
+    return;
+  }
   if(event.code==='KeyM' && !event.repeat){get('map-button').click();return;}
   if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','ShiftLeft','ShiftRight'].includes(event.code)){
     event.preventDefault();
@@ -324,12 +467,14 @@ function drawMap() {
   const {x,z,yaw}=arcade.player;
   const margin=11, width=92, height=96;
   const px=value=>margin+(value-room.minX)/(room.maxX-room.minX)*width;
-  const pz=value=>12+(value-room.minZ)/(room.maxZ-room.minZ)*height;
+  const pz=value=>12+(value-room.minZ)/(club.maxZ-room.minZ)*height;
   mapCtx.clearRect(0,0,map.width,map.height);
-  mapCtx.fillStyle='#312643';mapCtx.fillRect(10,10,95,101);
-  mapCtx.strokeStyle='#a483aa';mapCtx.strokeRect(10,10,95,101);
-  mapCtx.fillStyle='#63465f';mapCtx.fillRect(14,99,19,8);mapCtx.fillRect(79,99,21,8);
-  for(const station of stations){
+  const boundary=pz(clubDoor.z);
+  mapCtx.fillStyle='#312643';mapCtx.fillRect(10,10,95,boundary-10);
+  mapCtx.strokeStyle='#a483aa';mapCtx.strokeRect(10,10,95,boundary-10);
+  mapCtx.fillStyle='#532940';mapCtx.fillRect(px(club.minX),boundary,px(club.maxX)-px(club.minX),pz(club.maxZ)-boundary);
+  mapCtx.strokeRect(px(club.minX),boundary,px(club.maxX)-px(club.minX),pz(club.maxZ)-boundary);
+  for(const station of [...stations,bar,clubDoor]){
     mapCtx.fillStyle=station.color;
     const size=station===vendingStation?10:6;
     mapCtx.fillRect(px(station.x)-size/2,pz(station.z)-3,size,6);
@@ -344,7 +489,7 @@ function drawMap() {
   mapCtx.fillText('MAP',117,45);
   mapCtx.fillStyle='#e399f6';mapCtx.fillRect(118,60,7,7);
   mapCtx.fillStyle='#cdbad0';mapCtx.font='11px system-ui';mapCtx.fillText('Packs',129,67);
-  mapCtx.fillStyle='#bca2cc';mapCtx.fillText('Entry',42,128);
+  mapCtx.fillStyle='#bca2cc';mapCtx.fillText('Club',46,125);
 }
 
 function loop(now) {
@@ -354,18 +499,22 @@ function loop(now) {
     const side=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));
     const forward=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));
     arcade.move(side+joystickX,forward+joystickY,dt,keys.has('ShiftLeft')||keys.has('ShiftRight'));
-    arcade.draw(dt);
+    inventory.sober(dt);
+    arcade.draw(dt,inventory.buzz);
+    clubMusic();
     refreshTarget(arcade.target());
-    if(now-(loop.mapTime??0)>65){drawMap();loop.mapTime=now;}
+    if(now-(loop.mapTime??0)>65){drawMap();updateBuzz();loop.mapTime=now;}
   }
   requestAnimationFrame(loop);
 }
 
 buildDirectory();
+buildBar();
+renderItems();
 
 try {
   const [{createRoom}]=await Promise.all([
-    import('./room.js'),
+    import('./room.js?v=afterglow'),
     Promise.race([document.fonts.load('800 40px "Barlow Condensed"'),new Promise(resolve=>setTimeout(resolve,900))]).catch(()=>{})
   ]);
   arcade=createRoom(view);

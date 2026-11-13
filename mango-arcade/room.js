@@ -1,5 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
 import { stations, spawn, room } from './catalog.js';
+import { bar, clubDoor, club, doorwayHalf } from './nightlife.js';
+import { buildClub, createProps } from './club.js';
 import { featured } from './featured.js';
 import { makeCanvas, texture, drawLabel, screenArt, marquee, wallSign, flooring, panelPack } from './graphics.js';
 
@@ -9,6 +11,7 @@ const cylinderGeometry = new THREE.CylinderGeometry(1,1,1,16);
 const sphereGeometry = new THREE.SphereGeometry(1,12,8);
 const materials = new Map();
 const batchable = new Set();
+let building = true;
 const cabinetSurfaces = [];
 const obstacles = [];
 const animated = [];
@@ -33,7 +36,7 @@ function mesh(parent, geometry, appearance, x,y,z, sx=1,sy=1,sz=1, rx=0) {
 }
 function box(parent, x,y,z, w,h,d, appearance, angle=0) {
   const item=mesh(parent,boxGeometry,appearance,x,y,z,w,h,d,angle);
-  batchable.add(item);
+  if(building)batchable.add(item);
   return item;
 }
 function plate(parent,x,y,z,w,h,canvas,angle=0,nearest=false) {
@@ -237,7 +240,7 @@ function furnishing(scene,shadowMap) {
   box(bench,0,.80,.37,3.77,.48,.14,material('#693454'));
   for(const x of [-.94,0,.94])box(bench,x,.597,.037,.016,.014,.79,material('#462540'));
   obstacles.push({x:-5.45,z:9.54,w:1.89,d:.48});
-  const counter=group(scene,5.7,0,9.62,Math.PI);
+  const counter=group(scene,bar.x,0,bar.z,bar.turn);
   shadow(counter,0,0,5,1.8,shadowMap);
   box(counter,0,.55,0,4.25,1.1,.95,material('#3c2b45'));
   box(counter,0,1.13,.043,4.42,.115,1.08,material('#6e5575',0,.28));
@@ -249,7 +252,19 @@ function furnishing(scene,shadowMap) {
     mesh(counter,cylinderGeometry,material('#eec6a2'),x,1.35,.12,.09,.30,.09);
     mesh(counter,cylinderGeometry,material('#e7d5d8'),x,1.508,.12,.095,.031,.095);
   }
-  obstacles.push({x:5.7,z:9.62,w:2.22,d:.56});
+  for(let i=0;i<6;i++){
+    const x=-1.6+i*.34;
+    const color=['#956c4b','#956b95','#718b5e'][i%3];
+    mesh(counter,cylinderGeometry,material(color,0,.3),x,1.38,-.26,.087,.38,.087);
+    mesh(counter,cylinderGeometry,material(color,0,.3),x,1.64,-.26,.046,.18,.046);
+  }
+  for(let i=0;i<3;i++){
+    box(counter,1.2+i*.20,1.27,.17,.15,.20,.08,material(i%2?'#f3d8ad':'#dc758d'));
+  }
+  const hit=mesh(counter,boxGeometry,new THREE.MeshBasicMaterial({visible:false}),0,1.15,0,4.25,2.3,.95);
+  hit.userData.station=bar;
+  cabinetSurfaces.push(hit);
+  obstacles.push({x:bar.x,z:bar.z,w:2.22,d:.56,h:1.15});
 }
 
 function batchBoxes(scene) {
@@ -300,7 +315,10 @@ export function createRoom(container) {
   wall(scene,0,-13.1,18.6,0);
   wall(scene,-9.17,-1.3,23.8,Math.PI/2);
   wall(scene,9.17,-1.3,23.8,-Math.PI/2);
-  wall(scene,0,10.65,18.6,Math.PI);
+  const wallWidth=9.3-doorwayHalf;
+  for(const side of [-1,1])wall(scene,side*(doorwayHalf+wallWidth/2),10.65,wallWidth,Math.PI);
+  box(scene,0,4.22,10.65,doorwayHalf*2,1.56,.22,material('#342545'));
+  box(scene,0,.014,10.62,doorwayHalf*2,.029,.47,material('#845787',0,.4));
 
   const purpleNeon=material('#b977d1',1);
   const pinkNeon=material('#e483ac',1);
@@ -328,12 +346,14 @@ export function createRoom(container) {
   plate(scene,0,3.72,-12.654,7.89,1.49,sign);
   box(scene,0,4.54,-12.66,8.03,.038,.04,amberNeon);
   box(scene,0,2.91,-12.66,8.03,.036,.04,pinkNeon);
-  const concession=plate(scene,5.7,2.37,10.47,3.86,.91,wallSign('CONCESSIONS','SNACK BAR','#ffb7cd'));
+  const concession=plate(scene,5.7,2.37,10.47,3.86,.91,wallSign('ARCADE BAR','DRINKS  •  CIGARETTES','#ffb7cd'));
   concession.rotation.y=Math.PI;
-  const exit=plate(scene,0,2.84,10.42,1.62,.49,wallSign('EXIT','', '#a8e5bd'));
-  exit.rotation.y=Math.PI;
-  box(scene,0,1.19,10.43,1.92,2.29,.125,material('#3a2c42'));
-  box(scene,0,1.26,10.34,1.55,.047,.04,material('#8f798e',0,.35));
+  const entrance=plate(scene,0,3.73,10.52,3.7,.81,wallSign('CLUB AFTERGLOW','DANCE FLOOR','#ffa5e1'));
+  entrance.rotation.y=Math.PI;
+  for(const x of [-1.24,1.24])box(scene,x,1.52,10.46,.10,3.01,.13,pinkNeon);
+  const doorway=mesh(scene,boxGeometry,new THREE.MeshBasicMaterial({visible:false}),0,1.58,10.72,2.37,3.1,.16);
+  doorway.userData.station=clubDoor;
+  cabinetSurfaces.push(doorway);
   for(const x of [-2.94,2.94]){
     box(scene,x,.026,-.78,.065,.012,18.66,material('#7a487a'));
     box(scene,x*.958,.023,-.78,.022,.011,18.66,material('#a95d8e'));
@@ -349,7 +369,12 @@ export function createRoom(container) {
     if(station.id==='vending')vendor(scene,station,shadowMap);
     else cabinet(scene,station,shadowMap);
   }
+  const api={box,group,light,material,mesh,plate,wall,block:obstacle=>obstacles.push(obstacle),
+    dynamic:item=>batchable.delete(item)};
+  const animateClub=buildClub(scene,api);
   batchBoxes(scene);
+  building=false;
+  scene.add(camera);
   scene.updateMatrixWorld(true);
 
   const ray=new THREE.Raycaster();
@@ -357,10 +382,21 @@ export function createRoom(container) {
   const center=new THREE.Vector2();
   const player={...spawn};
   const playerHeight=1.66;
-  let pulse=0, time=0;
+  let pulse=0, time=0, buzz=0;
+  const reduced=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  function inside(x,z,margin=0) {
+    if(z>=10.34-margin && z<=10.98+margin)return Math.abs(x)<=doorwayHalf-margin;
+    const bounds=z>10.98?club:room;
+    return x>=bounds.minX+margin && x<=bounds.maxX-margin &&
+      z>=bounds.minZ && z<=(bounds===room?10.34:bounds.maxZ);
+  }
+  const props=createProps(scene,camera,api,(x,z,y)=>inside(x,z,.09) &&
+    !obstacles.some(o=>y<(o.h??2.9) && Math.abs(x-o.x)<o.w+.09 && Math.abs(z-o.z)<o.d+.09));
   function look() {
-    camera.position.set(player.x,playerHeight,player.z);
-    camera.rotation.set(player.pitch,player.yaw,0,'YXZ');
+    const retch=props.retches();
+    const sway=reduced?0:Math.min(buzz/85,1)*.025;
+    camera.position.set(player.x,playerHeight-(reduced?0:retch*.44),player.z);
+    camera.rotation.set(player.pitch-(reduced?0:retch*.42),player.yaw,Math.sin(time*3)*sway,'YXZ');
     camera.updateMatrixWorld();
   }
   function resize() {
@@ -373,12 +409,12 @@ export function createRoom(container) {
     renderer.setSize(width,height,false);
   }
   function free(x,z) {
-    return x>=room.minX && x<=room.maxX && z>=room.minZ && z<=room.maxZ &&
+    return inside(x,z,.19) &&
       !obstacles.some(o=>Math.abs(x-o.x)<o.w+.22 && Math.abs(z-o.z)<o.d+.22);
   }
   function move(side,forward,dt,sprint) {
     const length=Math.max(1,Math.hypot(side,forward));
-    const rate=dt*(sprint?6.1:3.8)/length;
+    const rate=dt*(sprint?6.1:3.8)*(props.retches()>.12?.42:1)/length;
     const dx=(Math.cos(player.yaw)*side-Math.sin(player.yaw)*forward)*rate;
     const dz=(-Math.sin(player.yaw)*side-Math.cos(player.yaw)*forward)*rate;
     if(free(player.x+dx,player.z))player.x+=dx;
@@ -391,6 +427,9 @@ export function createRoom(container) {
   function target(point=center) {
     ray.setFromCamera(point,camera);
     const hit=ray.intersectObjects(cabinetSurfaces,false)[0];
+    const prop=props.hovered(ray.ray);
+    if(prop && (!hit || prop.distance<hit.distance))return prop.station;
+    if(hit?.object.userData.station===clubDoor && player.z>clubDoor.z+1.2)return null;
     return hit && hit.distance<=4.15 ? hit.object.userData.station : null;
   }
   function select(clientX,clientY) {
@@ -413,14 +452,21 @@ export function createRoom(container) {
     player.pitch=.01;
     look();
   }
-  function draw(dt) {
+  function enterClub(){
+    Object.assign(player,{x:0,z:13.5,yaw:Math.PI,pitch:0});
+    look();
+  }
+  function draw(dt, level=0) {
+    buzz=level;
+    props.update(dt);
     look();
     pulse=Math.max(0,pulse-dt);
     time+=dt;
     for(const animate of animated)animate(time,pulse);
+    if(player.z>9.6)animateClub(time);
     renderer.render(scene,camera);
   }
   look();
   resize();
-  return {player,resize,move,aim,target,select,visit,draw,dispense:()=>{pulse=.55;}};
+  return {player,resize,move,aim,target,select,visit,enterClub,draw,props,dispense:()=>{pulse=.55;}};
 }
