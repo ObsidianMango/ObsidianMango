@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" href="./mtgboost-icon.svg" type="image/svg+xml">
     <title>MTG Pocket Sim: v11 (Shop)</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
     <style>
@@ -668,6 +669,11 @@
                     elements.setSelect.appendChild(opt);
                 });
                 elements.setSelect.disabled = false; elements.spinner.style.display = 'none';
+                const requestedSet = new URLSearchParams(location.search).get('set')?.toLowerCase();
+                if (requestedSet && state.sets.some(set => set.code === requestedSet)) {
+                    elements.setSelect.value = requestedSet;
+                    await updateSetInfo();
+                }
             } catch(e) { elements.retryBtn.style.display = 'block'; elements.spinner.style.display = 'none'; }
         }
 
@@ -681,6 +687,7 @@
                 const url = `https://api.scryfall.com/cards/search?q=set:${code}%20unique:cards%20game:paper&order=rarity`;
                 let allCards = []; let r = await fetch(url); let d = await r.json(); if(d.data) allCards = allCards.concat(d.data);
                 if(d.has_more) { let r2 = await fetch(d.next_page); let d2 = await r2.json(); if(d2.data) allCards = allCards.concat(d2.data); }
+                if (elements.setSelect.value !== code) return;
                 state.pool = { common: [], uncommon: [], rare: [], mythic: [], land: [] };
                 allCards.forEach(c => {
                     let img = c.image_uris?.normal; if(!img && c.card_faces && c.card_faces[0].image_uris) img = c.card_faces[0].image_uris.normal;
@@ -691,7 +698,7 @@
                     }
                 });
                 state.isLoaded = true; elements.packWrapper.style.opacity = '1'; showToast("Ready!");
-            } catch(e) { showToast("Error loading cards"); }
+            } catch(e) { if (elements.setSelect.value === code) showToast("Error loading cards"); }
         }
 
         let isDragging = false;

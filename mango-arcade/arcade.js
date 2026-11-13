@@ -1,0 +1,384 @@
+import { stations, room } from './catalog.js';
+import { featured } from './featured.js';
+
+const get = id => document.getElementById(id);
+const view = get('view');
+const directory = get('directory');
+const vending = get('vending');
+const playerDialog = get('player');
+const panels = [directory, vending, playerDialog];
+const packGrid = get('packs');
+const search = get('set-search');
+const allButton = get('set-all');
+const moreButton = get('set-more');
+const vendingStatus = get('vending-status');
+const frameSlot = get('frame-slot');
+const frameLoading = get('frame-loading');
+const prompt = get('prompt');
+const touchUse = get('touch-use');
+const map = get('map');
+const floorMap = get('floor-map');
+const mapCtx = map.getContext('2d');
+const vendingStation = stations.find(station => station.id === 'vending');
+const keys = new Set();
+const joystick = get('joystick');
+const stick = get('stick');
+const coarse = matchMedia('(pointer:coarse)').matches;
+
+let arcade, current, drag, joystickId, audio, loadingTimer;
+let joystickX=0, joystickY=0;
+let showAll=false, limit=24, dispensing=false, sound=false;
+let allSets, loadingSets, setsFailed=false;
+
+function beep(notes) {
+  if (!sound) return;
+  try {
+    audio ||= new AudioContext();
+    if (audio.state==='suspended') audio.resume().catch(()=>{});
+    const start=audio.currentTime;
+    notes.forEach((hz,index)=>{
+      const oscillator=audio.createOscillator();
+      const volume=audio.createGain();
+      const time=start+index*.073;
+      oscillator.type='triangle';
+      oscillator.frequency.value=hz;
+      volume.gain.setValueAtTime(.0001,time);
+      volume.gain.exponentialRampToValueAtTime(.068,time+.02);
+      volume.gain.exponentialRampToValueAtTime(.0001,time+.14);
+      oscillator.connect(volume).connect(audio.destination);
+      oscillator.start(time);
+      oscillator.stop(time+.15);
+    });
+  } catch {}
+}
+
+get('sound').onclick=event=>{
+  sound=!sound;
+  event.currentTarget.setAttribute('aria-pressed',String(sound));
+  event.currentTarget.innerHTML=sound ?
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4m12-1c2 1 2 5 0 6m2-9c4 3 4 9 0 12"/></svg>' :
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4m12 0 4 4m0-4-4 4"/></svg>';
+  beep([392,523]);
+};
+get('map-button').onclick=event=>{
+  floorMap.hidden=!floorMap.hidden;
+  event.currentTarget.setAttribute('aria-pressed',String(!floorMap.hidden));
+};
+get('directory-button').onclick=()=>open(directory);
+get('interact').onclick=()=>use(current);
+touchUse.onclick=()=>use(current);
+
+function clearInput() {
+  keys.clear();
+  drag=undefined;
+  joystickId=undefined;
+  joystickX=joystickY=0;
+  stick.style.transform='';
+}
+
+function open(dialog) {
+  clearInput();
+  for (const panel of panels) if(panel!==dialog && panel.open)panel.close();
+  if(!dialog.open)dialog.showModal();
+}
+
+for (const panel of panels) {
+  panel.querySelector('[data-close]').onclick=()=>panel.close();
+  panel.addEventListener('click',event=>{
+    if(panel===playerDialog || event.target!==panel)return;
+    const r=panel.getBoundingClientRect();
+    if(event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom)panel.close();
+  });
+}
+playerDialog.addEventListener('close',()=>{
+  clearTimeout(loadingTimer);
+  frameSlot.replaceChildren();
+});
+
+function play(station, set) {
+  const url=new URL(station.url);
+  if(set)url.searchParams.set('set',set.code);
+  get('game-title').textContent=set ? set.name : station.title;
+  get('external').href=url.href;
+  const frame=document.createElement('iframe');
+  frame.title=set ? `Open a ${set.name} booster pack` : station.title;
+  frame.allow='fullscreen; gamepad; autoplay';
+  frame.allowFullscreen=true;
+  frame.src=url.href;
+  frameLoading.textContent='Loading…';
+  frameLoading.hidden=false;
+  frame.onload=()=>{
+    if(!frame.isConnected)return;
+    clearTimeout(loadingTimer);
+    frameLoading.hidden=true;
+  };
+  frameSlot.replaceChildren(frame);
+  clearTimeout(loadingTimer);
+  loadingTimer=setTimeout(()=>{
+    frameLoading.textContent='Still loading? Try Open in new tab.';
+  },12000);
+  open(playerDialog);
+}
+
+function use(station) {
+  if(!station || dispensing)return;
+  beep([330,440]);
+  if(station===vendingStation) {
+    open(vending);
+    renderSets();
+  } else play(station);
+}
+
+function dispense(set, tile) {
+  if(dispensing || !set)return;
+  dispensing=true;
+  tile?.classList.add('dispensing');
+  arcade?.dispense();
+  beep([349,440,523,698]);
+  if(vending.open)vendingStatus.textContent=`Dispensing ${set.name}…`;
+  const wasOpen=vending.open;
+  setTimeout(()=>{
+    dispensing=false;
+    tile?.classList.remove('dispensing');
+    if(wasOpen && !vending.open)return;
+    play(vendingStation,set);
+  },matchMedia('(prefers-reduced-motion:reduce)').matches?20:450);
+}
+
+function buildDirectory() {
+  const list=get('games');
+  for(const station of stations) {
+    const card=document.createElement('div');
+    card.className='game';
+    const icon=new Image();
+    icon.src=station.icon;
+    icon.alt='';
+    icon.onerror=()=>{icon.onerror=null;icon.src='assets/arcade.svg';};
+    const label=document.createElement('button');
+    label.type='button';label.className='game-name';
+    const title=document.createElement('strong');
+    title.textContent=station.title;
+    const genre=document.createElement('small');
+    genre.textContent=station.genre;
+    label.append(title,genre);
+    label.onclick=()=>use(station);
+    const walk=document.createElement('button');
+    walk.type='button';walk.className='walk';walk.textContent='↗';
+    walk.title=`Go to ${station.title}`;
+    walk.setAttribute('aria-label',walk.title);
+    walk.hidden=!arcade;
+    walk.onclick=()=>{
+      arcade.visit(station);
+      directory.close();
+      refreshTarget(arcade.target());
+    };
+    card.append(icon,label,walk);
+    list.append(card);
+  }
+}
+
+async function fetchSets() {
+  if(allSets || loadingSets)return;
+  setsFailed=false;
+  loadingSets=true;
+  renderSets();
+  try {
+    const response=await fetch('https://api.scryfall.com/sets',{signal:AbortSignal.timeout(10000)});
+    if(!response.ok)throw new Error('Set list unavailable');
+    const {data}=await response.json();
+    const types=new Set(['core','expansion','masters','draft_innovation','commander','funny']);
+    const stock=new Map(featured.map(set=>[set.code,set]));
+    allSets=[...featured,...data.filter(set=>types.has(set.set_type) && set.card_count>0 && !stock.has(set.code))
+      .map(set=>({code:set.code,name:set.name,icon:set.icon_svg_uri,color:'#a18ae0'}))];
+  } catch {setsFailed=true;}
+  loadingSets=false;
+  renderSets();
+}
+
+function renderSets() {
+  if(!vending.open || dispensing)return;
+  const query=search.value.trim().toLowerCase();
+  const expanded=showAll || Boolean(query);
+  const stock=expanded && allSets ? allSets : featured;
+  const sets=stock.filter(set=>!query || set.name.toLowerCase().includes(query) || set.code.includes(query));
+  packGrid.replaceChildren();
+  for (const set of sets.slice(0,limit)) {
+    const tile=document.createElement('button');
+    tile.type='button';
+    tile.className='pack';
+    tile.style.setProperty('--pack-color',set.color);
+    tile.setAttribute('aria-label',`Dispense ${set.name}`);
+    const art=new Image();
+    art.alt='';
+    art.loading='lazy';
+    art.src=set.art || set.icon || 'assets/arcade.svg';
+    if(!set.art)art.className='symbol';
+    art.onerror=()=>{
+      art.onerror=null;
+      art.className='symbol';
+      art.src='assets/arcade.svg';
+    };
+    const name=document.createElement('b');
+    name.textContent=set.name;
+    tile.append(art,name);
+    tile.onclick=()=>dispense(set,tile);
+    packGrid.append(tile);
+  }
+  allButton.textContent=showAll?'Featured':setsFailed?'Retry all sets':'All sets';
+  moreButton.hidden=sets.length<=limit;
+  vendingStatus.textContent=expanded && loadingSets ? 'Loading more sets…' :
+    expanded && setsFailed ? 'The full set list is unavailable. Featured packs are still here.' :
+    sets.length===0 ? 'No sets found.' : '';
+}
+
+allButton.onclick=()=>{
+  showAll=setsFailed || !showAll;
+  search.value='';
+  limit=24;
+  if(showAll)fetchSets();
+  renderSets();
+};
+search.oninput=()=>{
+  limit=24;
+  if(search.value.trim() && !setsFailed)fetchSets();
+  renderSets();
+};
+moreButton.onclick=()=>{
+  limit+=24;
+  renderSets();
+};
+
+function refreshTarget(station) {
+  if(station===current)return;
+  current=station;
+  prompt.hidden=!station;
+  touchUse.hidden=!station;
+  if(!station)return;
+  get('target-name').textContent=station.title;
+  get('target-action').textContent=station===vendingStation ? 'Choose a set' : 'Play cabinet';
+}
+
+window.addEventListener('keydown',event=>{
+  if(panels.some(panel=>panel.open) || event.ctrlKey || event.metaKey || event.altKey)return;
+  if(event.code==='KeyE' && !event.repeat){if(current)event.preventDefault();use(current);return;}
+  if(event.code==='KeyM' && !event.repeat){get('map-button').click();return;}
+  if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','ShiftLeft','ShiftRight'].includes(event.code)){
+    event.preventDefault();
+    keys.add(event.code);
+  }
+});
+window.addEventListener('keyup',event=>keys.delete(event.code));
+window.addEventListener('blur',clearInput);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)clearInput();});
+
+view.addEventListener('pointerdown',event=>{
+  if(!arcade || drag || event.button!==0)return;
+  view.setPointerCapture(event.pointerId);
+  drag={id:event.pointerId,x:event.clientX,y:event.clientY,length:0};
+});
+view.addEventListener('pointermove',event=>{
+  if(!drag || drag.id!==event.pointerId)return;
+  const dx=event.clientX-drag.x,dy=event.clientY-drag.y;
+  drag.length+=Math.hypot(dx,dy);
+  drag.x=event.clientX;drag.y=event.clientY;
+  if(drag.length>5)arcade.aim(dx,dy);
+});
+view.addEventListener('pointerup',event=>{
+  if(!drag || drag.id!==event.pointerId)return;
+  const click=drag.length<=5;
+  drag=undefined;
+  if(!click)return;
+  const hit=arcade.select(event.clientX,event.clientY);
+  if(hit?.set)dispense(hit.set);
+  else if(hit?.station)use(hit.station);
+});
+view.addEventListener('pointercancel',()=>{drag=undefined;});
+view.addEventListener('lostpointercapture',()=>{drag=undefined;});
+
+function steer(event) {
+  const r=joystick.getBoundingClientRect();
+  const x=event.clientX-(r.left+r.width/2),y=event.clientY-(r.top+r.height/2);
+  const reach=34;
+  const magnitude=Math.max(reach,Math.hypot(x,y));
+  joystickX=x/magnitude;joystickY=-y/magnitude;
+  stick.style.transform=`translate(${joystickX*reach}px,${-joystickY*reach}px)`;
+}
+joystick.addEventListener('pointerdown',event=>{
+  if(joystickId!==undefined || event.button!==0)return;
+  joystickId=event.pointerId;
+  joystick.setPointerCapture(event.pointerId);
+  steer(event);
+});
+joystick.addEventListener('pointermove',event=>{if(event.pointerId===joystickId)steer(event);});
+for(const name of ['pointerup','pointercancel','lostpointercapture']){
+  joystick.addEventListener(name,event=>{
+    if(event.pointerId!==joystickId)return;
+    joystickId=undefined;
+    joystickX=joystickY=0;
+    stick.style.transform='';
+  });
+}
+
+function drawMap() {
+  if(floorMap.hidden)return;
+  const {x,z,yaw}=arcade.player;
+  const margin=11, width=92, height=96;
+  const px=value=>margin+(value-room.minX)/(room.maxX-room.minX)*width;
+  const pz=value=>12+(value-room.minZ)/(room.maxZ-room.minZ)*height;
+  mapCtx.clearRect(0,0,map.width,map.height);
+  mapCtx.fillStyle='#312643';mapCtx.fillRect(10,10,95,101);
+  mapCtx.strokeStyle='#a483aa';mapCtx.strokeRect(10,10,95,101);
+  mapCtx.fillStyle='#63465f';mapCtx.fillRect(14,99,19,8);mapCtx.fillRect(79,99,21,8);
+  for(const station of stations){
+    mapCtx.fillStyle=station.color;
+    const size=station===vendingStation?10:6;
+    mapCtx.fillRect(px(station.x)-size/2,pz(station.z)-3,size,6);
+  }
+  mapCtx.save();
+  mapCtx.translate(px(x),pz(z));
+  mapCtx.rotate(-yaw);
+  mapCtx.fillStyle='#fff9e6';mapCtx.beginPath();
+  mapCtx.moveTo(0,-7);mapCtx.lineTo(4,4);mapCtx.lineTo(0,2);mapCtx.lineTo(-4,4);mapCtx.closePath();mapCtx.fill();
+  mapCtx.restore();
+  mapCtx.fillStyle='#f0d9ee';mapCtx.font='bold 12px system-ui';mapCtx.fillText('FLOOR',117,30);
+  mapCtx.fillText('MAP',117,45);
+  mapCtx.fillStyle='#e399f6';mapCtx.fillRect(118,60,7,7);
+  mapCtx.fillStyle='#cdbad0';mapCtx.font='11px system-ui';mapCtx.fillText('Packs',129,67);
+  mapCtx.fillStyle='#bca2cc';mapCtx.fillText('Entry',42,128);
+}
+
+function loop(now) {
+  const dt=Math.min((now-(loop.last??now))/1000,.05);
+  loop.last=now;
+  if(!document.hidden && !panels.some(panel=>panel.open)) {
+    const side=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));
+    const forward=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));
+    arcade.move(side+joystickX,forward+joystickY,dt,keys.has('ShiftLeft')||keys.has('ShiftRight'));
+    arcade.draw(dt);
+    refreshTarget(arcade.target());
+    if(now-(loop.mapTime??0)>65){drawMap();loop.mapTime=now;}
+  }
+  requestAnimationFrame(loop);
+}
+
+buildDirectory();
+
+try {
+  const [{createRoom}]=await Promise.all([
+    import('./room.js'),
+    Promise.race([document.fonts.load('800 40px "Barlow Condensed"'),new Promise(resolve=>setTimeout(resolve,900))]).catch(()=>{})
+  ]);
+  arcade=createRoom(view);
+  get('games').querySelectorAll('.walk').forEach(button=>{button.hidden=false;});
+  addEventListener('resize',arcade.resize);
+  get('status').hidden=true;
+  requestAnimationFrame(loop);
+} catch(error) {
+  console.error('Mango Arcade could not start',error);
+  get('status').textContent='The 3D arcade could not load. Open Game list to play.';
+  floorMap.hidden=true;
+  get('map-button').hidden=true;
+  get('controls-tip').hidden=true;
+  joystick.hidden=true;
+  get('reticle').hidden=true;
+}
