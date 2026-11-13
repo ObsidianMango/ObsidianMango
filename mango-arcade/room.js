@@ -1,7 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
 import { stations, spawn, room } from './catalog.js';
 import { bar, clubDoor, club, doorwayHalf } from './nightlife.js';
-import { buildClub, createProps } from './club.js';
+import { buildClub, createProps } from './club.js?v=afterglow-dancers';
 import { featured } from './featured.js';
 import { makeCanvas, texture, drawLabel, screenArt, marquee, wallSign, flooring, panelPack } from './graphics.js';
 

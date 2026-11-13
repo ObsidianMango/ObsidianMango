@@ -514,7 +514,7 @@ renderItems();
 
 try {
   const [{createRoom}]=await Promise.all([
-    import('./room.js?v=afterglow'),
+    import('./room.js?v=afterglow-dancers'),
     Promise.race([document.fonts.load('800 40px "Barlow Condensed"'),new Promise(resolve=>setTimeout(resolve,900))]).catch(()=>{})
   ]);
   arcade=createRoom(view);
