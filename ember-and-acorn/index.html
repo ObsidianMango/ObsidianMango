@@ -242,6 +242,55 @@ const skyProgram = gl && program(
     gl_FragColor=vec4(mix(c,floor(c*23.+grain)/23.,filterOn),1.);
   }`
 );
+const tripProgram = gl && program(
+  'attribute vec2 p; varying vec2 uv; void main(){uv=p*.5+.5; gl_Position=vec4(p,0.,1.);}',
+  `precision mediump float;
+  varying vec2 uv;
+  uniform sampler2D scene;
+  uniform vec2 origin; uniform vec2 size; uniform vec2 canvasSize;
+  uniform float intensity; uniform float psychedelic; uniform float clock; uniform float motion;
+  const float pi=3.14159265;
+  vec3 sampleScene(vec2 at){
+    vec2 p=clamp(at*size,vec2(.5),size-vec2(.5));
+    return texture2D(scene,(origin+p)/canvasSize).rgb;
+  }
+  vec3 rainbow(float phase){
+    return .55+.45*cos(phase+vec3(0.,2.0944,4.1888));
+  }
+  void main(){
+    vec2 point=uv*2.-1.;
+    float radius=length(point);
+    float edge=smoothstep(.19,1.05,radius);
+    float deep=smoothstep(1.15,2.9,intensity);
+    float peak=smoothstep(2.35,3.9,intensity);
+    float wild=(.48+.52*psychedelic)*smoothstep(1.15,1.85,intensity);
+    float phase=clock*1.4*motion;
+    vec2 ripple=vec2(sin(point.y*10.+phase+radius*5.),cos(point.x*8.-phase+radius*4.));
+    vec2 drift=ripple*(.008+.027*deep)*wild*motion*edge;
+    vec2 at=uv+drift+point*.028*deep*edge*sin(radius*12.-phase)*motion;
+    vec2 split=point/max(radius,.001)*(.004+.017*deep)*edge*wild*motion;
+    vec3 c=sampleScene(at);
+    c.r=mix(c.r,sampleScene(at+split).r,.85);
+    c.b=mix(c.b,sampleScene(at-split).b,.85);
+    if(deep>.005&&motion>.5) {
+      vec3 echo=sampleScene(at-drift*2.6+point*.031*edge);
+      c=mix(c,echo.brg,deep*edge*wild*.32);
+    }
+    float angle=atan(point.y,point.x+.0001);
+    if(peak>.005&&motion>.5) {
+      float sector=pi/3.;
+      float folded=abs(mod(angle+phase*.08,sector)-sector*.5)+pi*.42;
+      vec2 mirror=.5+.43*radius*vec2(cos(folded),sin(folded));
+      c=mix(c,sampleScene(mirror),peak*smoothstep(.52,1.14,radius)*wild*.64);
+    }
+    float petals=sin(angle*6.+radius*12.-phase);
+    float rings=.5+.5*cos(radius*25.+petals*1.45-phase*1.2);
+    vec3 spectrum=rainbow(angle*2.+radius*12.-phase);
+    c=mix(c,c*.73+spectrum*.34,deep*(.11+edge*.21)*wild);
+    c+=spectrum*pow(rings,7.)*peak*(.06+.25*edge)*wild;
+    gl_FragColor=vec4(c,1.);
+  }`
+);
 function locations(prog,names) {
   return Object.fromEntries(names.map(n => [n,gl.getUniformLocation(prog,n)]));
 }
@@ -250,6 +299,50 @@ const su = gl && locations(skyProgram,["forward","right","up","span","room","cle
 const wp = gl && gl.getAttribLocation(worldProgram,"p");
 const wc = gl && gl.getAttribLocation(worldProgram,"c");
 const sp = gl && gl.getAttribLocation(skyProgram,"p");
+const tp = gl && gl.getAttribLocation(tripProgram,"p");
+const tu = gl && locations(tripProgram,["scene","origin","size","canvasSize","intensity","psychedelic","clock","motion"]);
+const tripTarget = gl && {buffer:gl.createFramebuffer(),texture:gl.createTexture(),depth:gl.createRenderbuffer(),width:0,height:0,ready:false};
+
+function prepareTripTarget() {
+  const {width,height}=canvas;
+  if(tripTarget.width===width&&tripTarget.height===height) return tripTarget.ready;
+  Object.assign(tripTarget,{width,height});
+  gl.bindTexture(gl.TEXTURE_2D,tripTarget.texture);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,width,height,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.bindRenderbuffer(gl.RENDERBUFFER,tripTarget.depth);
+  gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT16,width,height);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,tripTarget.buffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tripTarget.texture,0);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,tripTarget.depth);
+  tripTarget.ready=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  return tripTarget.ready;
+}
+
+function drawTripPane(x,y,w,h,t,intensity,psychedelic) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  gl.disable(gl.DEPTH_TEST);
+  gl.useProgram(tripProgram);
+  gl.bindBuffer(gl.ARRAY_BUFFER,skyBuffer);
+  gl.vertexAttribPointer(tp,2,gl.FLOAT,false,0,0);
+  gl.enableVertexAttribArray(tp);
+  if(wc!==tp) gl.disableVertexAttribArray(wc);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D,tripTarget.texture);
+  gl.uniform1i(tu.scene,0);
+  gl.uniform2f(tu.origin,x,y);
+  gl.uniform2f(tu.size,w,h);
+  gl.uniform2f(tu.canvasSize,canvas.width,canvas.height);
+  gl.uniform1f(tu.intensity,intensity);
+  gl.uniform1f(tu.psychedelic,psychedelic);
+  gl.uniform1f(tu.clock,t%600);
+  gl.uniform1f(tu.motion,Number(!reducedMotion.matches));
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+}
 const skyBuffer = gl && gl.createBuffer();
 if(gl) {
   gl.bindBuffer(gl.ARRAY_BUFFER,skyBuffer);
@@ -377,6 +470,18 @@ const brews={
   spark:{name:"Ember fizz",verb:"Drink",duration:25,vision:3,effect:"A warm glow and double spell damage",ingredients:{dreamcap:1,emberpetal:2}}
 };
 const cannabisDryTime=20;
+const maxTripDoses=4;
+const tripStages=["","Light","Building","Deep","Kaleidoscope"];
+
+function tripIntensity(p) {
+  let intensity=0, psychedelic=0;
+  for(const dose of p.tripDoses) {
+    const amount=Math.min(1,dose.remaining/4,(dose.duration-dose.remaining)/.65);
+    intensity+=amount;
+    if(dose.psychedelic) psychedelic+=amount;
+  }
+  return {intensity,psychedelic:intensity?psychedelic/intensity:0};
+}
 const homePlotCount=plots.length;
 for(const region of [byPlace.orchard,byPlace.falls]) {
   for(let i=0;i<6;i++) plots.push({x:region.x-5-i%3*1.65,z:region.z+6+Math.floor(i/3)*1.7,region:region.id});
@@ -1059,8 +1164,8 @@ function produceValue() {
   return Object.entries(state.foodStock).reduce((sum,[id,n])=>sum+(foods[id]?.price||0)*n,0);
 }
 let area="farm", active=false, currentPanel="title", elapsed=0, toastEnd=0, saveClock=0;
-const player={x:0,z:2.9,yaw:0,pitch:.035,hp:5,first:false,walk:0,step:0,immune:0,cooldown:0,brew:null,brewTime:0,id:0};
-const partner={x:1.65,z:3.55,yaw:0,pitch:.035,hp:5,first:false,walk:0,step:0,immune:0,cooldown:0,brew:null,brewTime:0,id:1};
+const player={x:0,z:2.9,yaw:0,pitch:.035,hp:5,first:false,walk:0,step:0,immune:0,cooldown:0,brew:null,brewTime:0,tripDoses:[],id:0};
+const partner={x:1.65,z:3.55,yaw:0,pitch:.035,hp:5,first:false,walk:0,step:0,immune:0,cooldown:0,brew:null,brewTime:0,tripDoses:[],id:1};
 let coop=false, freshHarvest=null, cookingCamp=null;
 const players=[player,partner];
 const projectiles=[], enemyShots=[], particles=[];
@@ -1090,7 +1195,11 @@ function relocate(place,yaw=0) {
     p.pitch=.04;
     p.immune=1.6;
     p.cooldown=0;
-    if(p.hp<=0) {p.brew=null;p.brewTime=0;}
+    if(p.hp<=0) {
+      p.brew=null;
+      p.brewTime=0;
+      p.tripDoses.length=0;
+    }
   }
   projectiles.length=0;
   enemyShots.length=0;
@@ -1994,7 +2103,7 @@ function drawTriangle(f,ax,ay,az,bx,by,bz,cx,cy,cz,color) {
     }
   }
 }
-function renderRaster(view,left,top,w,h,world,dynamic,t,vision,strength) {
+function renderRaster(view,left,top,w,h,world,dynamic,t,vision,strength,intensity,psychedelic) {
   const id=left+","+top;
   let f=frames.get(id);
   if(!f||f.w!==w||f.h!==h) {
@@ -2102,16 +2211,63 @@ function renderRaster(view,left,top,w,h,world,dynamic,t,vision,strength) {
       f.pixels[i]=pixel(r,g,b);
     }
   }
+  if(intensity>1.15) distortRaster(f,t,intensity,psychedelic);
   raster.putImageData(f.image,left,top);
+}
+
+function distortRaster(f,t,intensity,psychedelic) {
+  const {w,h,pixels}=f;
+  f.tripSource??=new Uint32Array(pixels.length);
+  f.tripSource.set(pixels);
+  const source=f.tripSource;
+  const motion=!reducedMotion.matches;
+  const deep=clamp((intensity-1.15)/1.75,0,1), peak=clamp((intensity-2.35)/1.55,0,1);
+  const wild=(.48+.52*psychedelic)*clamp((intensity-1.15)/.7,0,1);
+  const phase=motion?t*1.4:0;
+  const sample=(x,y)=>source[clamp(Math.round(y),0,h-1)*w+clamp(Math.round(x),0,w-1)];
+  for(let y=0;y<h;y++) for(let x=0,i=y*w;x<w;x++,i++) {
+    const xx=2*x/w-1, yy=1-2*y/h, radius=Math.hypot(xx,yy);
+    const edge=clamp((radius-.19)/.86,0,1);
+    const wave=deep*edge*wild;
+    let r=0,g=0,b=0;
+    if(motion) {
+      const atX=x+Math.sin(yy*10+phase+radius*5)*w*.035*wave;
+      const atY=y+Math.cos(xx*8-phase+radius*4)*h*.035*wave;
+      const split=w*.017*wave;
+      r=sample(atX+xx*split,atY)&255;
+      g=(sample(atX,atY)>>>8)&255;
+      b=(sample(atX-xx*split,atY)>>>16)&255;
+    } else {
+      const c=source[i];
+      r=c&255;g=(c>>>8)&255;b=(c>>>16)&255;
+    }
+    const angle=Math.atan2(yy,xx);
+    if(peak>0&&motion) {
+      const sector=PI/3;
+      const folded=Math.abs(((angle+phase*.08)%sector+sector)%sector-sector*.5)+PI*.42;
+      const mirror=sample(w*(.5+.43*radius*Math.cos(folded)),h*(.5-.43*radius*Math.sin(folded)));
+      const blend=peak*clamp((radius-.52)/.62,0,1)*wild*.64;
+      r=mix(r,mirror&255,blend);g=mix(g,(mirror>>>8)&255,blend);b=mix(b,(mirror>>>16)&255,blend);
+    }
+    const petals=Math.sin(angle*6+radius*12-phase);
+    const rings=.5+.5*Math.cos(radius*25+petals*1.45-phase*1.2);
+    const glow=(wave*.17+rings**7*peak*(.06+.25*edge)*wild)*255;
+    const hue=angle*2+radius*12-phase;
+    pixels[i]=pixel(r+glow*(.55+.45*Math.cos(hue)),g+glow*(.55+.45*Math.cos(hue+TAU/3)),
+      b+glow*(.55+.45*Math.cos(hue+2*TAU/3)));
+  }
 }
 
 function renderPane(view,x,y,w,h,world,dynamic,now,p) {
   const brew=p?.brew&&brews[p.brew], vision=brew?.vision||0;
+  const {intensity,psychedelic}=p?tripIntensity(p):{intensity:0,psychedelic:0};
   const strength=brew?Math.min(1,p.brewTime/2,(brew.duration-p.brewTime)/.55):0;
   if(software) {
-    renderRaster(view,x,canvas.height-y-h,w,h,world,dynamic,now,vision,strength);
+    renderRaster(view,x,canvas.height-y-h,w,h,world,dynamic,now,vision,strength,intensity,psychedelic);
     return;
   }
+  const distorted=intensity>1.15&&prepareTripTarget();
+  if(distorted) gl.bindFramebuffer(gl.FRAMEBUFFER,tripTarget.buffer);
   gl.viewport(x,y,w,h);
   gl.scissor(x,y,w,h);
   gl.clear(gl.DEPTH_BUFFER_BIT);
@@ -2147,6 +2303,7 @@ function renderPane(view,x,y,w,h,world,dynamic,now,p) {
   gl.uniform1f(wu.filterOn,Number(state.dither));
   for(const mesh of world==="farm"?outdoorMeshes(view):[staticWorlds.abbey]) drawMesh(mesh);
   for(const mesh of dynamic) drawMesh(mesh);
+  if(distorted) drawTripPane(x,y,w,h,now,intensity,psychedelic);
 }
 function positionMarker(view,width,height) {
   const label=$("marker");
@@ -2239,9 +2396,11 @@ function syncHud() {
     region!==home?"Light the valley’s waystones. ("+wards+"/6)"+(region.id==="barrow"&&!state.warden?" · Hunt the Barrow Warden.":""):
     state.ember?"Explore the valley and light its waystones. ("+wards+"/6)":state.opened||state.gold>=12?"Follow the lanterns to Hollowbell Abbey.":"Earn 12 coins to unlock the abbey. ("+state.gold+"/12)";
   const foe=visibleEnemy();
-  const status=(coop?players:[player]).filter(p=>p.brew).map(p=>
-    (coop?"P"+(p.id+1)+" ":"")+brews[p.brew].name+" · "+Math.ceil(p.brewTime)+"s"
-  ).join(" / ");
+  const status=(coop?players:[player]).filter(p=>p.brew||p.tripDoses.length).map(p=>{
+    const effect=p.brew?brews[p.brew].name+" · "+Math.ceil(p.brewTime)+"s":"Afterglow";
+    const stage=tripStages[p.tripDoses.length];
+    return (coop?"P"+(p.id+1)+" ":"")+effect+(stage?" · "+stage+" "+p.tripDoses.length+"/"+maxTripDoses:"");
+  }).join(" / ");
   const info=[area,region?.id,player.hp,partner.hp,state.gold,quest,a?.label,b?.label,coop,foe?.type,foe?.hp,foe?.maxHp,status].join("|");
   if(info===hudStamp) return;
   hudStamp=info;
@@ -2306,6 +2465,8 @@ function takeBrew(id,p) {
   give(stock,id,-1);
   p.brew=id;
   p.brewTime=brew.duration;
+  if(p.tripDoses.length>=maxTripDoses) p.tripDoses.shift();
+  p.tripDoses.push({duration:brew.duration,remaining:brew.duration,psychedelic:brew.vision===1});
   if(brew.heal) p.hp=Math.min(5,p.hp+brew.heal);
   save();
   openPanel(null);
@@ -2648,6 +2809,11 @@ function movePlayer(p,dt) {
   p.yaw+=turn*1.85*dt;
   p.brewTime=Math.max(0,p.brewTime-dt);
   if(!p.brewTime) p.brew=null;
+  for(let i=p.tripDoses.length-1;i>=0;i--) {
+    const dose=p.tripDoses[i];
+    dose.remaining-=dt;
+    if(dose.remaining<=0) p.tripDoses.splice(i,1);
+  }
   const boost=brews[p.brew]?.speed??1;
   const magnitude=Math.hypot(x,z), stride=(area==="farm"?6.4:4.65)*boost*dt/Math.max(1,magnitude);
   const sn=Math.sin(p.yaw), cs=Math.cos(p.yaw);
