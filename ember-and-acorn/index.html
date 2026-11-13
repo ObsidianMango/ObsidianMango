@@ -93,9 +93,10 @@ button:disabled{cursor:default;opacity:.48}
   <div id="touch"><div id="stick" aria-label="Move"><div id="nub"></div></div><div id="actions"><button id="use">USE</button><button id="cast">CAST</button></div></div>
 </div>
 <div id="overlay">
-  <section class="panel" id="title"><div class="crest" aria-hidden="true">✦</div><h1>Ember &amp; Acorn</h1><p>Tend your farm, brew strange mushrooms, and follow the old roads into a valley of ruins, wild magic, and monsters.</p><button class="primary" id="start">Enter the hamlet</button><small id="titleControls"></small></section>
+  <section class="panel" id="title"><div class="crest" aria-hidden="true">✦</div><h1>Ember &amp; Acorn</h1><p>Tend your farm, forage for wild herbs and mushrooms, and follow the old roads into a valley of ruins, wild magic, and monsters.</p><button class="primary" id="start">Enter the hamlet</button><small id="titleControls"></small></section>
   <section class="panel" id="pause" hidden><h2>Paused</h2><button class="primary" id="resume">Resume</button><button id="sound">Sound on</button><button id="dither">Dither on</button><button id="quit">Title screen</button></section>
   <section class="panel sheet" id="inventory" hidden><h2>Satchel</h2><div class="rows" id="bagList"></div><button class="primary" id="closeBag">Back</button></section>
+  <section class="panel" id="harvest" hidden><h2 id="harvestName"></h2><p id="harvestEffect"></p><button class="primary" id="eatHarvest"></button><button id="keepHarvest">Keep in bag</button></section>
   <section class="panel sheet" id="atlas" hidden><h2>Valley Map</h2><canvas id="atlasCanvas" width="224" height="170" aria-label="Map of the valley"></canvas><div class="rows" id="atlasList"></div><button class="primary" id="closeAtlas">Back</button></section>
   <section class="panel sheet" id="market" hidden><h2>Hamlet Market</h2><div class="rows" id="marketList"></div><button class="primary" id="closeMarket">Back</button></section>
   <section class="panel sheet" id="cooking" hidden><h2>Cookfire</h2><div class="rows" id="cookList"></div><button class="primary" id="closeCook">Back</button></section>
@@ -115,7 +116,7 @@ const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 $("titleControls").textContent = coarse ? "Left stick to walk · Drag the scene to look" : "WASD to walk · Drag or use the arrow keys to look";
 function panel(name) {
   $("overlay").hidden = !name;
-  for (const id of ["title","pause","inventory","atlas","market","cooking","ending","unsupported"]) $(id).hidden = id !== name;
+  for (const id of ["title","pause","inventory","harvest","atlas","market","cooking","ending","unsupported"]) $(id).hidden = id !== name;
 }
 if (!gl && !raster) { panel("unsupported"); return; }
 
@@ -161,7 +162,13 @@ const colorGrade = `
       return mix(c,shifted*1.15+vec3(.045,.005,.082),strength*.87);
     }
     if(vision<2.5) return mix(c,c*vec3(.82,1.12,1.40)+vec3(.025,.080,.13),strength*.77);
-    return mix(c,c*vec3(1.23,1.01,.77)+vec3(.080,.016,.0),strength*.75);
+    if(vision<3.5) return mix(c,c*vec3(1.23,1.01,.77)+vec3(.080,.016,.0),strength*.75);
+    if(vision<4.5){
+      float haze=.025*(1.+motion*sin(uv.y*.022-clock*.8+uv.x*.008));
+      return mix(c,c*vec3(.92,1.08,.78)+vec3(.044,.067,.042+haze),strength*.77);
+    }
+    if(vision<5.5) return mix(c,c*vec3(.88,1.09,1.18)+vec3(.008,.046,.084),strength*.68);
+    return mix(c,c*vec3(.96,.79,1.19)+vec3(.10,.023,.092),strength*.78);
   }`;
 const worldProgram = gl && program(
   'attribute vec3 p; attribute vec3 c; uniform mat4 vp; varying vec3 color; varying vec3 pos; varying float depth; void main(){gl_Position=vp*vec4(p,1.); color=c; pos=p; depth=gl_Position.w;}',
@@ -355,14 +362,21 @@ const recipes={
 const reagents={
   dreamcap:{name:"Dreamcap mushroom",color:0xf15fcf,where:"by the hamlet cookfire and in Bramblewood"},
   glowmoss:{name:"Glowmoss",color:0x79eab9,where:"by the hamlet cookfire and in Cinderfen"},
-  emberpetal:{name:"Emberpetal",color:0xff8d4e,where:"by the hamlet cookfire and in Goldleaf Orchard"}
+  emberpetal:{name:"Emberpetal",color:0xff8d4e,where:"by the hamlet cookfire and in Goldleaf Orchard"},
+  cannabis:{name:"Fresh cannabis",color:0x90bb53,where:"south of the hamlet cookfire, in Goldleaf Orchard and Bramblewood"},
+  starroot:{name:"Starroot",color:0x9ce7f3,where:"in the hamlet and on Frostcap Ridge"},
+  moonspore:{name:"Moonspore",color:0xc09aee,where:"in the hamlet, Cinderfen and Ashen Barrow"}
 };
 const brews={
-  dreamcap:{name:"Raw Dreamcap",verb:"Eat",duration:14,vision:1,effect:"Shifting colors and a quicker stride"},
-  prism:{name:"Prism tea",verb:"Drink",duration:30,vision:1,effect:"Kaleidoscope colors and faster movement",ingredients:{dreamcap:2,emberpetal:1}},
+  dreamcap:{name:"Raw Dreamcap",verb:"Eat",raw:true,duration:22,vision:1,speed:1.12,effect:"Psychedelic colors and a quicker stride"},
+  starroot:{name:"Starroot",verb:"Chew",raw:true,duration:24,vision:5,castDelay:.23,effect:"Cast spells faster under an icy shimmer"},
+  joint:{name:"Cannabis joint",verb:"Smoke",duration:35,vision:4,heal:1,effect:"Soft green haze and restore one heart"},
+  moonveil:{name:"Moonveil tincture",verb:"Drink",duration:40,vision:6,ward:true,effect:"Violet vision and a ward that absorbs one hit",ingredients:{moonspore:1,glowmoss:1}},
+  prism:{name:"Prism tea",verb:"Drink",duration:30,vision:1,speed:1.24,effect:"Kaleidoscope colors and faster movement",ingredients:{dreamcap:2,emberpetal:1}},
   lantern:{name:"Wisp tonic",verb:"Drink",duration:40,vision:2,effect:"Blue night vision and glowing monster eyes",ingredients:{dreamcap:1,glowmoss:2}},
   spark:{name:"Ember fizz",verb:"Drink",duration:25,vision:3,effect:"A warm glow and double spell damage",ingredients:{dreamcap:1,emberpetal:2}}
 };
+const cannabisDryTime=20;
 const homePlotCount=plots.length;
 for(const region of [byPlace.orchard,byPlace.falls]) {
   for(let i=0;i<6;i++) plots.push({x:region.x-5-i%3*1.65,z:region.z+6+Math.floor(i/3)*1.7,region:region.id});
@@ -418,7 +432,9 @@ const hamletReagents=[
   [-3.5,6.2,"dreamcap"],[-5.2,6,"dreamcap"],[-6.7,5.7,"dreamcap"],
   [-3.8,1.1,"dreamcap"],[-5.6,1.7,"glowmoss"],[-6.9,1.3,"emberpetal"],
   [-2.5,7.6,"glowmoss"],[-4.2,8.1,"glowmoss"],
-  [-6.3,7.8,"emberpetal"],[-7.6,7.1,"emberpetal"]
+  [-6.3,7.8,"emberpetal"],[-7.6,7.1,"emberpetal"],
+  [-.8,6.9,"cannabis"],[-3.5,9.5,"cannabis"],[-6.8,9.8,"cannabis"],
+  [-1.6,10.2,"starroot"],[-9.6,7.3,"moonspore"]
 ];
 for(const [i,[x,z,reagent]] of hamletReagents.entries()) {
   nodes.push({id:"hamlet-reagent-"+i,x,z,reagent,phase:i*2.4});
@@ -836,6 +852,21 @@ for(let iz=-9;iz<6;iz++) for(let ix=-7;ix<7;ix++) {
     scenery(x,z,type,{region,size,seed:Math.floor(landscapeRng()*2147483647)});
   }
 }
+// Separate IDs keep existing forage respawn times attached to their original plants.
+for(const [place,items] of Object.entries({
+  orchard:["cannabis"],bramble:["cannabis","dreamcap"],ridge:["starroot"],
+  fen:["moonspore","dreamcap"],barrow:["moonspore","dreamcap"]
+})) {
+  const region=byPlace[place];
+  for(let i=0;i<12;i++) {
+    const angle=.57+i*2.399, radius=10+i%3*4;
+    const x=region.x+Math.cos(angle)*radius,z=region.z+Math.sin(angle)*radius;
+    if(waterAt(x,z)||plots.some(p=>distance(p,{x,z})<2)||nodes.some(n=>distance(n,{x,z})<2.2)) continue;
+    const obstacles=chunkScenery.get(chunkKey(x,z))||[];
+    if(obstacles.some(o=>distance(o,{x,z})<2)) continue;
+    nodes.push({id:place+"-wild-herb-"+i,x,z,reagent:items[i%items.length],phase:angle});
+  }
+}
 function bedMesh(m,x,z) {
   m.box(x,.035,z,1.39,.13,1.4,0x4c322c);
   for(let i=-1;i<=1;i++) m.box(x+i*.40,.14,z,.25,.085,1.25,0x76513b);
@@ -897,6 +928,12 @@ function campfire(m,x,z) {
     m.box(x+Math.cos(a)*.49,.01,z+Math.sin(a)*.49,.33,.18,.30,0x796466,a);
   }
   for(const a of [.35,1.8]) m.box(x,.13,z,.83,.16,.20,0x603e3c,a);
+  for(const offset of [.65,1.33]) {
+    m.box(x+offset,.015,z+.42,.085,.98,.09,0x765439);
+    m.box(x+offset,.02,z+.42,.15,.11,.16,0x8b7661);
+  }
+  m.box(x+.99,.91,z+.42,.83,.085,.095,0xae7950);
+  m.box(x+.99,.68,z+.42,.72,.039,.053,0x936447);
 }
 function makeChunk(ix,iz) {
   const m=new Mesh(), random=rng(Math.imul(ix+44,198409)+Math.imul(iz+61,827011));
@@ -994,7 +1031,7 @@ const initialSave=()=>({
   gold:0,opened:false,ember:false,shards:0,muted:false,dither:true,
   crops:plots.map((_,i)=>freshCrop(i)),
   seedStock:{sunroot:9,squash:3,bean:3,cabbage:2},foodStock:{},reagentStock:{},brewStock:{},selected:"sunroot",
-  discovered:{home:true},wards:{},kills:{},nodeReady:{},openedCaches:{},worldAge:0,warden:false,route:null
+  discovered:{home:true},wards:{},kills:{},nodeReady:{},openedCaches:{},worldAge:0,warden:false,route:null,drying:null,dryCannabis:0
 });
 const storageKey="ember-acorn-save-v1";
 function load() {
@@ -1024,7 +1061,7 @@ function produceValue() {
 let area="farm", active=false, currentPanel="title", elapsed=0, toastEnd=0, saveClock=0;
 const player={x:0,z:2.9,yaw:0,pitch:.035,hp:5,first:false,walk:0,step:0,immune:0,cooldown:0,brew:null,brewTime:0,id:0};
 const partner={x:1.65,z:3.55,yaw:0,pitch:.035,hp:5,first:false,walk:0,step:0,immune:0,cooldown:0,brew:null,brewTime:0,id:1};
-let coop=false;
+let coop=false, freshHarvest=null, cookingCamp=null;
 const players=[player,partner];
 const projectiles=[], enemyShots=[], particles=[];
 const enemySpawns=[[-3,-10],[3,-13],[.7,-19],[-3,-24],[3,-29],[0,-34]];
@@ -1035,6 +1072,8 @@ const overworldEnemies=wildSpawns.filter(s=>s.type!=="warden"||!state.warden).ma
 let enemies=overworldEnemies;
 function openPanel(name) {
   currentPanel=name;
+  if(name!=="harvest") freshHarvest=null;
+  if(name!=="cooking") cookingCamp=null;
   panel(name);
   $("hud").hidden=!active || name==="title" || name==="unsupported";
   keys.clear();
@@ -1128,9 +1167,10 @@ function nearestAction(p) {
   if(area==="farm") {
     if(distance(p,shop)<2.5) return {type:"sell",label:"Trade at the market"};
     if(distance(p,gate)<2.65) return {type:"gate",label:state.opened?"Enter Hollowbell Abbey":"Open abbey · 12 coins"};
-    if(distance(p,kitchen)<1.7) return {type:"cook",label:"Cook or brew at the fire"};
+    if(distance(p,kitchen)<1.7) return {type:"cook",label:"Use the cookfire",camp:kitchen};
     for(const region of regions) {
-      if(distance(p,{x:region.x+3.3,z:region.z+1.4})<1.7) return {type:"cook",label:"Cook or brew at the fire"};
+      const camp={x:region.x+3.3,z:region.z+1.4};
+      if(distance(p,camp)<1.7) return {type:"cook",label:"Use the cookfire",camp};
       if(distance(p,region)<2.15) {
         const ready=count(state.kills,region.id)>=2;
         const label=state.wards[region.id]?"Rest at the waystone":ready?"Light the waystone":"Waystone · "+count(state.kills,region.id)+"/2 monsters";
@@ -1194,7 +1234,12 @@ function use(p) {
   if(!a) return;
   if(a.type==="crop") tendPlot(a.index);
   if(a.type==="sell") {updateMarket();openPanel("market");return;}
-  if(a.type==="cook") {updateCooking();openPanel("cooking");return;}
+  if(a.type==="cook") {
+    cookingCamp=a.camp;
+    updateCooking();
+    openPanel("cooking");
+    return;
+  }
   if(a.type==="forage") {
     const {node}=a, item=reagents[node.reagent]||foods[node.food];
     if(node.reagent) give(state.reagentStock,node.reagent);
@@ -1203,6 +1248,11 @@ function use(p) {
     notify(item.name+" gathered");
     burst(node.x,.45,node.z,[item.color,0xffd17e],12);
     sound("harvest");
+    if(brews[node.reagent]?.raw) {
+      save();
+      showHarvest(node.reagent,p);
+      return;
+    }
   }
   if(a.type==="cache") {
     const {cache}=a, seed=cache.region.gift;
@@ -1275,7 +1325,7 @@ function walk(p,dx,dz,r) {
 function angleDiff(a,b) { return Math.atan2(Math.sin(a-b),Math.cos(a-b)); }
 function cast(p) {
   if(!active||currentPanel||p.cooldown>0) return;
-  p.cooldown=.38;
+  p.cooldown=brews[p.brew]?.castDelay??.38;
   let yaw=p.yaw, target=null, best=Infinity;
   for(const e of enemies) {
     if(e.hp<=0) continue;
@@ -1291,6 +1341,15 @@ function cast(p) {
 }
 function hurt(p,e) {
   if(p.immune>0) return false;
+  if(brews[p.brew]?.ward) {
+    p.brew=null;
+    p.brewTime=0;
+    p.immune=.6;
+    burst(p.x,.9,p.z,[0xb495ef,0xe4caff],16);
+    sound("restore");
+    notify("Moonveil absorbed the hit");
+    return false;
+  }
   p.hp--;
   p.immune=1.3;
   burst(p.x,.8,p.z,[0xd85e65,0xef996b],10);
@@ -1592,11 +1651,41 @@ function flame(m,x,z,t) {
 function forageMesh(m,node,t) {
   const {x,z,food,reagent,phase}=node;
   const c=(reagents[reagent]||foods[food]).color;
+  if(reagent==="cannabis") {
+    for(let stem=0;stem<3;stem++) {
+      const a=phase+stem*2.4, offset=stem*.18;
+      const xx=x+Math.cos(a)*offset,zz=z+Math.sin(a)*offset,h=.63-stem*.13;
+      m.box(xx,.02,zz,.035,h,.035,0x698344);
+      for(let branch=0;branch<5;branch++) {
+        const angle=a+branch*2.4, y=h*(.29+.135*branch), length=.20-branch*.017;
+        const dx=Math.cos(angle)*length,dz=Math.sin(angle)*length;
+        const hub=[xx+dx*.46,y+.04,zz+dz*.46];
+        m.rod([xx,y,zz],hub,.022,0x758d43);
+        for(let blade=-2;blade<=2;blade++) {
+          const spread=angle+blade*.49, reach=length*(.95-Math.abs(blade)*.19);
+          const vx=Math.cos(spread)*reach,vz=Math.sin(spread)*reach;
+          m.quad(hub,[hub[0]+vx*.40-vz*.24,hub[1]+.05,hub[2]+vz*.40+vx*.24],
+            [hub[0]+vx,hub[1]+.11,hub[2]+vz],[hub[0]+vx*.40+vz*.24,hub[1]+.05,hub[2]+vz*.40-vx*.24],
+            blade%2?0x497846:c);
+        }
+      }
+      m.profile(xx,zz,[[h*.92,.074,.072],[h+.035,.07,.069],[h+.09,.034,.033]],6,0x8fa259,a);
+    }
+    return;
+  }
   if(reagent||food==="mushroom") {
     for(let i=0;i<4;i++) {
       const a=i*2.399+phase,r=i===0?0:.21+(i%3)*.11;
       const xx=x+Math.cos(a)*r,zz=z+Math.sin(a)*r,h=.23+(3-i)*.085;
-      if(reagent==="glowmoss") {
+      if(reagent==="starroot") {
+        m.profile(xx,zz,[[.024,.065,.051],[h*.51,.054,.056],[h,.022,.022]],5,0x617e79,a);
+        for(let j=0;j<5;j++) {
+          const angle=a+j*TAU/5;
+          m.rod([xx,h*.71,zz],[xx+Math.cos(angle)*.12,h*.88,zz+Math.sin(angle)*.12],.047,0x518987);
+          m.box(xx+Math.cos(angle)*.081,h*.88,zz+Math.sin(angle)*.081,.07,.07,.07,c,angle);
+        }
+        m.box(xx,h*.90,zz,.075,.09,.075,0xffedba,a);
+      } else if(reagent==="glowmoss") {
         m.profile(xx,zz,[[.026,.19,.14],[.093,.235,.17],[.166,.146,.11]],6,0x447962,a);
         for(let j=0;j<3;j++) {
           const y=.12+j*.041;
@@ -1610,8 +1699,8 @@ function forageMesh(m,node,t) {
         }
         m.box(xx,h-.015,zz,.085,.064,.085,0xffd45b,a);
       } else {
-        const cap=h*.66;
-        m.profile(xx,zz,[[.024,.059,.054],[h*.8,.043,.047],[h,.058,.053]],5,0xf0ccae,a);
+        const cap=h*(reagent==="moonspore"?.49:.66);
+        m.profile(xx,zz,[[.024,.059,.054],[h*.8,.043,.047],[h,.058,.053]],5,reagent==="moonspore"?0x937eb3:0xf0ccae,a);
         m.profile(xx,zz,[[h-.03,cap*.76,cap*.73],[h+.009,cap,cap*.93],[h+cap*.35,cap*.81,cap*.79],[h+cap*.56,cap*.49,cap*.49]],8,c,a);
         for(let j=0;j<5;j++) {
           const aa=a+j*2.399;
@@ -1731,6 +1820,14 @@ function dynamicMesh(t) {
     cropMesh(m,t);
     if(closeToPlayers(shop.x,shop.z,40)) merchant(m,t);
     if(closeToPlayers(kitchen.x,kitchen.z,31)) flame(m,kitchen.x,kitchen.z,t);
+    const batch=state.drying;
+    if(batch&&closeToPlayers(batch.x,batch.z,32)) {
+      for(let i=0;i<Math.min(4,batch.amount);i++) {
+        const x=batch.x+.77+i*.145, z=batch.z+.42;
+        m.box(x,.81,z,.021,.12,.024,0xb4a07a);
+        m.profile(x,z,[[.59,.044,.04],[.70,.063,.06],[.81,.024,.025]],5,0x708442,i*.5);
+      }
+    }
     for(const region of regions) {
       if(!closeToPlayers(region.x,region.z,34)) continue;
       flame(m,region.x+3.3,region.z+1.4,t);
@@ -1790,6 +1887,18 @@ function dynamicMesh(t) {
   for(const s of projectiles) {
     m.box(s.x,s.y-.10,s.z,.21,.21,.21,0xdcc5ff,t*8);
     for(let i=1;i<=4;i++) m.box(s.x-s.vx*i*.009,s.y-.075,s.z-s.vz*i*.009,.17-i*.022,.14-i*.017,.17-i*.022,i%2?0x916bd6:0xeab3de,t*6+i);
+  }
+  for(const p of (coop?players:[player])) {
+    if(p.brew!=="joint") continue;
+    const age=brews.joint.duration-p.brewTime;
+    for(let i=0;i<6;i++) {
+      const rise=age*1.1-i*.15;
+      if(rise<0||rise>1.1) continue;
+      const x=p.x+Math.sin(p.yaw)*.24+Math.sin(i*2.4+rise*3)*rise*.22;
+      const z=p.z-Math.cos(p.yaw)*.24+Math.cos(i*2.4)*rise*.19;
+      const size=.034+rise*.065;
+      m.box(x,1.38+rise*.87,z,size,size*.72,size,i%2?0xb7bcac:0xd4d8bd,i+t*.46);
+    }
   }
   for(const p of particles) {
     const s=.035+p.life/p.max*.075;
@@ -1978,6 +2087,12 @@ function renderRaster(view,left,top,w,h,world,dynamic,t,vision,strength) {
         r=mix(r,r*.82+7,strength);g=mix(g,g*1.12+21,strength);b=mix(b,b*1.40+33,strength);
       } else if(vision===3) {
         r=mix(r,r*1.23+20,strength);g=mix(g,g+4,strength);b=mix(b,b*.77,strength);
+      } else if(vision===4) {
+        r=mix(r,r*.92+11,strength);g=mix(g,g*1.08+17,strength);b=mix(b,b*.78+14,strength);
+      } else if(vision===5) {
+        r=mix(r,r*.88+2,strength);g=mix(g,g*1.09+12,strength);b=mix(b,b*1.18+21,strength);
+      } else if(vision===6) {
+        r=mix(r,r*.96+26,strength);g=mix(g,g*.79+6,strength);b=mix(b,b*1.19+23,strength);
       }
       if(state.dither) {
         const noise=f.depth[i]>0?((Math.imul(x,1597334677)^Math.imul(y,3812015801))>>>29)-3:0;
@@ -2176,12 +2291,22 @@ function eat(id,p) {
   updateBag();
   syncHud();
 }
+function showHarvest(id,p) {
+  const item=reagents[id], brew=brews[id];
+  freshHarvest={id,p};
+  $("harvestName").textContent=item.name;
+  $("harvestEffect").textContent=brew.effect+" · "+brew.duration+" seconds";
+  $("eatHarvest").textContent=brew.verb+" now";
+  openPanel("harvest");
+  $("eatHarvest").focus({preventScroll:true});
+}
 function takeBrew(id,p) {
-  const brew=brews[id], stock=id==="dreamcap"?state.reagentStock:state.brewStock;
+  const brew=brews[id], stock=brew.raw?state.reagentStock:state.brewStock;
   if(!count(stock,id)) return;
   give(stock,id,-1);
   p.brew=id;
   p.brewTime=brew.duration;
+  if(brew.heal) p.hp=Math.min(5,p.hp+brew.heal);
   save();
   openPanel(null);
   sound("restore");
@@ -2189,7 +2314,31 @@ function takeBrew(id,p) {
   syncHud();
 }
 function updateBag() {
-  const list=$("bagList"), contents=[row(state.gold+" coins · "+state.shards+" ember shards"),heading("Planting seeds")];
+  const list=$("bagList"), contents=[row(state.gold+" coins · "+state.shards+" ember shards")];
+  const carriedHerbs=Object.entries(reagents).filter(([id])=>count(state.reagentStock,id));
+  const carriedBrews=Object.entries(brews).filter(([id])=>count(state.brewStock,id));
+  if(carriedHerbs.length||carriedBrews.length||state.dryCannabis||state.drying) {
+    contents.push(heading("Foraging & brews"));
+    const useButtons=(id)=>{
+      const {verb}=brews[id];
+      const buttons=[control(coop?verb+" P1":verb,()=>takeBrew(id,player))];
+      if(coop) buttons.push(control(verb+" P2",()=>takeBrew(id,partner)));
+      return buttons;
+    };
+    for(const [id,item] of carriedHerbs) {
+      const brew=brews[id];
+      const detail=brew?.raw?" · "+brew.effect:id==="cannabis"?" · Dry at a cookfire":"";
+      contents.push(row(item.name+" ×"+count(state.reagentStock,id)+detail,brew?.raw?useButtons(id):[]));
+    }
+    if(state.drying) {
+      contents.push(row("Cannabis on the rack ×"+state.drying.amount+" · "+drySeconds()+"s left"));
+    }
+    if(state.dryCannabis) contents.push(row("Dried cannabis ×"+state.dryCannabis+" · Roll at a cookfire"));
+    for(const [id,brew] of carriedBrews) {
+      contents.push(row(brew.name+" ×"+count(state.brewStock,id)+" · "+brew.effect,useButtons(id)));
+    }
+  }
+  contents.push(heading("Planting seeds"));
   for(const [id,c] of Object.entries(crops)) {
     const selected=state.selected===id;
     contents.push(row(c.name+" ×"+count(state.seedStock,id),[control(selected?"Selected":"Select",()=>{
@@ -2203,22 +2352,6 @@ function updateBag() {
     const buttons=[control(coop?"Eat P1":"Eat",()=>eat(id,player),player.hp>=5)];
     if(coop) buttons.push(control("Eat P2",()=>eat(id,partner),partner.hp>=5));
     contents.push(row(f.name+" ×"+count(state.foodStock,id)+" · +"+f.heal+" HP",buttons));
-  }
-  contents.push(heading("Foraging & brews"));
-  for(const [id,item] of Object.entries(reagents)) {
-    const stock=count(state.reagentStock,id), buttons=[];
-    if(id==="dreamcap"&&stock) {
-      buttons.push(control(coop?"Eat P1":"Eat raw",()=>takeBrew(id,player)));
-      if(coop) buttons.push(control("Eat P2",()=>takeBrew(id,partner)));
-    }
-    contents.push(row(item.name+" ×"+stock+(stock?"":" · "+item.where),buttons));
-  }
-  for(const [id,brew] of Object.entries(brews)) {
-    const stock=count(state.brewStock,id);
-    if(!stock) continue;
-    const buttons=[control(coop?"Drink P1":brew.verb,()=>takeBrew(id,player))];
-    if(coop) buttons.push(control("Drink P2",()=>takeBrew(id,partner)));
-    contents.push(row(brew.name+" ×"+stock+" · "+brew.effect,buttons));
   }
   list.replaceChildren(...contents);
 }
@@ -2270,8 +2403,39 @@ function brewRecipe(id) {
   sound("harvest");
   updateCooking();
 }
+function drySeconds() {
+  return Math.max(0,Math.ceil(state.drying.readyAt-state.worldAge));
+}
+function startDrying() {
+  const amount=count(state.reagentStock,"cannabis");
+  if(!cookingCamp||state.drying||!amount) return;
+  state.drying={...cookingCamp,amount,readyAt:state.worldAge+cannabisDryTime};
+  give(state.reagentStock,"cannabis",-amount);
+  save();
+  openPanel(null);
+  sound("harvest");
+  notify("Cannabis hung to dry · "+cannabisDryTime+"s of play");
+  syncHud();
+}
+function rollJoint() {
+  if(!cookingCamp||!state.dryCannabis) return;
+  state.dryCannabis--;
+  give(state.brewStock,"joint");
+  save();
+  sound("harvest");
+  updateCooking();
+}
 function updateCooking() {
-  const contents=[heading("Brewing")];
+  const fresh=count(state.reagentStock,"cannabis"), batch=state.drying;
+  const dryLabel=batch?"On the rack ×"+batch.amount+" · "+drySeconds()+"s left while exploring":
+    "Fresh cannabis ×"+fresh+" · Dries in "+cannabisDryTime+"s of play";
+  const contents=[
+    heading("Drying rack"),
+    row(dryLabel,[control("Hang to dry",startDrying,!!batch||!fresh)]),
+    row("Dried cannabis ×"+state.dryCannabis+" · Joints in bag ×"+count(state.brewStock,"joint"),
+      [control("Roll joint",rollJoint,!state.dryCannabis)]),
+    heading("Brewing")
+  ];
   for(const [id,brew] of Object.entries(brews)) {
     if(!brew.ingredients) continue;
     const parts=Object.entries(brew.ingredients), stock=state.reagentStock;
@@ -2464,6 +2628,10 @@ $("dither").addEventListener("click",()=>{
   save();
   showPause();
 });
+$("eatHarvest").addEventListener("click",()=>{
+  if(freshHarvest) takeBrew(freshHarvest.id,freshHarvest.p);
+});
+$("keepHarvest").addEventListener("click",()=>openPanel(null));
 for(const id of ["closeBag","closeAtlas","closeMarket","closeCook"]) $(id).addEventListener("click",()=>openPanel(null));
 $("continue").addEventListener("click",()=>{openPanel(null);notify("The sky clears");});
 $("quit").addEventListener("click",()=>{save();openPanel("title");});
@@ -2480,7 +2648,7 @@ function movePlayer(p,dt) {
   p.yaw+=turn*1.85*dt;
   p.brewTime=Math.max(0,p.brewTime-dt);
   if(!p.brewTime) p.brew=null;
-  const boost=p.brew==="prism"?1.24:p.brew==="dreamcap"?1.12:1;
+  const boost=brews[p.brew]?.speed??1;
   const magnitude=Math.hypot(x,z), stride=(area==="farm"?6.4:4.65)*boost*dt/Math.max(1,magnitude);
   const sn=Math.sin(p.yaw), cs=Math.cos(p.yaw);
   walk(p,(x*cs+z*sn)*stride,(x*sn-z*cs)*stride);
@@ -2497,6 +2665,12 @@ function update(dt) {
   if(coop) discover(partner);
   updateCombat(dt);
   state.worldAge+=dt;
+  if(state.drying&&state.worldAge>=state.drying.readyAt) {
+    state.dryCannabis+=state.drying.amount;
+    state.drying=null;
+    save();
+    notify("Cannabis is dry · roll it at a cookfire");
+  }
   for(const c of state.crops) if(c.kind!=="empty") c.age=Math.min(crops[c.plant].time,c.age+dt);
   for(let i=particles.length-1;i>=0;i--) {
     const p=particles[i];
