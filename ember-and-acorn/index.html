@@ -43,7 +43,6 @@ button:active{transform:translateY(2px)}
 #actions{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(24px,calc(env(safe-area-inset-bottom) + 13px));display:flex;gap:9px;align-items:flex-end}
 #actions button{width:57px;height:57px;border-radius:50%;font-size:11px;font-weight:bold}
 #actions #cast{width:68px;height:68px;background:#34265a;border-color:#a78ade}
-#actions #trip{background:#543965;border-color:#ba90d4}
 #actions #use{background:#713941;border-color:#e3a56b}
 #marker{position:absolute;transform:translate(-50%,-50%);font-size:11px;white-space:nowrap;padding:5px 8px;color:#ffe5a9;background:#271a2bbf;border:1px solid #9a7552;text-shadow:1px 1px #211323}
 #aim{position:absolute;top:50%;left:50%;width:12px;height:12px;transform:translate(-50%,-50%);opacity:.8;filter:drop-shadow(1px 1px #281829)}
@@ -91,15 +90,14 @@ button:disabled{cursor:default;opacity:.48}
   <div id="tools"><button id="view">View</button><button id="bag">Bag</button><button id="gear">Gear</button><button id="map">Map</button><button id="menu" aria-label="Pause">☰</button></div>
   <div id="quest"></div><div id="enemy" hidden><span id="enemyName"></span><meter id="enemyHp" min="0" aria-label="Monster health"></meter></div>
   <div id="marker" hidden></div><div id="toast" role="status" hidden></div><div id="prompt" hidden></div><div id="aim" hidden></div>
-  <div id="hints">WASD Move · Drag Look · E Use · Space Cast · T Trip · G Gear · M Map · V View</div>
-  <div id="touch"><div id="stick" aria-label="Move"><div id="nub"></div></div><div id="actions"><button id="trip">TRIP</button><button id="use">USE</button><button id="cast">CAST</button></div></div>
+  <div id="hints">WASD Move · Drag Look · E Use · Space Cast · B Bag · G Gear · M Map · V View</div>
+  <div id="touch"><div id="stick" aria-label="Move"><div id="nub"></div></div><div id="actions"><button id="use">USE</button><button id="cast">CAST</button></div></div>
 </div>
 <div id="overlay">
   <section class="panel" id="title"><div class="crest" aria-hidden="true">✦</div><h1>Ember &amp; Acorn</h1><p>There are things in the valley you can only see while tripping. Eat a Dreamcap, hunt what appears, and use its essence to upgrade your gear for deeper trips.</p><button class="primary" id="start">Enter the hamlet</button><small id="titleControls"></small></section>
   <section class="panel" id="pause" hidden><h2>Paused</h2><button class="primary" id="resume">Resume</button><button id="sound">Sound on</button><button id="dither">Dither on</button><button id="quit">Title screen</button></section>
   <section class="panel sheet" id="inventory" hidden><h2>Satchel</h2><div class="rows" id="bagList"></div><button class="primary" id="closeBag">Back</button></section>
   <section class="panel sheet" id="gearPanel" hidden><h2>Spirit gear</h2><div class="rows" id="gearList"></div><button class="primary" id="closeGear">Back</button></section>
-  <section class="panel sheet" id="tripPanel" hidden><h2>Take a trip</h2><div class="rows" id="tripList"></div><button class="primary" id="closeTrip">Back</button></section>
   <section class="panel" id="harvest" hidden><h2 id="harvestName"></h2><p id="harvestEffect"></p><button class="primary" id="eatHarvest"></button><button id="keepHarvest">Keep in bag</button></section>
   <section class="panel sheet" id="atlas" hidden><h2>Valley Map</h2><canvas id="atlasCanvas" width="224" height="170" aria-label="Map of the valley"></canvas><div class="rows" id="atlasList"></div><button class="primary" id="closeAtlas">Back</button></section>
   <section class="panel sheet" id="market" hidden><h2>Hamlet Market</h2><div class="rows" id="marketList"></div><button class="primary" id="closeMarket">Back</button></section>
@@ -2562,7 +2560,7 @@ function huntObjective() {
     (player.depth<depth?"Reach trip depth 4 to reveal the Hollow Seraph.":"Banish the Hollow Seraph."):"Travel to Hollowbell Abbey with enough doses for trip depth 4."];
   const {hunts}=ranks[depth], won=count(state.hunts,"depth"+depth);
   if(won>=hunts) return ["Upgrade your gear","Use Gear to raise all four pieces to rank "+["","I","II","III"][depth]+"."];
-  if(depth===1&&!player.depth) return ["I · "+name,count(state.reagentStock,"dreamcap")?"Eat a Dreamcap from Trip or Bag.":"Gather and eat a pink Dreamcap by the hamlet path."];
+  if(depth===1&&!player.depth) return ["I · "+name,count(state.reagentStock,"dreamcap")?"Eat a Dreamcap from your Bag.":"Gather and eat a pink Dreamcap by the hamlet path."];
   const places=hauntGroups[depth-1].places.map(p=>p.name);
   return [["","I","II","III"][depth]+" · "+name,
     "Banish spirits in "+places.join(" / ")+" ("+won+"/"+hunts+")."+(player.depth<depth?" Reach trip depth "+depth+".":"")];
@@ -2647,14 +2645,11 @@ function showHarvest(id,p) {
 function brewDetail(brew) {
   return "+"+brew.depth+" trip depth · "+secondsFor(brew)+"s · "+brew.effect;
 }
-function brewStock(id) {
-  return brews[id].raw?state.reagentStock:state.brewStock;
-}
 function refreshDepth(p) {
   p.depth=Math.min(unlockedDepth(),activeDepth(p.tripDoses));
 }
 function takeBrew(id,p) {
-  const brew=brews[id], stock=brewStock(id);
+  const brew=brews[id], stock=brew.raw?state.reagentStock:state.brewStock;
   if(!count(stock,id)) return;
   give(stock,id,-1);
   const duration=secondsFor(brew), before=p.depth;
@@ -2675,16 +2670,6 @@ function doseControls(id) {
   const buttons=[control(coop?verb+" P1":verb,()=>takeBrew(id,player))];
   if(coop) buttons.push(control(verb+" P2",()=>takeBrew(id,partner)));
   return buttons;
-}
-function showTrip() {
-  const contents=[row("Your gear supports trip depth "+unlockedDepth()+". Doses stack while active.")];
-  for(const [id,brew] of Object.entries(brews)) {
-    const stock=count(brewStock(id),id);
-    if(stock) contents.push(row(brew.name+" ×"+stock+" · "+brewDetail(brew),doseControls(id)));
-  }
-  if(contents.length===1) contents.push(row("Gather a pink Dreamcap near the hamlet path or a valley camp."));
-  $("tripList").replaceChildren(...contents);
-  openPanel("tripPanel");
 }
 function updateGear() {
   const roman=["","I","II","III"];
@@ -2909,7 +2894,7 @@ function start(withPartner) {
   }
   coop=withPartner;
   active=true;
-  $("hints").textContent=coop?"P1 · WASD / Q,R / E / Space    P2 · Arrows / J,L / Enter / Right Shift":"WASD Move · Drag Look · E Use · Space Cast · T Trip · G Gear · M Map · V View";
+  $("hints").textContent=coop?"P1 · WASD / Q,R / E / Space    P2 · Arrows / J,L / Enter / Right Shift":"WASD Move · Drag Look · E Use · Space Cast · B Bag · G Gear · M Map · V View";
   $("start").textContent="Continue solo";
   openPanel(null);
   syncHud();
@@ -2927,13 +2912,12 @@ window.addEventListener("keydown",event=>{
     return;
   }
   if(!active||currentPanel) return;
-  if(motionKeys.has(code)||["Space","KeyE","KeyB","KeyM","KeyV","KeyN","KeyT","KeyG","Enter","ShiftRight"].includes(code)) event.preventDefault();
+  if(motionKeys.has(code)||["Space","KeyE","KeyB","KeyM","KeyV","KeyN","KeyG","Enter","ShiftRight"].includes(code)) event.preventDefault();
   keys.add(code);
   if(event.repeat) return;
   if(code==="KeyE") use(player);
   if(code==="KeyV") setView(player);
   if(code==="KeyB") showBag();
-  if(code==="KeyT") showTrip();
   if(code==="KeyG") showGear();
   if(code==="KeyM") showAtlas();
   if(coop&&code==="Enter") use(partner);
@@ -3010,7 +2994,6 @@ $("use").addEventListener("pointerdown",e=>{
 $("use").addEventListener("click",e=>{if(!e.detail) use(player);});
 $("view").addEventListener("click",()=>setView(player));
 $("bag").addEventListener("click",showBag);
-$("trip").addEventListener("click",showTrip);
 $("gear").addEventListener("click",showGear);
 $("map").addEventListener("click",showAtlas);
 $("menu").addEventListener("click",showPause);
@@ -3034,7 +3017,7 @@ $("eatHarvest").addEventListener("click",()=>{
   if(freshHarvest) takeBrew(freshHarvest.id,freshHarvest.p);
 });
 $("keepHarvest").addEventListener("click",()=>openPanel(null));
-for(const id of ["closeBag","closeAtlas","closeMarket","closeCook","closeGear","closeTrip"]) $(id).addEventListener("click",()=>openPanel(null));
+for(const id of ["closeBag","closeAtlas","closeMarket","closeCook","closeGear"]) $(id).addEventListener("click",()=>openPanel(null));
 $("continue").addEventListener("click",()=>{openPanel(null);notify("The sky clears");});
 $("quit").addEventListener("click",()=>{save();openPanel("title");});
 
