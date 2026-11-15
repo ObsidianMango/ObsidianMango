@@ -1,11 +1,57 @@
 import * as T from '../vendor/three.module.js';
-import {box} from './render.js?v=sibling-walk-7';
+import {box} from './render.js?v=aim-guide-1';
 import {createSiegeModel,createProjectileModel,animateSiegeModel,slingAngle,RELEASE_TIME,SHOT_CYCLE} from './weapon-models.js?v=sibling-walk-7';
 import R from '../vendor/rapier.mjs';
+import {projectileShape} from './physics.js?v=aim-guide-1';
 import {WEAPONS} from './data.js?v=sibling-walk-7';
 export const ORIGIN=new T.Vector3(0,2.1,24);
 export function velocity(weapon,yaw,elevation,power,scale=1){const angle=(weapon.type==='ram'||weapon.type==='tower'?2:elevation)*Math.PI/180,a=yaw*Math.PI/180,s=weapon.speed*(.55+power*.008)*scale;return new T.Vector3(Math.sin(a)*Math.cos(angle)*s,Math.sin(angle)*s,-Math.cos(a)*Math.cos(angle)*s)}
-export function trajectory(weapon,yaw,elevation,power,gravity=1,scale=1,releaseOrigin=null){const v=velocity(weapon,yaw,elevation,power,scale),origin=releaseOrigin?.clone()||ORIGIN.clone();if(!releaseOrigin&&(weapon.type==='ram'||weapon.type==='tower'))origin.y=weapon.type==='ram'?.8:2.5;const points=[];let target=new T.Vector3();for(let i=0;i<100;i++){const t=i*.05;const p=origin.clone().addScaledVector(v,t);p.y-=.5*9.81*gravity*t*t;if(p.y<.1){target.copy(p);target.y=.1;break}points.push(p);target.copy(p)}return{points,target}}
+export function trajectory(weapon,yaw,elevation,power,gravity=1,scale=1,releaseOrigin=null,sim=null){
+ const rolling=weapon.type==='ram'||weapon.type==='tower';
+ const v=velocity(weapon,yaw,elevation,power,scale);
+ const origin=releaseOrigin?.clone()||ORIGIN.clone();
+ if(!releaseOrigin&&rolling)origin.y=weapon.type==='ram'?.8:2.5;
+
+ const world=sim?.world,shape=projectileShape(weapon);
+ const rotation=new T.Quaternion(),travel=new T.Vector3();
+ const points=[origin];
+ const terrainOnly=collider=>!sim.colliders.has(collider.handle);
+ const obstacle=collider=>{
+  const entity=sim.colliders.get(collider.handle);
+  return !entity?.projectile&&(!rolling||!!entity);
+ };
+ const terrainRay=rolling&&world?new R.Ray({x:0,y:150,z:0},{x:0,y:-1,z:0}):null;
+ const steps=weapon.type==='cluster'?20:100;
+ for(let i=1;i<=steps;i++){
+  const t=i*.05;
+  const dampedTime=-Math.expm1(-.01*t)/.01; // Match the projectile's light linear damping.
+  const next=origin.clone().addScaledVector(v,rolling?t:dampedTime);
+  next.y=origin.y+v.y*dampedTime-9.81*gravity*(t-dampedTime)/.01;
+  if(terrainRay){
+   terrainRay.origin.x=next.x;
+   terrainRay.origin.z=next.z;
+   const floor=world.castRay(terrainRay,200,true,undefined,undefined,undefined,undefined,terrainOnly);
+   if(floor)next.y=Math.max(next.y,150-floor.timeOfImpact+shape.halfExtents.y);
+  }
+  const previous=points.at(-1);
+  travel.subVectors(next,previous);
+  const hit=world?.castShape(previous,rotation,travel,shape,0,1,true,undefined,undefined,undefined,undefined,obstacle);
+  if(hit){
+   const entity=sim.colliders.get(hit.collider.handle);
+   const building=entity?.b&&!entity.dead&&entity.mat!=='barrel'&&entity.mat!=='treasure'
+    &&entity.b.tag!=='cart'&&entity.b.tag!=='statue';
+   points.push(previous.clone().addScaledVector(travel,hit.time_of_impact));
+   return{points,target:new T.Vector3().copy(hit.witness1),impact:!!building,ground:!entity,
+    contactTime:(i-1+hit.time_of_impact)*.05};
+  }
+  if(next.y<(world?-7:.1)){
+   if(!world){next.y=.1;points.push(next);return{points,target:next,impact:false,ground:true};}
+   break;
+  }
+  points.push(next);
+ }
+ return{points,target:points.at(-1),impact:false,ground:false};
+}
 export const projectileVisual=createProjectileModel;
 export class Arsenal{
  constructor(view,sim){this.view=view;this.sim=sim;this.index=0;this.animation=0;this.model=null;this.platformPosition=new T.Vector3(0,0,24);this.launch=null;this.shotStart=-Infinity;this.build();sim.beforeStep=()=>this.updateLaunch();sim.onReset=()=>{this.launch=null;this.shotStart=-Infinity;};sim.onCluster=p=>{const pos=new T.Vector3().copy(p.body.translation()),v=p.body.linvel();for(let i=0;i<6;i++){const w={...WEAPONS[7],radius:.35,mass:4,blast:2.5,damage:130};this.sim.projectile(w,pos.clone().add(new T.Vector3((i%3-1)*.7,Math.floor(i/3)*.6,0)),{x:v.x+(i%3-1)*6,y:v.y+3+Math.floor(i/3)*4,z:v.z-3},projectileVisual(w))}}}
@@ -16,7 +62,23 @@ export class Arsenal{
  spawnPosition(w){return this.platformPosition.clone().add(new T.Vector3(0,w.type==='ram'?.8:w.type==='tower'?2.5:2.1,0));}
  get throwing(){return ['catapult','triple','trebuchet'].includes(this.model.userData.kind)}
  scoopPosition(slot,yaw,elevation,elapsed=RELEASE_TIME){const s=this.model.userData,a=s.loaded[slot]||s.loaded[0];return a.position.clone().applyAxisAngle(new T.Vector3(1,0,0),slingAngle(elapsed,elevation,a.position)).add(s.pivot.position).applyAxisAngle(new T.Vector3(0,1,0),-yaw*Math.PI/180).add(this.view.weapon.position);}
- guide(yaw,elevation,power,gravity=1,scale=1){return trajectory(WEAPONS[this.index],yaw,elevation,power,gravity,scale,this.throwing?this.scoopPosition(this.model.userData.loaded.length===3?1:0,yaw,elevation):this.spawnPosition(WEAPONS[this.index]))}
+ guide(yaw,elevation,power,gravity=1,scale=1){
+  const weapon=WEAPONS[this.index],sim=this.sim.clock>0?this.sim:null;
+  const spawn=this.spawnPosition(weapon);
+  const path=(bearing,origin)=>trajectory(weapon,bearing,elevation,power,gravity,scale,origin,sim);
+  if(sim&&weapon.type==='chain'){
+   const left=path(yaw,spawn.clone().add(new T.Vector3(-.75,0,0)));
+   const right=path(yaw,spawn.clone().add(new T.Vector3(.75,0,0)));
+   if(right.impact&&(!left.impact||right.contactTime<left.contactTime))return right;
+   return left;
+  }
+  const center=path(yaw,this.throwing?this.scoopPosition(weapon.type==='triple'?1:0,yaw,elevation):spawn);
+  if(!sim||weapon.type!=='triple'||center.impact)return center;
+  const left=path(yaw-5,this.scoopPosition(0,yaw,elevation));
+  const right=path(yaw+5,this.scoopPosition(2,yaw,elevation));
+  if(right.impact&&(!left.impact||right.contactTime<left.contactTime))return right;
+  return left.impact?left:center;
+ }
  fire(yaw,elevation,power,scale=1){
   const w=WEAPONS[this.index],results=[],count=w.type==='triple'?3:w.type==='chain'?2:1;
   this.shotStart=this.sim.clock;this.shotAim={yaw,elevation};

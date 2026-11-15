@@ -1,6 +1,6 @@
 import * as T from '../vendor/three.module.js';
 import {BUILD_PARTS,MATERIALS,clamp} from './data.js?v=sibling-walk-7';
-import {box} from './render.js?v=sibling-walk-7';
+import {box} from './render.js?v=aim-guide-1';
 import {partBlocks,starterCastle,BUILD_LIMIT,BLOCK_LIMIT,sanitizeBlueprint,dimensions} from './blueprints.js?v=sibling-walk-7';
 export class Builder{
  constructor(view,save,notify){

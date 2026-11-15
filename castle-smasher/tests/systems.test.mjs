@@ -30,3 +30,48 @@ test('all throwing machines release from their own scoop and reset cancels a pen
 test('launcher height and position apply to direct-fire weapons and the guide',()=>{const{sim,view}=scene(0),arsenal=new Arsenal(view,sim);for(const index of[2,3,4,5,9,11,12]){arsenal.select(index);arsenal.setPosition(28,40,-30);const expected=arsenal.spawnPosition(WEAPONS[index]),guide=arsenal.guide(-140,-45,40);assert(guide.points[0].distanceTo(expected)<1e-8);const[e]=arsenal.fire(-140,-45,40);const offset=WEAPONS[index].type==='chain'?-.75:0;assert(e.mesh.position.distanceTo(expected.clone().add(new T.Vector3(offset,0,0)))<1e-8);assert(e.mesh.position.y>=40.8)}sim.world.free();sim.queue.free()});
 
 test('360-degree attack positions launch inward and damage the castle from every side',async()=>{const{attackPosition,castleBearing}=await import('../src/attack-position.js');for(const angle of[0,90,180,270]){const{sim,view,events}=scene(0),arsenal=new Arsenal(view,sim),p=attackPosition(angle,28);arsenal.select(3);arsenal.setPosition(p.x,p.y,p.z);assert.equal(view.weapon.children.length,1,'only the weapon is rendered');const bearing=castleBearing(p),[shot]=arsenal.fire(bearing,5,35),v=shot.body.linvel();assert(p.x*v.x+p.z*v.z<0,'heading points inward');for(let i=0;i<120;i++)sim.step(1/60);assert(events.some(e=>e.type==='impact'),`castle collision from ${angle} degrees`);assert(sim.destroyed>0,`castle damage from ${angle} degrees`);sim.world.free();sim.queue.free()}const a=attackPosition(0,35,12),b=attackPosition(360,35,12);assert.deepEqual(a,b,'full circle returns to the same attack position')});
+
+test('aim guide marks the first castle surface touched by the projectile and distinguishes ground hits',()=>{
+ const view=fakeView(),events=[];
+ const sim=new Simulation(view,e=>events.push(e),{gravity:1});
+ const wall={x:0,y:1.5,z:16,w:.8,h:3,d:1,mat:'stone',tag:'wall',structure:1};
+ sim.build([wall,{...wall,z:10,structure:2}]);
+ const arsenal=new Arsenal(view,sim);
+ arsenal.select(3);
+ arsenal.setPosition(.7,0,24);
+ sim.step(1/60);
+
+ const hit=arsenal.guide(0,0,40);
+ assert(hit.impact,'the cannonball can clip the wall even when its center would miss');
+ assert.equal(hit.ground,false);
+ assert(Math.abs(hit.target.z-16.49)<.01,'the marker is on the near wall surface');
+ assert(hit.points.at(-1).z>hit.target.z,'the flight path stops at first contact');
+ arsenal.fire(0,0,40);
+ for(let i=0;i<18;i++)sim.step(1/60);
+ const actual=events.find(e=>e.type==='impact');
+ assert(actual&&Math.abs(actual.pos.z-hit.points.at(-1).z)<1);
+
+ sim.entities[0].body.setEnabled(false);
+ sim.step(1/60);
+ const rear=arsenal.guide(0,0,40);
+ assert(rear.impact&&Math.abs(rear.target.z-10.49)<.01,'a disabled foreground collider reveals the next wall');
+
+ const miss=arsenal.guide(0,-50,40);
+ assert.equal(miss.impact,false);
+ assert.equal(miss.ground,true);
+ assert(Math.abs(miss.target.y)<.01);
+ sim.queue.free();sim.world.free();
+});
+
+test('ground-driven siege weapons keep predicting a hit after reaching the terrain',()=>{
+ const view=fakeView(),sim=new Simulation(view,()=>{},{gravity:1});
+ sim.build([{x:0,y:1,z:3,w:1,h:2,d:1,mat:'stone',tag:'wall',structure:1}]);
+ const arsenal=new Arsenal(view,sim);
+ arsenal.select(4);
+ sim.step(1/60);
+ const path=arsenal.guide(0,0,40);
+ assert(path.impact);
+ assert(Math.abs(path.target.z-3.49)<.01);
+ assert(path.points.at(-1).y>.54);
+ sim.queue.free();sim.world.free();
+});
