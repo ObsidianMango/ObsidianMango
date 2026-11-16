@@ -1,0 +1,1900 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meadow Magic</title>
+<meta name="theme-color" content="#b4d8cd">
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+  body { background: #b7dce0; color: #fff9e6; font: 500 13px/1.4 "Inter", system-ui, sans-serif; user-select: none; }
+  #world { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  #world:active { cursor: grabbing; }
+  .title { position: fixed; top: max(24px, env(safe-area-inset-top)); left: max(28px, env(safe-area-inset-left)); pointer-events: none; }
+  h1 { margin: 0; color: #1c4131; font: 400 clamp(32px, 4vw, 56px)/1 "Instrument Serif", Georgia, serif; letter-spacing: -.055em; text-shadow: 0 1px 12px #e5f2d0aa; }
+  .controls { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: max(28px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 14px; padding: 8px 11px; border: 1px solid #f5f5da52; border-radius: 8px; background: #143427cb; box-shadow: 0 4px 22px #10312622; pointer-events: none; }
+  .control { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .control + .control { border-left: 1px solid #f8fae044; padding-left: 13px; }
+  kbd { min-width: 19px; height: 20px; padding: 1px 3px; text-align: center; border: 1px solid #f8fae044; border-radius: 3px; font: 600 11px/16px "IBM Plex Mono", monospace; }
+  .keys { display: flex; gap: 2px; }
+  .mouse { width: 12px; height: 17px; border: 1px solid currentColor; border-radius: 7px; position: relative; }
+  .mouse::before { content: ""; position: absolute; width: 1px; height: 5px; background: currentColor; top: 2px; left: 4.5px; }
+  #aim { position: fixed; top: 50%; left: 50%; width: 7px; height: 7px; border: 1px solid #fff8e5e0; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 1px #25241c70; pointer-events: none; }
+  #aim[data-state="charging"] { border-color: #ffd385; box-shadow: 0 0 9px 2px #ff7e30; }
+  #aim[data-state="miss"] { border-color: #f09774; }
+  #blast-flash { position: fixed; inset: 0; background: radial-gradient(ellipse at var(--flash-x, 50%) var(--flash-y, 50%), #fff3c5 0%, #ffd29a 24%, #f6a66960 70%, transparent 100%); opacity: 0; pointer-events: none; }
+  #status { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: max-content; max-width: 85vw; color: #1c4131; background: #f7f7e7; border-radius: 7px; padding: 12px 18px; }
+  .touch { display: none; }
+  #stick { position: fixed; z-index: 2; left: max(22px, env(safe-area-inset-left)); bottom: max(24px, env(safe-area-inset-bottom)); width: 93px; height: 93px; border-radius: 50%; border: 1px solid #fff9e78c; background: #183b2e63; touch-action: none; }
+  #stick span { position: absolute; inset: 27px; border-radius: 50%; background: #fff9e7b8; box-shadow: 0 2px 8px #14342777; pointer-events: none; }
+  @media (pointer: coarse) {
+    .touch { display: block; }
+    .desktop { display: none; }
+    .controls { left: auto; right: max(15px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom)); }
+    .title { left: max(17px, env(safe-area-inset-left)); }
+  }
+</style>
+</head>
+<body>
+<canvas id="world" aria-label="Meadow Magic first-person meadow"></canvas>
+<div id="blast-flash" aria-hidden="true"></div>
+<div id="aim" aria-hidden="true" hidden></div>
+<header class="title"><h1>Meadow Magic</h1></header>
+<div class="controls desktop" aria-label="W A S D to walk. Drag to look. Click to cast fire at the crosshair.">
+  <span class="control"><span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> Walk</span>
+  <span class="control"><span class="mouse" aria-hidden="true"></span> Drag to look</span>
+  <span class="control">Click to cast fire</span>
+</div>
+<div id="stick" class="touch" role="group" aria-label="Drag to walk"><span></span></div>
+<div class="controls touch">Drag to look · Tap to cast</div>
+<div id="status" role="status">Opening the meadow…</div>
+<script type="module">
+const status = document.querySelector('#status');
+try {
+  const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js');
+  start(THREE);
+  status.hidden = true;
+} catch (error) {
+  status.textContent = 'Could not open the meadow. Check your connection and use a browser with WebGL 2.';
+  console.error(error);
+}
+
+function start(T) {
+  const canvas = document.querySelector('#world');
+  const renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  const compact = matchMedia('(pointer: coarse)').matches;
+  const pixelRatio = Math.min(devicePixelRatio, compact ? 1.45 : 1.75);
+  renderer.setPixelRatio(pixelRatio);
+  renderer.setClearColor(0xc6e3e5);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFShadowMap;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
+  renderer.toneMapping = T.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.16;
+  renderer.autoClear = false;
+
+  const scene = new T.Scene();
+  scene.fog = new T.FogExp2(0xdcebd6, 0.0115);
+  const camera = new T.PerspectiveCamera(57, 1, 0.045, 177);
+  camera.rotation.order = 'YXZ';
+
+  const sunDirection = new T.Vector3(-0.59, 0.42, -0.67).normalize();
+  const sun = new T.DirectionalLight(0xffedca, 2.55);
+  sun.position.copy(sunDirection).multiplyScalar(70).add(new T.Vector3(0, 0, -11));
+  sun.target.position.set(0, 0, -11);
+  sun.castShadow = true;
+  sun.shadow.mapSize.setScalar(compact ? 1536 : 2048);
+  Object.assign(sun.shadow.camera, { left: -38, right: 38, top: 34, bottom: -34, near: 8, far: 147 });
+  sun.shadow.camera.updateProjectionMatrix();
+  sun.shadow.bias = -0.00022;
+  sun.shadow.normalBias = 0.09;
+  sun.shadow.radius = 3;
+  scene.add(sun, sun.target, new T.HemisphereLight(0xfff6e2, 0x86a96b, 1.85));
+  const fill = new T.DirectionalLight(0xd9efff, 0.42);
+  fill.position.set(16, 14, 23);
+  scene.add(fill);
+
+  // A shader dome supplies the daylight gradient, haze, and drifting clouds.
+  const windTime = { value: 0 };
+  const sky = new T.Mesh(new T.SphereGeometry(151, 32, 18), new T.ShaderMaterial({
+    side: T.BackSide,
+    depthWrite: false,
+    uniforms: {
+      clock: windTime,
+      sunDir: { value: sunDirection },
+      zenith: { value: new T.Color(0x63b5df) },
+      horizon: { value: new T.Color(0xe6f0dc) },
+      middle: { value: new T.Color(0xa5d4e6) }
+    },
+    vertexShader: `
+      varying vec3 direction;
+      void main() {
+        direction = position;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float clock;
+      uniform vec3 sunDir, zenith, horizon, middle;
+      varying vec3 direction;
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+      }
+      float noise(vec2 p) {
+        vec2 f = fract(p), i = floor(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x),
+          mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+      }
+      void main() {
+        vec3 ray = normalize(direction);
+        float y = max(0.0, ray.y);
+        vec3 color = mix(horizon, middle, smoothstep(0.0, 0.34, y));
+        color = mix(color, zenith, smoothstep(0.22, 0.9, y));
+        float towardSun = max(0.0, dot(ray, sunDir));
+        color += vec3(0.32, 0.19, 0.07) * pow(towardSun, 7.0);
+        color += vec3(1.0, 0.79, 0.42) * smoothstep(0.9986, 0.99965, towardSun);
+        vec2 p = ray.xz / (0.30 + max(0.0, ray.y));
+        p = p * vec2(3.0, 6.3) + vec2(5.2 - clock * 0.014, 9.7);
+        float cloud = noise(p) * 0.60 + noise(p * 2.0) * 0.25 +
+          noise(p * 4.1) * 0.10 + noise(p * 8.0) * 0.05;
+        float veil = smoothstep(0.55, 0.69, cloud) * smoothstep(0.035, 0.25, y) * 0.88;
+        color = mix(color, vec3(0.96, 0.98, 0.92), veil);
+        gl_FragColor = vec4(color, 1.0);
+        #include <colorspace_fragment>
+      }
+    `
+  }));
+  sky.frustumCulled = false;
+  sky.renderOrder = -100;
+  scene.add(sky);
+
+  let seed = 675204;
+  function random() {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  }
+  const between = (a, b) => a + random() * (b - a);
+  const pick = (items) => items[Math.floor(random() * items.length)];
+  const clamp = T.MathUtils.clamp;
+  const V = (x, y, z) => new T.Vector3(x, y, z);
+  const TAU = 2 * Math.PI;
+  const cottageSite = { x: 8.6, z: -8.8, width: 6.2, depth: 4.6, pad: 4.8 };
+  const millSite = { x: -11.8, z: -15.7, radius: 2.45, pad: 3.9 };
+  const towerSite = { x: -1.1, z: -31, radius: 3.18, pad: 4.5 };
+  const ruinSite = { x: 15.9, z: -22.7, width: 4.6, depth: 1.5, pad: 3.2 };
+  const sites = [cottageSite, millSite, towerSite, ruinSite];
+
+  function slope(x, z) {
+    const r = Math.hypot(x * 0.84, (z + 9) * 0.95);
+    return 0.42 * Math.sin(x * 0.126 + z * 0.051) + 0.29 * Math.cos(z * 0.18) +
+      0.27 * Math.sin((x - z) * 0.15) + 0.86 * Math.exp(-((x + 14) ** 2 + (z + 16) ** 2) / 110) +
+      T.MathUtils.smoothstep(r, 37, 110) * (8 + 3 * Math.sin(x * 0.09 + z * 0.047) +
+      4 * Math.cos(z * 0.08 - x * 0.06));
+  }
+
+  function elevation(x, z) {
+    let y = slope(x, z);
+    for (const site of sites) {
+      const blend = 1 - T.MathUtils.smoothstep(Math.hypot(x - site.x, z - site.z), site.pad, site.pad + 2.3);
+      if (blend > 0) y += (slope(site.x, site.z) - y) * blend;
+    }
+    return y;
+  }
+
+  function segmentDistance(x, z, ax, az, bx, bz) {
+    const u = clamp(((x - ax) * (bx - ax) + (z - az) * (bz - az)) / ((bx - ax) ** 2 + (bz - az) ** 2), 0, 1);
+    return Math.hypot(x - ax - u * (bx - ax), z - az - u * (bz - az));
+  }
+
+  function roadX(z) {
+    return 0.35 + 1.75 * Math.sin((z - 5) * 0.107) + 0.5 * Math.sin(z * 0.23);
+  }
+
+  function verge(x, z) {
+    const main = z > -29 && z < 27 ? Math.abs(x - roadX(z)) - 0.83 + 0.13 * Math.sin(z * 2) : 99;
+    const cottage = segmentDistance(x, z, roadX(0), 0, 4.8, -3.2) - 0.61;
+    const doorstep = segmentDistance(x, z, 4.8, -3.2, 8.55, -6.4) - 0.61;
+    const mill = segmentDistance(x, z, roadX(-10), -10, -8.2, -13.1) - 0.56;
+    const millstep = segmentDistance(x, z, -8.2, -13.1, -11.5, -13.5) - 0.52;
+    return Math.min(main, cottage, doorstep, mill, millstep);
+  }
+
+  const materials = new Map();
+  function matte(color) {
+    if (!materials.has(color)) {
+      materials.set(color, new T.MeshStandardMaterial({ color, roughness: 0.96, flatShading: true }));
+    }
+    return materials.get(color);
+  }
+  function mesh(parent, geometry, surface, x = 0, y = 0, z = 0, shadows = true) {
+    const object = new T.Mesh(geometry, surface);
+    object.position.set(x, y, z);
+    object.castShadow = shadows;
+    object.receiveShadow = shadows;
+    parent.add(object);
+    return object;
+  }
+  const boxGeometry = new T.BoxGeometry(1, 1, 1);
+  const roundGeometry = new T.IcosahedronGeometry(1, 1);
+  const detailedRock = new T.IcosahedronGeometry(1, 2);
+  function box(parent, color, x, y, z, w, h, d, rz = 0) {
+    const object = mesh(parent, boxGeometry, matte(color), x, y, z);
+    object.scale.set(w, h, d);
+    object.rotation.z = rz;
+    return object;
+  }
+  function round(parent, color, x, y, z, w, h, d, geometry = roundGeometry) {
+    const object = mesh(parent, geometry, matte(color), x, y, z);
+    object.scale.set(w, h, d);
+    object.rotation.y = between(0, TAU);
+    return object;
+  }
+  function cylinder(parent, color, x, y, z, top, base, height, sides = 12) {
+    return mesh(parent, new T.CylinderGeometry(top, base, height, sides), matte(color), x, y, z);
+  }
+  function limb(parent, color, a, b, base, tip, sides = 7) {
+    const dir = b.clone().sub(a);
+    const middle = a.clone().addScaledVector(dir, 0.5);
+    const object = cylinder(parent, color, middle.x, middle.y, middle.z, tip, base, dir.length(), sides);
+    object.quaternion.setFromUnitVectors(V(0, 1, 0), dir.normalize());
+    return object;
+  }
+  function place(site) {
+    const group = new T.Group();
+    group.position.set(site.x, elevation(site.x, site.z), site.z);
+    scene.add(group);
+    return group;
+  }
+  function instance(parent, geometry, surface, data, shadows = true) {
+    const batch = new T.InstancedMesh(geometry, surface, data.length);
+    const dummy = new T.Object3D();
+    data.forEach((item, index) => {
+      dummy.position.copy(item.position);
+      dummy.scale.copy(item.scale);
+      dummy.rotation.set(0, item.yaw || 0, item.roll || 0);
+      dummy.updateMatrix();
+      batch.setMatrixAt(index, dummy.matrix);
+      if (item.color !== undefined) batch.setColorAt(index, new T.Color(item.color));
+    });
+    batch.castShadow = shadows;
+    batch.receiveShadow = true;
+    parent.add(batch);
+    return batch;
+  }
+  const entry = (x, y, z, sx, sy, sz, color, yaw = 0, roll = 0) => ({
+    position: V(x, y, z), scale: V(sx, sy, sz), color, yaw, roll
+  });
+
+  // Ground color is painted onto a generated terrain grid.
+  const terrain = new T.PlaneGeometry(265, 265, 320, 320).rotateX(-Math.PI / 2);
+  const groundPositions = terrain.attributes.position;
+  const groundColors = [];
+  const groundGrassCover = [];
+  const grassA = new T.Color(0x80a74f);
+  const grassB = new T.Color(0xa5bc63);
+  const pathA = new T.Color(0xc5ae7e);
+  const pathB = new T.Color(0xddc18f);
+  const color = new T.Color();
+  for (let i = 0; i < groundPositions.count; i++) {
+    const x = groundPositions.getX(i), z = groundPositions.getZ(i) - 11;
+    groundPositions.setXYZ(i, x, elevation(x, z), z);
+    const mottling = clamp(0.52 + 0.17 * Math.sin(x * 0.51 + z * 0.24) +
+      0.14 * Math.sin(x * 0.13 - z * 0.52) + between(-0.15, 0.15), 0, 1);
+    const edge = T.MathUtils.smoothstep(verge(x, z), -0.25, 0.42);
+    color.copy(pathA).lerp(pathB, mottling).lerp(grassA.clone().lerp(grassB, mottling), edge);
+    groundColors.push(color.r, color.g, color.b);
+    groundGrassCover.push(edge);
+  }
+  terrain.setAttribute('color', new T.Float32BufferAttribute(groundColors, 3));
+  terrain.setAttribute('grassCover', new T.Float32BufferAttribute(groundGrassCover, 1));
+  terrain.computeVertexNormals();
+  const ground = mesh(scene, terrain, new T.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), 0, 0, 0, false);
+  ground.receiveShadow = true;
+  const scorch = makeScorch();
+  ground.material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, scorch.uniforms);
+    shader.vertexShader = 'attribute float grassCover;\nvarying float burnable;\nvarying vec2 scorchPosition;\n' + shader.vertexShader.replace(
+      '#include <begin_vertex>', '#include <begin_vertex>\nscorchPosition = position.xz;\nburnable = grassCover;'
+    );
+    shader.fragmentShader = scorch.glsl + 'varying float burnable;\nvarying vec2 scorchPosition;\n' + shader.fragmentShader.replace(
+      '#include <color_fragment>', `
+        #include <color_fragment>
+        float burned = scorchAt(scorchPosition) * burnable;
+        if (burned > 0.0) {
+          float ashGrain = fract(sin(dot(floor(scorchPosition * 47.0), vec2(12.9898, 78.233))) * 43758.5453);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.021, 0.015, 0.011) * (0.75 + ashGrain * 0.5), burned * 0.93);
+        }
+      `
+    );
+  };
+
+  // The keep's blocks are wedges, leaving narrow mortar joints.
+  const stone = [0x989c86, 0xafad95, 0x868d79, 0xb9b59c, 0x9c9d90, 0xa6a591, 0x7f897b];
+  const darkStone = 0x7f8473;
+  const mortar = 0x6d7465;
+  function wedge(radius, height, halfAngle, thickness) {
+    const shape = new T.Shape();
+    const outer = radius, inner = radius - thickness;
+    for (let i = 0; i <= 3; i++) {
+      const a = -halfAngle + i * halfAngle * 2 / 3;
+      const x = Math.sin(a) * outer, z = -Math.cos(a) * outer;
+      if (i === 0) shape.moveTo(x, z);
+      else shape.lineTo(x, z);
+    }
+    for (let i = 3; i >= 0; i--) {
+      const a = -halfAngle + i * halfAngle * 2 / 3;
+      shape.lineTo(Math.sin(a) * inner, -Math.cos(a) * inner);
+    }
+    shape.closePath();
+    return new T.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false })
+      .rotateX(-Math.PI / 2).translate(0, -height / 2, 0);
+  }
+  function archShape(width, height) {
+    const arch = new T.Shape();
+    const r = width / 2;
+    arch.moveTo(-r, 0);
+    arch.lineTo(r, 0);
+    arch.lineTo(r, height - r);
+    arch.absarc(0, height - r, r, 0, Math.PI, false);
+    arch.lineTo(-r, 0);
+    return arch;
+  }
+  function archFace(parent, x, y, z, width, height, surface) {
+    return mesh(parent, new T.ExtrudeGeometry(archShape(width, height), {
+      depth: 0.035, bevelEnabled: false, curveSegments: 10
+    }), matte(surface), x, y, z);
+  }
+  function archBlocks(parent, x, y, z, width, height, thickness, depth, palette) {
+    const r = width / 2;
+    const spring = height - r;
+    for (const side of [-1, 1]) {
+      const courses = Math.max(2, Math.round(spring / 0.32));
+      for (let i = 0; i < courses; i++) {
+        box(parent, pick(palette), x + side * (r + thickness / 2), y + (i + 0.5) * spring / courses, z,
+          thickness, spring / courses - 0.022, depth);
+      }
+    }
+    for (let i = 0; i < 9; i++) {
+      const a = (i + 0.5) * Math.PI / 9;
+      box(parent, pick(palette), x + Math.cos(a) * (r + thickness / 2),
+        y + spring + Math.sin(a) * (r + thickness / 2), z,
+        thickness, (r + thickness / 2) * Math.PI / 9 + 0.01, depth, a);
+    }
+  }
+
+  const tower = place(towerSite);
+  cylinder(tower, darkStone, 0, 0.20, 0, 3.09, 3.24, 0.54, 32);
+  cylinder(tower, mortar, 0, 4.75, 0, 2.67, 2.93, 9.2, 40);
+  const blockCount = 28;
+  const towerBlocks = [];
+  const windowRows = [10, 11, 12, 18, 19];
+  for (let row = 0; row < 23; row++) {
+    const taper = 1 - row * 0.0032;
+    for (let j = 0; j < blockCount; j++) {
+      const angle = (j + (row % 2) * 0.5) * TAU / blockCount;
+      const front = Math.cos(angle) > 0.99;
+      if (front && (row < 5 || windowRows.includes(row))) continue;
+      const scale = taper * between(0.993, 1.009);
+      towerBlocks.push(entry(0, 0.64 + row * 0.385, 0, scale, between(0.94, 1.03), scale, pick(stone), angle));
+    }
+  }
+  instance(tower, wedge(3.03, 0.363, Math.PI / blockCount - 0.006, 0.28), matte(0xffffff), towerBlocks);
+  cylinder(tower, 0x777d6d, 0, 8.88, 0, 2.96, 2.69, 0.38, 32);
+  cylinder(tower, 0xa9a994, 0, 9.14, 0, 3.10, 2.99, 0.31, 32);
+  cylinder(tower, darkStone, 0, 9.43, 0, 3.01, 3.03, 0.45, 32);
+  const crenels = [];
+  for (let i = 0; i < 12; i++) {
+    const a = i * TAU / 12;
+    crenels.push(entry(Math.sin(a) * 2.73, 9.96, Math.cos(a) * 2.73, 0.89, 0.7, 0.50, pick(stone), a));
+    crenels.push(entry(Math.sin(a) * 2.74, 10.34, Math.cos(a) * 2.74, 0.98, 0.14, 0.58, 0xb4b29d, a));
+  }
+  instance(tower, boxGeometry, matte(0xffffff), crenels);
+  archFace(tower, 0, 0.23, 3.03, 1.22, 2.25, 0x453c30);
+  archBlocks(tower, 0, 0.23, 3.02, 1.22, 2.25, 0.26, 0.32, stone);
+  for (const y of [4.35, 7.18]) {
+    const z = y > 6 ? 2.90 : 2.98;
+    archFace(tower, 0, y, z, 0.44, 1.1, 0x273a36);
+    archBlocks(tower, 0, y, z, 0.44, 1.1, 0.17, 0.18, stone);
+    box(tower, 0x8a927e, 0, y, z + 0.07, 0.82, 0.13, 0.31);
+  }
+
+  // Timber-framed cottage with individual clay tiles and a garden window.
+  const cottage = place(cottageSite);
+  const cream = 0xf4dfb1, timber = 0x73503c, timberLight = 0x97674a;
+  const cw = cottageSite.width, cd = cottageSite.depth, eave = 2.94, rise = 2.05;
+  box(cottage, darkStone, 0, 0.17, 0, cw + 0.32, 0.48, cd + 0.28);
+  box(cottage, cream, 0, 1.62, 0, cw, 2.68, cd);
+  const gable = new T.Shape();
+  gable.moveTo(-cw / 2, 0);
+  gable.lineTo(cw / 2, 0);
+  gable.lineTo(0, rise);
+  gable.closePath();
+  mesh(cottage, new T.ExtrudeGeometry(gable, { depth: cd, bevelEnabled: false }), matte(cream), 0, eave, -cd / 2);
+  const tileColors = [0xb6503d, 0xad4333, 0xb84b3a, 0xc25d47, 0xa94737, 0xcb624a, 0xb1503d, 0x9e4437];
+  const run = cw / 2 + 0.37;
+  const pitch = Math.atan2(rise, cw / 2);
+  const roofLength = run / Math.cos(pitch);
+  for (const side of [-1, 1]) {
+    const roof = new T.Group();
+    roof.position.set(0, eave + rise + 0.04, 0);
+    roof.rotation.z = -side * pitch;
+    cottage.add(roof);
+    box(roof, 0x8f3c2c, side * roofLength / 2, 0, 0, roofLength + 0.06, 0.14, cd + 0.69);
+    const tiles = [];
+    for (let row = 0; row < 10; row++) {
+      for (let column = 0; column < 15; column++) {
+        const z = (column - 7) * 0.343 + (row % 2 ? 0.085 : -0.085);
+        tiles.push(entry(side * ((row + 0.5) * roofLength / 10), 0.09 + between(0, 0.022), z,
+          roofLength / 10 + 0.046, 0.08, 0.336, pick(tileColors), between(-0.018, 0.018)));
+      }
+    }
+    instance(roof, boxGeometry, matte(0xffffff), tiles);
+    for (const z of [-cd / 2 - 0.31, cd / 2 + 0.31]) {
+      box(roof, 0x6a4836, side * roofLength / 2, -0.036, z, roofLength + 0.11, 0.15, 0.14);
+    }
+  }
+  box(cottage, 0x9e4739, 0, eave + rise + 0.12, 0, 0.22, 0.15, cd + 0.76);
+  const stonework = [];
+  for (let i = 0; i < 22; i++) {
+    stonework.push(entry(-3.06 + i * 0.29, 0.27, cd / 2 + 0.154, 0.265, between(0.21, 0.34), 0.12, pick(stone)));
+  }
+  instance(cottage, boxGeometry, matte(0xffffff), stonework);
+  const face = cd / 2 + 0.045;
+  for (const x of [-3.03, -1.15, 1.15, 3.03]) box(cottage, timber, x, 1.63, face, 0.15, 2.69, 0.14);
+  box(cottage, timber, 0, 2.92, face, cw, 0.15, 0.15);
+  box(cottage, timber, 0, 3.77, face, 0.16, 1.69, 0.14);
+  for (const x of [-1, 1]) {
+    box(cottage, timberLight, x * 1.36, 3.27, face + 0.01, 1.58, 0.12, 0.14, -x * 0.43);
+  }
+  for (const side of [-1, 1]) {
+    const wall = new T.Group();
+    wall.position.set(side * (cw / 2 + 0.045), 0, 0);
+    wall.rotation.y = side * Math.PI / 2;
+    cottage.add(wall);
+    for (const x of [-cd / 2, 0, cd / 2]) box(wall, timber, x, 1.59, 0, 0.14, 2.71, 0.12);
+    box(wall, timber, 0, 2.88, 0, cd, 0.18, 0.17);
+    windowFrame(wall, -0.93, 1.8, 0.035, 0.77, 1.0);
+    windowFrame(wall, 0.93, 1.8, 0.035, 0.77, 1.0);
+  }
+
+  function windowFrame(parent, x, y, z, w, h) {
+    box(parent, 0x463d36, x, y, z, w + 0.14, h + 0.14, 0.11);
+    box(parent, 0x4f878d, x, y, z + 0.067, w, h, 0.042);
+    box(parent, 0xa1c6bc, x - w * 0.19, y + h * 0.16, z + 0.093, 0.10, h * 0.46, 0.02, -0.61);
+    box(parent, 0xc1a780, x, y, z + 0.105, 0.058, h, 0.04);
+    box(parent, 0xc1a780, x, y, z + 0.105, w, 0.058, 0.04);
+    box(parent, timberLight, x, y - h / 2 - 0.075, z + 0.08, w + 0.31, 0.13, 0.26);
+  }
+  for (const x of [-2.05, 2.05]) {
+    windowFrame(cottage, x, 1.67, face + 0.06, 0.80, 1.04);
+    for (const side of [-1, 1]) {
+      box(cottage, 0x7d9b7a, x + side * 0.64, 1.67, face + 0.025, 0.35, 1.06, 0.095);
+      for (const y of [1.3, 2.03]) box(cottage, 0x55765e, x + side * 0.64, y, face + 0.086, 0.35, 0.064, 0.027);
+    }
+    box(cottage, timber, x, 1.02, face + 0.23, 1.12, 0.20, 0.33);
+    for (let j = 0; j < 7; j++) {
+      round(cottage, pick([0x7c9c4a, 0x86a94f, 0x668341]), x + between(-0.49, 0.49), between(1.10, 1.22), face + 0.24, 0.19, 0.13, 0.13);
+      round(cottage, pick([0xf192af, 0xe8769a, 0x9da8f2]), x + (j - 3) * 0.14, between(1.21, 1.31), face + 0.30, 0.10, 0.071, 0.079);
+    }
+  }
+  windowFrame(cottage, 0, 3.70, face + 0.10, 0.44, 0.52);
+  archFace(cottage, 0, 0.37, face + 0.08, 1.29, 2.17, 0x544534);
+  archFace(cottage, 0, 0.40, face + 0.13, 1.09, 2.00, 0x61795d);
+  for (let i = -2; i <= 2; i++) box(cottage, 0x4f5f48, i * 0.18, 1.12, face + 0.176, 0.019, 1.40, 0.02);
+  box(cottage, 0x73866a, 0, 0.66, face + 0.183, 1.04, 0.11, 0.026);
+  round(cottage, 0xc09e52, 0.36, 1.27, face + 0.23, 0.049, 0.049, 0.045);
+  box(cottage, 0xa6a48c, 0, 0.23, face + 0.31, 1.58, 0.26, 0.64);
+  box(cottage, 0xa6a48c, 0, 0.08, face + 0.58, 1.87, 0.18, 0.70);
+
+  for (let i = 0; i < 13; i++) {
+    box(cottage, pick(stone), 1.94, 2.58 + i * 0.216, -1.03, 0.68, 0.205, 0.71);
+  }
+  box(cottage, 0x8d917d, 1.94, 5.40, -1.03, 0.84, 0.16, 0.87);
+  box(cottage, 0x57584e, 1.94, 5.50, -1.03, 0.5, 0.08, 0.52);
+
+  // The windmill has a broad sail silhouette and a slowly rotating hub.
+  const mill = place(millSite);
+  mill.rotation.y = 0.22;
+  cylinder(mill, darkStone, 0, 0.24, 0, 2.42, 2.49, 0.60, 16);
+  cylinder(mill, 0xdac9a5, 0, 2.6, 0, 1.63, 2.24, 4.72, 20);
+  cylinder(mill, 0x7a6856, 0, 4.95, 0, 1.77, 1.70, 0.23, 20);
+  cylinder(mill, 0x485952, 0, 5.62, 0, 0.57, 1.93, 1.40, 14);
+  cylinder(mill, 0x58675b, 0, 6.45, 0, 0.18, 0.67, 0.39, 14);
+  cylinder(mill, timber, 0, 6.77, 0, 0.05, 0.08, 0.45, 8);
+  const millBricks = [];
+  for (let i = 0; i < 87; i++) {
+    const a = between(0, TAU), y = between(0.52, 4.72), r = 2.24 - (y - 0.24) * 0.129;
+    if (Math.cos(a) > 0.91 && y < 2.35) continue;
+    millBricks.push(entry(Math.sin(a) * r, y, Math.cos(a) * r, between(0.23, 0.53),
+      between(0.11, 0.18), 0.10, pick([0xcbbd9c, 0xc0b495, 0xe1d0ad, 0xbdb298]), a));
+  }
+  instance(mill, boxGeometry, matte(0xffffff), millBricks);
+  archFace(mill, 0, 0.25, 2.26, 1.19, 1.96, 0x69533e);
+  archBlocks(mill, 0, 0.25, 2.21, 1.19, 1.96, 0.20, 0.24, stone);
+  box(mill, darkStone, 0, 0.11, 2.38, 1.61, 0.23, 0.57);
+  windowFrame(mill, -0.66, 3.17, 1.83, 0.48, 0.72);
+  const rotor = new T.Group();
+  rotor.position.set(0, 5.17, 2.25);
+  mill.add(rotor);
+  const sailGeometry = new T.Shape();
+  sailGeometry.moveTo(0.10, 0.84);
+  sailGeometry.lineTo(0.91, 1.00);
+  sailGeometry.lineTo(1.01, 3.22);
+  sailGeometry.lineTo(0.10, 3.44);
+  sailGeometry.closePath();
+  const linen = new T.MeshStandardMaterial({ color: 0xf2e3be, side: T.DoubleSide, roughness: 0.97 });
+  const canvasSail = new T.ShapeGeometry(sailGeometry);
+  for (let i = 0; i < 4; i++) {
+    const sail = new T.Group();
+    sail.rotation.z = i * Math.PI / 2;
+    rotor.add(sail);
+    box(sail, timber, 0, 1.75, 0, 0.13, 3.63, 0.16);
+    mesh(sail, canvasSail, linen, 0, 0, 0.015);
+    for (let rung = 0; rung < 7; rung++) {
+      box(sail, rung % 3 === 0 ? 0x8e7757 : 0xb7a581, 0.50, 0.96 + rung * 0.375, 0.05,
+        0.89 + rung * 0.013, 0.045, 0.065, -0.075);
+    }
+    box(sail, 0x91805e, 0.94, 2.13, 0.06, 0.065, 2.28, 0.07, -0.048);
+  }
+  const hub = cylinder(rotor, 0x6c523c, 0, 0, 0.14, 0.44, 0.48, 0.33, 12);
+  hub.rotation.x = Math.PI / 2;
+  const pin = cylinder(rotor, 0xba955d, 0, 0, 0.35, 0.17, 0.18, 0.16, 10);
+  pin.rotation.x = Math.PI / 2;
+
+  const ruins = place(ruinSite);
+  ruins.rotation.y = -0.25;
+  archBlocks(ruins, 0, 0.10, 0, 2.25, 3.20, 0.40, 0.74, stone);
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 5; i++) {
+      box(ruins, pick(stone), side * (1.61 + Math.floor(i / 3) * 0.57), 0.24 + (i % 3) * 0.35, -0.13,
+        0.55, 0.34, 0.77, between(-0.055, 0.065));
+    }
+  }
+  for (let i = 0; i < 17; i++) {
+    const x = between(-3.5, 3.5), z = between(-2.1, 2.5);
+    round(ruins, pick(stone), x, between(0.05, 0.17), z, between(0.13, 0.46), between(0.10, 0.27), between(0.14, 0.42));
+  }
+
+  // Rounded crowns use instancing so the tree line stays cheap to draw.
+  const trees = [];
+  const trunkBatches = [];
+  const crowns = [];
+  const leafColors = [0x548152, 0x69924d, 0x7e9d4e, 0x5d9059, 0x47774a, 0x659756, 0x88a55d];
+  function tree(x, z, size) {
+    const y = elevation(x, z);
+    trees.push({ x, z, radius: 0.31 * size });
+    trunkBatches.push(entry(x, y + 1.27 * size, z, size, size, size, pick([0x79614a, 0x634f3d, 0x82664b]), 0, between(-0.12, 0.12)));
+    crowns.push(entry(x, y + 3.39 * size, z, 1.50 * size, 1.59 * size, 1.34 * size, pick(leafColors), between(0, TAU)));
+    for (let i = 0; i < 6; i++) {
+      const a = i * TAU / 6 + between(-0.25, 0.25), r = between(0.77, 1.45) * size;
+      const d = between(0.93, 1.26) * size;
+      crowns.push(entry(x + Math.cos(a) * r, y + between(2.78, 3.67) * size, z + Math.sin(a) * r,
+        d * between(1.0, 1.27), d * between(0.83, 1.19), d, pick(leafColors), a));
+    }
+  }
+  for (const [x, z, size] of [
+    [-10, 8, 1.2], [13.9, 5.8, 1.26], [15.5, -1.8, 0.95], [-8.8, -4.8, 0.92],
+    [-19.8, -9, 1.1], [-21.3, -19, 1.25], [17, -12.2, 1.12], [10.9, -23.2, 1.02],
+    [-8.4, -24.9, 0.93], [20.1, -25.7, 1.27], [4.9, -29.2, 0.88], [-5.7, 17.3, 0.78]
+  ]) tree(x, z, size);
+  for (let i = 0; i < 67; i++) {
+    const a = i / 67 * TAU + between(-0.07, 0.07), r = between(30, 55);
+    const x = Math.cos(a) * r, z = -11 + Math.sin(a) * (r + 1);
+    if (z < 27 && sites.every(s => Math.hypot(s.x - x, s.z - z) > s.pad + 2)) tree(x, z, between(0.77, 1.58));
+  }
+  const trunks = instance(scene, new T.CylinderGeometry(0.17, 0.34, 2.76, 8), matte(0xffffff), trunkBatches);
+  const canopy = instance(scene, detailedRock, matte(0xffffff), crowns);
+
+  const pebbles = [];
+  for (let i = 0; i < 380; i++) {
+    const z = between(-32, 20), x = roadX(z) + between(-3.8, 3.8);
+    if (Math.abs(verge(x, z)) > 0.69 || sites.some(s => Math.hypot(s.x - x, s.z - z) < s.pad - 1)) continue;
+    const r = between(0.022, 0.13);
+    pebbles.push(entry(x, elevation(x, z) + r * 0.10, z, r, r * 0.42, r * 0.72,
+      pick([0xb4a78b, 0xaba48b, 0xc5b596, 0x9ca18a]), between(0, TAU)));
+  }
+  const trailStones = instance(scene, roundGeometry, matte(0xffffff), pebbles);
+
+  const fence = [];
+  for (let i = 0; i <= 6; i++) {
+    const x = 11.54 + i * 0.80, z = -2.9 - i * 0.39;
+    const y = elevation(x, z);
+    fence.push(entry(x, y + 0.41, z, 0.135, 0.83, 0.12, 0x9a7954, 0, between(-0.11, 0.11)));
+    if (i < 6) {
+      for (const h of [0.29, 0.58]) fence.push(entry(x + 0.40, elevation(x + 0.40, z - 0.20) + h,
+        z - 0.20, 0.91, 0.107, 0.074, pick([0xb3976c, 0x9f805c, 0xaa8962]), 0.454));
+    }
+  }
+  const fenceMesh = instance(scene, boxGeometry, matte(0xffffff), fence);
+
+  // The same wind field bends both grass and flowers from their roots.
+  function vegetationMaterial(bend) {
+    const material = new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide });
+    material.customProgramCacheKey = () => String(bend);
+    material.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, scorch.uniforms);
+      shader.uniforms.meadowTime = windTime;
+      shader.vertexShader = scorch.glsl + 'uniform float meadowTime;\nvarying float charAmount;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
+        #include <begin_vertex>
+        vec2 root = instanceMatrix[3].xz;
+        charAmount = scorchAt(root);
+        float strength = sin(meadowTime * 1.65 + root.x * 0.24 + root.y * 0.36)
+          * 0.50 + sin(meadowTime * 2.45 + root.y * 0.94) * 0.21 + 0.36;
+        vec2 wind = vec2(0.94, 0.34) * strength;
+        vec2 localWind = vec2(dot(normalize(instanceMatrix[0].xz), wind),
+          dot(normalize(instanceMatrix[2].xz), wind));
+        transformed.xz += localWind * position.y * position.y * ${bend.toFixed(3)};
+        transformed.xz += localWind * position.y * charAmount * 0.13;
+        transformed.y *= 1.0 - charAmount * 0.39;
+      `);
+      shader.fragmentShader = 'varying float charAmount;\n' + shader.fragmentShader.replace('#include <color_fragment>', `
+        #include <color_fragment>
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.010, 0.008, 0.006), charAmount);
+      `);
+    };
+    return material;
+  }
+
+  function tuftGeometry() {
+    const positions = [], colors = [], shade = new T.Color();
+    const root = new T.Color(0x355f38), tip = new T.Color(0xa0bc57);
+    function emit(vertices, heights) {
+      vertices.forEach((v, i) => {
+        positions.push(...v);
+        shade.copy(root).lerp(tip, heights[i]);
+        colors.push(shade.r, shade.g, shade.b);
+      });
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = i * TAU / 6, c = Math.cos(a), s = Math.sin(a);
+      const h = between(0.47, 1.00), w = between(0.028, 0.071);
+      const x = between(-0.12, 0.12), z = between(-0.12, 0.12);
+      const local = (side, y, arch) => [x + c * arch - s * side, y, z + s * arch + c * side];
+      const a0 = local(-w, 0, 0), a1 = local(w, 0, 0);
+      const b0 = local(-w * 0.64, h * 0.56, h * 0.065);
+      const b1 = local(w * 0.64, h * 0.56, h * 0.065);
+      const end = local(0, h, h * between(0.14, 0.40));
+      emit([a0, a1, b1, a0, b1, b0, b0, b1, end], [0, 0, 0.57, 0, 0.57, 0.57, 0.57, 0.57, 1]);
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function clearOfStructure(x, z) {
+    return sites.every(s => s.radius
+      ? Math.hypot(x - s.x, z - s.z) > s.radius + 0.13
+      : Math.abs(x - s.x) > s.width / 2 + 0.15 || Math.abs(z - s.z) > s.depth / 2 + 0.21);
+  }
+  const grassGeometry = tuftGeometry();
+  const grassMaterial = vegetationMaterial(0.28);
+  const tuftTints = [0xe1ebae, 0xf2f0bd, 0xb9d490, 0xc5db87, 0xf1e9a3, 0xd8e3a0];
+  for (let tz = -50; tz < 22; tz += 12) {
+    for (let tx = -42; tx < 42; tx += 12) {
+      const tufts = [];
+      const samples = compact ? 425 : 710;
+      for (let i = 0; i < samples; i++) {
+        const x = tx + random() * 12, z = tz + random() * 12;
+        const pathEdge = verge(x, z);
+        if (pathEdge < between(-0.20, 0.18) || !clearOfStructure(x, z)) continue;
+        const patch = 0.55 + 0.25 * Math.sin(x * 0.49 + z * 0.22) + 0.16 * Math.cos(x * 0.30 - z * 0.69);
+        if (random() > patch + 0.20) continue;
+        const height = between(0.40, 0.93) * (pathEdge < 0.4 ? 0.73 : 1);
+        tufts.push(entry(x, elevation(x, z) - 0.038, z, between(0.57, 1.15), height, between(0.57, 1.15),
+          pick(tuftTints), between(0, TAU)));
+      }
+      if (tufts.length) instance(scene, grassGeometry, grassMaterial, tufts, false);
+    }
+  }
+
+  function flowerGeometry(petalColor, coreColor, petalCount) {
+    const positions = [], colors = [];
+    const petal = new T.IcosahedronGeometry(1, 0);
+    function add(source, x, y, z, w, h, d, palette, yaw = 0, roll = 0) {
+      const geometry = source.index ? source.toNonIndexed() : source.clone();
+      geometry.scale(w, h, d).rotateZ(roll).rotateY(yaw).translate(x, y, z);
+      const tint = new T.Color(palette);
+      const p = geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        positions.push(p.getX(i), p.getY(i), p.getZ(i));
+        colors.push(tint.r, tint.g, tint.b);
+      }
+      geometry.dispose();
+    }
+    const stem = new T.CylinderGeometry(1, 1, 1, 5);
+    add(stem, 0, 0.43, 0, 0.010, 0.86, 0.010, 0x47794a);
+    add(petal, -0.089, 0.30, 0.003, 0.116, 0.022, 0.047, 0x689454, -0.1, -0.48);
+    add(petal, 0.083, 0.52, 0.006, 0.104, 0.020, 0.037, 0x5e8f4c, 0.4, 0.44);
+    for (let i = 0; i < petalCount; i++) {
+      const a = i * TAU / petalCount;
+      add(petal, Math.cos(a) * 0.077, 0.86 + Math.sin(a) * 0.024, Math.sin(a) * 0.073,
+        0.077, 0.024, petalCount === 5 ? 0.051 : 0.036, petalColor, -a, 0.25);
+    }
+    add(petal, 0, 0.888, 0, 0.051, 0.031, 0.049, coreColor);
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    stem.dispose();
+    petal.dispose();
+    return geo;
+  }
+
+  const flowers = [[], [], [], []];
+  const flowerBeds = [
+    [-2.8, 14.7, 2.1, 5.0, 152], [3.0, 12.1, 2.2, 4.0, 132],
+    [-4.2, 6.1, 3.3, 4.1, 180], [3.1, 4.6, 2.5, 4.3, 172],
+    [-8.9, -12.1, 4.8, 4.3, 240], [-15.0, -13.0, 3.5, 4.5, 133],
+    [6.9, -4.4, 2.7, 2.6, 134], [12.0, -8.3, 2.6, 3.8, 132],
+    [1.5, -17.0, 4.6, 3.0, 157], [12.9, -20.2, 4.0, 4.1, 105],
+    [-5.5, -28.8, 2.7, 3.6, 122], [8.2, -28.3, 2.8, 3.8, 89]
+  ];
+  for (let index = 0; index < flowerBeds.length; index++) {
+    const [cx, cz, rx, rz, count] = flowerBeds[index];
+    for (let i = 0; i < count * (compact ? 0.66 : 1); i++) {
+      const a = between(0, TAU), r = Math.sqrt(random());
+      const x = cx + Math.cos(a) * r * rx, z = cz + Math.sin(a) * r * rz;
+      if (verge(x, z) < 0.18 || !clearOfStructure(x, z)) continue;
+      const kind = random() < 0.77 ? index % 4 : Math.floor(random() * 4);
+      const h = between(0.60, 1.05);
+      flowers[kind].push(entry(x, elevation(x, z) - 0.02, z, h, h, h, undefined, between(0, TAU), between(-0.11, 0.11)));
+    }
+  }
+  const flowerMaterial = vegetationMaterial(0.19);
+  const petalSchemes = [
+    [0x548edc, 0xf7e7a2, 5], [0xe984aa, 0xf0c671, 7],
+    [0xf5a8bf, 0xeaa666, 5], [0x658cde, 0xf6da9f, 7]
+  ];
+  flowers.forEach((data, i) => instance(scene, flowerGeometry(...petalSchemes[i]), flowerMaterial, data, false));
+
+  // The view-model pass keeps the player's hand and staff clear of terrain.
+  const foreground = new T.Scene();
+  const handCamera = new T.PerspectiveCamera(57, 1, 0.015, 7);
+  const staff = new T.Group();
+  foreground.add(staff, new T.HemisphereLight(0xffedcd, 0x72866c, 1.65));
+  const handSun = new T.DirectionalLight(0xffe0b1, 2.35);
+  handSun.position.set(-1.7, 2.4, 1.5);
+  foreground.add(handSun);
+
+  const staffPoints = [
+    V(0.005, -0.82, 0.035), V(-0.009, -0.40, 0.010), V(0.012, -0.06, 0.002),
+    V(0.011, 0.26, 0.014), V(0.058, 0.49, -0.017), V(0.095, 0.64, -0.027),
+    V(0.068, 0.73, 0.012), V(-0.015, 0.765, 0.026), V(-0.081, 0.704, 0.041)
+  ];
+  const spine = new T.CatmullRomCurve3(staffPoints);
+  function woodenTube(parent, curve, radius, shades) {
+    const length = 52, sides = 9;
+    const frame = curve.computeFrenetFrames(length, false);
+    const positions = [], colorValues = [], indices = [];
+    for (let i = 0; i <= length; i++) {
+      const t = i / length, p = curve.getPointAt(t);
+      for (let j = 0; j < sides; j++) {
+        const a = j * TAU / sides, r = radius * (1.0 - 0.74 * t ** 4);
+        const q = p.clone().addScaledVector(frame.normals[i], r * Math.cos(a))
+          .addScaledVector(frame.binormals[i], r * Math.sin(a));
+        positions.push(q.x, q.y, q.z);
+        const tint = new T.Color(shades[j % shades.length]).multiplyScalar(0.93 + 0.09 * Math.sin(i * 0.29 + j));
+        colorValues.push(tint.r, tint.g, tint.b);
+        if (i < length) {
+          const k = i * sides + j, next = i * sides + (j + 1) % sides;
+          indices.push(k, next, k + sides, next, next + sides, k + sides);
+        }
+      }
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new T.Float32BufferAttribute(colorValues, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return mesh(parent, geo, new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.91, side: T.DoubleSide }), 0, 0, 0, false);
+  }
+  woodenTube(staff, spine, 0.053, [0x8c5b3a, 0x71462f, 0xa57547, 0x7f512f, 0x8c633a]);
+  const branch = new T.CatmullRomCurve3([V(0.057, 0.47, -0.012), V(-0.022, 0.54, 0.009),
+    V(-0.105, 0.57, 0.023), V(-0.138, 0.64, 0.036)]);
+  woodenTube(staff, branch, 0.037, [0x8c5b3a, 0x76502f, 0x9c693f, 0x67462c]);
+  for (const [y, radius, tone] of [
+    [-0.246, 0.059, 0x927552], [-0.219, 0.058, 0x60422a], [-0.192, 0.058, 0xa0784b],
+    [-0.165, 0.057, 0x6e4a2d], [0.267, 0.050, 0x9a7443], [0.298, 0.049, 0x775738]
+  ]) {
+    const ring = mesh(staff, new T.TorusGeometry(radius, 0.010, 6, 14), matte(tone), 0.012, y, 0.013, false);
+    ring.rotation.x = Math.PI / 2;
+  }
+  limb(staff, 0x355d57, V(0.33, -0.83, 0.19), V(0.118, -0.39, 0.11), 0.137, 0.089, 10);
+  limb(staff, 0xb39458, V(0.155, -0.467, 0.127), V(0.12, -0.394, 0.109), 0.096, 0.087, 10);
+  limb(staff, 0x436a5e, V(0.142, -0.442, 0.12), V(0.109, -0.375, 0.103), 0.093, 0.083, 10);
+  const skin = 0xbb835c;
+  const hand = round(staff, skin, 0.070, -0.338, 0.075, 0.075, 0.098, 0.055);
+  hand.rotation.z = 0.35;
+  for (let i = 0; i < 4; i++) {
+    const f = round(staff, i % 2 ? 0xc4936c : 0xc78e66, -0.021, -0.293 - i * 0.031, 0.071, 0.066, 0.0165, 0.025);
+    f.rotation.set(0, -0.15, (i - 1.6) * 0.1);
+  }
+  const thumb = round(staff, 0xc99972, 0.037, -0.251, 0.052, 0.039, 0.058, 0.026);
+  thumb.rotation.z = -0.70;
+
+  // A world-space mask keeps each burn in place for the rest of the session.
+  function makeScorch() {
+    const size = 512, min = -88, span = 176, step = span / size;
+    const pixels = new Uint8Array(size * size);
+    const texture = new T.DataTexture(pixels, size, size, T.RedFormat);
+    texture.minFilter = texture.magFilter = T.LinearFilter;
+    texture.needsUpdate = true;
+    const uniforms = {
+      scorchMap: { value: texture },
+      scorchTransform: { value: new T.Vector2(-min / span, 1 / span) },
+      scorchReady: { value: 0 }
+    };
+    const glsl = `
+      uniform sampler2D scorchMap;
+      uniform vec2 scorchTransform;
+      uniform float scorchReady;
+      float scorchAt(vec2 p) {
+        if (scorchReady < 0.5) return 0.0;
+        return texture2D(scorchMap, p * scorchTransform.y + scorchTransform.x).r;
+      }
+    `;
+    function stamp(x, z, radius) {
+      const reach = (radius * 1.13 + step) / step;
+      const cx = (x - min) / step - 0.5, cz = (z - min) / step - 0.5;
+      const left = Math.max(0, Math.floor(cx - reach)), right = Math.min(size - 1, Math.ceil(cx + reach));
+      const top = Math.max(0, Math.floor(cz - reach)), bottom = Math.min(size - 1, Math.ceil(cz + reach));
+      let changed = false;
+      for (let row = top; row <= bottom; row++) {
+        const dz = (row - cz) * step;
+        for (let col = left; col <= right; col++) {
+          const dx = (col - cx) * step;
+          const a = Math.atan2(dz, dx);
+          const edge = radius * (1 + 0.067 * Math.sin(7 * a + x) + 0.047 * Math.sin(13 * a + z));
+          const char = Math.round(255 * (1 - T.MathUtils.smoothstep(Math.hypot(dx, dz), edge * 0.68, edge)));
+          const index = row * size + col;
+          if (char <= pixels[index]) continue;
+          pixels[index] = char;
+          changed = true;
+        }
+      }
+      if (changed) {
+        uniforms.scorchReady.value = 1;
+        texture.needsUpdate = true;
+      }
+    }
+    return { uniforms, glsl, stamp };
+  }
+
+  function makeFireSpell(targets) {
+    const fuse = 0.53, cooldown = 0.60, maxCasts = 7, blastRadius = 4.4;
+    const maxAge = 3.60, range = 66;
+    const aim = document.querySelector('#aim');
+    const flash = document.querySelector('#blast-flash');
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    const effects = new T.Group();
+    effects.name = 'Fire spell';
+    scene.add(effects);
+    // A separate random stream keeps the original layout and colors deterministic.
+    let effectSeed = 8732;
+    function variation(low, high) {
+      effectSeed = (Math.imul(effectSeed, 1664525) + 1013904223) >>> 0;
+      return low + (high - low) * (effectSeed / 4294967296);
+    }
+    const firelight = new T.PointLight(0xff922d, 0, 23, 1.85);
+    effects.add(firelight);
+
+    const runeMaterial = new T.ShaderMaterial({
+      uniforms: { progress: { value: 0 } },
+      transparent: true,
+      side: T.DoubleSide,
+      depthWrite: false,
+      blending: T.AdditiveBlending,
+      vertexShader: `
+        varying vec2 paintedUV;
+        void main() {
+          paintedUV = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float progress;
+        varying vec2 paintedUV;
+        const float TAU = 6.283185307;
+        float segment(vec2 p, vec2 a, vec2 b) {
+          vec2 ab = b - a;
+          return length(p - a - ab * clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0));
+        }
+        void main() {
+          vec2 p = paintedUV * 2.0 - 1.0;
+          float r = length(p);
+          float a = atan(p.y, p.x) + 3.14159265;
+          float ring = min(abs(r - 0.88), min(abs(r - 0.81), abs(r - 0.58)));
+          float wheel = a / TAU * 12.0;
+          vec2 g = vec2((fract(wheel) - 0.5) * 1.4, (r - 0.695) * 8.7);
+          float glyph = segment(g, vec2(-0.28, -0.49), vec2(-0.28, 0.47));
+          glyph = min(glyph, segment(g, vec2(-0.28, 0.45), vec2(0.26, 0.15)));
+          float branch = mod(floor(wheel), 3.0) - 1.0;
+          glyph = min(glyph, segment(g, vec2(-0.28, -0.17), vec2(0.29, branch * 0.42)));
+          float symbol = segment(p, vec2(-0.38, -0.23), vec2(0.0, 0.43));
+          symbol = min(symbol, segment(p, vec2(0.0, 0.43), vec2(0.38, -0.23)));
+          symbol = min(symbol, segment(p, vec2(-0.38, -0.23), vec2(0.38, -0.23)));
+          symbol = min(symbol, abs(length(p - vec2(0.0, -0.04)) - 0.105));
+          float dist = min(min(ring, glyph * 0.11), symbol);
+          float glow = exp(-dist * 55.0);
+          float line = 1.0 - smoothstep(0.004, 0.014, dist);
+          float draw = 1.0 - smoothstep(progress - 0.12, progress + 0.025, a / TAU);
+          draw = max(draw, (0.32 + progress * 0.42) * (1.0 - smoothstep(0.54, 0.59, r)));
+          float intensity = (0.7 + 0.3 * sin(progress * 15.0)) * draw;
+          vec3 color = mix(vec3(1.0, 0.16, 0.015), vec3(1.0, 0.77, 0.37), line);
+          gl_FragColor = vec4(color, (line * 0.88 + glow * 0.36) * intensity);
+          #include <colorspace_fragment>
+        }
+      `
+    });
+    const runeSize = 3.65;
+    const initialPlane = new T.PlaneGeometry(runeSize, runeSize, 16, 16);
+    const planePositions = initialPlane.attributes.position.array;
+    const casts = Array.from({ length: maxCasts }, () => {
+      const rune = new T.Mesh(initialPlane.clone(), runeMaterial.clone());
+      rune.visible = false;
+      rune.frustumCulled = false;
+      rune.renderOrder = 2;
+      effects.add(rune);
+      return {
+        rune, point: new T.Vector3(), normal: new T.Vector3(),
+        flames: [], smoke: [], shards: [], sparks: [], time: -Infinity,
+        exploded: false, charStage: 0, radius: 0
+      };
+    });
+    initialPlane.dispose();
+
+    const counts = compact ? { flame: 28, ember: 7, smoke: 24, spark: 46, shard: 16 }
+      : { flame: 43, ember: 10, smoke: 33, spark: 73, shard: 27 };
+    const fireCloud = makePuffBatch(maxCasts * (counts.flame + counts.ember), false);
+    const smokeCloud = makePuffBatch(maxCasts * counts.smoke, true);
+    const sparks = dynamicMesh(new T.ConeGeometry(1, 1, 4), new T.MeshBasicMaterial(), counts.spark);
+    const debris = dynamicMesh(roundGeometry, new T.MeshStandardMaterial({ roughness: 1, flatShading: true }), counts.shard);
+    const emberStart = new T.Color(0xffedb8), emberEnd = new T.Color(0xc34117);
+    const emberColor = new T.Color();
+    const debrisColors = [0x3a3024, 0x69513a, 0x675b47, 0x8c7456].map(color => new T.Color(color));
+    const dummy = new T.Object3D(), up = V(0, 1, 0), localZ = V(0, 0, 1);
+    const raycaster = new T.Raycaster(undefined, undefined, 0.07, range);
+    const direction = new T.Vector3(), forward = new T.Vector3(), projected = new T.Vector3();
+    const worldMatrix = new T.Matrix4(), instanceMatrix = new T.Matrix4(), normalMatrix = new T.Matrix3();
+    const intersections = [];
+    const puffs = [], haze = [];
+    const audio = makeFireAudio();
+    let lastCast = -Infinity, missUntil = -Infinity, aimState = '', flashPoint = null;
+    let screenFlash = 0, shake = 0, screenOpacity = 0;
+    aim.hidden = false;
+
+    function dynamicMesh(geometry, material, count) {
+      const object = new T.InstancedMesh(geometry, material, maxCasts * count);
+      object.instanceMatrix.setUsage(T.DynamicDrawUsage);
+      // Allocate the color attribute before the renderer compiles this batch.
+      object.setColorAt(0, new T.Color(0xffffff));
+      object.instanceColor.setUsage(T.DynamicDrawUsage);
+      object.count = 0;
+      object.frustumCulled = false;
+      effects.add(object);
+      return object;
+    }
+
+    function makePuffBatch(capacity, isSmoke) {
+      const geometry = new T.InstancedBufferGeometry();
+      geometry.setIndex([0, 1, 2, 0, 2, 3]);
+      geometry.setAttribute('position', new T.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
+      const center = new T.InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(T.DynamicDrawUsage);
+      const shape = new T.InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(T.DynamicDrawUsage);
+      const seed = new T.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(T.DynamicDrawUsage);
+      geometry.setAttribute('puffCenter', center);
+      geometry.setAttribute('puffShape', shape);
+      geometry.setAttribute('puffSeed', seed);
+      geometry.instanceCount = 0;
+      const material = new T.ShaderMaterial({
+        transparent: true, depthWrite: false,
+        uniforms: {
+          smoke: { value: isSmoke },
+          mist: { value: scene.fog.color },
+          density: { value: scene.fog.density }
+        },
+        vertexShader: `
+          attribute vec3 puffCenter;
+          attribute vec4 puffShape;
+          attribute float puffSeed;
+          varying vec2 cardUV;
+          varying vec3 data;
+          varying float distanceToCamera;
+          void main() {
+            float c = cos(puffShape.y), s = sin(puffShape.y);
+            vec2 p = position.xy;
+            vec4 view = modelViewMatrix * vec4(puffCenter, 1.0);
+            view.xy += mat2(c, s, -s, c) * p * puffShape.x;
+            gl_Position = projectionMatrix * view;
+            cardUV = p;
+            data = vec3(puffShape.z, puffShape.w, puffSeed);
+            distanceToCamera = -view.z;
+          }
+        `,
+        fragmentShader: `
+          uniform bool smoke;
+          uniform vec3 mist;
+          uniform float density;
+          varying vec2 cardUV;
+          varying vec3 data;
+          varying float distanceToCamera;
+          float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+          }
+          float noise(vec2 p) {
+            vec2 i = floor(p), f = fract(p);
+            vec2 u = f * f * (3.0 - 2.0 * f);
+            return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+              mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+          }
+          void main() {
+            float age = data.y;
+            vec2 flow = vec2(data.z * 2.7, -age * 1.4);
+            float n = noise(cardUV * 3.6 + flow) * 0.76 + noise(cardUV * 8.3 - flow) * 0.24;
+            float field = 1.0 - length(cardUV) + (n - 0.5) * 0.42;
+            float inside = smoothstep(0.07, smoke ? 0.55 : 0.32, field);
+            vec3 color;
+            if (smoke) {
+              float rim = smoothstep(0.0, 1.0, 0.51 + cardUV.y * 0.28 + (n - 0.5) * 0.6);
+              color = mix(vec3(0.038, 0.026, 0.018), vec3(0.21, 0.178, 0.148), rim);
+              color += vec3(0.24, 0.072, 0.012) * (1.0 - age) * smoothstep(0.3, 1.0, -cardUV.y);
+            } else {
+              float heat = smoothstep(0.08, 0.73, field + n * 0.16 - age * 0.26);
+              color = mix(vec3(1.0, 0.068, 0.006), vec3(1.0, 0.56, 0.047), heat);
+              color = mix(color, vec3(1.0, 0.96, 0.66), smoothstep(0.56, 1.0, heat));
+            }
+            float fog = 1.0 - exp(-density * density * distanceToCamera * distanceToCamera);
+            gl_FragColor = vec4(mix(color, mist, fog), inside * data.x);
+            #include <colorspace_fragment>
+          }
+        `
+      });
+      const batch = new T.Mesh(geometry, material);
+      batch.frustumCulled = false;
+      batch.renderOrder = isSmoke ? 3 : 4;
+      effects.add(batch);
+      return { geometry, center, shape, seed };
+    }
+
+    function paintRune(rune, point, normal, followsGround) {
+      const attribute = rune.geometry.attributes.position;
+      rune.position.copy(point);
+      if (followsGround) {
+        rune.quaternion.identity();
+        for (let i = 0; i < attribute.count; i++) {
+          const x = planePositions[i * 3], z = -planePositions[i * 3 + 1];
+          attribute.setXYZ(i, x, elevation(point.x + x, point.z + z) - point.y + 0.052, z);
+        }
+      } else {
+        rune.position.addScaledVector(normal, 0.065);
+        rune.quaternion.setFromUnitVectors(localZ, normal);
+        attribute.array.set(planePositions);
+      }
+      attribute.needsUpdate = true;
+      rune.material.uniforms.progress.value = 0;
+      rune.visible = true;
+    }
+
+    function cast(origin, yaw, pitch, now) {
+      if (now - lastCast < cooldown) return;
+      const slot = casts.find(item => now - item.time >= maxAge + fuse);
+      if (!slot) return;
+      const cos = Math.cos(pitch);
+      direction.set(-Math.sin(yaw) * cos, Math.sin(pitch), -Math.cos(yaw) * cos);
+      raycaster.set(origin, direction);
+      intersections.length = 0;
+      raycaster.intersectObjects(targets, true, intersections);
+      const hit = intersections[0];
+      if (!hit) {
+        missUntil = now + 0.20;
+        return;
+      }
+      slot.point.copy(hit.point);
+      slot.structure = hit.object.userData.structure;
+      worldMatrix.copy(hit.object.matrixWorld);
+      if (hit.instanceId !== undefined) {
+        hit.object.getMatrixAt(hit.instanceId, instanceMatrix);
+        worldMatrix.multiply(instanceMatrix);
+      }
+      slot.normal.copy(hit.face.normal).applyNormalMatrix(normalMatrix.getNormalMatrix(worldMatrix));
+      if (slot.normal.dot(direction) > 0) slot.normal.negate();
+      paintRune(slot.rune, slot.point, slot.normal, hit.object === ground);
+      slot.time = lastCast = now;
+      slot.exploded = false;
+      slot.charStage = 0;
+      slot.radius = 0;
+      audio.charge(clamp(1 / (1 + hit.distance * 0.053), 0.21, 1));
+    }
+    function makePuff(point, smoke, ember = false) {
+      const a = variation(0, TAU), r = variation(0.12, 0.67);
+      const x = Math.cos(a), z = Math.sin(a);
+      const speed = smoke ? variation(0.60, 2.8) : variation(3.4, 9.3);
+      const delay = ember ? variation(0.22, 0.74) : smoke ? variation(0.13, 0.57) : variation(0.0, 0.15);
+      const life = smoke ? variation(1.98, 2.99) : ember ? variation(0.60, 1.36) : variation(0.46, 1.05);
+      const origin = point.clone();
+      if (ember) {
+        const spread = variation(1.3, blastRadius * 0.87);
+        origin.x += x * spread;
+        origin.z += z * spread;
+        origin.y = elevation(origin.x, origin.z) + 0.11;
+      } else {
+        origin.x += x * r;
+        origin.y += variation(0.05, smoke ? 1.26 : 0.84);
+        origin.z += z * r;
+      }
+      return {
+        position: origin.clone(), origin, delay, life, seed: variation(0, 37),
+        vx: ember ? x * 0.23 : x * speed, vz: ember ? z * 0.23 : z * speed,
+        vy: ember ? variation(0.18, 0.64) : variation(0.85, smoke ? 2.52 : 5.20),
+        size: smoke ? variation(0.53, 1.23) : ember ? variation(0.15, 0.32) : variation(0.42, 1.03),
+        growth: smoke ? variation(0.44, 0.82) : ember ? 0.17 : variation(0.75, 1.85),
+        spin: variation(-1.6, 1.6), angle: variation(0, TAU)
+      };
+    }
+
+    function makeFragment(origin, normal, hot) {
+      const a = variation(0, TAU), speed = hot ? variation(5.5, 19) : variation(3.2, 10.4);
+      const life = hot ? variation(0.48, 1.46) : variation(1.05, 2.25);
+      const velocity = V(Math.cos(a) * speed, variation(2.0, hot ? 12.0 : 8.40), Math.sin(a) * speed);
+      if (velocity.dot(normal) < 0) velocity.reflect(normal);
+      return {
+        position: origin.clone().add(V(variation(-0.18, 0.18), variation(0.05, 0.41), variation(-0.18, 0.18))),
+        velocity,
+        spin: V(variation(-11, 11), variation(-9, 9), variation(-8, 8)),
+        color: debrisColors[Math.floor(variation(0, debrisColors.length))],
+        size: hot ? variation(0.018, 0.052) : variation(0.07, 0.23), life
+      };
+    }
+
+    function detonate(slot) {
+      demolition.blast(slot.point, slot.structure);
+      slot.exploded = true;
+      slot.rune.visible = false;
+      const origin = slot.point.clone().addScaledVector(slot.normal, 0.30);
+      const height = Math.max(0, slot.point.y - elevation(slot.point.x, slot.point.z));
+      slot.radius = Math.sqrt(Math.max(0, blastRadius ** 2 - height ** 2));
+      for (const list of [slot.flames, slot.smoke, slot.sparks, slot.shards]) list.length = 0;
+      for (let i = 0; i < counts.flame; i++) slot.flames.push(makePuff(origin, false));
+      if (height < 0.8) for (let i = 0; i < counts.ember; i++) slot.flames.push(makePuff(origin, false, true));
+      for (let i = 0; i < counts.smoke; i++) slot.smoke.push(makePuff(origin, true));
+      for (let i = 0; i < counts.spark; i++) slot.sparks.push(makeFragment(origin, slot.normal, true));
+      for (let i = 0; i < counts.shard; i++) slot.shards.push(makeFragment(origin, slot.normal, false));
+      const distance = camera.position.distanceTo(origin);
+      const force = 1 / (1 + distance * 0.076);
+      shake = Math.max(shake, 0.32 * force);
+      direction.copy(origin).sub(camera.position);
+      const forwards = direction.normalize().dot(forward);
+      if (forwards > 0.52) {
+        screenFlash = 0.20 * (0.45 + force * 0.55);
+        flashPoint = origin;
+      }
+      const pan = clamp(direction.x * forward.z * -1 + direction.z * forward.x, -1, 1);
+      audio.boom(clamp(force * 1.28, 0.17, 1), pan);
+    }
+
+    function animatePuffs(list, time, isSmoke, destination) {
+      for (const p of list) {
+        const age = time - p.delay;
+        if (age <= 0 || age >= p.life) continue;
+        const unit = age / p.life;
+        const travel = (1 - Math.exp(-age * (isSmoke ? 1.32 : 3.0))) / (isSmoke ? 1.32 : 3.0);
+        p.position.set(p.origin.x + p.vx * travel + age * age * 0.11,
+          p.origin.y + p.vy * (isSmoke ? age * 0.74 : travel),
+          p.origin.z + p.vz * travel + age * 0.15);
+        p.diameter = p.size + p.growth * (isSmoke ? age : Math.sqrt(age));
+        p.rotation = p.angle + p.spin * age;
+        p.alpha = (isSmoke ? 0.51 : 0.91) * Math.min(1, age / (isSmoke ? 0.31 : 0.057)) * (1 - unit ** (isSmoke ? 1.47 : 2.7));
+        p.unit = unit;
+        p.depth = p.position.dot(forward);
+        destination.push(p);
+      }
+    }
+
+    function drawPuffs(batch, list) {
+      list.sort((a, b) => b.depth - a.depth);
+      list.forEach((p, i) => {
+        batch.center.setXYZ(i, p.position.x, p.position.y, p.position.z);
+        batch.shape.setXYZW(i, p.diameter, p.rotation, p.alpha, p.unit);
+        batch.seed.setX(i, p.seed);
+      });
+      batch.geometry.instanceCount = list.length;
+      if (list.length) batch.center.needsUpdate = batch.shape.needsUpdate = batch.seed.needsUpdate = true;
+    }
+
+    function drawFragments(list, time, dt, hot, batch, index) {
+      for (const p of list) {
+        if (time > p.life) continue;
+        p.velocity.y -= (hot ? 12 : 17) * dt;
+        p.position.addScaledVector(p.velocity, dt);
+        const floor = elevation(p.position.x, p.position.z) + p.size * 0.44;
+        if (p.position.y < floor) {
+          p.position.y = floor;
+          p.velocity.y = Math.abs(p.velocity.y) * (hot ? 0.16 : 0.30);
+          p.velocity.x *= 0.68;
+          p.velocity.z *= 0.68;
+        }
+        const unit = time / p.life;
+        const shrink = Math.min(1, (1 - unit) * 4.5);
+        const size = p.size * shrink;
+        dummy.position.copy(p.position);
+        if (hot) {
+          direction.copy(p.velocity).normalize();
+          dummy.quaternion.setFromUnitVectors(up, direction);
+          dummy.scale.set(size, (0.058 + p.velocity.length() * 0.031) * shrink, size);
+          batch.setColorAt(index, emberColor.copy(emberStart).lerp(emberEnd, unit ** 0.55));
+        } else {
+          dummy.rotation.set(time * p.spin.x, time * p.spin.y, time * p.spin.z);
+          dummy.scale.set(size * 1.15, size * 0.73, size);
+          batch.setColorAt(index, p.color);
+        }
+        dummy.updateMatrix();
+        batch.setMatrixAt(index++, dummy.matrix);
+      }
+      return index;
+    }
+
+    function finishBatch(batch, count) {
+      batch.count = count;
+      if (count) batch.instanceColor.needsUpdate = batch.instanceMatrix.needsUpdate = true;
+    }
+
+    function update(now, dt) {
+      camera.updateMatrixWorld();
+      camera.getWorldDirection(forward);
+      puffs.length = haze.length = 0;
+      let sparkCount = 0, debrisCount = 0, light = 0, charging = false;
+      for (const slot of casts) {
+        const age = now - slot.time, blastAge = age - fuse;
+        if (blastAge < 0) {
+          charging = true;
+          slot.rune.material.uniforms.progress.value = T.MathUtils.smoothstep(age, 0, fuse);
+          const glow = 1.6 + 4.0 * age / fuse;
+          if (glow > light) {
+            light = glow;
+            firelight.position.copy(slot.point).addScaledVector(slot.normal, 0.62);
+          }
+          continue;
+        }
+        if (blastAge >= maxAge) continue;
+        if (!slot.exploded) detonate(slot);
+        const glow = 185 * Math.exp(-blastAge * 9.4) + 15 * Math.exp(-blastAge * 2.8);
+        if (glow > light) {
+          light = glow;
+          firelight.position.copy(slot.point).addScaledVector(slot.normal, 0.83);
+        }
+        const stage = Math.min(5, 1 + Math.floor(blastAge * 12.0));
+        if (slot.radius > 0.25 && stage > slot.charStage) {
+          scorch.stamp(slot.point.x, slot.point.z, slot.radius * (0.28 + stage * 0.144));
+          slot.charStage = stage;
+        }
+        animatePuffs(slot.flames, blastAge, false, puffs);
+        animatePuffs(slot.smoke, blastAge, true, haze);
+        sparkCount = drawFragments(slot.sparks, blastAge, dt, true, sparks, sparkCount);
+        debrisCount = drawFragments(slot.shards, blastAge, dt, false, debris, debrisCount);
+      }
+      firelight.intensity = light;
+      drawPuffs(fireCloud, puffs);
+      drawPuffs(smokeCloud, haze);
+      finishBatch(sparks, sparkCount);
+      finishBatch(debris, debrisCount);
+      const state = charging ? 'charging' : now < missUntil ? 'miss' : '';
+      if (state !== aimState) aim.dataset.state = aimState = state;
+
+      if (shake > 0) {
+        if (!reducedMotion.matches) {
+          const strength = Math.min(1, shake / 0.24);
+          camera.rotation.x += Math.sin(now * 71) * strength * 0.009;
+          camera.rotation.y += Math.sin(now * 48) * strength * 0.007;
+          camera.position.x += Math.sin(now * 90) * strength * 0.037;
+          camera.position.y += Math.cos(now * 63) * strength * 0.026;
+        }
+        shake = Math.max(0, shake - dt);
+      }
+      if (screenFlash > 0 && flashPoint) {
+        projected.copy(flashPoint).project(camera);
+        flash.style.setProperty('--flash-x', (50 + clamp(projected.x, -1, 1) * 50) + '%');
+        flash.style.setProperty('--flash-y', (50 - clamp(projected.y, -1, 1) * 50) + '%');
+        screenOpacity = Math.min(reducedMotion.matches ? 0.13 : 0.52, screenFlash * 2.7);
+        flash.style.opacity = String(screenOpacity);
+        screenFlash = Math.max(0, screenFlash - dt);
+      } else if (screenOpacity) {
+        flash.style.opacity = '0';
+        screenOpacity = 0;
+      }
+    }
+
+    return { cast, update };
+  }
+
+  // The charge, crack, bass impact, and low rumble are synthesized at runtime.
+  function makeFireAudio() {
+    let context, master, noise;
+    function unlock() {
+      const Audio = window.AudioContext || window.webkitAudioContext;
+      if (!Audio) return;
+      try {
+        if (!context) {
+          context = new Audio();
+          const limiter = context.createDynamicsCompressor();
+          master = context.createGain();
+          master.gain.value = 0.63;
+          master.connect(limiter);
+          limiter.connect(context.destination);
+          noise = context.createBuffer(1, Math.ceil(context.sampleRate * 1.6), context.sampleRate);
+          const data = noise.getChannelData(0);
+          let seed = 72199;
+          for (let i = 0; i < data.length; i++) {
+            seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+            data[i] = seed / 2147483648 - 1;
+          }
+        }
+        return context.state !== 'running' ? context.resume() : undefined;
+      } catch {
+        // A device without an available audio output can still play the spell.
+      }
+    }
+    function envelope(output, start, attack, length, volume) {
+      const amp = context.createGain();
+      amp.gain.setValueAtTime(0.0001, start);
+      amp.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), start + attack);
+      amp.gain.exponentialRampToValueAtTime(0.0001, start + length);
+      amp.connect(output);
+      return amp;
+    }
+    function tone(output, time, from, to, volume, length, type = 'sine', attack = 0.012) {
+      const oscillator = context.createOscillator();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(from, time);
+      oscillator.frequency.exponentialRampToValueAtTime(to, time + length * 0.84);
+      oscillator.connect(envelope(output, time, attack, length, volume));
+      oscillator.start(time);
+      oscillator.stop(time + length + 0.015);
+    }
+    function burst(output, time, type, from, to, q, volume, length, attack) {
+      const source = context.createBufferSource();
+      source.buffer = noise;
+      const filter = context.createBiquadFilter();
+      filter.type = type;
+      filter.Q.value = q;
+      filter.frequency.setValueAtTime(from, time);
+      filter.frequency.exponentialRampToValueAtTime(to, time + length * 0.87);
+      source.connect(filter);
+      filter.connect(envelope(output, time, attack, length, volume));
+      source.start(time);
+      source.stop(time + length + 0.015);
+    }
+    function charge(force) {
+      const triggeredAt = performance.now();
+      const pending = unlock();
+      function play() {
+        if (context?.state !== 'running' || performance.now() - triggeredAt > 160) return;
+        const time = context.currentTime;
+        tone(master, time, 130, 385, 0.047 * force, 0.52, 'triangle', 0.18);
+        tone(master, time + 0.072, 203, 622, 0.024 * force, 0.43, 'sine', 0.14);
+      }
+      if (pending) pending.then(play).catch(() => {});
+      else play();
+    }
+    function boom(force, pan) {
+      if (context?.state !== 'running') return;
+      const time = context.currentTime;
+      let output = master;
+      if (context.createStereoPanner) {
+        output = context.createStereoPanner();
+        output.pan.value = pan * 0.66;
+        output.connect(master);
+        const panner = output;
+        setTimeout(() => panner.disconnect(), 1550);
+      }
+      tone(output, time, 93, 29, 0.68 * force, 0.65);
+      burst(output, time, 'highpass', 2240, 890, 0.52, 0.51 * force, 0.17, 0.006);
+      burst(output, time, 'lowpass', 990, 128, 1.05, 0.83 * force, 1.22, 0.031);
+      burst(output, time + 0.044, 'bandpass', 1870, 310, 0.78, 0.37 * force, 0.71, 0.035);
+    }
+    return { charge, boom };
+  }
+
+  const demolition = (function buildDestruction(T, scene, buildings, boxGeometry, wedge, elevation, compact) {
+  const step = 1 / 60, limit = compact ? 72 : 112, blastRadius = 4.4, cellWidth = 1.3;
+  const active = [], waiting = [], targets = [];
+  const structures = new Map(), geometries = new Map(), dirty = new Set();
+  const anchored = new Map(), sleeping = new Map(), moving = new Map();
+  const material = new T.MeshStandardMaterial({ roughness: 0.96, flatShading: true });
+  const matrix = new T.Matrix4(), local = new T.Matrix4();
+  const offset = new T.Matrix4(), pose = new T.Matrix4();
+  const spinStep = new T.Quaternion(), axis = new T.Vector3(), normal = new T.Vector3();
+  const tint = new T.Color(), instanceTint = new T.Color();
+  let accumulator = 0, nextId = 0;
+
+  scene.updateMatrixWorld(true);
+  for (const [root, site, type] of buildings) {
+    const structure = { site, type, pieces: [], batches: new Map(), attached: 0 };
+    structures.set(site, structure);
+    root.traverse(object => {
+      if (object.isMesh) splitMesh(structure, object);
+    });
+    structure.attached = structure.pieces.length;
+    root.clear();
+    for (const [geometry, pieces] of structure.batches) {
+      const batch = new T.InstancedMesh(geometry, material, pieces.length);
+      batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
+      batch.castShadow = batch.receiveShadow = true;
+      batch.frustumCulled = false;
+      batch.boundingSphere = new T.Sphere(new T.Vector3(site.x, root.position.y + 4, site.z), 90);
+      batch.userData.structure = structure;
+      for (let i = 0; i < pieces.length; i++) {
+        const piece = pieces[i];
+        piece.batch = batch;
+        piece.index = i;
+        batch.setColorAt(i, piece.color);
+        piece.fixedCell = addTo(anchored, piece);
+        write(piece);
+      }
+      scene.add(batch);
+      targets.push(batch);
+    }
+  }
+  upload();
+
+  function addPiece(structure, geometry, transform, color) {
+    if (!geometries.has(geometry)) {
+      geometry.computeBoundingBox();
+      const center = geometry.boundingBox.getCenter(new T.Vector3());
+      const size = geometry.boundingBox.getSize(new T.Vector3());
+      const centered = center.lengthSq() < 1e-10 ? geometry
+        : geometry.clone().translate(-center.x, -center.y, -center.z);
+      geometries.set(geometry, { center, size, centered });
+    }
+    const { center, size, centered } = geometries.get(geometry);
+    const piece = {
+      id: nextId++, structure, color: color.clone(),
+      position: new T.Vector3(), rotation: new T.Quaternion(), scale: new T.Vector3(),
+      velocity: new T.Vector3(), spin: new T.Vector3(), half: new T.Vector3(),
+      attached: true, moving: false, queued: false, age: 0, quiet: 0
+    };
+    pose.copy(transform).multiply(offset.makeTranslation(center.x, center.y, center.z));
+    pose.decompose(piece.position, piece.rotation, piece.scale);
+    piece.half.copy(size).multiply(piece.scale).multiplyScalar(0.5);
+    piece.radius = T.MathUtils.clamp(piece.half.length() * 0.76, 0.055, 0.53);
+    piece.mass = Math.max(0.055, piece.half.x * piece.half.y * piece.half.z);
+    if (!structure.batches.has(centered)) structure.batches.set(centered, []);
+    structure.batches.get(centered).push(piece);
+    structure.pieces.push(piece);
+  }
+
+  function panel(transform, structure, color, x, y, z, w, h, d) {
+    local.makeScale(w, h, d).setPosition(x, y, z);
+    addPiece(structure, boxGeometry, matrix.multiplyMatrices(transform, local), color);
+  }
+
+  function wallPanels(structure, transform, color, w, d) {
+    const rows = 6;
+    for (let side = 0; side < 4; side++) {
+      const across = side % 2 === 0;
+      const length = across ? w : d - 0.36;
+      const columns = Math.ceil(length / 0.82);
+      const sign = side < 2 ? 1 : -1;
+      for (let row = 0; row < rows; row++) {
+        const shift = row % 2 ? 0.5 : 0;
+        for (let column = 0; column < columns + shift; column++) {
+          const lo = Math.max(0, column - shift);
+          const hi = Math.min(columns, column + 1 - shift);
+          const at = ((lo + hi) / (2 * columns) - 0.5) * length;
+          const width = (hi - lo) * length / columns - 0.008;
+          tint.copy(color).multiplyScalar(0.93 + 0.011 * ((side + row + column * 3) % 7));
+          panel(transform, structure, tint, across ? at / w : sign * (0.5 - 0.09 / w),
+            (row + 0.5) / rows - 0.5, across ? sign * (0.5 - 0.09 / d) : at / d,
+            (across ? width : 0.18) / w, 1 / rows - 0.005, (across ? 0.18 : width) / d);
+        }
+      }
+    }
+  }
+
+  function gablePanels(structure, transform, color) {
+    const height = 2.05, rows = 6;
+    for (const z of [0.085, structure.site.depth - 0.085]) {
+      for (let row = 0; row < rows; row++) {
+        const y = (row + 0.5) * height / rows;
+        const width = structure.site.width * (1 - y / height);
+        const columns = Math.ceil(width / 0.95);
+        for (let i = 0; i < columns; i++) {
+          tint.copy(color).multiplyScalar(0.93 + ((i + row * 3) % 5) * 0.015);
+          panel(transform, structure, tint, (i + 0.5) * width / columns - width / 2, y, z,
+            width / columns - 0.008, height / rows - 0.010, 0.17);
+        }
+      }
+    }
+  }
+
+  function splitMesh(structure, object) {
+    const transform = object.matrixWorld;
+    const geometry = object.geometry, color = object.material.color;
+    const { x: w, y: h, z: d } = object.scale;
+    const cottageWall = structure.type === 'cottage' && color.getHex() === 0xf4dfb1;
+
+    if (structure.type === 'tower' && geometry.type === 'CylinderGeometry') {
+      const { height, radiusTop, radiusBottom } = geometry.parameters;
+      if (height > 2) return; // The stone facing replaces the solid tower core.
+      const radius = (radiusTop + radiusBottom) / 2;
+      const course = wedge(radius, height - 0.016, Math.PI / 20 - 0.004, 0.39);
+      for (let i = 0; i < 20; i++) {
+        matrix.copy(transform).multiply(local.makeRotationY(i * Math.PI / 10));
+        addPiece(structure, course, matrix, color);
+      }
+    } else if (cottageWall && geometry === boxGeometry) {
+      wallPanels(structure, transform, color, w, d);
+    } else if (cottageWall && geometry.type === 'ExtrudeGeometry') {
+      gablePanels(structure, transform, color);
+    } else if (geometry === boxGeometry && w > 3 && d > 3) {
+      const across = h < 0.2 ? 1 : Math.ceil(w / 1.1);
+      const deep = Math.ceil(d / (h < 0.2 ? 0.6 : 1.1));
+      for (let x = 0; x < across; x++) {
+        for (let z = 0; z < deep; z++) {
+          panel(transform, structure, color, (x + 0.5) / across - 0.5, 0, (z + 0.5) / deep - 0.5,
+            1 / across - (across > 1 ? 0.002 : 0), 1, 1 / deep - 0.002);
+        }
+      }
+    } else if (object.isInstancedMesh) {
+      for (let i = 0; i < object.count; i++) {
+        object.getMatrixAt(i, local);
+        object.getColorAt(i, instanceTint);
+        addPiece(structure, geometry, matrix.multiplyMatrices(transform, local),
+          tint.copy(color).multiply(instanceTint));
+      }
+    } else {
+      addPiece(structure, geometry, transform, color);
+    }
+  }
+
+  function blast(point, hit) {
+    const center = point.clone(), additions = [];
+    for (const structure of structures.values()) {
+      const direct = hit === structure;
+      const close = structure.pieces.some(piece => piece.attached && piece.position.distanceToSquared(center) < 9);
+      const collapse = structure.type === 'tower' ? direct || close : direct && close;
+      for (const piece of structure.pieces) {
+        const distance = piece.position.distanceTo(center);
+        const near = distance < blastRadius;
+        if (piece.moving) {
+          if (near) launch(piece, center, distance, true);
+          continue;
+        }
+        if (piece.queued || (!near && !(collapse && piece.attached))) continue;
+        const thrown = near && (distance < 3 || !collapse);
+        piece.queued = true;
+        additions.push({ piece, center, distance, thrown,
+          priority: thrown ? 30 - distance : piece.position.y * 0.65 - distance * 0.11 });
+      }
+    }
+    additions.sort((a, b) => b.priority - a.priority);
+    waiting.unshift(...additions);
+  }
+
+  function launch(piece, center, distance, thrown) {
+    normal.copy(piece.position).sub(center);
+    normal.y *= 0.34;
+    if (normal.lengthSq() < 0.0001) normal.set(1, 0, 0);
+    const power = thrown ? 3 + 8 * Math.max(0, 1 - distance / blastRadius) : 0.75;
+    piece.velocity.addScaledVector(normal.normalize(), power);
+    piece.velocity.y += thrown ? 2.1 + (piece.id % 9) * 0.27 : -0.45;
+    piece.velocity.clampLength(0, 16);
+    piece.spin.set(piece.id % 9 - 4, (piece.id % 7 - 3) * 0.95, (piece.id % 11 - 5) * 0.73);
+    piece.quiet = 0;
+  }
+
+  function key(x, z) {
+    return (x + 512) * 1024 + z + 512;
+  }
+
+  function addTo(grid, piece) {
+    const { x, z } = piece.position;
+    const id = key(Math.floor(x / cellWidth), Math.floor(z / cellWidth));
+    if (!grid.has(id)) grid.set(id, new Set());
+    const bin = grid.get(id);
+    bin.add(piece);
+    return bin;
+  }
+
+  function write(piece) {
+    piece.batch.setMatrixAt(piece.index, pose.compose(piece.position, piece.rotation, piece.scale));
+    dirty.add(piece.batch);
+  }
+
+  function upload() {
+    for (const batch of dirty) batch.instanceMatrix.needsUpdate = true;
+    dirty.clear();
+  }
+
+  function land(piece) {
+    const { x, y, z, w } = piece.rotation;
+    const height = Math.abs(2 * (x * y + w * z)) * piece.half.x +
+      Math.abs(1 - 2 * (x * x + z * z)) * piece.half.y +
+      Math.abs(2 * (y * z - w * x)) * piece.half.z;
+    const floor = elevation(piece.position.x, piece.position.z) + height;
+    if (piece.position.y > floor) return;
+    piece.position.y = floor;
+    piece.supported = true;
+    if (piece.velocity.y < 0) piece.velocity.y *= Math.abs(piece.velocity.y) > 0.65 ? -0.24 : 0;
+    piece.spin.x = piece.spin.x * 0.69 + piece.velocity.z * 0.58;
+    piece.spin.z = piece.spin.z * 0.69 - piece.velocity.x * 0.58;
+    piece.spin.y *= 0.78;
+    piece.velocity.x *= 0.78;
+    piece.velocity.z *= 0.78;
+  }
+
+  function settleContact(piece) {
+    piece.supported = true;
+    piece.velocity.multiplyScalar(0.84);
+    piece.spin.multiplyScalar(0.75);
+  }
+
+  function meet(a, b, both) {
+    normal.copy(a.position).sub(b.position);
+    const distanceSq = normal.lengthSq(), width = a.radius + b.radius;
+    if (distanceSq >= width * width) return;
+    const distance = Math.sqrt(distanceSq);
+    if (distance < 0.0001) normal.set(0, 1, 0);
+    else normal.multiplyScalar(1 / distance);
+    const share = both ? b.mass / (a.mass + b.mass) : 1;
+    const correction = Math.min(0.22, (width - distance) * 0.74);
+    a.position.addScaledVector(normal, correction * share);
+    if (both) b.position.addScaledVector(normal, -correction * (1 - share));
+    const approach = a.velocity.dot(normal) - (both ? b.velocity.dot(normal) : 0);
+    if (approach < 0) {
+      a.velocity.addScaledVector(normal, -approach * 1.1 * share);
+      if (both) b.velocity.addScaledVector(normal, approach * 1.1 * (1 - share));
+    }
+    if (normal.y > 0.35) settleContact(a);
+    if (both && normal.y < -0.35) settleContact(b);
+  }
+
+  function tick() {
+    for (let i = 0; i < 11 && waiting.length && active.length < limit; i++) {
+      const { piece, center, distance, thrown } = waiting.shift();
+      piece.fixedCell?.delete(piece);
+      piece.restCell?.delete(piece);
+      piece.fixedCell = piece.restCell = null;
+      piece.queued = false;
+      piece.moving = true;
+      if (piece.attached) piece.structure.attached--;
+      piece.attached = false;
+      piece.age = 0;
+      piece.velocity.set(0, 0, 0);
+      launch(piece, center, distance, thrown);
+      active.push(piece);
+    }
+
+    moving.clear();
+    for (const piece of active) {
+      piece.age += step;
+      piece.supported = false;
+      piece.velocity.y -= 17 * step;
+      piece.position.addScaledVector(piece.velocity, step);
+      const speed = piece.spin.length();
+      if (speed > 0.003) {
+        axis.copy(piece.spin).multiplyScalar(1 / speed);
+        piece.rotation.premultiply(spinStep.setFromAxisAngle(axis, speed * step)).normalize();
+      }
+      piece.spin.multiplyScalar(0.986);
+      land(piece);
+      addTo(moving, piece);
+    }
+
+    // Collide only with pieces in neighboring grid cells.
+    for (const piece of active) {
+      const x = Math.floor(piece.position.x / cellWidth), z = Math.floor(piece.position.z / cellWidth);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const id = key(x + dx, z + dz);
+          const mobiles = moving.get(id), pile = sleeping.get(id), fixed = anchored.get(id);
+          if (mobiles) for (const other of mobiles) if (piece.id < other.id) meet(piece, other, true);
+          if (pile) for (const other of pile) meet(piece, other, false);
+          if (fixed) for (const other of fixed) if (!other.queued) meet(piece, other, false);
+        }
+      }
+    }
+
+    for (let i = active.length - 1; i >= 0; i--) {
+      const piece = active[i];
+      land(piece);
+      const speedSq = piece.velocity.lengthSq();
+      const quiet = speedSq < 0.24 && piece.spin.lengthSq() < 0.64;
+      piece.quiet = piece.supported && quiet ? piece.quiet + step : 0;
+      if (piece.quiet > 0.30 || (piece.supported && piece.age > 4.5 && speedSq < 2)) {
+        piece.velocity.set(0, 0, 0);
+        piece.spin.set(0, 0, 0);
+        piece.moving = false;
+        piece.restCell = addTo(sleeping, piece);
+        active[i] = active[active.length - 1];
+        active.pop();
+      }
+      write(piece);
+    }
+  }
+
+  function update(dt) {
+    if (!active.length && !waiting.length) {
+      accumulator = 0;
+      return;
+    }
+    accumulator = Math.min(3 * step, accumulator + dt);
+    while (accumulator >= step) {
+      tick();
+      accumulator -= step;
+    }
+    upload();
+  }
+
+  function cleared(site) {
+    const structure = structures.get(site);
+    return Boolean(structure && structure.attached < structure.pieces.length * 0.44);
+  }
+
+  return { targets, blast, update, cleared };
+})(T, scene, [
+    [tower, towerSite, 'tower'], [cottage, cottageSite, 'cottage'], [ruins, ruinSite, 'ruins']
+  ], boxGeometry, wedge, elevation, compact);
+  const fire = makeFireSpell([ground, ...demolition.targets, mill, trunks, canopy, trailStones, fenceMesh]);
+
+  // Drag-to-look and WASD share movement with the optional touch stick.
+  const player = V(roadX(16), elevation(roadX(16), 16) + 1.69, 16);
+  let yaw = 0.071, pitchAngle = 0.018, walking = 0, stride = 0;
+  let lookPointer = null, pointerX = 0, pointerY = 0;
+  let pressX = 0, pressY = 0, dragged = false;
+  const keys = new Set();
+  const directions = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']);
+  window.addEventListener('keydown', (event) => {
+    if (!directions.has(event.code) || event.ctrlKey || event.metaKey || event.altKey) return;
+    event.preventDefault();
+    keys.add(event.code);
+  });
+  window.addEventListener('keyup', (event) => keys.delete(event.code));
+  const resetInput = () => {
+    keys.clear();
+    stopLook();
+    stopStick();
+  };
+  window.addEventListener('blur', resetInput);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); });
+
+  canvas.addEventListener('pointerdown', (event) => {
+    if (lookPointer !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    lookPointer = event.pointerId;
+    pressX = pointerX = event.clientX;
+    pressY = pointerY = event.clientY;
+    dragged = false;
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener('pointermove', (event) => {
+    if (event.pointerId !== lookPointer) return;
+    const threshold = event.pointerType === 'touch' ? 8 : 4;
+    if (!dragged && Math.hypot(event.clientX - pressX, event.clientY - pressY) < threshold) return;
+    dragged = true;
+    const sensitivity = event.pointerType === 'touch' ? 0.0058 : 0.0040;
+    yaw -= (event.clientX - pointerX) * sensitivity;
+    pitchAngle = clamp(pitchAngle - (event.clientY - pointerY) * sensitivity, -1.43, 1.43);
+    pointerX = event.clientX;
+    pointerY = event.clientY;
+  });
+  canvas.addEventListener('pointerup', (event) => {
+    if (event.pointerId !== lookPointer) return;
+    const threshold = event.pointerType === 'touch' ? 8 : 4;
+    if (!dragged && Math.hypot(event.clientX - pressX, event.clientY - pressY) < threshold) {
+      fire.cast(player, yaw, pitchAngle, elapsed);
+    }
+    stopLook(event);
+  });
+  function stopLook(event) {
+    if (event && event.pointerId !== lookPointer) return;
+    const id = lookPointer;
+    lookPointer = null;
+    if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+  }
+  for (const type of ['pointercancel', 'lostpointercapture']) canvas.addEventListener(type, stopLook);
+  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+
+  const stick = document.querySelector('#stick');
+  const knob = stick.querySelector('span');
+  const analog = new T.Vector2();
+  let stickPointer = null;
+  function moveStick(event) {
+    if (event.pointerId !== stickPointer) return;
+    const bounds = stick.getBoundingClientRect();
+    analog.set((event.clientX - bounds.x - bounds.width / 2) / 31,
+      (event.clientY - bounds.y - bounds.height / 2) / 31).clampLength(0, 1);
+    knob.style.transform = `translate(${analog.x * 29}px, ${analog.y * 29}px)`;
+  }
+  function stopStick(event) {
+    if (event && event.pointerId !== stickPointer) return;
+    const id = stickPointer;
+    stickPointer = null;
+    if (id !== null && stick.hasPointerCapture(id)) stick.releasePointerCapture(id);
+    analog.set(0, 0);
+    knob.style.transform = '';
+  }
+  stick.addEventListener('pointerdown', (event) => {
+    if (stickPointer !== null) return;
+    stickPointer = event.pointerId;
+    stick.setPointerCapture(event.pointerId);
+    moveStick(event);
+  });
+  stick.addEventListener('pointermove', moveStick);
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) stick.addEventListener(type, stopStick);
+
+  function passable(x, z) {
+    if (Math.hypot(x, (z + 11) * 1.04) > 44) return false;
+    for (const site of sites) {
+      const dx = x - site.x, dz = z - site.z;
+      if (site === ruinSite || demolition.cleared(site)) continue;
+      if (site.radius && Math.hypot(dx, dz) < site.radius + 0.23) return false;
+      if (!site.radius && Math.abs(dx) < site.width / 2 + 0.25 && Math.abs(dz) < site.depth / 2 + 0.22) return false;
+    }
+    return !trees.some((tree) => Math.hypot(x - tree.x, z - tree.z) < tree.radius + 0.19);
+  }
+
+  function resize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const aspect = Math.max(0.1, w / Math.max(h, 1));
+    camera.aspect = handCamera.aspect = aspect;
+    camera.fov = aspect < 1 ? 68 : 57;
+    camera.updateProjectionMatrix();
+    handCamera.updateProjectionMatrix();
+    renderer.setSize(w, h, false);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  scene.updateMatrixWorld();
+
+  const input = new T.Vector2();
+  let lastTime = performance.now(), elapsed = 0, lastShadow = -1;
+  renderer.setAnimationLoop((now) => {
+    const dt = clamp((now - lastTime) / 1000, 0, 0.045);
+    lastTime = now;
+    elapsed += dt;
+    windTime.value = elapsed;
+    input.set(Number(keys.has('KeyD')) - Number(keys.has('KeyA')) + analog.x,
+      Number(keys.has('KeyW')) - Number(keys.has('KeyS')) - analog.y).clampLength(0, 1);
+    const vx = (Math.cos(yaw) * input.x - Math.sin(yaw) * input.y) * 4.55 * dt;
+    const vz = (-Math.sin(yaw) * input.x - Math.cos(yaw) * input.y) * 4.55 * dt;
+    const previousX = player.x, previousZ = player.z;
+    if (vx && passable(player.x + vx, player.z)) player.x += vx;
+    if (vz && passable(player.x, player.z + vz)) player.z += vz;
+    const speed = Math.hypot(player.x - previousX, player.z - previousZ) / Math.max(0.001, dt);
+    walking = T.MathUtils.damp(walking, clamp(speed / 4.55, 0, 1), 11, dt);
+    stride += dt * (5.5 + walking * 5);
+    player.y = T.MathUtils.damp(player.y, elevation(player.x, player.z) + 1.69, 15, dt);
+    camera.position.set(player.x, player.y + Math.sin(stride * 2) * 0.019 * walking, player.z);
+    camera.rotation.set(pitchAngle, yaw, 0);
+    fire.update(elapsed, dt);
+    demolition.update(dt);
+    sky.position.copy(camera.position);
+    rotor.rotation.z = 0.44 - elapsed * 0.34;
+    if (elapsed - lastShadow > 0.073) {
+      renderer.shadowMap.needsUpdate = true;
+      lastShadow = elapsed;
+    }
+
+    const swaying = Math.sin(stride) * walking;
+    const handX = Math.tan(T.MathUtils.degToRad(handCamera.fov / 2)) * handCamera.aspect;
+    const portraitOffset = handCamera.aspect < 0.8 ? 0.13 : 0;
+    staff.position.set(handX * 0.69 - portraitOffset + swaying * 0.017,
+      -0.396 + Math.sin(stride * 2) * walking * 0.021 + Math.sin(elapsed * 1.8) * 0.009, -1.07);
+    staff.rotation.set(0.10 + walking * 0.036, -0.18, -0.11 + swaying * 0.025);
+
+    renderer.clear();
+    renderer.render(scene, camera);
+    renderer.clearDepth();
+    renderer.render(foreground, handCamera);
+  });
+}
+</script>
+</body>
+</html>
