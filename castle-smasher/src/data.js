@@ -30,7 +30,7 @@ export const WEAPONS=[
 export const LEVELS=[
  {name:'Training Fort',tag:'THE FIRST CRACK',theme:'meadow',mat:'wood',layout:'fort',height:4,ammo:6,goal:45,hint:'Aim low. Remove the front wall’s timber supports.',bonus:'Open the gate',target:'gate'},
  {name:'Stonewall Keep',tag:'MORTAR & MAYHEM',theme:'meadow',mat:'stone',layout:'keep',height:6,ammo:7,goal:55,hint:'The red barrels beside the gate are an opportunity.',bonus:'Ignite a barrel',target:'barrel'},
- {name:'Sibling Towers',tag:'DOMINO THEORY',theme:'meadow',mat:'stone',layout:'twin',height:42,ammo:6,goal:50,hint:'Tall silver façades, exposed lobby columns. Aim at the supports.',bonus:'Topple both towers',target:'tower'},
+ {name:'Twin Domes',tag:'CURVES AHEAD',theme:'meadow',mat:'sandstone',layout:'domes',height:10,ammo:6,goal:50,hint:'Two domes share one roof. Aim at the powder barrels beside the front arches.',bonus:'Collapse both domes',target:'dome'},
  {name:'Riverfront Castle',tag:'A BRIDGE TOO FRAGILE',theme:'river',mat:'stone',layout:'bridge',height:7,ammo:7,goal:55,hint:'The drawbridge beams connect the gatehouse.',bonus:'Break the drawbridge',target:'bridge'},
  {name:'Mountain Citadel',tag:'DOWNHILL FROM HERE',theme:'mountain',mat:'stone',layout:'citadel',height:9,ammo:7,goal:55,hint:'Strike the cliffside columns to release the upper keep.',bonus:'Destroy a column',target:'column'},
  {name:'Royal Palace',tag:'RENOVATION BY FORCE',theme:'royal',mat:'stone',layout:'palace',height:8,ammo:8,goal:60,hint:'Glass balconies and timber floors are weak links.',bonus:'Find the royal treasury',target:'treasure'},

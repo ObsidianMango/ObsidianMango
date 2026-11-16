@@ -11,13 +11,37 @@ const fakeView=()=>({objects:new T.Group(),weapon:new T.Group(),particles:{add()
 function scene(i){const events=[],view=fakeView(),sim=new Simulation(view,e=>events.push(e),{gravity:1,strength:1,explosions:1});sim.build(generateCastle(LEVELS[i],i));return{sim,view,events}}
 function pose(sim){return sim.entities.map(e=>({p:{...e.body.translation()},q:{...e.body.rotation()},v:{...e.body.linvel()}}))}
 test('twelve distinct valid castles remain standing before a shot',()=>{const sizes=new Set();for(let i=0;i<12;i++){const{sim}=scene(i);assert(sim.entities.length>120,LEVELS[i].name);sizes.add(sim.entities.length);for(const b of sim.blocks){assert([b.x,b.y,b.z,b.w,b.h,b.d].every(Number.isFinite));assert(b.w>0&&b.h>0&&b.d>0)}for(let k=0;k<60;k++)sim.step(1/60);assert.equal(sim.destroyed,0);assert.equal(sim.activeCount,0);sim.world.free();sim.queue.free()}assert(sizes.size>=8)});
-test('cannon impacts create damage, cascading releases and real body displacement',()=>{const{sim,events}=scene(2),w=WEAPONS[3];const p=ORIGIN.clone();const v=velocity(w,-7,5,35);sim.projectile(w,p,v,projectileVisual(w));for(let k=0;k<720;k++)sim.step(1/60);assert(events.some(e=>e.type==='impact'),'actual collider impact');assert(sim.destroyed>12,'masonry damage');assert(sim.activeCount>30,'structural cascade');assert(events.some(e=>e.type==='collapse'),'tower collapse event');assert(sim.entities.some(e=>e.b&&e.original.distanceTo(e.mesh.position)>2),'physical movement');sim.world.free();sim.queue.free()});
+test('a cannon shot can collapse both domes through the shared supports',()=>{
+ const {sim,events}=scene(2),w=WEAPONS[3];
+ sim.projectile(w,ORIGIN.clone(),velocity(w,-7,5,35),projectileVisual(w));
+ for(let k=0;k<720;k++)sim.step(1/60);
+ assert(events.some(e=>e.type==='impact'),'actual collider impact');
+ assert(sim.percent>=LEVELS[2].goal,'the limited-shot challenge is attainable');
+ const collapses=events.filter(e=>e.type==='collapse'&&e.tag==='dome');
+ assert.equal(collapses.length,2);
+ assert.equal(new Set(collapses.map(e=>e.structure)).size,2);
+ assert(sim.entities.some(e=>e.b?.wedge&&e.original.distanceTo(e.mesh.position)>2),'dome masonry falls');
+ sim.world.free();
+ sim.queue.free();
+});
 test('all sixteen weapons launch and their secondary mechanics run',()=>{for(let i=0;i<16;i++){const{sim,view}=scene(0);const arsenal=new Arsenal(view,sim);arsenal.select(i);const projectiles=arsenal.fire(0,8,35);assert.equal(projectiles.length,WEAPONS[i].type==='triple'?3:WEAPONS[i].type==='chain'?2:1);for(let k=0;k<240;k++){sim.step(1/60);arsenal.animate(1/60,0,8)}assert(sim.entities.every(e=>Number.isFinite(e.body.translation().x)),WEAPONS[i].name);if(WEAPONS[i].type==='cluster')assert(sim.entities.filter(e=>e.projectile).length===7);sim.world.free();sim.queue.free()}});
 test('replay records real motion, interpolates, bounds memory, and preserves physics exactly',()=>{const{sim,events}=scene(0),rep=new Replay();sim.onEvent=e=>{events.push(e);rep.event(e.type,e.pos,e.value,{mat:e.mat})};rep.begin(sim.entities,{});sim.projectile(WEAPONS[0],ORIGIN.clone(),velocity(WEAPONS[0],0,10,40),projectileVisual(WEAPONS[0]));for(let i=0;i<360;i++){sim.step(1/60);rep.tick(1/60,sim.entities)}rep.finish(sim.entities);assert(rep.frames.length>100);assert(rep.events.some(e=>e.type==='impact'));const before=pose(sim);const live=sim.entities.map(e=>({p:e.mesh.position.clone(),q:e.mesh.quaternion.clone(),v:e.mesh.visible}));assert(rep.enter(sim.entities));for(const t of[0,.13,rep.impact,3.73,rep.duration])rep.apply(sim.entities,t);assert.deepEqual(pose(sim),before,'playback never mutates live rigid bodies');rep.leave(sim.entities);sim.entities.forEach((e,i)=>{assert(e.mesh.position.equals(live[i].p));assert(e.mesh.quaternion.equals(live[i].q));assert.equal(e.mesh.visible,live[i].v)});assert.deepEqual(pose(sim),before);const[a,b,f]=bracket(rep.frames,.13);assert(a.t<=.13&&b.t>=.13);assert(f>=0&&f<=1);const bounded=new Replay();bounded.maxFrames=5;bounded.begin(sim.entities,{});for(let i=0;i<20;i++)bounded.capture(sim.entities,i*.05);assert(bounded.frames.length<=5);assert(bounded.frames[0].t===0);assert(bounded.bytes<=bounded.maxBytes);sim.world.free();sim.queue.free()});
 
 test('replay stepping follows captured timestamps and re-entry cannot overwrite the live state',()=>{const {sim}=scene(0),rep=new Replay();rep.begin(sim.entities,{});for(const dt of [.05,.05,.1,.2]){sim.step(dt);rep.tick(dt,sim.entities)}rep.finish(sim.entities);rep.enter(sim.entities);rep.seek(.051);rep.step(1);assert.equal(rep.time,.1);rep.step(-1);assert.equal(rep.time,.05);const live=rep.live;assert.equal(rep.enter(sim.entities),false);assert.equal(rep.live,live);rep.leave(sim.entities);sim.world.free();sim.queue.free()});
 
-test('precision bonus requires treasury and twin-tower bonus requires both collapses',async()=>{const{Scoring}=await import('../src/scoring.js');const scoring=new Scoring({medal:()=>true},()=>{});scoring.event({type:'secret',secret:'The chicken kingdom awakens!',value:450},{target:'treasure'});assert.equal(scoring.bonus,false);scoring.event({type:'secret',secret:'Royal treasury',value:700},{target:'treasure'});assert.equal(scoring.bonus,true);scoring.reset();scoring.event({type:'break',tag:'tower',t:0,value:40},{target:'tower'});assert.equal(scoring.bonus,false);scoring.event({type:'collapse',value:600},{target:'tower'});assert.equal(scoring.bonus,false);scoring.event({type:'collapse',value:600},{target:'tower'});assert.equal(scoring.bonus,true)});
+test('precision and tower bonuses require their respective objectives',async()=>{const{Scoring}=await import('../src/scoring.js');const scoring=new Scoring({medal:()=>true},()=>{});scoring.event({type:'secret',secret:'The chicken kingdom awakens!',value:450},{target:'treasure'});assert.equal(scoring.bonus,false);scoring.event({type:'secret',secret:'Royal treasury',value:700},{target:'treasure'});assert.equal(scoring.bonus,true);scoring.reset();scoring.event({type:'break',tag:'tower',t:0,value:40},{target:'tower'});assert.equal(scoring.bonus,false);scoring.event({type:'collapse',value:600},{target:'tower'});assert.equal(scoring.bonus,false);scoring.event({type:'collapse',value:600},{target:'tower'});assert.equal(scoring.bonus,true)});
+
+test('the Twin Domes bonus requires distinct collapses of both domes',async()=>{
+ const {Scoring}=await import('../src/scoring.js');
+ const scoring=new Scoring({medal:()=>true},()=>{}),level=LEVELS[2];
+ scoring.event({type:'break',tag:'dome',t:0,value:40},level);
+ scoring.event({type:'collapse',tag:'tower',structure:1,value:600},level);
+ assert.equal(scoring.bonus,false);
+ for(let i=0;i<2;i++)scoring.event({type:'collapse',tag:'dome',structure:2,value:600},level);
+ assert.equal(scoring.bonus,false);
+ scoring.event({type:'collapse',tag:'dome',structure:3,value:600},level);
+ assert.equal(scoring.bonus,true);
+});
 
 test('secret creatures can be struck without entering masonry damage paths',async()=>{const{spawnCreature}=await import('../src/secrets.js');const{sim}=scene(0);const chicken=spawnCreature(sim,'chicken',{x:0,y:0,z:12});const ball=sim.projectile(WEAPONS[3],ORIGIN.clone(),velocity(WEAPONS[3],0,5,35),projectileVisual(WEAPONS[3]));assert.doesNotThrow(()=>sim.impact(ball,chicken));assert.doesNotThrow(()=>sim.hit(chicken,100));sim.explode({x:0,y:1,z:12},5,100);for(let i=0;i<30;i++)sim.step(1/60);assert(Number.isFinite(chicken.body.translation().x));sim.world.free();sim.queue.free()});
 

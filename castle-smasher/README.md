@@ -48,7 +48,7 @@ The playing screen uses custom SVG siege instruments: drag the **Move Around** w
 
 ## Workshop and first-person exploration
 
-**Sibling Towers** replaces Twin Towers with two slender, square, 42-unit towers: close vertical façade ribs, dark glazing, horizontal service bands, open columned lobbies, flat roofs and a single antenna. Each façade panel and its attached detailing follow the same recorded/destructible entity. The design takes architectural cues from the original towers, rather than replicating their real engineering or scale. References: [Skyscraper Museum](https://www.skyscraper.org/exhibitions/giants-twin-towers-and-the-twentieth-century/) and [9/11 Memorial & Museum](https://www.911memorial.org/learn/resources/world-trade-center-history).
+**Twin Domes** is a walkable stone arcade with two rose sandstone domes on a shared roof. Each dome is made of individual curved masonry courses with matching convex colliders. Hit the powder barrels near the outer arches and take down both domes for the bonus. The Three Stones challenge also uses this layout.
 
 The Castle Workshop now shares geometry with the siege simulation. Towers are hollow, gates are open doorways, and fifteen low stair treads climb onto the next storey's floor. Choose a piece, material, and storey; tap to place or use Select / move. The inspector edits X, Z and base height. Rotate, duplicate, delete, undo/redo, three starting templates and browser-local named saves are available. A 180-piece / 2,400-collider budget bounds custom builds. **SIEGE IT** keeps the blueprint available via **Edit build**; returning to editing restores the intact blueprint rather than converting rubble back into components.
 

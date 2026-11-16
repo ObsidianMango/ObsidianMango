@@ -4,16 +4,16 @@ import {starterCastle} from './blueprints.js?v=sibling-walk-7';
 import {SiegeControls} from './controls.js?v=sibling-walk-7';
 import {attackPosition,castleBearing} from './attack-position.js?v=sibling-walk-7';
 import {View} from './render.js?v=aim-guide-1';
-import {Simulation} from './physics.js?v=aim-guide-1';
-import {generateCastle} from './castles.js?v=sibling-walk-7';
+import {Simulation} from './physics.js?v=twin-domes-1';
+import {generateCastle} from './castles.js?v=twin-domes-1';
 import {Arsenal,projectileVisual} from './weapons.js?v=aim-guide-1';
 import {Replay} from './replay.js?v=sibling-walk-7';
 import {Save} from './save.js?v=sibling-walk-7';
-import {Scoring} from './scoring.js?v=sibling-walk-7';
+import {Scoring} from './scoring.js?v=twin-domes-1';
 import {AudioSystem} from './audio.js?v=sibling-walk-7';
 import {Builder} from './builder.js?v=aim-guide-1';
 import {spawnCreature,updateSecrets} from './secrets.js?v=aim-guide-1';
-import {LEVELS,WEAPONS,MEDALS,BUILD_PARTS,clamp} from './data.js?v=sibling-walk-7';
+import {LEVELS,WEAPONS,MEDALS,BUILD_PARTS,clamp} from './data.js?v=twin-domes-1';
 const $=id=>document.getElementById(id),on=(id,fn)=>$(id).addEventListener('click',fn),show=(id,yes=true)=>$(id).classList.toggle('hidden',!yes);
 const save=new Save(),settings=save.data.settings,audio=new AudioSystem(settings),replay=new Replay();
 let secretsFired=new Set();
@@ -63,14 +63,22 @@ function help(){modal(`<div class="eyebrow">THE ART OF MAKING THINGS FALL</div><
 function aimAtCastle(){yaw=castleBearing({x:attackState.x,z:attackState.z});elevation=clamp(Math.atan2(3-attackState.height-2.1,Math.max(1,Math.hypot(attackState.x,attackState.z)))*180/Math.PI,-75,70);$('yaw').value=yaw;$('elev').value=elevation;updateGuide();}
 function syncPositionControls(){for(const key of['angle','distance','height']){$('flight_'+key).value=attackState[key];$('flight_'+key+'_out').textContent=`${attackState[key]}${key==='angle'?'°':' m'}`;}}
 function updatePositionPanel(){const visible=positionOpen&&['playing','shot'].includes(state)&&!replay.active&&!builder.active;show('positionPanel',visible);$('positionToggle').classList.toggle('active',visible);$('positionToggle').setAttribute('aria-expanded',String(visible));for(const id of['flight_angle','flight_distance','flight_height','flightAim','flightTrack'])$(id).disabled=!!arsenal.launch||replay.active;controls?.setDisabled(!!arsenal.launch||replay.active);}
-function attackCamera(){const a=(attackState.angle+30)*Math.PI/180,f=Math.max(1,Math.min(1.7,.85/view.camera.aspect)),distance=Math.max(70,attackState.distance+40)*f;view.controls.target.set(0,level.layout==='twin'?level.height*.44:4,0);view.camera.position.set(Math.sin(a)*distance,Math.max(28,attackState.height+16,level.layout==='twin'?level.height*.7:0)*f,Math.cos(a)*distance);view.controls.update();}
+function attackCamera(){
+ const domes=level.layout==='domes';
+ const a=(attackState.angle+(domes?18:30))*Math.PI/180;
+ const f=Math.max(1,Math.min(1.7,.85/view.camera.aspect));
+ const distance=(domes?Math.max(35,attackState.distance+12):Math.max(70,attackState.distance+40))*f;
+ view.controls.target.set(0,domes?level.height*.43:4,0);
+ view.camera.position.set(Math.sin(a)*distance,Math.max(domes?17:28,attackState.height+16)*f,Math.cos(a)*distance);
+ view.controls.update();
+}
 function moveAttackPosition(key,value){if(modalOpen||replay.active||arsenal.launch||!['playing','shot'].includes(state))return;
  const old=arsenal.platformPosition.clone(),limits={angle:[0,360],distance:[18,75],height:[0,60]};attackState[key]=clamp(+value,...limits[key]);
  const p=attackPosition(attackState.angle,attackState.distance,attackState.height);attackState.x=p.x;attackState.z=p.z;arsenal.setPosition(p.x,p.y,p.z);
  if(weaponCamera){const delta=arsenal.platformPosition.clone().sub(old);view.camera.position.add(delta);view.controls.target.add(delta);}else{manualCamera=true;attackCamera();}
  if($('flightTrack').checked)aimAtCastle();syncPositionControls();updateGuide();
 }
-function challengeMenu(){modal(`<div class="eyebrow">SMALL AMMUNITION. LARGE EXPECTATIONS.</div><h2>Prove your demolition credentials.</h2><div class="grid">${[['precision','The Royal Heist','Find and smash the hidden treasury in Stonewall Keep.'],['limited','Three Stones','Demolish half of the Sibling Towers in just three shots.'],['timed','Against the Clock','50% destruction in 90 seconds.'],['one','One-Shot Wonder','35% of the Training Fort. One projectile.']].map(([id,n,d])=>`<button class="card" data-challenge="${id}"><span class="number">✦</span><b>${n}</b><small>${d}</small></button>`).join('')}</div>`);$('modalContent').querySelectorAll('[data-challenge]').forEach(b=>b.onclick=()=>{challengeType=b.dataset.challenge;startGame('challenge',challengeType==='limited'?2:challengeType==='one'?0:1)})}
+function challengeMenu(){modal(`<div class="eyebrow">SMALL AMMUNITION. LARGE EXPECTATIONS.</div><h2>Prove your demolition credentials.</h2><div class="grid">${[['precision','The Royal Heist','Find and smash the hidden treasury in Stonewall Keep.'],['limited','Three Stones','Demolish half of Twin Domes in just three shots.'],['timed','Against the Clock','50% destruction in 90 seconds.'],['one','One-Shot Wonder','35% of the Training Fort. One projectile.']].map(([id,n,d])=>`<button class="card" data-challenge="${id}"><span class="number">✦</span><b>${n}</b><small>${d}</small></button>`).join('')}</div>`);$('modalContent').querySelectorAll('[data-challenge]').forEach(b=>b.onclick=()=>{challengeType=b.dataset.challenge;startGame('challenge',challengeType==='limited'?2:challengeType==='one'?0:1)})}
 function refreshBuilderUI(){
  $('buildCount').textContent=`${builder.parts.length} / 180 pieces`;$('buildPart').value=builder.type;$('buildPlaceMode').classList.toggle('active',builder.tool==='place');$('buildSelectMode').classList.toggle('active',builder.tool==='select');
  const p=builder.parts[builder.selected];show('buildInspector',!!p);$('buildSelection').textContent=p?`${p.type} #${builder.selected+1}`:builder.tool==='place'?'Tap ground to place':'Tap a piece to select';

@@ -9,7 +9,21 @@ import {WalkMotor,walkSpawn,clearHeadroom} from '../src/walk.js';
 await Simulation.init();
 function world(parts){const sim=new Simulation({objects:new T.Group(),particles:{clear(){},add(){}},shake:0},()=>{},{strength:1,gravity:1});sim.build(generateCastle(LEVELS[1],1,parts));sim.step(1/60);return sim;}
 function release(sim,motor){motor?.dispose();sim.world.free();sim.queue.free();}
-test('Sibling Towers have tall square facades, flat decks and a single antenna',()=>{assert.equal(LEVELS[2].name,'Sibling Towers');const bs=generateCastle(LEVELS[2],2),facades=bs.filter(b=>b.facade);assert(facades.length>300);assert(Math.max(...facades.map(b=>b.y+b.h/2))>40);assert(new Set(facades.map(b=>b.structure)).size===2);assert(bs.some(b=>b.tag==='antenna'));assert(!bs.some(b=>b.tag==='banner'));});
+test('Twin Domes are two separate masonry shells supported by one walkable roof',()=>{
+ const level=LEVELS[2],sim=new Simulation({objects:new T.Group(),particles:{clear(){},add(){}},shake:0},()=>{},{strength:1,gravity:1});
+ assert.equal(level.name,'Twin Domes');
+ sim.build(generateCastle(level,2));
+ sim.step(1/60);
+ const domes=sim.entities.filter(e=>e.b?.tag==='dome');
+ assert.equal(new Set(domes.map(e=>e.b.structure)).size,2);
+ assert(domes.every(e=>e.b.wedge&&e.supportCount>0));
+ const foundations=domes.filter(e=>e.supports.some(s=>s.b.tag==='roof'));
+ assert.equal(new Set(foundations.map(e=>e.b.structure)).size,2);
+ assert.equal(new Set(foundations.flatMap(e=>e.supports.filter(s=>s.b.tag==='roof').map(s=>s.b.structure))).size,1);
+ assert.equal(walkSpawn(sim,'roof').tag,'roof');
+ assert(clearHeadroom(sim,{x:0,y:0,z:3}));
+ release(sim);
+});
 test('each builder part produces finite collision geometry and gates/towers are hollow',()=>{for(const [type,v]of Object.entries(BUILD_PARTS)){const blocks=partBlocks({type,x:4,y:v[1]/2,z:-3,rot:Math.PI/2});assert(blocks.length>0,type);assert(blocks.every(b=>[b.x,b.y,b.z,b.w,b.h,b.d].every(Number.isFinite)&&b.w>0&&b.h>0&&b.d>0),type);}const sim=world(starterCastle());assert(clearHeadroom(sim,{x:0,y:0,z:4}));assert(walkSpawn(sim,'upper').y>=2.4);assert.equal(walkSpawn(sim,'upper').tag,'floor');assert(walkSpawn(sim,'roof').y>4.8);release(sim);});
 test('walk motor stops at walls and climbs stairs onto a second-story landing',()=>{
  const parts=[{type:'Stairs',x:0,y:1.35,z:0,rot:0},{type:'Floor',x:0,y:2.55,z:-4.8,rot:0},{type:'Wall',x:0,y:1.2,z:-8,rot:0},{type:'Wall',x:0,y:3.6,z:-8,rot:0}];const sim=world(parts),motor=new WalkMotor(sim,{x:0,y:.05,z:4});

@@ -1,7 +1,8 @@
+import {domeMasonry} from './dome-masonry.js?v=twin-domes-1';
 import {addFacadePools} from './facade.js?v=sibling-walk-7';
 import R from '../vendor/rapier.mjs';
 import * as T from '../vendor/three.module.js';
-import {MATERIALS,clamp,rng} from './data.js?v=sibling-walk-7';
+import {MATERIALS,clamp,rng} from './data.js?v=twin-domes-1';
 import {box,mesh,cube} from './render.js?v=aim-guide-1';
 export function projectileShape(weapon) {
  if(weapon.type==='bolt')return new R.Cuboid(.12,.12,1.1);
@@ -15,9 +16,57 @@ export class Simulation{
  constructor(view,onEvent,settings){this.view=view;this.onEvent=onEvent;this.settings=settings;this.entities=[];this.colliders=new Map();this.joints=[];this.clock=0;this.pending=[];this.damageClock=0;this.initialCount=0;this.destroyed=0;this.collapsed=new Set();this.activeCount=0;this.events=[];this.resetWorld();}
  resetWorld(){this.queue?.free();this.world?.free();this.world=new R.World({x:0,y:-9.81,z:0});this.world.numSolverIterations=5;this.queue=new R.EventQueue(true);this.world.createCollider(R.ColliderDesc.cuboid(120,1,120).setTranslation(0,this.terrain==='mountain'?-10:-1,0).setFriction(.8));if(this.terrain==='mountain'){this.world.createCollider(R.ColliderDesc.cuboid(18,.6,33).setTranslation(0,-.6,0));for(const x of[-1,1])this.world.createCollider(R.ColliderDesc.cuboid(14,.6,33).setTranslation(x*30,-4.5,0).setRotation({x:0,y:0,z:Math.sin(-x*.175),w:Math.cos(.175)}).setFriction(.6));}}
  clear(){this.onReset?.();for(const e of this.entities)if(e.b)e.mesh.material.dispose();this.resetWorld();this.view.objects.traverse(o=>{if(o.isMesh){if(o.geometry!==box)o.geometry.dispose();o.material?.dispose?.()}});this.view.objects.clear();this.entities=[];this.colliders.clear();this.joints=[];this.pending=[];this.clock=0;this.destroyed=0;this.collapsed.clear();this.events=[];this.activeCount=0;this.view.particles.clear();}
- build(blocks){this.clear();this.blocks=blocks;for(const b of blocks)this.block(b);this.initialCount=blocks.length;this.linkSupports();this.createInstances();this.addPeople();}
- block(b){const mat=MATERIALS[b.mat],m=mesh(box,mat.color);const color=new T.Color(b.facade?0x334955:b.tag==='banner'?0xb84c38:mat.color);color.multiplyScalar(.88+((this.entities.length*37)%19)/90);m.material.color.copy(color);if(b.mat==='glass'){m.material.transparent=true;m.material.opacity=.65;m.material.metalness=.2}if(b.mat==='treasure'){m.material.emissive.setHex(0x6b3e00);m.material.emissiveIntensity=.4}m.position.set(b.x,b.y,b.z);m.scale.set(b.w,b.h,b.d);m.rotation.y=b.rot||0;this.view.objects.add(m);const q=m.quaternion;const body=this.world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(b.x,b.y,b.z).setRotation(q));const desc=R.ColliderDesc.cuboid(b.w*.49,b.h*.49,b.d*.49).setDensity(mat.density).setFriction(mat.friction).setRestitution(b.mat==='iron'?.15:.04).setActiveEvents(R.ActiveEvents.COLLISION_EVENTS|R.ActiveEvents.CONTACT_FORCE_EVENTS).setContactForceEventThreshold(60);const collider=this.world.createCollider(desc,body);const e={id:this.entities.length,mesh:m,body,collider,b:{...b},mat:b.mat,hp:mat.hp*(this.settings.strength||1),maxHp:mat.hp*(this.settings.strength||1),active:false,dead:false,scored:false,supports:[],dependents:[],original:new T.Vector3(b.x,b.y,b.z),lastHit:-1,joints:[]};this.entities.push(e);this.colliders.set(collider.handle,e);return e;}
- createInstances(){this.pools=[];for(const mat of Object.keys(MATERIALS)){const items=this.entities.filter(e=>e.mat===mat);if(!items.length)continue;const material=new T.MeshStandardMaterial({color:0xffffff,roughness:.85,transparent:mat==='glass',opacity:mat==='glass'?.65:1});const pool=new T.InstancedMesh(box,material,items.length);pool.castShadow=pool.receiveShadow=true;pool.frustumCulled=false;this.view.objects.add(pool);for(const e of items)this.view.objects.remove(e.mesh);this.pools.push({pool,items});}addFacadePools(this);this.syncInstances();}
+ build(blocks){this.clear();this.domeShapes=new Map();this.blocks=blocks;for(const b of blocks)this.block(b);this.initialCount=blocks.length;this.linkSupports();this.createInstances();this.addPeople();}
+ block(b){
+  const mat=MATERIALS[b.mat];
+  let masonry;
+  if(b.wedge){
+   const key=[...b.wedge,b.h].join(',');
+   if(!this.domeShapes.has(key))this.domeShapes.set(key,domeMasonry(b));
+   masonry=this.domeShapes.get(key);
+  }
+  const m=mesh(masonry?.geometry||box,mat.color);
+  const color=new T.Color(b.color??(b.facade?0x334955:b.tag==='banner'?0xb84c38:mat.color));
+  color.multiplyScalar(.88+((this.entities.length*37)%19)/90);
+  m.material.color.copy(color);
+  if(b.mat==='glass'){m.material.transparent=true;m.material.opacity=.65;m.material.metalness=.2}
+  if(b.mat==='treasure'){m.material.emissive.setHex(0x6b3e00);m.material.emissiveIntensity=.4}
+  m.position.set(b.x,b.y,b.z);
+  if(!masonry)m.scale.set(b.w,b.h,b.d);
+  m.rotation.y=b.rot||0;
+  this.view.objects.add(m);
+  const body=this.world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(b.x,b.y,b.z).setRotation(m.quaternion));
+  const shape=masonry?R.ColliderDesc.convexHull(masonry.vertices):R.ColliderDesc.cuboid(b.w*.49,b.h*.49,b.d*.49);
+  const desc=shape.setDensity(mat.density).setFriction(mat.friction).setRestitution(b.mat==='iron'?.15:.04)
+   .setActiveEvents(R.ActiveEvents.COLLISION_EVENTS|R.ActiveEvents.CONTACT_FORCE_EVENTS).setContactForceEventThreshold(60);
+  const collider=this.world.createCollider(desc,body);
+  const e={id:this.entities.length,mesh:m,body,collider,b:{...b},mat:b.mat,hp:mat.hp*(this.settings.strength||1),maxHp:mat.hp*(this.settings.strength||1),active:false,dead:false,scored:false,supports:[],dependents:[],original:new T.Vector3(b.x,b.y,b.z),lastHit:-1,joints:[]};
+  this.entities.push(e);
+  this.colliders.set(collider.handle,e);
+  return e;
+ }
+ createInstances(){
+  this.pools=[];
+  const groups=new Map();
+  for(const e of this.entities){
+   const geometry=e.mesh.geometry;
+   if(!groups.has(geometry))groups.set(geometry,new Map());
+   const materials=groups.get(geometry);
+   if(!materials.has(e.mat))materials.set(e.mat,[]);
+   materials.get(e.mat).push(e);
+  }
+  for(const [geometry,materials] of groups)for(const [mat,items] of materials){
+   const material=new T.MeshStandardMaterial({color:0xffffff,roughness:.85,transparent:mat==='glass',opacity:mat==='glass'?.65:1});
+   const pool=new T.InstancedMesh(geometry,material,items.length);
+   pool.castShadow=pool.receiveShadow=true;
+   pool.frustumCulled=false;
+   this.view.objects.add(pool);
+   for(const e of items)this.view.objects.remove(e.mesh);
+   this.pools.push({pool,items});
+  }
+  addFacadePools(this);
+  this.syncInstances();
+ }
  syncInstances(){if(!this.pools)return;const dummy=new T.Object3D();for(const{pool,items,decor}of this.pools){items.forEach((e,i)=>{e.mesh.updateMatrix();if(e.mesh.visible)pool.setMatrixAt(i,e.mesh.matrix);else{dummy.position.copy(e.mesh.position);dummy.scale.setScalar(0);dummy.updateMatrix();pool.setMatrixAt(i,dummy.matrix)}pool.setColorAt(i,decor?new T.Color().setScalar(.45+.55*Math.max(0,e.hp/e.maxHp)):e.mesh.material.color)});pool.instanceMatrix.needsUpdate=true;if(pool.instanceColor)pool.instanceColor.needsUpdate=true}}
  linkSupports(){const es=this.entities;for(const e of es){const b=e.b;const bw=Math.abs(Math.cos(b.rot||0))*b.w+Math.abs(Math.sin(b.rot||0))*b.d,bd=Math.abs(Math.cos(b.rot||0))*b.d+Math.abs(Math.sin(b.rot||0))*b.w;e.grounded=b.y-b.h/2<.25;for(const f of es){if(f===e)continue;const c=f.b,cw=Math.abs(Math.cos(c.rot||0))*c.w+Math.abs(Math.sin(c.rot||0))*c.d,cd=Math.abs(Math.cos(c.rot||0))*c.d+Math.abs(Math.sin(c.rot||0))*c.w;const vertical=(b.y-b.h/2)-(c.y+c.h/2);if(vertical>-.15&&vertical<.35&&Math.abs(b.x-c.x)<(bw+cw)/2-.08&&Math.abs(b.z-c.z)<(bd+cd)/2-.08){e.supports.push(f);f.dependents.push(e)}}e.supportCount=e.supports.length;}
  // A sparse set of mortar bonds holds courses together while a tower leans.
@@ -27,8 +76,22 @@ export class Simulation{
  event(type,pos,value=1,extra={}){const event={type,pos:{x:pos.x,y:pos.y,z:pos.z},value,t:this.clock,seed:this.events.length*39+17,...extra};this.events.push(event);if(this.events.length>300)this.events.shift();this.view.particles.add(event);this.onEvent(event);return event;}
  activate(e,impulse=null){if(!e||e.active||e.dead||e.projectile)return;e.active=true;this.activeCount++;e.releasedAt=this.clock;e.body.setBodyType(R.RigidBodyType.Dynamic,true);e.body.setLinearDamping(.15);e.body.setAngularDamping(.25);if(impulse)e.body.applyImpulse(impulse,true);const below=e.bondTo;if(below&&below.active&&!below.dead&&this.joints.length<1100){const localA={x:0,y:-e.b.h/2,z:0},localB={x:e.b.x-below.b.x,y:below.b.h/2,z:e.b.z-below.b.z};const joint=this.world.createImpulseJoint(R.JointData.fixed(localA,{x:0,y:0,z:0,w:1},localB,{x:0,y:0,z:0,w:1}),e.body,below.body,true);const bond={joint,a:e,b:below,until:this.clock+1.8+(e.mat==='reinforced'?1.5:0),dead:false};this.joints.push(bond);e.joints.push(bond);below.joints.push(bond)} }
  releaseBonds(e){for(const b of e.joints){if(!b.dead){b.dead=true;this.world.removeImpulseJoint(b.joint,true)}}}
- hit(e,amount,force=null){if(!e||!e.b||e.dead||e.character||e.projectile)return;const now=this.clock;if(now-e.lastHit<.075)return;e.lastHit=now;e.hp-=amount;const health=clamp(e.hp/e.maxHp,0,1);e.mesh.material.color.setHex(MATERIALS[e.mat].color).multiplyScalar(.45+health*.5);if(e.hp<=0){this.break(e,force);return}if(e.hp<e.maxHp*.65){if(!e.supportEvent&&['column','beam','floor'].includes(e.b.tag)){e.supportEvent=true;this.event('support',e.body.translation(),120,{mat:e.mat})}this.releaseBonds(e);this.activate(e,force);this.supportFailure(e)} }
- mark(e,reason='break'){if(e.scored||e.character||e.projectile)return;e.scored=true;this.destroyed++;this.event(reason,e.body.translation(),MATERIALS[e.mat].points,{mat:e.mat,tag:e.b.tag,structure:e.b.structure})}
+ hit(e,amount,force=null){if(!e||!e.b||e.dead||e.character||e.projectile)return;const now=this.clock;if(now-e.lastHit<.075)return;e.lastHit=now;e.hp-=amount;const health=clamp(e.hp/e.maxHp,0,1);e.mesh.material.color.setHex(e.b.color??MATERIALS[e.mat].color).multiplyScalar(.45+health*.5);if(e.hp<=0){this.break(e,force);return}if(e.hp<e.maxHp*.65){if(!e.supportEvent&&['column','beam','floor'].includes(e.b.tag)){e.supportEvent=true;this.event('support',e.body.translation(),120,{mat:e.mat})}this.releaseBonds(e);this.activate(e,force);this.supportFailure(e)} }
+ mark(e,reason='break'){
+  if(e.scored||e.character||e.projectile)return;
+  e.scored=true;
+  this.destroyed++;
+  const {tag,structure}=e.b,pos=e.body.translation();
+  this.event(reason,pos,MATERIALS[e.mat].points,{mat:e.mat,tag,structure});
+  if(tag==='dome'&&!this.collapsed.has(structure)){
+   const stones=this.entities.filter(f=>f.b?.tag==='dome'&&f.b.structure===structure);
+   const damaged=stones.filter(f=>f.scored).length;
+   if(damaged>=stones.length/3){
+    this.collapsed.add(structure);
+    this.event('collapse',pos,damaged*60,{tag,structure,mat:e.mat});
+   }
+  }
+ }
  break(e,force=null){if(e.dead)return;e.dead=true;this.releaseBonds(e);this.mark(e);if(e.b.tag==='wall'&&!e.breachEvent){e.breachEvent=true;this.event('breach',e.body.translation(),80)}if(e.mat==='barrel'){const p={...e.body.translation()};this.pending.push(()=>this.explode(p,4.4,210,'explosion'));}if(e.mat==='treasure')this.event('secret',e.body.translation(),700,{secret:'Royal treasury'});if(e.b.tag==='secret')this.event('secret',e.body.translation(),450,{secret:'The chicken kingdom awakens!'});if(e.mat==='glass'){e.mesh.visible=false;e.body.setEnabled(false)}else{e.dead=false;this.activate(e,force);e.dead=true;e.mesh.scale.multiplyScalar(.8);e.body.applyImpulse(force||{x:1,y:1,z:-2},true)}this.supportFailure(e);}
  supportFailure(start){const pending=[...start.dependents];const seen=new Set();while(pending.length){const e=pending.shift();if(seen.has(e.id)||e.active||e.dead||e.grounded)continue;seen.add(e.id);const stable=e.supports.filter(s=>!s.active&&!s.dead&&s.hp>s.maxHp*.4).length;if(stable<Math.max(1,e.supportCount*.55)){this.activate(e,{x:(e.b.x-start.b.x)*.08,y:0,z:-.25});pending.push(...e.dependents)}}}
  impact(p,e){if(!e.b){if(e.secret&&e.active)e.body.applyImpulse({x:0,y:5,z:-8},true);return}if(p.hitTargets.has(e.id))return;p.hitTargets.add(e.id);const v=p.preVelocity||p.body.linvel(),speed=Math.hypot(v.x,v.y,v.z),energy=.5*p.mass*speed*speed;const pos=p.body.translation();this.event('impact',pos,energy,{mat:e.mat||'stone'});const local={x:pos.x-e.body.translation().x,y:pos.y-e.body.translation().y,z:pos.z-e.body.translation().z};const dims=e.b||{w:1,h:1,d:1};const axis=['x','y','z'].sort((a,b)=>Math.abs(local[b])/(dims[{x:'w',y:'h',z:'d'}[b]]||1)-Math.abs(local[a])/(dims[{x:'w',y:'h',z:'d'}[a]]||1))[0];const incidence=Math.abs(v[axis])/Math.max(1,speed);const angle=clamp(speed/Math.max(1,p.launchSpeed),.2,1.5)*(.35+.65*incidence),damage=p.weapon.damage*angle*Math.sqrt(p.mass/14);this.hit(e,damage,{x:v.x*p.mass*.08,y:v.y*p.mass*.08,z:v.z*p.mass*.08});this.blast(pos,p.weapon.blast,damage*.68,{x:v.x,y:Math.max(1,v.y),z:v.z},false);
