@@ -224,6 +224,72 @@ function start(T) {
     return Math.min(main, cottage, doorstep, mill, millstep);
   }
 
+  function detailedSurface(material, kind) {
+    const grain = {
+      wood: `
+        float u = finishUV.x * 6.2831853, v = finishUV.y;
+        float warp = surfaceNoise(vec3(cos(u) * 2.7, sin(u) * 2.7, v * 8.0));
+        float rib = sin(u * 29.0 + warp * 5.8 + sin(v * 12.0 + u * 3.0));
+        float fine = sin(u * 63.0 + warp * 8.0) * (1.0 - smoothstep(0.34, 1.30, fwidth(u * 63.0)));
+        float pores = smoothstep(0.63, 0.86, surfaceNoise(vec3(cos(u) * 26.0, sin(u) * 26.0, v * 16.0)));
+        float tint = 0.91 + 0.15 * rib + 0.05 * fine - 0.10 * pores;
+        diffuseColor.rgb *= tint * mix(vec3(0.96, 0.90, 0.85), vec3(1.10, 1.04, 0.94), warp);
+      `,
+      stone: `
+        vec3 p = finishPosition;
+        float strata = surfaceNoise(p * 6.9);
+        float chips = surfaceNoise(p * vec3(30.0, 39.0, 32.0));
+        float distant = 1.0 - smoothstep(0.018, 0.078, length(fwidth(p)));
+        float speck = (smoothstep(0.52, 0.84, chips) - 0.26) * distant;
+        diffuseColor.rgb *= (0.78 + 0.31 * strata + 0.20 * speck) *
+          mix(vec3(0.95, 0.94, 0.91), vec3(1.07, 1.04, 0.99), strata);
+      `,
+      cloth: `
+        vec2 threads = finishUV * vec2(178.0, 159.0);
+        vec2 detailStrength = 1.0 - smoothstep(vec2(0.25), vec2(0.92), fwidth(threads));
+        vec2 thread = sin(threads * 6.2831853);
+        float weave = dot(thread * detailStrength, vec2(0.072, 0.062)) +
+          thread.x * thread.y * detailStrength.x * detailStrength.y * 0.040;
+        float wear = surfaceNoise(vec3(finishUV * vec2(3.3, 2.6), 5.7));
+        float seam = (1.0 - smoothstep(0.0, 0.026, abs(finishUV.x - 0.15))) * 0.08;
+        float fold = sin(finishUV.y * 15.2 + finishUV.x * 2.8) * 0.034;
+        diffuseColor.rgb *= (0.86 + wear * 0.15 + weave + fold - seam);
+      `
+    }[kind];
+    material.customProgramCacheKey = () => 'surface-' + kind;
+    material.onBeforeCompile = shader => {
+      shader.vertexShader = 'varying vec3 finishPosition;\nvarying vec2 finishUV;\n' +
+        shader.vertexShader.replace('#include <begin_vertex>', `
+          #include <begin_vertex>
+          finishPosition = position;
+          finishUV = uv;
+          #ifdef USE_INSTANCING
+            finishPosition *= vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz),
+              length(instanceMatrix[2].xyz));
+          #endif
+        `);
+      shader.fragmentShader = `
+        varying vec3 finishPosition;
+        varying vec2 finishUV;
+        float surfaceHash(vec3 p) {
+          p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+          p += dot(p, p.yxz + 33.33);
+          return fract((p.x + p.y) * p.z);
+        }
+        float surfaceNoise(vec3 p) {
+          vec3 g = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          float low = mix(mix(surfaceHash(g), surfaceHash(g + vec3(1,0,0)), f.x),
+            mix(surfaceHash(g + vec3(0,1,0)), surfaceHash(g + vec3(1,1,0)), f.x), f.y);
+          float high = mix(mix(surfaceHash(g + vec3(0,0,1)), surfaceHash(g + vec3(1,0,1)), f.x),
+            mix(surfaceHash(g + vec3(0,1,1)), surfaceHash(g + vec3(1,1,1)), f.x), f.y);
+          return mix(low, high, f.z);
+        }
+      ` + shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n' + grain);
+    };
+    return material;
+  }
+
   const materials = new Map();
   function matte(color) {
     if (!materials.has(color)) {
@@ -346,9 +412,11 @@ function start(T) {
   function wedge(radius, height, halfAngle, thickness) {
     const shape = new T.Shape();
     const outer = radius, inner = radius - thickness;
+    const chip = Math.min(0.012, thickness * 0.10, height * 0.15);
     for (let i = 0; i <= 3; i++) {
       const a = -halfAngle + i * halfAngle * 2 / 3;
-      const x = Math.sin(a) * outer, z = -Math.cos(a) * outer;
+      const chipped = outer + (i === 1 ? -chip * 0.78 : i === 2 ? chip * 0.23 : 0);
+      const x = Math.sin(a) * chipped, z = -Math.cos(a) * chipped;
       if (i === 0) shape.moveTo(x, z);
       else shape.lineTo(x, z);
     }
@@ -357,8 +425,19 @@ function start(T) {
       shape.lineTo(Math.sin(a) * inner, -Math.cos(a) * inner);
     }
     shape.closePath();
-    return new T.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false })
-      .rotateX(-Math.PI / 2).translate(0, -height / 2, 0);
+    const depth = height - chip * 2;
+    // The bevel cuts into the edge, leaving the full-width joint between masonry courses.
+    const brick = new T.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSegments: 1,
+      bevelSize: chip, bevelOffset: -chip, bevelThickness: chip })
+      .rotateX(-Math.PI / 2).translate(0, -depth / 2, 0);
+    const positions = brick.getAttribute('position');
+    const mortarTint = new Float32Array(positions.count * 3);
+    for (let i = 0; i < positions.count; i++) {
+      const edge = Math.abs(positions.getY(i)) > height / 2 - chip * 0.48;
+      mortarTint.set(edge ? [0.74, 0.70, 0.65] : [1, 1, 1], i * 3);
+    }
+    brick.setAttribute('color', new T.BufferAttribute(mortarTint, 3));
+    return brick;
   }
   function archShape(width, height) {
     const arch = new T.Shape();
@@ -553,7 +632,8 @@ function start(T) {
   sailGeometry.lineTo(1.01, 3.22);
   sailGeometry.lineTo(0.10, 3.44);
   sailGeometry.closePath();
-  const linen = new T.MeshStandardMaterial({ color: 0xf2e3be, side: T.DoubleSide, roughness: 0.97 });
+  const linen = detailedSurface(new T.MeshStandardMaterial({ color: 0xf2e3be,
+    side: T.DoubleSide, roughness: 0.97 }), 'cloth');
   const canvasSail = new T.ShapeGeometry(sailGeometry);
   for (let i = 0; i < 4; i++) {
     const sail = new T.Group();
@@ -896,28 +976,40 @@ function start(T) {
   function woodenTube(parent, curve, radius, shades) {
     const length = 52, sides = 9;
     const frame = curve.computeFrenetFrames(length, false);
-    const positions = [], colorValues = [], indices = [];
+    const positions = [], colorValues = [], indices = [], grainUV = [];
     for (let i = 0; i <= length; i++) {
       const t = i / length, p = curve.getPointAt(t);
-      for (let j = 0; j < sides; j++) {
+      for (let j = 0; j <= sides; j++) {
         const a = j * TAU / sides, r = radius * (1.0 - 0.74 * t ** 4);
         const q = p.clone().addScaledVector(frame.normals[i], r * Math.cos(a))
           .addScaledVector(frame.binormals[i], r * Math.sin(a));
         positions.push(q.x, q.y, q.z);
-        const tint = new T.Color(shades[j % shades.length]).multiplyScalar(0.93 + 0.09 * Math.sin(i * 0.29 + j));
+        grainUV.push(j / sides, t);
+        const side = j % sides;
+        const tint = new T.Color(shades[side % shades.length]).multiplyScalar(0.93 + 0.09 * Math.sin(i * 0.29 + side));
         colorValues.push(tint.r, tint.g, tint.b);
-        if (i < length) {
-          const k = i * sides + j, next = i * sides + (j + 1) % sides;
-          indices.push(k, next, k + sides, next, next + sides, k + sides);
+        if (i < length && j < sides) {
+          const stride = sides + 1, k = i * stride + j;
+          indices.push(k, k + 1, k + stride, k + 1, k + 1 + stride, k + stride);
         }
       }
     }
     const geo = new T.BufferGeometry();
     geo.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
     geo.setAttribute('color', new T.Float32BufferAttribute(colorValues, 3));
+    geo.setAttribute('uv', new T.Float32BufferAttribute(grainUV, 2));
     geo.setIndex(indices);
     geo.computeVertexNormals();
-    return mesh(parent, geo, new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.91, side: T.DoubleSide }), 0, 0, 0, false);
+    const normals = geo.getAttribute('normal');
+    const smoothedSeam = new T.Vector3(), otherSide = new T.Vector3();
+    for (let i = 0; i <= length; i++) {
+      const first = i * (sides + 1), last = first + sides;
+      smoothedSeam.fromBufferAttribute(normals, first).add(otherSide.fromBufferAttribute(normals, last)).normalize();
+      normals.setXYZ(first, smoothedSeam.x, smoothedSeam.y, smoothedSeam.z);
+      normals.setXYZ(last, smoothedSeam.x, smoothedSeam.y, smoothedSeam.z);
+    }
+    return mesh(parent, geo, detailedSurface(new T.MeshStandardMaterial({ vertexColors: true,
+      roughness: 0.89, side: T.DoubleSide }), 'wood'), 0, 0, 0, false);
   }
   woodenTube(staff, spine, 0.053, [0x8c5b3a, 0x71462f, 0xa57547, 0x7f512f, 0x8c633a]);
   const branch = new T.CatmullRomCurve3([V(0.057, 0.47, -0.012), V(-0.022, 0.54, 0.009),
@@ -1895,7 +1987,9 @@ function start(T) {
   const structures = new Map(), geometries = new Map(), dirty = new Set();
   const anchored = new Map(), sleeping = new Map(), moving = new Map();
   const material = new T.MeshStandardMaterial({ roughness: 0.96, flatShading: true });
-  const sailMaterial = material.clone();
+  const stoneMaterial = detailedSurface(material.clone(), 'stone');
+  stoneMaterial.vertexColors = true;
+  const sailMaterial = detailedSurface(material.clone(), 'cloth');
   sailMaterial.side = T.DoubleSide;
   const matrix = new T.Matrix4(), local = new T.Matrix4();
   const offset = new T.Matrix4(), pose = new T.Matrix4();
@@ -1924,8 +2018,8 @@ function start(T) {
   for (const [root, site, type] of buildings) splitBuilding(root, site, type);
   upload();
 
-  function createBatch(geometry, count, bounds) {
-    const batch = new T.InstancedMesh(geometry, geometry === canvasSail ? sailMaterial : material, count);
+  function createBatch(geometry, count, bounds, surface = material) {
+    const batch = new T.InstancedMesh(geometry, geometry === canvasSail ? sailMaterial : surface, count);
     batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
     batch.castShadow = batch.receiveShadow = true;
     batch.frustumCulled = false;
@@ -1956,13 +2050,15 @@ function start(T) {
     root.clear();
     if (keepRotor) mill.add(rotor);
     for (const [geometry, pieces] of structure.batches) {
-      const batch = createBatch(geometry, pieces.length, new T.Sphere(V(site.x, root.position.y + 4, site.z), 90));
+      const surface = type === 'tower' || type === 'ruins' || type === 'windmill' ? stoneMaterial : material;
+      const batch = createBatch(geometry, pieces.length, new T.Sphere(V(site.x, root.position.y + 4, site.z), 90), surface);
       batch.userData.structure = structure;
       for (let i = 0; i < pieces.length; i++) {
         attachPiece(pieces[i], batch, i);
       }
     }
     structure.batches.clear();
+    if (type !== 'sail') buildSupports(structure);
     return structure;
   }
 
@@ -2025,6 +2121,114 @@ function start(T) {
     attachPiece(piece, batch, batch.count++);
     batch.instanceColor.needsUpdate = true;
     source.setMatrixAt(index, hiddenTree);
+  }
+
+  function buildSupports(structure) {
+    const pieces = structure.pieces;
+    const rotation = new T.Matrix4();
+    for (let i = 0; i < pieces.length; i++) {
+      const piece = pieces[i];
+      const r = rotation.makeRotationFromQuaternion(piece.rotation).elements;
+      const { x, y, z } = piece.half;
+      const extent = new T.Vector3(
+        Math.abs(r[0]) * x + Math.abs(r[4]) * y + Math.abs(r[8]) * z,
+        Math.abs(r[1]) * x + Math.abs(r[5]) * y + Math.abs(r[9]) * z,
+        Math.abs(r[2]) * x + Math.abs(r[6]) * y + Math.abs(r[10]) * z
+      );
+      piece.supportIndex = i;
+      piece.bonds = [];
+      piece.supportMin = piece.position.clone().sub(extent);
+      piece.supportMax = piece.position.clone().add(extent);
+      piece.foundation = piece.supportMin.y <= elevation(piece.position.x, piece.position.z) + 0.145;
+    }
+
+    // An upward joint carries weight. A short sideways run can bridge a chipped course.
+    for (let i = 0; i < pieces.length; i++) {
+      const a = pieces[i], lo = a.supportMin, hi = a.supportMax;
+      for (let j = i + 1; j < pieces.length; j++) {
+        const b = pieces[j];
+        const overlapX = Math.min(hi.x, b.supportMax.x) - Math.max(lo.x, b.supportMin.x);
+        const overlapZ = Math.min(hi.z, b.supportMax.z) - Math.max(lo.z, b.supportMin.z);
+        if (overlapX < -0.073 || overlapZ < -0.073) continue;
+        const maxOverlap = Math.max(overlapX, overlapZ);
+        if (maxOverlap < 0.026) continue;
+        const rise = b.position.y - a.position.y;
+        const lower = rise >= 0 ? a : b, upper = rise >= 0 ? b : a;
+        const verticalGap = upper.supportMin.y - lower.supportMax.y;
+        if (verticalGap > 0.14) continue;
+        const sitsOnLower = Math.abs(rise) > 0.10 && Math.min(overlapX, overlapZ) > 0.032 &&
+          lower.supportMax.y <= upper.position.y + 0.09;
+        if (sitsOnLower) {
+          lower.bonds.push({ next: upper, cost: 0 });
+        } else if (Math.abs(rise) < 0.57) {
+          a.bonds.push({ next: b, cost: 1 });
+          b.bonds.push({ next: a, cost: 1 });
+        }
+      }
+    }
+    structure.supportSpan = structure.type === 'cottage' ? 3 : 2;
+    const original = traceSupports(structure);
+    for (const piece of pieces) {
+      if (original[piece.supportIndex] >= 0) continue;
+      // Trim and thin roof tiles can be slightly separated from their backing mesh.
+      // Mount them to the closest original load path and let them drop with it.
+      let parent = null, nearest = Infinity;
+      for (const candidate of pieces) {
+        if (original[candidate.supportIndex] < 0) continue;
+        const dy = candidate.position.y - piece.position.y;
+        const distance = (candidate.position.x - piece.position.x) ** 2 +
+          (candidate.position.z - piece.position.z) ** 2 + dy * dy * (dy > 0.16 ? 2.2 : 0.65);
+        if (distance < nearest) {
+          nearest = distance;
+          parent = candidate;
+        }
+      }
+      if (parent) parent.bonds.push({ next: piece, cost: 0 });
+    }
+    if (structure.type === 'windmill') {
+      const bearing = new T.Vector3(0, 4.62, 1.59).applyMatrix4(mill.matrixWorld);
+      structure.bearings = pieces.filter(piece => piece.half.y > 0.13 && original[piece.supportIndex] >= 0)
+        .sort((a, b) => a.position.distanceToSquared(bearing) - b.position.distanceToSquared(bearing)).slice(0, 6);
+    }
+  }
+
+  function traceSupports(structure) {
+    const reachable = new Int8Array(structure.pieces.length).fill(-1);
+    const queue = [];
+    for (const piece of structure.pieces) {
+      if (!piece.foundation || !piece.attached || piece.queued) continue;
+      reachable[piece.supportIndex] = structure.supportSpan;
+      queue.push(piece);
+    }
+    for (let i = 0; i < queue.length; i++) {
+      const piece = queue[i];
+      for (const { next, cost } of piece.bonds) {
+        if (next.queued || !next.attached) continue;
+        const reach = reachable[piece.supportIndex] - cost;
+        if (reach <= reachable[next.supportIndex]) continue;
+        reachable[next.supportIndex] = reach;
+        queue.push(next);
+      }
+    }
+    return reachable;
+  }
+
+  function checkSupports(structure, center, falls) {
+    const reachable = traceSupports(structure);
+    const drop = piece => {
+      piece.queued = true;
+      falls.push({ piece, center, mode: 'gravity' });
+    };
+    for (const piece of structure.pieces) {
+      if (piece.attached && !piece.queued && reachable[piece.supportIndex] < 0) drop(piece);
+    }
+    if (structure.bearings?.length && rotor.parent &&
+      !structure.bearings.some(piece => reachable[piece.supportIndex] >= 0)) {
+      rotor.getWorldPosition(rotorCenter);
+      const rotorParts = splitBuilding(rotor, { x: rotorCenter.x, z: rotorCenter.z }, 'sail');
+      rotor.removeFromParent();
+      for (const piece of rotorParts.pieces) drop(piece);
+    }
   }
 
   function addPiece(structure, geometry, transform, color) {
@@ -2216,11 +2420,27 @@ function start(T) {
     }
     additions.sort((a, b) => b.priority - a.priority);
     additions.length = Math.min(additions.length, budget);
-    for (const { piece } of additions) piece.queued = true;
-    waiting.unshift(...additions);
+    const impacted = new Set(), falls = [];
+    for (const { piece } of additions) {
+      piece.queued = true;
+      if (piece.attached && piece.bonds) impacted.add(piece.structure);
+    }
+    for (const structure of impacted) checkSupports(structure, center, falls);
+    falls.sort((a, b) => a.piece.position.y - b.piece.position.y);
+    waiting.unshift(...additions, ...falls);
   }
 
   function launch(piece, center, distance, thrown, mode, push, reach) {
+    if (mode === 'gravity') {
+      normal.copy(piece.position).sub(center);
+      normal.y = 0;
+      piece.velocity.copy(normal.normalize()).multiplyScalar(0.31);
+      piece.velocity.y = -0.13;
+      piece.spin.set((piece.id % 7 - 3) * 0.31, (piece.id % 5 - 2) * 0.17,
+        (piece.id % 11 - 5) * 0.23);
+      piece.quiet = 0;
+      return;
+    }
     normal.copy(piece.position).sub(center);
     normal.y *= 0.34;
     if (normal.lengthSq() < 0.0001) normal.set(1, 0, 0);
