@@ -1,0 +1,2925 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#090f12">
+<meta name="description" content="Break three chalk rituals and run for the street in a first-person subway horror game.">
+<title>Last Light Below</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    color-scheme: dark;
+    --ink: #e1e9e5;
+    --dim: #a9bbb9;
+    --brass: #ffd391;
+    --danger: #ffa085;
+    --line: #a4bdb550;
+    --panel: #0d171bea;
+    --mono: "IBM Plex Mono", "Courier New", monospace;
+    --sans: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+    --top: max(16px, env(safe-area-inset-top));
+    --left: max(18px, env(safe-area-inset-left));
+    --right: max(18px, env(safe-area-inset-right));
+    --bottom: max(14px, env(safe-area-inset-bottom));
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
+  body { background: #080d10; color: var(--ink); font-family: var(--mono); user-select: none; }
+  button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  button:focus-visible { outline: 2px solid #ffe1b1; outline-offset: 4px; }
+  [hidden] { display: none !important; }
+  #world, #lens, #hud, #end { position: fixed; inset: 0; width: 100%; height: 100%; }
+  #world { display: block; outline: none; cursor: grab; touch-action: none; }
+  #world:active { cursor: grabbing; }
+  #lens {
+    pointer-events: none;
+    background: radial-gradient(ellipse at 50% 43%, transparent 30%, #04080b29 66%, #040709a9 100%);
+  }
+  #lens::after {
+    position: absolute; inset: 0; content: ""; opacity: .12;
+    background: repeating-linear-gradient(0deg, #020609 0 1px, transparent 1px 4px);
+  }
+  #hud { pointer-events: none; }
+  .masthead {
+    position: absolute; left: var(--left); top: var(--top);
+    max-width: min(510px, calc(100vw - 150px)); padding: 8px 12px 9px;
+    border-left: 2px solid #d4aa73;
+    background: linear-gradient(90deg, #081116db, #08111677 88%, transparent);
+    text-shadow: 0 1px 3px #000;
+  }
+  h1 { margin: 0 0 5px; font: 850 clamp(15px, 2.6vw, 25px)/1 var(--sans); letter-spacing: .14em; }
+  #objective { margin: 0; font-size: clamp(10px, 1.5vw, 13px); line-height: 1.35; color: var(--brass); }
+  #location { display: block; margin-top: 5px; color: var(--dim); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; }
+  .is-chase .masthead { border-color: #ff896b; }
+  .is-chase #objective { color: var(--danger); }
+  .meters { position: absolute; top: var(--top); right: var(--right); display: flex; align-items: start; gap: 7px; }
+  .ritual-meter, #sound { min-height: 42px; border: 1px solid var(--line); background: var(--panel); }
+  .ritual-meter { padding: 6px 11px 8px; color: var(--dim); }
+  .ritual-meter > span { display: block; letter-spacing: .13em; font-size: 9px; }
+  .lights { display: flex; gap: 9px; padding: 7px 2px 1px; }
+  .lights i { width: 7px; height: 7px; border: 1px solid #87a29f; transform: rotate(45deg); }
+  .lights i.done { background: var(--brass); border-color: var(--brass); box-shadow: 0 0 8px #ffc26688; }
+  .lights i.next { border-color: var(--brass); }
+  #sound { width: 44px; height: 44px; pointer-events: auto; font-size: 18px; line-height: 1; }
+  #sound[aria-pressed="true"] { color: var(--dim); }
+  #aim {
+    position: absolute; width: 27px; height: 27px; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    background: conic-gradient(from 0deg, #ffd48c var(--charge, 0deg), transparent 0);
+    border-radius: 100%;
+    -webkit-mask: radial-gradient(transparent 57%, #fff 61%);
+    mask: radial-gradient(transparent 57%, #fff 61%);
+  }
+  #dot {
+    position: absolute; width: 5px; height: 5px; left: 50%; top: 50%;
+    transform: translate(-50%, -50%) rotate(45deg);
+    background: #f0f7ec; box-shadow: 0 0 0 1px #000a, 0 0 7px #000;
+  }
+  #dot.target { background: var(--brass); box-shadow: 0 0 9px var(--brass); }
+  #hint {
+    position: absolute; left: 50%; top: calc(50% + 26px); transform: translateX(-50%);
+    width: max-content; max-width: 90vw; text-align: center; padding: 5px 9px;
+    background: #080e12d9; color: #ffe2ae; font-size: 11px; line-height: 1.35;
+  }
+  #caption {
+    position: absolute; left: 50%; top: 68%; transform: translateX(-50%);
+    max-width: 85vw; width: max-content; padding: 7px 11px; background: #080e12db;
+    color: #e2ece8; text-align: center; font-size: clamp(11px, 2vw, 14px);
+  }
+  .kit {
+    position: absolute; left: 50%; bottom: var(--bottom); transform: translateX(-50%);
+    width: max-content; max-width: calc(100vw - 12px); text-align: center;
+  }
+  .readout { margin-bottom: 6px; font-size: 10px; letter-spacing: .075em; text-shadow: 0 1px 5px #000, 0 1px 5px #000; }
+  #power-name { color: var(--brass); font-weight: 700; }
+  #power-detail { color: #d0dcda; }
+  .power-row { display: flex; justify-content: center; gap: 4px; }
+  .power {
+    position: relative; width: 52px; min-width: 0; height: 46px;
+    pointer-events: auto; border: 1px solid var(--line); background: var(--panel);
+    color: var(--power); box-shadow: 0 4px 16px #02070a5c;
+    touch-action: manipulation;
+  }
+  .power[aria-pressed="true"] { border-color: var(--power); background: #26302df2; }
+  .power[aria-pressed="true"] span { text-shadow: 0 0 9px var(--power); }
+  .power span { font: 24px/1 var(--sans); }
+  .power kbd { position: absolute; right: 5px; top: 4px; font: 9px var(--mono); color: #b5c5c4; }
+  .power::after {
+    position: absolute; content: ""; left: 0; right: 0; bottom: 0; height: 2px;
+    background: linear-gradient(to right, var(--power) var(--ready, 100%), transparent 0);
+    opacity: .75;
+  }
+  .power.cooling span { opacity: .53; }
+  #controls { margin: 7px 0 0; color: #d1ddda; text-shadow: 0 1px 4px #000, 0 1px 4px #000; font-size: 10px; line-height: 1.3; }
+  #touch { display: none; }
+  body.touch #touch { display: block; }
+  body.touch #controls, body.touch .power kbd { display: none; }
+  #stick, #cast, #ward {
+    position: absolute; pointer-events: auto; touch-action: none; border: 1px solid #c4d7ce8a;
+    background: #101e25b8; font-size: 11px;
+  }
+  #stick {
+    left: var(--left); bottom: calc(var(--bottom) + 76px);
+    border-radius: 100%; width: 102px; height: 102px;
+  }
+  #stick > span {
+    position: absolute; left: calc(50% - 17px); top: calc(50% - 17px);
+    width: 34px; height: 34px; border-radius: 100%; background: #a7bfbe79;
+    border: 1px solid #c3d2cdbb; pointer-events: none;
+  }
+  #cast {
+    right: var(--right); bottom: calc(var(--bottom) + 78px); min-width: 69px; height: 65px;
+    border-radius: 50%; color: var(--brass); border-color: #ffd291a0; font-weight: 700;
+  }
+  #cast[aria-pressed="true"] { background: #4a3927e6; }
+  #ward {
+    right: calc(var(--right) + 9px); bottom: calc(var(--bottom) + 152px);
+    min-width: 51px; min-height: 40px; border-color: #ffd29170; color: var(--brass);
+  }
+  #status {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    background: #10191bf5; border: 1px solid var(--line); padding: 12px 16px;
+    max-width: 88vw; text-align: center; font-size: 13px; line-height: 1.5;
+  }
+  #end { display: grid; place-items: center; padding: 16px; background: #070d11b5; }
+  .finish { width: min(360px, 100%); border: 1px solid var(--line); border-top: 2px solid var(--brass); padding: 24px; background: #0d171bed; }
+  .finish h2 { margin: 0; font: 850 25px/1.1 var(--sans); letter-spacing: .095em; }
+  .finish p { margin: 12px 0 20px; font-size: 13px; line-height: 1.5; color: var(--dim); }
+  #replay { min-height: 44px; border: 1px solid var(--brass); background: #2a231a; color: #ffe0aa; padding: 0 13px; }
+  @media (max-width: 530px) {
+    :root { --left: max(9px, env(safe-area-inset-left)); --right: max(9px, env(safe-area-inset-right)); }
+    .power-row { gap: 2px; }
+    .power { width: min(48px, calc((100vw - 24px) / 7)); height: 44px; }
+    .power span { font-size: 22px; }
+    .readout { font-size: 9px; letter-spacing: 0; }
+    #caption { top: 63%; }
+  }
+  @media (max-height: 430px) and (pointer: coarse) {
+    #stick { bottom: var(--bottom); }
+    #cast { bottom: var(--bottom); }
+    #ward { bottom: calc(var(--bottom) + 72px); }
+  }
+</style>
+</head>
+<body>
+<canvas id="world" tabindex="0" aria-label="First-person subway tunnel. Drag to look around."></canvas>
+<div id="lens" aria-hidden="true"></div>
+<div id="hud">
+  <header class="masthead">
+    <h1>LAST LIGHT BELOW</h1>
+    <p id="objective" aria-live="polite">Break the platform ritual</p>
+    <span id="location">Canal St · closed platform</span>
+  </header>
+  <div class="meters">
+    <div id="ritual-meter" class="ritual-meter" role="img" aria-label="0 of 3 rituals broken">
+      <span>RITUALS</span><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+    </div>
+    <button id="sound" type="button" aria-label="Mute sound" aria-pressed="false" title="Mute sound">♪</button>
+  </div>
+  <div id="aim" aria-hidden="true"></div><div id="dot" aria-hidden="true"></div>
+  <div id="hint" hidden></div><div id="caption" aria-live="polite" hidden></div>
+  <div class="kit" id="kit" hidden>
+    <div class="readout"><span id="power-name">Light of Christ</span><span id="power-detail"></span></div>
+    <div class="power-row" id="power-row" role="group" aria-label="Crucifix powers"></div>
+    <p id="controls">WASD move · Drag to look · Hold F to cast · Shift sprint · Q ward</p>
+  </div>
+  <div id="touch" hidden>
+    <div id="stick" role="img" aria-label="Move joystick. Push to the edge to sprint."><span></span></div>
+    <button id="ward" type="button">WARD</button>
+    <button id="cast" type="button" aria-pressed="false">CAST</button>
+  </div>
+  <div id="status" role="status">Entering the tunnels…</div>
+</div>
+<div id="end" hidden>
+  <section class="finish" aria-labelledby="exit-title">
+    <h2 id="exit-title">STREET LEVEL</h2>
+    <p id="end-detail">Three rituals broken. You made it out.</p>
+    <button id="replay" type="button">Play again</button>
+  </section>
+</div>
+
+<script type="module">
+let THREE;
+const status = document.getElementById('status');
+try {
+  THREE = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js');
+  startGame();
+} catch (error) {
+  status.textContent = 'The tunnels could not load. Check that WebGL is enabled and reload.';
+  console.error(error);
+}
+
+function startGame() {
+  const ui = Object.fromEntries([
+    'world', 'lens', 'hud', 'objective', 'location', 'ritual-meter', 'sound', 'aim', 'dot',
+    'hint', 'caption', 'kit', 'power-row', 'power-name', 'power-detail', 'touch', 'stick',
+    'cast', 'ward', 'end', 'end-detail', 'replay'
+  ].map((id) => [id, document.getElementById(id)]));
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const touchDevice = matchMedia('(pointer: coarse)').matches;
+  let touchControls = touchDevice;
+  const scene = new THREE.Scene();
+  const fogColor = new THREE.Color(0x1a2930);
+  scene.background = fogColor.clone();
+  scene.fog = new THREE.FogExp2(fogColor, 0.043);
+  const camera = new THREE.PerspectiveCamera(63, 1, 0.035, 86);
+  camera.rotation.order = 'YXZ';
+  const renderer = new THREE.WebGLRenderer({
+    canvas: ui.world, antialias: !touchDevice, powerPreference: 'high-performance'
+  });
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.17;
+  scene.add(camera);
+
+  const TAU = Math.PI * 2;
+  const clamp = THREE.MathUtils.clamp;
+  const lerp = THREE.MathUtils.lerp;
+  const vector = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+  const square = (value) => value * value;
+  const distance = (x, z, a, b) => Math.hypot(x - a, z - b);
+  const choice = (list, random) => list[Math.floor(random() * list.length)];
+  function seeded(seed) {
+    return () => {
+      seed = (1664525 * seed + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+  }
+  const sceneryRandom = seeded(71321);
+  const rand = (low, high) => lerp(low, high, sceneryRandom());
+
+  function paint(width, height, draw) {
+    const surface = document.createElement('canvas');
+    surface.width = width;
+    surface.height = height;
+    const pen = surface.getContext('2d');
+    draw(pen, width, height);
+    const texture = new THREE.CanvasTexture(surface);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    return texture;
+  }
+
+  function speckle(pen, w, h, random, count, pale = 0.2) {
+    for (let i = 0; i < count; i++) {
+      const size = random() < .04 ? 6 * random() + 2 : random() * 2 + .5;
+      pen.fillStyle = random() < .4 ? 'rgba(226,226,206,' + random() * pale + ')' :
+        'rgba(11,16,13,' + random() * .31 + ')';
+      pen.fillRect(random() * w, random() * h, size, size * (.45 + random()));
+    }
+  }
+
+  function stain(pen, x, y, rx, ry, color) {
+    pen.save();
+    pen.translate(x, y);
+    pen.scale(rx, ry);
+    const tint = pen.createRadialGradient(0, 0, .1, 0, 0, 1);
+    tint.addColorStop(0, color);
+    tint.addColorStop(1, 'transparent');
+    pen.fillStyle = tint;
+    pen.fillRect(-1, -1, 2, 2);
+    pen.restore();
+  }
+
+  const tileMap = paint(512, 256, (pen, w, h) => {
+    const random = seeded(19);
+    pen.fillStyle = '#373b33';
+    pen.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 64) {
+      for (let x = 0; x < w; x += 128) {
+        const light = 139 + Math.floor(random() * 49);
+        const glaze = pen.createLinearGradient(x, y, x, y + 64);
+        glaze.addColorStop(0, 'rgb(' + (light + 17) + ',' + (light + 14) + ',' + light + ')');
+        glaze.addColorStop(.14, 'rgb(' + (light + 11) + ',' + (light + 8) + ',' + (light - 3) + ')');
+        glaze.addColorStop(1, 'rgb(' + (light - 5) + ',' + (light - 8) + ',' + (light - 18) + ')');
+        pen.fillStyle = glaze;
+        pen.fillRect(x + 2, y + 2, 123, 59);
+        pen.fillStyle = '#e2e0c664';
+        pen.fillRect(x + 4, y + 3, 118, 1);
+        if (random() < .74) {
+          pen.beginPath();
+          pen.moveTo(x + random() * 110, y + 61);
+          let startX = x + random() * 56 + 7;
+          for (let j = 0; j < 7; j++) {
+            pen.lineTo(startX, y + 60 - j * 9);
+            startX += (random() - .4) * 14;
+          }
+          pen.strokeStyle = '#3d382f80';
+          pen.lineWidth = 1.2;
+          pen.stroke();
+        }
+      }
+    }
+    speckle(pen, w, h, random, 26000, .23);
+    for (let i = 0; i < 45; i++) {
+      stain(pen, random() * w, random() * h, 6 + random() * 23, 11 + random() * 76, '#3d421f92');
+    }
+  });
+
+  const concreteMap = paint(512, 512, (pen, w, h) => {
+    const random = seeded(26);
+    pen.fillStyle = '#77776c';
+    pen.fillRect(0, 0, w, h);
+    for (let i = 0; i < 370; i++) {
+      stain(pen, random() * w, random() * h, 6 + random() * 74, 3 + random() * 37,
+        random() < .5 ? '#202d2190' : '#c0ac845f');
+    }
+    speckle(pen, w, h, random, 42500, .19);
+    pen.strokeStyle = '#272f2a77';
+    pen.lineWidth = 2;
+    for (let i = 0; i < 11; i++) {
+      const x = random() * w;
+      const y = random() * h;
+      pen.beginPath();
+      pen.moveTo(x, y);
+      for (let j = 1; j < 5; j++) pen.lineTo(x + j * 13, y + j * 9 + random() * 15);
+      pen.stroke();
+    }
+  });
+
+  const gravelMap = paint(512, 512, (pen, w, h) => {
+    const random = seeded(141);
+    pen.fillStyle = '#282c2a';
+    pen.fillRect(0, 0, w, h);
+    for (let i = 0; i < 7400; i++) {
+      const x = random() * w;
+      const y = random() * h;
+      const size = 1 + random() * 8;
+      const light = 24 + Math.floor(random() * 58);
+      pen.fillStyle = 'rgb(' + light + ',' + (light + 2) + ',' + (light - 4) + ')';
+      pen.beginPath();
+      pen.moveTo(x, y - size);
+      pen.lineTo(x + size, y - size * .28);
+      pen.lineTo(x + size * .56, y + size * .68);
+      pen.lineTo(x - size * .83, y + size * .58);
+      pen.closePath();
+      pen.fill();
+      pen.strokeStyle = '#b1b4a737';
+      pen.lineWidth = .8;
+      pen.beginPath();
+      pen.moveTo(x - size * .7, y + size * .4);
+      pen.lineTo(x, y - size);
+      pen.lineTo(x + size, y - size * .28);
+      pen.stroke();
+    }
+  });
+
+  const canvasFabric = paint(512, 256, (pen, w, h) => {
+    const random = seeded(198);
+    pen.fillStyle = '#9a8c73';
+    pen.fillRect(0, 0, w, h);
+    for (let x = 0; x < w; x += 31) {
+      pen.fillStyle = '#536677';
+      pen.fillRect(x, 0, 5, h);
+      pen.fillStyle = '#88745b';
+      pen.fillRect(x + 6, 0, 2, h);
+    }
+    for (let y = 3; y < h; y += 11) {
+      pen.fillStyle = '#c2b38c32';
+      pen.fillRect(0, y, w, 2);
+    }
+    for (let i = 0; i < 37; i++) {
+      stain(pen, random() * w, random() * h, 7 + random() * 66, 5 + random() * 27, '#3b281a91');
+    }
+    speckle(pen, w, h, random, 12500);
+  });
+
+  const woodMap = paint(256, 512, (pen, w, h) => {
+    const random = seeded(986);
+    pen.fillStyle = '#6d4627';
+    pen.fillRect(0, 0, w, h);
+    for (let i = 0; i < 1450; i++) {
+      const x = random() * w;
+      pen.strokeStyle = random() < .25 ? '#d69a5d43' : '#1e140e50';
+      pen.lineWidth = .5 + random() * 1.7;
+      pen.beginPath();
+      pen.moveTo(x, 0);
+      pen.bezierCurveTo(x + 18 * random(), 130, x - 14 * random(), 330, x, h);
+      pen.stroke();
+    }
+    speckle(pen, w, h, random, 4000, .26);
+  });
+
+  const glowMap = paint(96, 96, (pen, w, h) => {
+    const glow = pen.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    glow.addColorStop(0, '#ffffff');
+    glow.addColorStop(.22, '#ffffff9e');
+    glow.addColorStop(.58, '#ffffff32');
+    glow.addColorStop(1, '#ffffff00');
+    pen.fillStyle = glow;
+    pen.fillRect(0, 0, w, h);
+  });
+
+  const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+  const sphereGeometry = new THREE.SphereGeometry(1, 12, 9);
+  const cylinderGeometry = new THREE.CylinderGeometry(1, 1, 1, 10);
+  const planeGeometry = new THREE.PlaneGeometry(1, 1);
+  const construction = new Map();
+  const dummy = new THREE.Object3D();
+
+  function standard(color, roughness = .87, metalness = 0) {
+    return new THREE.MeshStandardMaterial({color, roughness, metalness});
+  }
+
+  const steel = standard(0xffffff, .49, .55);
+  const painted = standard(0xffffff, .76, .14);
+  const earth = standard(0xffffff);
+  const railMetal = standard(0xffffff, .32, .49);
+  const railBright = new THREE.MeshStandardMaterial({
+    color: 0xa9b2b2, roughness: .25, metalness: .28, emissive: 0x263130, emissiveIntensity: .21
+  });
+  const twin = new THREE.MeshBasicMaterial({color: 0x090b0b});
+  const coatWood = standard(0x9a7760, .65);
+  coatWood.map = woodMap;
+
+  function primitive(type, material, parent, x, y, z, sx, sy, sz) {
+    const mesh = new THREE.Mesh(type, material);
+    mesh.position.set(x, y, z);
+    mesh.scale.set(sx, sy, sz);
+    parent.add(mesh);
+    return mesh;
+  }
+
+  function block(parent, material, x, y, z, sx, sy, sz) {
+    return primitive(boxGeometry, material, parent, x, y, z, sx, sy, sz);
+  }
+
+  function sphere(parent, material, x, y, z, sx, sy, sz) {
+    return primitive(sphereGeometry, material, parent, x, y, z, sx, sy, sz);
+  }
+
+  function staticBox(material, color, x, y, z, sx, sy, sz, yaw = 0, roll = 0) {
+    if (!construction.has(material)) construction.set(material, []);
+    dummy.position.set(x, y, z);
+    dummy.rotation.set(0, yaw, roll);
+    dummy.scale.set(sx, sy, sz);
+    dummy.updateMatrix();
+    construction.get(material).push({matrix: dummy.matrix.clone(), color});
+  }
+
+  function finishConstruction() {
+    for (const [material, items] of construction) {
+      const mesh = new THREE.InstancedMesh(boxGeometry, material, items.length);
+      const color = new THREE.Color();
+      items.forEach((item, index) => {
+        mesh.setMatrixAt(index, item.matrix);
+        mesh.setColorAt(index, color.set(item.color));
+      });
+      scene.add(mesh);
+    }
+    construction.clear();
+  }
+
+  function repeatMap(texture, x, y) {
+    const map = texture.clone();
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.repeat.set(x, y);
+    return map;
+  }
+
+  function panel(texture, width, height, x, y, z, yaw, pitch, unitX, unitY, color, roughness) {
+    const material = standard(color, roughness);
+    material.map = repeatMap(texture, width / unitX, height / unitY);
+    const mesh = primitive(planeGeometry, material, scene, x, y, z, width, height, 1);
+    mesh.rotation.set(pitch, yaw, 0, 'YXZ');
+    return mesh;
+  }
+
+  function decal(texture, width, height, x, y, z, yaw = 0, pitch = 0, options = {}) {
+    const material = new THREE.MeshBasicMaterial({map: texture, ...options});
+    const mesh = primitive(planeGeometry, material, scene, x, y, z, width, height, 1);
+    mesh.rotation.set(pitch, yaw, 0, 'YXZ');
+    return mesh;
+  }
+
+  function halo(parent, color, opacity, x, y, z, w, h) {
+    const material = new THREE.SpriteMaterial({
+      map: glowMap, color, opacity, transparent: true, depthWrite: false,
+      blending: THREE.AdditiveBlending, toneMapped: false
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.position.set(x, y, z);
+    sprite.scale.set(w, h, 1);
+    parent.add(sprite);
+    return sprite;
+  }
+
+  const passages = [
+    [-8.8, 8.8, -15, 15], [2.8, 7.6, -25, -15], [2.8, 29.8, -25, -19.8],
+    [21.8, 33.5, -19.8, -6], [25.5, 30.3, -6, 13], [8.8, 25.5, 9, 13],
+    [-18.4, -8.8, 8.55, 12.45], [-23.5, -18.4, 6.8, 14]
+  ];
+  const obstacles = [];
+  const thresholds = {gateX: -8.8, zMin: 8.55, zMax: 12.45, streetX: -18.85};
+  const flood = {xMin: 7.6, xMax: 24.05, zMin: -25, zMax: -19.8, ledge: -22.47};
+  const numberOfRituals = 3;
+  const locations = [
+    'Canal St · Closed platform', 'Northbound service tunnel', 'Flooded passage',
+    'Maintenance room', 'Service corridor', 'Street stairs', 'Canal St · Street level'
+  ];
+  const spawn = {x: 5.12, z: 10.65, yaw: .02, pitch: -.08};
+  const checkpoints = [
+    spawn, {x: 5.16, z: -.45, yaw: -.01, pitch: 0},
+    {x: 20.3, z: -23.83, yaw: -Math.PI / 2, pitch: -.05},
+    {x: 27.8, z: -9.5, yaw: Math.PI, pitch: -.034}
+  ];
+
+  function within(x, z, rectangle) {
+    return x >= rectangle[0] && x <= rectangle[1] && z >= rectangle[2] && z <= rectangle[3];
+  }
+
+  function blocked(x, z, radius, unlocked, fromX = null) {
+    if (!unlocked && Math.abs(x - thresholds.gateX) < radius + .15 &&
+        z > thresholds.zMin - radius && z < thresholds.zMax + radius) return true;
+    if (!unlocked && fromX !== null && fromX > thresholds.gateX && x < thresholds.gateX) return true;
+    for (let i = 0; i < 4; i++) {
+      const px = x + (i & 1 ? radius : -radius);
+      const pz = z + (i & 2 ? radius : -radius);
+      if (!passages.some((rectangle) => within(px, pz, rectangle))) return true;
+    }
+    return obstacles.some(([minX, maxX, minZ, maxZ]) =>
+      x + radius > minX && x - radius < maxX && z + radius > minZ && z - radius < maxZ
+    );
+  }
+
+  function floorAt(x, z) {
+    if (x < -18.4) return 3.89;
+    if (x < -8.8 && z >= 8.55 && z <= 12.45) return .34 + (-x - 8.8) * 3.55 / 9.6;
+    if (x <= 8.8 && z >= -15 && z <= 15) return x < .8 && x > -5.13 ? -.34 : .34;
+    if (x > 7.6 && x < 24.05 && z < -19.8) return z <= flood.ledge && x >= 12.8 && x <= 22.36 ? .24 : -.15;
+    if (x < 7.6 && z < -19.8) return lerp(.32, -.15, clamp((x - 5.2) / 2.4, 0, 1));
+    if (x > 24.05 && z < -19.8) return lerp(-.15, .18, clamp((x - 24.05) / 2.1, 0, 1));
+    return .18;
+  }
+
+  function areaAt(x, z) {
+    if (x < -18.4) return 6;
+    if (x < -8.8) return 5;
+    if (x <= 8.8 && z >= -15) return 0;
+    if (x < 7.62) return 1;
+    if (z < -19.8) return 2;
+    if (z < -6) return 3;
+    return 4;
+  }
+
+  const walkFloor = (texture, x1, x2, z1, z2, y, color = 0xa1aaa1, rough = .82) =>
+    panel(texture, x2 - x1, z2 - z1, (x1 + x2) / 2, y, (z1 + z2) / 2,
+      0, -Math.PI / 2, 5.25, 5.25, color, rough);
+  const ceiling = (x1, x2, z1, z2, y) =>
+    panel(concreteMap, x2 - x1, z2 - z1, (x1 + x2) / 2, y, (z1 + z2) / 2,
+      0, Math.PI / 2, 5.3, 5.3, 0x626967, .94);
+
+  function wallX(x, z1, z2, side, tiled, height = 4.28, y = -.41) {
+    const yaw = side * Math.PI / 2;
+    panel(concreteMap, z2 - z1, height - y, x, (height + y) / 2, (z1 + z2) / 2,
+      yaw, 0, 5, 5, tiled ? 0x7b8074 : 0x929885, .95);
+    if (tiled) {
+      panel(tileMap, z2 - z1, 2.52, x + .013 * side, 1.63, (z1 + z2) / 2,
+        yaw, 0, 2.15, 1.15, 0xb0aea0, .7);
+      staticBox(painted, 0x52655a, x + .031 * side, 2.99, (z1 + z2) / 2, .062, .26, z2 - z1);
+      staticBox(painted, 0x333d35, x + .033 * side, .43, (z1 + z2) / 2, .063, .13, z2 - z1);
+    }
+  }
+
+  function wallZ(z, x1, x2, side, tiled, height = 4.28, y = -.41) {
+    const yaw = side > 0 ? 0 : Math.PI;
+    panel(concreteMap, x2 - x1, height - y, (x1 + x2) / 2, (height + y) / 2, z,
+      yaw, 0, 5, 5, tiled ? 0x7b8074 : 0x979d93, .95);
+    if (tiled) {
+      panel(tileMap, x2 - x1, 2.52, (x1 + x2) / 2, 1.63, z + .013 * side,
+        yaw, 0, 2.15, 1.15, 0xb0aea0, .7);
+      staticBox(painted, 0x52655a, (x1 + x2) / 2, 2.99, z + .031 * side, x2 - x1, .26, .062);
+      staticBox(painted, 0x333d35, (x1 + x2) / 2, .43, z + .033 * side, x2 - x1, .13, .062);
+    }
+  }
+
+  function track(x, z1, z2) {
+    const center = (z1 + z2) / 2;
+    staticBox(railMetal, 0x4f4037, x, -.18, center, .165, .196, z2 - z1);
+    staticBox(railBright, 0xffffff, x, -.071, center, .109, .042, z2 - z1);
+    staticBox(railMetal, 0x3c3b32, x, -.255, center, .243, .041, z2 - z1);
+  }
+
+  function makeSign(lines, options = {}) {
+    const {background = '#101a20', accent = '#c9d5cd', border = '#8b9c93', width = 768,
+      pad = 31, kind = 'station'} = options;
+    const height = lines.length > 1 ? 220 : 150;
+    return paint(width, height, (pen, w, h) => {
+      pen.fillStyle = background;
+      pen.fillRect(0, 0, w, h);
+      pen.strokeStyle = border;
+      pen.lineWidth = 5;
+      pen.strokeRect(4, 4, w - 8, h - 8);
+      if (kind === 'station') {
+        pen.fillStyle = '#758f77';
+        pen.fillRect(0, 0, w, 18);
+      }
+      pen.fillStyle = accent;
+      pen.textBaseline = 'middle';
+      const primary = lines.length > 1 ? 77 : 79;
+      const startY = lines.length > 1 ? 93 : 79;
+      pen.font = 'bold ' + primary + 'px Arial, sans-serif';
+      pen.fillText(lines[0], pad, startY, w - 2 * pad);
+      if (lines[1]) {
+        pen.font = 'bold 32px Courier New, monospace';
+        pen.fillStyle = kind === 'station' ? '#a7b9b0' : accent;
+        pen.fillText(lines[1], pad + 2, 169, w - 2 * pad);
+      }
+      const random = seeded(97);
+      speckle(pen, w, h, random, 6100, .17);
+    });
+  }
+
+  const stationSign = makeSign(['Canal St', 'SERVICE PLATFORM']);
+  const exitSign = makeSign(['STREET EXIT'], {
+    background: '#2b1411', accent: '#ffd8bb', border: '#ba6752', kind: 'exit', width: 689
+  });
+  const serviceSign = makeSign(['SERVICE TUNNEL', 'NORTHBOUND  ›'], {accent: '#d9d8a6'});
+  const maintenanceSign = makeSign(['MAINTENANCE', 'AUTHORIZED PERSONNEL'], {accent: '#d1c19b'});
+  const corridorSign = makeSign(['STREET  ›'], {
+    background: '#1d3028', accent: '#daedcd', kind: 'arrow', width: 580
+  });
+  const forwardSign = makeSign(['STREET  ↑'], {
+    background: '#1d3028', accent: '#daedcd', kind: 'arrow', width: 580
+  });
+  const lockedSign = makeSign(['GATE LOCKED'], {accent: '#f2c48f', kind: 'arrow', width: 580});
+
+  function floorGlow(color, opacity, x, y, z, width, length) {
+    return decal(glowMap, width, length, x, y, z, 0, -Math.PI / 2, {
+      color, opacity, transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1
+    });
+  }
+
+  const lamps = [];
+  const smallPools = [];
+  function addLamp(x, y, z, axis, color = 0xb6d6c8, strength = 23) {
+    const assembly = new THREE.Group();
+    assembly.position.set(x, y, z);
+    assembly.rotation.y = axis ? Math.PI / 2 : 0;
+    scene.add(assembly);
+    block(assembly, standard(0x343e3b, .46, .28), 0, .05, 0, 2.76, .16, .33);
+    const lit = new THREE.MeshBasicMaterial({color});
+    block(assembly, lit, 0, -.053, -.079, 2.58, .064, .071);
+    block(assembly, lit, 0, -.052, .079, 2.58, .066, .07);
+    const bloom = halo(assembly, color, .24, 0, -.065, 0, 3.6, .96);
+    const floor = floorAt(x, z);
+    const pool = floorGlow(color, .075, x, floor + .011, z, 6.7, 6);
+    lamps.push({x, y: y - .14, z, lit, bloom, pool, strength, color, phase: rand(0, 20), level: 1});
+  }
+
+  function addEmergency(x, y, z, yaw, color = 0xff7652) {
+    staticBox(painted, 0x282725, x, y, z, .25, .35, .16, yaw);
+    staticBox(twin, 0xffffff, x, y + .18, z, .37, .04, .24, yaw);
+    const shell = new THREE.MeshBasicMaterial({color, toneMapped: false});
+    const noseX = x + Math.sin(yaw) * .09;
+    const noseZ = z + Math.cos(yaw) * .09;
+    const lens = block(scene, shell, noseX, y, noseZ, .155, .144, .032);
+    lens.rotation.y = yaw;
+    const bloom = halo(scene, color, .42, noseX, y, noseZ, 1.12, 1.07);
+    const pool = floorGlow(color, .095, x + Math.sin(yaw) * .72,
+      floorAt(x, z) + .017, z + Math.cos(yaw) * .72, 4.6, 4.6);
+    smallPools.push({x: noseX, y, z: noseZ, color, shell, bloom, pool});
+  }
+
+  // The abandoned platform and its recessed track bed.
+  walkFloor(concreteMap, .8, 8.8, -15, 15, .34);
+  walkFloor(concreteMap, -8.8, -5.13, -15, 15, .34);
+  walkFloor(gravelMap, -5.13, .8, -15, 15, -.34, 0x91958b, .89);
+  ceiling(-8.8, 8.8, -15, 15, 4.3);
+  wallX(8.8, -15, 9, -1, true);
+  wallX(8.8, 13, 15, -1, true);
+  wallX(-8.8, -15, 8.55, 1, true);
+  wallX(-8.8, 12.45, 15, 1, true);
+  wallZ(-15, -8.8, 2.8, 1, true);
+  wallZ(-15, 7.6, 8.8, 1, true);
+  wallZ(15, -8.8, 8.8, -1, true);
+  for (const edge of [.8, -5.13]) {
+    staticBox(earth, 0x423f33, edge, -.014, 0, .16, .7, 30);
+    staticBox(painted, 0xaf8953, edge + (edge > 0 ? .26 : -.26), .353, 0, .46, .028, 30);
+    for (let z = -14.91; z < 15; z += .24) {
+      staticBox(earth, choice([0xb99058, 0xd3a465, 0x9b793f], sceneryRandom),
+        edge + (edge > 0 ? .26 : -.26), .372, z, .34, .019, .116);
+    }
+  }
+  for (const rail of [-4.57, -3.07, -1.69, -.19]) track(rail, -14.75, 14.75);
+  for (let z = -14.65; z <= 14.8; z += .63) {
+    for (const x of [-3.82, -.94]) {
+      staticBox(earth, choice([0x44392e, 0x4e4333, 0x352f2a], sceneryRandom),
+        x, -.265, z, 2.22, .17, rand(.19, .26), rand(-.045, .045));
+      for (const side of [-.75, .75]) {
+        staticBox(steel, 0x575247, x + side, -.18, z, .24, .034, .24);
+      }
+    }
+  }
+  for (const z of [-10.9, -4.25, 2.4, 7.4, 13.65]) {
+    staticBox(painted, 0x46544c, 1.36, 2.27, z, .41, 3.86, .42);
+    staticBox(steel, 0x68776a, 1.36, .48, z, .65, .29, .64);
+    staticBox(steel, 0x4f5b51, 1.36, 4.13, z, .76, .18, .73);
+    staticBox(steel, 0x66756b, 1.36, 4.08, z, 17.33, .39, .23);
+    obstacles.push([1.13, 1.59, z - .22, z + .22]);
+  }
+  for (const z of [-10.25, -2.22, 5.75, 12.1]) addLamp(4.75, 3.89, z, true, 0xc3dece, 28);
+  addLamp(-6.82, 3.82, 9.95, true, 0xc9cdc1, 17);
+  decal(stationSign, 4.42, 1.24, 8.769, 2.46, 4.32, -Math.PI / 2, 0, {color: 0xa4b3a8});
+  decal(stationSign, 3.08, .9, -8.766, 2.37, -.63, Math.PI / 2, 0, {color: 0x9caba2});
+  const mainExitSign = decal(exitSign, 3.46, .65, -8.724, 3.27, 10.49, Math.PI / 2, 0, {color: 0xcbb2a0});
+  decal(serviceSign, 2.78, .8, 5.21, 3.38, -14.91, 0, 0, {color: 0xa9b4a4});
+  addEmergency(-8.6, 3.03, 8.38, Math.PI / 2, 0xfc7852);
+  addEmergency(7.9, 2.68, -14.8, 0, 0xe38655);
+
+  function bench(x, z, length) {
+    for (const part of [[.25, .41, .66], [.19, .63, 1.07]]) {
+      staticBox(steel, 0x4f5f54, x + part[0], part[2], z, .12, .09, length);
+    }
+    for (let row = 0; row < 3; row++) {
+      staticBox(coatWood, 0xb39c7f, x + row * .17, .77, z, .133, .083, length);
+      staticBox(coatWood, 0xbaa68d, x + .44, .98 + row * .115, z, .065, .084, length);
+    }
+    for (const side of [-.42, .42]) {
+      staticBox(steel, 0x5e7064, x + .24, .556, z + length * side, .55, .4, .105);
+    }
+    obstacles.push([x - .11, x + .61, z - length / 2, z + length / 2]);
+  }
+  bench(7.79, 6.72, 2.38);
+  bench(7.8, -8.3, 2.65);
+
+  // The low northbound connector opens into a flooded pipe passage.
+  walkFloor(concreteMap, 2.8, 7.6, -19.8, -15, .18, 0x9c9b82);
+  walkFloor(concreteMap, 2.8, 7.6, -25, -19.8, .166, 0x989785);
+  walkFloor(concreteMap, 7.6, 24.05, -25, -19.8, -.15, 0x7c8990, .66);
+  walkFloor(concreteMap, 24.05, 29.8, -25, -19.8, .1, 0x9b9e8d);
+  walkFloor(concreteMap, 12.8, 22.36, -25, flood.ledge, .24, 0x9c9f90);
+  staticBox(earth, 0x64675a, 17.58, .041, flood.ledge, 9.56, .394, .135);
+  ceiling(2.8, 7.6, -19.8, -15, 3.25);
+  ceiling(2.8, 29.8, -25, -19.8, 3.25);
+  wallX(2.8, -25, -15, 1, false, 3.25);
+  wallX(7.6, -19.8, -15, -1, false, 3.25);
+  wallX(29.8, -25, -19.8, -1, false, 3.25);
+  wallZ(-25, 2.8, 29.8, 1, false, 3.25);
+  wallZ(-19.8, 7.6, 25.5, -1, false, 3.25);
+  wallZ(-19.8, 21.8, 25.5, 1, false, 3.7);
+  wallZ(-19.8, 29.8, 33.5, 1, false, 3.7);
+  staticBox(steel, 0x5b6255, 27.65, 2.92, -19.793, 4.34, .61, .224);
+  decal(maintenanceSign, 3.4, .93, 27.72, 2.94, -19.921, Math.PI, 0, {color: 0xafb6a5});
+  addLamp(5.16, 3.02, -18.03, false, 0xc9d8c0, 15);
+  for (const x of [8.38, 15.65, 22.0, 27.52]) addLamp(x, 3.03, -22.43, false, 0xabcfc8, 17);
+  addEmergency(12.81, 2.29, -24.76, 0, 0xf3a26a);
+  addEmergency(27.7, 2.81, -24.77, 0, 0xf27459);
+  staticBox(painted, 0x3b534e, 16.28, 2.72, -24.7, 26.5, .2, .21);
+  staticBox(steel, 0x554d40, 16.28, 2.38, -24.82, 26.5, .106, .105);
+  staticBox(steel, 0x3f5a52, 5.41, 2.93, -20.5, .157, .161, 10.8);
+  for (let x = 4.8; x < 29.3; x += 2.3) {
+    staticBox(steel, 0x666358, x, 2.72, -24.67, .13, .255, .252);
+    staticBox(painted, 0x515b50, x, 1.19, -24.955, .085, 2.3, .085);
+  }
+  for (const x of [8.2, 10.3, 12.4, 23.7]) {
+    staticBox(steel, 0x4a4d40, x, -.006, -24.68, 1.9, .08, .55);
+    for (let gx = x - .89; gx < x + .88; gx += .14) {
+      staticBox(railMetal, 0x7c7e6a, gx, .045, -24.68, .031, .03, .55);
+    }
+  }
+
+  const surfaceWater = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: true,
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      uTime: {value: 0}, uDark: {value: 0}, uRipple: {value: new THREE.Vector3(9, -22.3, 0)}, uWard: {value: new THREE.Vector3()}
+    }]),
+    vertexShader: [
+      '#include <fog_pars_vertex>',
+      'varying vec3 vWorld;',
+      'void main() {',
+      '  vWorld = (modelMatrix * vec4(position, 1.0)).xyz;',
+      '  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);',
+      '  gl_Position = projectionMatrix * mvPosition;',
+      '  #include <fog_vertex>',
+      '}'
+    ].join('\n'),
+    fragmentShader: [
+      '#include <fog_pars_fragment>',
+      'varying vec3 vWorld;',
+      'uniform float uTime, uDark;',
+      'uniform vec3 uRipple, uWard;',
+      'void main() {',
+      '  vec2 p = vWorld.xz;',
+      '  float wave = sin(p.x * 6.6 + sin(p.y * 5.9 + uTime) * 2.4 + uTime * 2.8);',
+      '  wave *= sin(p.y * 12.4 - p.x * .3 + uTime * 1.4);',
+      '  float mirror = pow(max(0.0, cos((p.x - 8.38) * .98 + wave * .14)), 16.0);',
+      '  mirror *= .38 + .62 * pow(max(0.0, sin(p.y * 28.0 + wave * 2.5)), 3.0);',
+      '  float ripple = max(0.0, sin(length(p-uRipple.xy) * 23.0 - uTime * 21.0));',
+      '  ripple *= uRipple.z * exp(-length(p-uRipple.xy) * 3.0);',
+      '  vec3 dark = vec3(.017, .036, .04) + wave * .009;',
+      '  vec3 light = vec3(.12, .23, .21) * mirror * (1.0-uDark*.84);',
+      '  float ward = uWard.z > .0 ? 1.0-smoothstep(uWard.z-.6,uWard.z,length(p-uWard.xy)) : .0;',
+      '  gl_FragColor = vec4(dark + light + ripple * .026 + vec3(.025,.13,.12)*ward, (.73 + mirror * .2) * (1.0-ward*.82));',
+      '  #include <tonemapping_fragment>',
+      '  #include <colorspace_fragment>',
+      '  #include <fog_fragment>',
+      '}'
+    ].join('\n')
+  });
+  function poolPiece(x1, x2, z1, z2) {
+    const water = primitive(planeGeometry, surfaceWater, scene, (x1 + x2) / 2, .085,
+      (z1 + z2) / 2, x2 - x1, z2 - z1, 1);
+    water.rotation.x = -Math.PI / 2;
+  }
+  poolPiece(7.6, 24.05, flood.ledge, -19.8);
+  poolPiece(7.6, 12.8, -25, flood.ledge);
+  poolPiece(22.36, 24.05, -25, flood.ledge);
+
+  // Pad shapes, piping and torn seams give the room its silhouette.
+  walkFloor(concreteMap, 21.8, 33.5, -19.8, -6, .18, 0xa4a28c, .92);
+  ceiling(21.8, 33.5, -19.8, -6, 3.7);
+  wallX(21.8, -19.8, -6, 1, false, 3.7);
+  wallX(33.5, -19.8, -6, -1, false, 3.7);
+  wallZ(-6, 21.8, 25.5, -1, false, 3.7);
+  wallZ(-6, 30.3, 33.5, -1, false, 3.7);
+  const quilt = paint(512, 512, (pen, w, h) => {
+    pen.drawImage(canvasFabric.image, 0, 0, w, h);
+    const random = seeded(228);
+    for (let row = 0; row <= h; row += 65) {
+      for (let column = -40; column <= w; column += 80) {
+        const x = column + (Math.floor(row / 65) % 2 ? 40 : 0);
+        stain(pen, x, row, 34, 24, '#d5c4a02f');
+        for (const [shade, offset] of [['#d3c6a456', -1], ['#443a2d7c', 1]]) {
+          pen.strokeStyle = shade;
+          pen.lineWidth = 2;
+          pen.beginPath();
+          pen.moveTo(x - 40, row + offset);
+          pen.quadraticCurveTo(x - 5, row - 39 + offset, x, row - 32 + offset);
+          pen.quadraticCurveTo(x + 5, row - 39 + offset, x + 40, row + offset);
+          pen.stroke();
+        }
+      }
+    }
+    speckle(pen, w, h, random, 3700);
+  });
+  const cushionGeometry = new THREE.BoxGeometry(1, 1, 1, 12, 8, 12);
+  const cushionPosition = cushionGeometry.getAttribute('position');
+  const cushionNormal = cushionGeometry.getAttribute('normal');
+  for (let i = 0; i < cushionPosition.count; i++) {
+    const x = cushionPosition.getX(i);
+    const y = cushionPosition.getY(i);
+    const z = cushionPosition.getZ(i);
+    const innerX = clamp(x, -.444, .444);
+    const innerY = clamp(y, -.24, .24);
+    const innerZ = clamp(z, -.45, .45);
+    const normal = vector((x - innerX) / .056, (y - innerY) / .26, (z - innerZ) / .05).normalize();
+    cushionPosition.setXYZ(i, innerX + normal.x * .056, innerY + normal.y * .26, innerZ + normal.z * .05);
+    cushionNormal.setXYZ(i, normal.x, normal.y, normal.z);
+  }
+  const ticking = standard(0xbfb7a6);
+  ticking.map = quilt;
+  const filthyTicking = standard(0x9c9785);
+  filthyTicking.map = quilt;
+  const seamMaterial = standard(0x5e5645);
+  const fillingMaterial = standard(0xb0a28e);
+  function mattress(x, y, z, yaw, pitch, roll, width, length, dingy) {
+    const root = new THREE.Group();
+    root.position.set(x, y, z);
+    root.rotation.set(pitch, yaw, roll, 'YXZ');
+    scene.add(root);
+    const pad = dingy ? filthyTicking : ticking;
+    primitive(cushionGeometry, pad, root, 0, 0, 0, width, .224, length);
+    for (const edge of [-1, 1]) {
+      block(root, seamMaterial, edge * (width / 2 - .035), .006, 0, .025, .025, length - .18);
+      block(root, seamMaterial, 0, .006, edge * (length / 2 - .038), width - .17, .025, .025);
+    }
+    if (dingy) {
+      for (let i = 0; i < 4; i++) {
+        sphere(root, fillingMaterial, width / 2 + rand(-.07, .032), rand(.02, .09),
+          length * .2 + i * .092, rand(.034, .067), .034, rand(.037, .081));
+      }
+    }
+  }
+  const piles = [
+    [23.3, -9.34, 4, -.24], [32.1, -9.15, 5, .43], [32.0, -15.14, 4, -.14],
+    [23.25, -15.52, 3, .19], [23.17, -17.78, 3, -.37], [31.8, -18.0, 2, .21]
+  ];
+  for (const [x, z, count, angle] of piles) {
+    obstacles.push([x - .94, x + .94, z - 1.22, z + 1.22]);
+    for (let i = 0; i < count; i++) {
+      mattress(x + rand(-.23, .23), .3 + i * .227, z + rand(-.24, .24), angle + rand(-.23, .23),
+        rand(-.06, .09), rand(-.12, .13), rand(1.36, 1.58), rand(1.87, 2.22), i % 2 === 0);
+    }
+  }
+  mattress(33.2, 1.19, -12.41, Math.PI / 2, -1.35, .04, 1.49, 2.15, true);
+  mattress(22.09, 1.07, -13.38, -Math.PI / 2, -1.34, -.18, 1.49, 2.1, false);
+  addLamp(27.5, 3.45, -13.22, false, 0xe4d2ad, 22);
+  addLamp(28.14, 3.45, -7.91, true, 0xc1d1bd, 15);
+  addEmergency(27.87, 2.73, -6.19, Math.PI, 0xff8055);
+  decal(forwardSign, 2.76, .71, 27.9, 3.06, -6.14, Math.PI, 0, {color: 0xc4d0bc});
+
+  // The service corridor returns to the tracks opposite the street gate.
+  walkFloor(concreteMap, 25.5, 30.3, -6, 13, .18, 0x999e8e);
+  walkFloor(concreteMap, 8.8, 25.5, 9, 13, .18, 0x989d8f);
+  ceiling(25.5, 30.3, -6, 13, 3.21);
+  ceiling(8.8, 25.5, 9, 13, 3.21);
+  wallX(25.5, -6, 9, 1, false, 3.21);
+  wallX(30.3, -6, 13, -1, false, 3.21);
+  wallZ(9, 8.8, 25.5, 1, false, 3.21);
+  wallZ(13, 8.8, 30.3, -1, false, 3.21);
+  for (const z of [-1.8, 4.0, 10.39]) addLamp(27.88, 2.96, z, true, 0xc3d5c1, 16);
+  addLamp(20.51, 2.96, 11.07, false, 0xd2dabe, 16);
+  addLamp(12.62, 2.96, 11.07, false, 0xbacfc0, 16);
+  addEmergency(29.97, 2.36, 11.6, -Math.PI / 2, 0xff8c56);
+  addEmergency(9.13, 2.36, 12.78, Math.PI, 0xff7950);
+  decal(corridorSign, 2.52, .62, 27.7, 2.38, 12.971, Math.PI, 0, {color: 0xb3cdaf});
+  decal(corridorSign, 2.52, .62, 13.38, 2.48, 12.971, Math.PI, 0, {color: 0xb3cdaf});
+  for (let z = -5.8; z < 12; z += 2.1) {
+    staticBox(painted, 0x57554a, 30.17, 2.68, z + .98, .13, .13, 2.05);
+    staticBox(steel, 0x77786e, 30.16, 2.68, z, .21, .21, .105);
+  }
+
+  const gate = new THREE.Group();
+  gate.position.set(-8.918, .34, 10.5);
+  scene.add(gate);
+  const gateMaterial = standard(0x75847d, .38, .48);
+  for (let i = -8; i <= 8; i++) block(gate, gateMaterial, 0, 1.4, i * .218, .079, 2.81, .045);
+  for (const y of [.075, 1.22, 2.79]) block(gate, gateMaterial, 0, y, 0, .089, .079, 3.85);
+  const gatePlaque = decal(lockedSign, 1.42, .37, gate.position.x + .065, 1.77, 10.5, Math.PI / 2, 0, {color: 0xd7c09f});
+  for (const z of [8.55, 12.45]) staticBox(steel, 0x777c71, -8.9, 1.85, z, .41, 3.02, .21);
+  staticBox(steel, 0x555950, -8.9, 3.13, 10.5, .43, .29, 4.14);
+
+  wallZ(8.55, -18.4, -8.8, 1, false, 7.19, .22);
+  wallZ(12.45, -18.4, -8.8, -1, false, 7.19, .22);
+  const stepCount = 32;
+  const stairDepth = 9.6 / stepCount;
+  const rise = 3.55 / stepCount;
+  for (let i = 0; i < stepCount; i++) {
+    const x = -8.8 - (i + .5) * stairDepth;
+    const y = .34 + i * rise;
+    staticBox(earth, i % 4 ? 0x777b70 : 0x899081, x, y - .094, 10.5, stairDepth + .018, .211, 3.88);
+    staticBox(painted, 0x909890, x + stairDepth * .396, y + .015, 10.5, .036, .027, 3.57);
+  }
+  const stairIncline = Math.atan2(3.55, 9.6);
+  for (const z of [8.97, 12.05]) {
+    staticBox(railMetal, 0x929b91, -13.58, 3.045, z, 10.18, .061, .061, 0, -stairIncline);
+    for (let i = 0; i < 5; i++) {
+      const x = -9.2 - i * 2.18;
+      staticBox(steel, 0x69716a, x, floorAt(x, z) + .45, z, .066, .95, .066);
+    }
+  }
+  walkFloor(concreteMap, -23.5, -18.4, 6.8, 14, 3.89, 0x9aa3a0, .79);
+  wallX(-23.5, 6.8, 14, 1, false, 12.5, 3.86);
+  wallZ(6.8, -23.5, -18.4, 1, true, 11.2, 3.88);
+  wallZ(14, -23.5, -18.4, -1, false, 10.4, 3.88);
+  staticBox(steel, 0x638071, -20.31, 4.39, 10.02, .089, .99, .089);
+  const streetLight = new THREE.PointLight(0xc9e0eb, 46, 11, 2);
+  streetLight.position.set(-19.95, 6.7, 10.5);
+  scene.add(streetLight);
+  floorGlow(0xc9e0eb, .44, -20.35, 3.912, 10.47, 6.31, 4.84);
+  const exitShine = new THREE.SpotLight(0xf4d2a6, 17, 13.5, .62, .76, 1.8);
+  exitShine.position.set(-9.43, 3.05, 10.52);
+  exitShine.target.position.set(-5.9, -.14, 10.52);
+  scene.add(exitShine, exitShine.target);
+
+  // Cable hangers, wet litter and debris, batched by material.
+  for (let i = 0; i < 365; i++) {
+    const x = rand(-8.6, 8.6);
+    const z = rand(-14.8, 14.8);
+    const isTrack = x > -5.13 && x < .8;
+    staticBox(i % 9 === 0 ? railMetal : earth,
+      choice([0x5a5444, 0x8c785c, 0x4e5750, 0x676450, 0xa1977a, 0x353a2f], sceneryRandom),
+      x, floorAt(x, z) + (isTrack ? rand(.028, .106) : .02), z,
+      rand(.035, .171), rand(.018, .046), rand(.04, .34), rand(0, TAU), rand(-.13, .13));
+  }
+  for (let i = 0; i < 110; i++) {
+    const x = rand(22.05, 33.22);
+    const z = rand(-19.49, -6.36);
+    if (distance(x, z, 27.75, -12.85) < 1.6) continue;
+    staticBox(earth, choice([0x6d6357, 0x756f61, 0x9b8b71], sceneryRandom), x, .21, z,
+      rand(.025, .145), rand(.014, .047), rand(.05, .25), rand(0, TAU));
+  }
+  for (let i = 0; i < 43; i++) {
+    const x = rand(-4.92, .64);
+    const z = rand(-14.6, 14.6);
+    floorGlow(0x6b969f, rand(.04, .14), x, -.324, z, rand(.4, 1.78), rand(.35, 1.33));
+  }
+  for (let z = -13.9; z < 14.7; z += 3.1) {
+    for (const x of [8.55, -8.56]) {
+      if (x < 0 && z > 7.38 && z < 12.98) continue;
+      if (x > 0 && z > 8.18 && z < 14.02) continue;
+      staticBox(painted, 0x3d4840, x, 3.44, z, .13, .13, 3.1);
+      staticBox(steel, 0x626b5d, x, 3.45, z, .22, .2, .13);
+    }
+  }
+
+  const hemisphere = new THREE.HemisphereLight(0xb8cfcb, 0x524239, 1.08);
+  scene.add(hemisphere);
+  const ambientFixtures = Array.from({length: 3}, () => {
+    const light = new THREE.PointLight(0xcce0d1, 0, 10.4, 2);
+    scene.add(light);
+    return light;
+  });
+  const vision = new THREE.SpotLight(0xd0dbc1, 12, 15, Math.PI / 4.15, .78, 1.3);
+  vision.position.set(0, .14, -.2);
+  vision.target.position.set(0, -.14, -6);
+  camera.add(vision, vision.target);
+  const castLight = new THREE.PointLight(0xffe0a6, 0, 8.0, 2);
+  scene.add(castLight);
+
+  const capGeometry = new THREE.CylinderGeometry(.78, 1.09, 1, 10);
+  const bootMaterial = standard(0x211f1b, .79);
+  const dollCeramic = standard(0xd9d1b7, .35);
+  const dollCloth = standard(0x858377, .93);
+  const dullFlesh = standard(0x9b9782, .8);
+  const hollowEye = new THREE.MeshBasicMaterial({color: 0x171415});
+  const whiteEye = new THREE.MeshBasicMaterial({color: 0xdbf1ce, toneMapped: false});
+  const contactMap = new THREE.MeshBasicMaterial({
+    map: glowMap, color: 0x0a1011, opacity: .54, transparent: true, depthWrite: false
+  });
+
+  function shadow(width, length, x, y, z) {
+    const patch = primitive(planeGeometry, contactMap, scene, x, y, z, width, length, 1);
+    patch.rotation.x = -Math.PI / 2;
+    return patch;
+  }
+
+  function limb(parent, x, y, z, length, width, material, tipMaterial, leg = false) {
+    const hinge = new THREE.Group();
+    hinge.position.set(x, y, z);
+    parent.add(hinge);
+    primitive(capGeometry, material, hinge, 0, -length * .43, 0, width, length * .96, width);
+    const end = new THREE.Group();
+    end.position.y = -length * .86;
+    hinge.add(end);
+    primitive(capGeometry, material, end, 0, -length * .38, 0, width * .82, length * .84, width * .83);
+    if (leg) {
+      sphere(end, tipMaterial, 0, -length * .81, .064, width * 1.04, .061, width * 1.63);
+    } else {
+      sphere(end, tipMaterial, 0, -length * .81, .02, width * .66, width * 1.1, width * .64);
+    }
+    return {hinge, end};
+  }
+
+  function person(jacketColor, pantsColor, skinColor, hat, possessed = false) {
+    const jacket = standard(jacketColor);
+    const pants = standard(pantsColor);
+    const skin = possessed ? dullFlesh : standard(skinColor, .74);
+    const root = new THREE.Group();
+    const upper = new THREE.Group();
+    upper.position.y = .86;
+    root.add(upper);
+    primitive(capGeometry, jacket, upper, 0, .21, 0, .269, .49, .175);
+    block(upper, jacket, 0, -.075, 0, .432, .21, .31);
+    block(upper, standard(0xb2aa96, .87), 0, .34, .16, .094, .23, .014);
+    const head = new THREE.Group();
+    head.position.set(0, .57, .027);
+    upper.add(head);
+    sphere(head, skin, 0, .089, 0, .137, .177, .126);
+    sphere(head, skin, 0, .023, .049, .109, .105, .102);
+    const eyes = [-.049, .049].map((x) =>
+      sphere(head, possessed ? whiteEye : hollowEye, x, .083, .12, .024, .014, .011));
+    sphere(head, skin, 0, .044, .128, .032, .044, .04);
+    block(head, hollowEye, 0, -.022, .125, .082, .016, .018);
+    if (hat === 'brim') {
+      primitive(cylinderGeometry, jacket, head, 0, .228, -.013, .21, .027, .17);
+      primitive(capGeometry, jacket, head, 0, .276, -.015, .132, .105, .123);
+    }
+    if (hat === 'knit') sphere(head, jacket, 0, .224, -.021, .114, .052, .111);
+    if (!hat) sphere(head, pants, 0, .193, -.029, .137, .07, .116);
+    if (possessed) block(upper, standard(0xb09c5c), .132, .3, .143, .09, .038, .026);
+    const arms = [-1, 1].map((side) => limb(upper, side * .251, .395, 0, .293, .073, jacket, skin));
+    const legs = [-1, 1].map((side) => limb(root, side * .121, .81, 0, .387, .096, pants, bootMaterial, true));
+    return {root, upper, head, eyes, arms, legs};
+  }
+
+  function poseStanding(model, waving, time) {
+    model.upper.rotation.x = -.05 + Math.sin(time * 3) * .026;
+    model.head.rotation.y = Math.sin(time * 1.2) * .13;
+    model.arms[0].hinge.rotation.set(waving ? -1.68 : -.18, 0, waving ? -.63 : -.09);
+    model.arms[0].end.rotation.x = waving ? -.44 + Math.sin(time * 18) * .46 : -.08;
+    model.arms[1].hinge.rotation.set(-.14, 0, .14);
+    model.arms[1].end.rotation.x = -.11;
+  }
+
+  const shelterMaterial = standard(0x343c35, .88);
+  const shelterSteel = standard(0x68716a, .53, .24);
+  const shelters = [];
+  function makeShelter(x, z, yaw, jacket, hat, line) {
+    const y = floorAt(x, z);
+    const root = new THREE.Group();
+    root.position.set(x, y, z);
+    root.rotation.y = yaw;
+    scene.add(root);
+    const resident = person(jacket, 0x333431, 0xb7a48b, hat);
+    resident.root.position.set(0, .015, .27);
+    root.add(resident.root);
+    block(root, shelterMaterial, 0, 1.09, .028, 1.86, 2.2, .14);
+    for (const xOffset of [-.88, .88]) {
+      block(root, shelterSteel, xOffset, 1.09, .338, .095, 2.18, .64);
+    }
+    block(root, shelterSteel, 0, 2.203, .33, 1.82, .16, .7);
+    const hinge = new THREE.Group();
+    hinge.position.set(-.824, 0, .633);
+    root.add(hinge);
+    block(hinge, shelterMaterial, .825, 1.076, 0, 1.65, 2.15, .104);
+    for (const yOffset of [.46, 1.17, 1.71]) {
+      block(hinge, coatWood, .825, yOffset, .093, 1.84, .22, .113);
+      for (const xOffset of [.08, 1.34]) block(hinge, shelterSteel, xOffset, yOffset, .166, .052, .047, .022);
+    }
+    block(hinge, shelterSteel, 1.432, 1.05, .114, .068, .242, .071);
+    const target = {x: x + Math.sin(yaw) * 1.3, z: z + Math.cos(yaw) * 1.3};
+    shelters.push({root, resident, hinge, x, z, line, target, phase: 'open', timer: 0, angle: -1.38});
+    if (Math.abs(Math.sin(yaw)) > .5) {
+      obstacles.push([Math.min(x, x + Math.sin(yaw) * .79), Math.max(x, x + Math.sin(yaw) * .79),
+        z - .88, z + .88]);
+    }
+  }
+  makeShelter(8.65, -.91, -Math.PI / 2, 0x262b2d, 'knit', '“Keep moving.”');
+  makeShelter(2.94, -17.69, Math.PI / 2, 0x333332, 'brim', '“Get away from the door.”');
+  makeShelter(30.15, 5.64, -Math.PI / 2, 0x343a36, '', '“Get back!”');
+
+  const crackedFace = paint(192, 160, (pen, w, h) => {
+    const random = seeded(268);
+    for (const x of [60, 132]) {
+      stain(pen, x, 86, 33, 27, '#a4595270');
+      stain(pen, x, 61, 24, 17, '#181716ca');
+      pen.fillStyle = '#272a27';
+      pen.beginPath();
+      pen.ellipse(x, 60, 14, 10, 0, 0, TAU);
+      pen.fill();
+      pen.fillStyle = '#969a8e';
+      pen.beginPath();
+      pen.ellipse(x + 3, 58, 2.4, 2.9, 0, 0, TAU);
+      pen.fill();
+    }
+    pen.strokeStyle = '#743e39b5';
+    pen.lineCap = 'round';
+    pen.lineWidth = 7;
+    pen.beginPath();
+    pen.moveTo(76, 117);
+    pen.quadraticCurveTo(96, 130, 114, 116);
+    pen.stroke();
+    for (const [x, y, dx, dy] of [[134, 16, -5, 7], [143, 52, 6, -5], [60, 75, -4, 6], [112, 109, 7, 6]]) {
+      pen.beginPath();
+      pen.moveTo(x, y);
+      for (let i = 1; i < 7; i++) pen.lineTo(x + dx * i + (random() - .5) * 11, y + dy * i);
+      pen.strokeStyle = '#322925b0';
+      pen.lineWidth = 1.9;
+      pen.stroke();
+    }
+  });
+  const faceMaterial = new THREE.MeshBasicMaterial({
+    map: crackedFace, transparent: true, color: 0xbfc5a8, depthWrite: false
+  });
+
+  function babyDoll() {
+    const root = new THREE.Group();
+    scene.add(root);
+    const hips = sphere(root, dollCloth, 0, .218, -.146, .151, .122, .161);
+    const torso = sphere(root, dollCeramic, 0, .228, .01, .131, .118, .197);
+    const head = new THREE.Group();
+    head.position.set(0, .359, .183);
+    root.add(head);
+    sphere(head, dollCeramic, 0, 0, 0, .139, .158, .143);
+    sphere(head, dollCeramic, 0, -.034, .13, .024, .024, .028);
+    primitive(planeGeometry, faceMaterial, head, 0, -.013, .132, .217, .159, 1);
+    for (const x of [-.132, .132]) sphere(head, dollCeramic, x, -.017, -.012, .027, .04, .025);
+    const arms = [-1, 1].map((side) => limb(root, side * .134, .228, .061, .143, .049, dollCeramic, dollCeramic));
+    const legs = [-1, 1].map((side) => limb(root, side * .088, .208, -.186, .122, .052, dollCeramic, dollCeramic));
+    block(arms[1].end, standard(0xe5dec6, .7), 0, -.128, .032, .024, .073, .023);
+    return {root, hips, torso, head, arms, legs, shade: shadow(.96, .7, 0, .02, 0)};
+  }
+
+  const chalkMap = paint(512, 512, (pen, w, h) => {
+    const random = seeded(481);
+    const center = w / 2;
+    pen.strokeStyle = '#ece0b9ef';
+    pen.lineJoin = 'round';
+    pen.lineCap = 'round';
+    for (const radius of [231, 203, 155, 56]) {
+      for (let i = 0; i < 128; i++) {
+        const angle = i / 128 * TAU;
+        const next = angle + .055 + random() * .006;
+        const r = radius + (random() - .5) * 4.8;
+        pen.lineWidth = 2 + random() * 6.45;
+        pen.beginPath();
+        pen.moveTo(center + Math.cos(angle) * r, center + Math.sin(angle) * r);
+        pen.lineTo(center + Math.cos(next) * r, center + Math.sin(next) * r);
+        pen.stroke();
+        for (let j = 0; j < 7; j++) {
+          const scatter = r + (random() - .5) * 19;
+          pen.fillStyle = 'rgba(235,229,197,' + (.06 + random() * .4) + ')';
+          pen.fillRect(center + Math.cos(angle) * scatter, center + Math.sin(angle) * scatter,
+            random() * 3.2, random() * 2.8);
+        }
+      }
+    }
+    for (let i = 0; i < 12; i++) {
+      const angle = i / 12 * TAU;
+      pen.save();
+      pen.translate(center, center);
+      pen.rotate(angle);
+      pen.strokeStyle = '#e3d7b5d8';
+      pen.lineWidth = 4;
+      pen.beginPath();
+      pen.moveTo(-7, -223);
+      pen.lineTo(7, -207);
+      pen.moveTo(7, -222);
+      pen.lineTo(-7, -210);
+      pen.moveTo(0, -194);
+      pen.lineTo(5, -159);
+      pen.lineTo(-10, -170);
+      pen.lineTo(12, -183);
+      pen.stroke();
+      pen.restore();
+    }
+    pen.lineWidth = 5;
+    for (const offset of [Math.PI / 2, -Math.PI / 2]) {
+      pen.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const direction = i / 3 * TAU + offset;
+        const x = center + Math.cos(direction) * 152;
+        const y = center + Math.sin(direction) * 152;
+        if (i) pen.lineTo(x, y);
+        else pen.moveTo(x, y);
+      }
+      pen.closePath();
+      pen.stroke();
+    }
+  });
+
+  function makeRitual(x, z, area) {
+    const y = floorAt(x, z);
+    const material = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, fog: true, polygonOffset: true, polygonOffsetFactor: -1,
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+        chalk: {value: chalkMap}, drawn: {value: .5}, broken: {value: 0}, focus: {value: 0}, time: {value: 0}
+      }]),
+      vertexShader: [
+        '#include <fog_pars_vertex>',
+        'varying vec2 vUv;',
+        'void main() {',
+        '  vUv = uv;',
+        '  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);',
+        '  gl_Position = projectionMatrix * mvPosition;',
+        '  #include <fog_vertex>',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        '#include <fog_pars_fragment>',
+        'uniform sampler2D chalk;',
+        'uniform float drawn, broken, focus, time;',
+        'varying vec2 vUv;',
+        'void main() {',
+        '  vec4 mark = texture2D(chalk, vUv);',
+        '  float sector = fract(atan(.5-vUv.y,vUv.x-.5)/6.2831853+1.0);',
+        '  float noise = fract(sin(dot(floor(vUv*305.0),vec2(17.43,53.17)))*5841.85);',
+        '  float line = sector + (noise-.5)*.042;',
+        '  float reveal = (1.0-smoothstep(drawn-.026, drawn+.018, line));',
+        '  float erase = broken > .002 ? smoothstep(broken-.018, broken+.027, line) : 1.0;',
+        '  float burning = step(.002,broken)*exp(-abs(line-broken)*37.0);',
+        '  vec3 color = mix(vec3(.68,.65,.52), vec3(.98,.82,.54), focus*.59);',
+        '  color += vec3(.74,.38,.07)*burning*(1.4+.6*sin(17.0*time+noise*6.0));',
+        '  gl_FragColor = vec4(color,mark.a*reveal*(.18 + .77*erase)*(.82+.18*focus));',
+        '  #include <tonemapping_fragment>',
+        '  #include <colorspace_fragment>',
+        '  #include <fog_fragment>',
+        '}'
+      ].join('\n')
+    });
+    const ring = primitive(planeGeometry, material, scene, x, y + .021, z, 2.52, 2.52, 1);
+    ring.rotation.x = -Math.PI / 2;
+    const beacon = halo(scene, 0xd0b680, .26, x, y + .18, z, 1.39, .59);
+    const doll = babyDoll();
+    return {x, y, z, area, ring, material, beacon, doll, turns: .47, progress: 0, cooldown: 0, done: false, collapse: 0};
+  }
+
+  const rituals = [
+    makeRitual(5.02, 1.56, 'platform'),
+    makeRitual(17.82, -23.74, 'flooded passage'),
+    makeRitual(27.69, -12.86, 'mattress room')
+  ];
+
+  const pursuers = Array.from({length: 6}, (_, i) => {
+    const model = person([0x323e3d, 0x4a4a3b, 0x434b4c][i % 3], 0x333736, 0x959283, '', true);
+    model.root.scale.setScalar(.97 + (i % 4) * .045);
+    model.root.visible = false;
+    scene.add(model.root);
+    const shade = shadow(1.02, .86, 0, -.315, 0);
+    shade.visible = false;
+    return {
+      model, shade, active: false, x: 0, z: 0, yaw: 0, runTime: i * 2.1, mode: 'stalk',
+      delay: 0, frozen: 0, stagger: 0, shoveX: 0, shoveZ: 0, charge: 0, spit: false,
+      shelter: null, retreatFlow: null, wardSoundAt: 0
+    };
+  });
+
+  const ratGroups = [
+    {ax: -.41, az: 9.55, bx: -4.8, bz: 12.03, count: 8, triggerX: 3.1, triggerZ: 10.65, radius: 6.9},
+    {ax: -4.9, az: -.72, bx: 2.93, bz: -4.38, count: 6, triggerX: 3.3, triggerZ: 1.8, radius: 7.2},
+    {ax: 11.2, az: -24.58, bx: 15.27, bz: -20.1, count: 7, triggerX: 12, triggerZ: -22.35, radius: 4.8},
+    {ax: 23.87, az: -15.51, bx: 31.4, bz: -18.03, count: 8, triggerX: 26.7, triggerZ: -16.2, radius: 5.6},
+    {ax: 31.7, az: -9.65, bx: 24.21, bz: -7.82, count: 9, triggerX: 28.45, triggerZ: -10.7, radius: 5.7}
+  ];
+  const rats = [];
+  ratGroups.forEach((group, groupIndex) => {
+    group.last = -99;
+    group.first = groupIndex * .34;
+    for (let i = 0; i < group.count; i++) {
+      rats.push({
+        group, delay: rand(.04, .86), length: rand(.94, 1.49), along: rand(.13, .47),
+        bob: rand(0, TAU), size: rand(.78, 1.15), coolUntil: 0, x: 0, z: 0
+      });
+    }
+  });
+  const ratBody = new THREE.InstancedMesh(sphereGeometry, standard(0x494239, .93), rats.length);
+  const ratHead = new THREE.InstancedMesh(sphereGeometry, standard(0x5c5144, .91), rats.length);
+  const ratEars = new THREE.InstancedMesh(sphereGeometry, standard(0x796556, .89), rats.length * 2);
+  const ratTail = new THREE.InstancedMesh(cylinderGeometry, standard(0x7c6252, .83), rats.length * 2);
+  const ratBatches = [ratBody, ratHead, ratEars, ratTail];
+  for (const batch of ratBatches) {
+    batch.count = 0;
+    batch.frustumCulled = false;
+    scene.add(batch);
+  }
+
+  finishConstruction();
+
+  // Crucifix and sleeve share the first-person rig, with no world collisions.
+  const handRig = new THREE.Group();
+  camera.add(handRig);
+  const handSkin = standard(0xb2997b, .67);
+  const sleeveMaterial = standard(0x343b36);
+  const cuffMaterial = standard(0x716957);
+  const brassMaterial = new THREE.MeshStandardMaterial({
+    color: 0xe2b177, roughness: .38, metalness: .58, emissive: 0x7e5227, emissiveIntensity: .53
+  });
+  const crucifix = new THREE.Group();
+  handRig.add(crucifix);
+  const sleeve = block(handRig, sleeveMaterial, .043, -.198, .14, .137, .25, .145);
+  sleeve.rotation.x = -.54;
+  const cuff = block(handRig, cuffMaterial, .028, -.1, .087, .135, .038, .13);
+  cuff.rotation.x = -.54;
+  sphere(handRig, handSkin, .028, -.061, .071, .065, .076, .061);
+  for (let i = 0; i < 3; i++) {
+    const finger = sphere(handRig, handSkin, -.029, -.039 - .023 * i, .051, .049, .015, .042);
+    finger.rotation.z = -.2;
+  }
+  const thumb = sphere(handRig, handSkin, .062, -.009, .067, .023, .047, .025);
+  thumb.rotation.z = -.14;
+  block(crucifix, coatWood, 0, .062, 0, .056, .318, .042);
+  block(crucifix, coatWood, 0, .126, 0, .202, .052, .04);
+  block(crucifix, brassMaterial, 0, .062, .024, .023, .257, .011);
+  block(crucifix, brassMaterial, 0, .126, .024, .159, .02, .012);
+  const corpus = sphere(crucifix, brassMaterial, 0, .117, -.032, .014, .057, .012);
+  corpus.rotation.z = -.08;
+  for (const x of [-.073, .073]) {
+    for (const sign of [-1, 1]) sphere(crucifix, brassMaterial, x, .126, sign * .027, .0075, .0075, .006);
+  }
+  sphere(crucifix, brassMaterial, 0, .179, -.032, .017, .018, .017);
+  const crucifixGlow = halo(handRig, 0xf6c276, .24, 0, .131, .054, .34, .34);
+  const gripLight = new THREE.PointLight(0xffcc93, .38, 1.45, 2);
+  gripLight.position.set(-.1, .32, .14);
+  handRig.add(gripLight);
+
+  const powers = [
+    {name: 'Light of Christ', dot: '†', color: '#ffe6b3', detail: 'Hold on chalk or a pursuer', cooldown: 0},
+    {name: 'Peace, Be Still', dot: 'Ⅱ', color: '#86cfff', detail: 'Stop nearby pursuers', cooldown: 7},
+    {name: 'Drive Them Out', dot: '↟', color: '#ffa95e', detail: 'Push back pursuers and rats', cooldown: 5.5},
+    {name: 'Let There Be Light', dot: '☼', color: '#ffee9f', detail: 'Light the way for a moment', cooldown: 7},
+    {name: 'Water of Life', dot: '≈', color: '#80e7df', detail: 'Cut a path through floodwater', cooldown: 6},
+    {name: 'Mercy', dot: '○', color: '#ffc0d2', detail: 'Cast a sanctuary around you', cooldown: 7},
+    {name: 'Sign of the Cross', dot: '✦', color: '#ffd184', detail: 'Block the pack for 3 seconds', cooldown: 6}
+  ].map((power) => ({...power, tint: new THREE.Color(power.color), readyAt: 0}));
+
+  const objectiveLabels = ['Break the platform ritual', 'Find the ritual in the flooded passage',
+    'Find the ritual in the maintenance room', 'Street exit open · Run to the stairs'];
+  const markers = [...ui['ritual-meter'].querySelectorAll('i')];
+  const keys = new Set();
+  const casting = new Set();
+  const joystick = {pointer: null, x: 0, y: 0};
+  const player = {
+    ...spawn, y: floorAt(spawn.x, spawn.z), moveAmount: 0, ratSlow: 0,
+    walkTime: 0, footstep: 0, protectionUntil: 0
+  };
+  const state = {
+    time: 0, startedAt: null, completed: 0, phase: 'playing', gateOpen: false, gateLift: 0,
+    blackUntil: 0, darkness: 0, brightUntil: 0, selected: 0, lifted: 0, castKick: 0,
+    captionUntil: 0, caughtUntil: 0, chaseStart: 0, rattles: 0, flare: 0,
+    flow: null, flowCell: -1, flowAt: 0, audioAt: 0, wardHudAt: 0,
+    focusRitual: null, focusPursuer: null, chaseWardSeen: false
+  };
+
+  function displaySelection() {
+    const selected = powers[state.selected];
+    ui['power-name'].style.color = selected.color;
+    ui['power-name'].textContent = selected.name;
+    ui['power-detail'].textContent = ' · ' + selected.detail;
+    ui.cast.style.setProperty('border-color', selected.color);
+    ui.cast.style.setProperty('color', selected.color);
+    ui.cast.setAttribute('aria-label', selected.name + (state.selected === 0 ? ', hold to cast' : ', cast'));
+    powers.forEach((power, index) => power.button.setAttribute('aria-pressed', String(index === state.selected)));
+  }
+
+  powers.forEach((power, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'power';
+    button.style.setProperty('--power', power.color);
+    button.title = power.name + ' — ' + power.detail;
+    button.setAttribute('aria-label', power.name);
+    const symbol = document.createElement('span');
+    symbol.textContent = power.dot;
+    symbol.setAttribute('aria-hidden', 'true');
+    const key = document.createElement('kbd');
+    key.textContent = String(index + 1);
+    key.setAttribute('aria-hidden', 'true');
+    button.append(symbol, key);
+    button.addEventListener('click', () => selectPower(index));
+    ui['power-row'].append(button);
+    power.button = button;
+  });
+
+  function selectPower(index) {
+    if (state.phase !== 'playing') return;
+    state.selected = index;
+    displaySelection();
+  }
+
+  function displayObjective() {
+    ui.objective.textContent = objectiveLabels[state.completed];
+    ui['ritual-meter'].setAttribute('aria-label', state.completed + ' of 3 rituals broken');
+    markers.forEach((marker, index) => {
+      marker.classList.toggle('done', index < state.completed);
+      marker.classList.toggle('next', index === state.completed);
+    });
+    ui.hud.classList.toggle('is-chase', state.gateOpen);
+  }
+
+  function say(message, duration = 2.25) {
+    ui.caption.textContent = message;
+    ui.caption.hidden = !message;
+    state.captionUntil = state.time + duration;
+  }
+
+  const navigation = {x: -23.2, z: -24.7, size: .91, width: 63, height: 45};
+  const navCount = navigation.width * navigation.height;
+  const nodes = Array.from({length: navCount}, (_, i) => {
+    const x = navigation.x + (i % navigation.width) * navigation.size;
+    const z = navigation.z + Math.floor(i / navigation.width) * navigation.size;
+    return {x, z, open: !blocked(x, z, .32, true), edges: []};
+  });
+
+  function clearLine(x, z, a, b, radius = .08) {
+    const length = distance(x, z, a, b);
+    const steps = Math.ceil(length / .36);
+    for (let i = 1; i <= steps; i++) {
+      if (blocked(lerp(x, a, i / steps), lerp(z, b, i / steps), radius, state.gateOpen)) return false;
+    }
+    return true;
+  }
+
+  const cardinalDirections = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+  nodes.forEach((node, index) => {
+    if (!node.open) return;
+    const row = Math.floor(index / navigation.width);
+    const column = index % navigation.width;
+    for (const [dx, dz] of cardinalDirections) {
+      if (row + dz < 0 || row + dz >= navigation.height ||
+          column + dx < 0 || column + dx >= navigation.width) continue;
+      const neighborIndex = index + dz * navigation.width + dx;
+      const neighbor = nodes[neighborIndex];
+      if (neighbor.open && !blocked((node.x + neighbor.x) / 2, (node.z + neighbor.z) / 2, .32, true)) {
+        node.edges.push(neighborIndex);
+      }
+    }
+  });
+
+  function openNode(index) {
+    return nodes[index]?.open && (state.gateOpen || nodes[index].x > thresholds.gateX);
+  }
+
+  function nearestNode(x, z) {
+    const row = clamp(Math.round((z - navigation.z) / navigation.size), 0, navigation.height - 1);
+    const column = clamp(Math.round((x - navigation.x) / navigation.size), 0, navigation.width - 1);
+    let nearest = -1;
+    let best = Infinity;
+    for (let r = Math.max(0, row - 2); r <= Math.min(row + 2, navigation.height - 1); r++) {
+      for (let c = Math.max(0, column - 2); c <= Math.min(column + 2, navigation.width - 1); c++) {
+        const index = r * navigation.width + c;
+        if (!openNode(index)) continue;
+        const node = nodes[index];
+        const score = square(node.x - x) + square(node.z - z);
+        if (score < best) {
+          best = score;
+          nearest = index;
+        }
+      }
+    }
+    return nearest;
+  }
+
+  function flowFrom(origin) {
+    const scores = new Int16Array(navCount).fill(-1);
+    if (origin < 0) return scores;
+    const queue = new Int16Array(navCount);
+    let head = 0;
+    let tail = 1;
+    queue[0] = origin;
+    scores[origin] = 0;
+    while (head < tail) {
+      const index = queue[head++];
+      for (const next of nodes[index].edges) {
+        if (scores[next] >= 0 || !openNode(next)) continue;
+        scores[next] = scores[index] + 1;
+        queue[tail++] = next;
+      }
+    }
+    return scores;
+  }
+
+  function goal(playerX, playerZ, x, z, flow) {
+    if (distance(playerX, playerZ, x, z) < 8.8 && clearLine(x, z, playerX, playerZ, .29)) {
+      return {x: playerX, z: playerZ};
+    }
+    let index = nearestNode(x, z);
+    if (index < 0 || !flow || flow[index] < 0) return {x, z};
+    let target = nodes[index];
+    for (let depth = 0; depth < 6 && flow[index] > 0; depth++) {
+      const next = nodes[index].edges.find((candidate) =>
+        flow[candidate] === flow[index] - 1 && clearLine(x, z, nodes[candidate].x, nodes[candidate].z, .26));
+      if (next === undefined) break;
+      target = nodes[next];
+      index = next;
+    }
+    return target;
+  }
+
+  let audio = null;
+  let muted = false;
+  function startAudio() {
+    if (audio) {
+      if (audio.context.state === 'suspended') audio.context.resume().catch(() => {});
+      return;
+    }
+    const Audio = window.AudioContext || window.webkitAudioContext;
+    if (!Audio) return;
+    try {
+      const context = new Audio();
+      const master = context.createGain();
+      master.gain.value = muted ? 0 : .41;
+      master.connect(context.destination);
+      const room = context.createGain();
+      room.gain.value = .05;
+      room.connect(master);
+      for (const [index, hz] of [47, 60, 88.7].entries()) {
+        const oscillator = context.createOscillator();
+        oscillator.type = index === 1 ? 'triangle' : 'sine';
+        oscillator.frequency.value = hz;
+        oscillator.connect(room);
+        oscillator.start();
+      }
+      const noise = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
+      const samples = noise.getChannelData(0);
+      const random = seeded(9453);
+      for (let i = 0; i < samples.length; i++) samples[i] = random() * 2 - 1;
+      audio = {context, master, room, noise};
+      context.resume().catch(() => {});
+    } catch {
+      audio = null;
+    }
+  }
+
+  function beginInput() {
+    if (state.startedAt === null) state.startedAt = state.time;
+    startAudio();
+  }
+
+  function output(x, z) {
+    if (x === undefined || !audio.context.createStereoPanner) return audio.master;
+    const pan = audio.context.createStereoPanner();
+    pan.pan.value = clamp(((x - player.x) * Math.cos(player.yaw) -
+      (z - player.z) * Math.sin(player.yaw)) / 7, -.95, .95);
+    pan.connect(audio.master);
+    return pan;
+  }
+
+  function soundTone(frequency, endFrequency, duration, volume, type, x, z) {
+    if (!audio || muted) return;
+    const {context} = audio;
+    const time = context.currentTime;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const destination = output(x, z);
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, time);
+    oscillator.frequency.exponentialRampToValueAtTime(endFrequency, time + duration);
+    gain.gain.setValueAtTime(.0001, time);
+    gain.gain.linearRampToValueAtTime(volume, time + Math.min(.035, duration / 3));
+    gain.gain.exponentialRampToValueAtTime(.0001, time + duration);
+    oscillator.connect(gain).connect(destination);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      gain.disconnect();
+      if (destination !== audio.master) destination.disconnect();
+    };
+    oscillator.start(time);
+    oscillator.stop(time + duration + .02);
+  }
+
+  function soundNoise(frequency, duration, volume, x, z, filterType = 'bandpass') {
+    if (!audio || muted) return;
+    const {context, noise} = audio;
+    const time = context.currentTime;
+    const source = context.createBufferSource();
+    source.buffer = noise;
+    const filter = context.createBiquadFilter();
+    filter.type = filterType;
+    filter.frequency.value = frequency;
+    filter.Q.value = .8;
+    const gain = context.createGain();
+    const destination = output(x, z);
+    gain.gain.setValueAtTime(.0001, time);
+    gain.gain.linearRampToValueAtTime(volume, time + Math.min(.025, duration / 3));
+    gain.gain.exponentialRampToValueAtTime(.0001, time + duration);
+    source.connect(filter).connect(gain).connect(destination);
+    source.onended = () => {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+      if (destination !== audio.master) destination.disconnect();
+    };
+    source.start(time, Math.random() * .9, duration + .02);
+  }
+
+  function playSound(kind, x, z) {
+    switch (kind) {
+      case 'step':
+        soundNoise(180, .15, .32, x, z, 'lowpass');
+        soundTone(81, 40, .10, .09, 'sine', x, z);
+        break;
+      case 'water':
+        soundNoise(1070, .28, .23, x, z, 'bandpass');
+        soundTone(87, 54, .12, .05, 'sine', x, z);
+        break;
+      case 'chalk':
+        soundNoise(2370, .15, .08, x, z);
+        break;
+      case 'rats':
+        soundNoise(2260, .42, .10, x, z, 'highpass');
+        soundTone(1220, 690, .14, .028, 'sine', x, z);
+        break;
+      case 'spit':
+        soundNoise(1260, .13, .23, x, z);
+        break;
+      case 'breath':
+        soundNoise(285, .73, .14, x, z);
+        soundTone(67, 47, .34, .055, 'triangle', x, z);
+        break;
+      case 'door':
+        soundNoise(440, .62, .38, x, z, 'lowpass');
+        soundTone(81, 33, .42, .44, 'triangle', x, z);
+        break;
+      case 'surge':
+        soundNoise(505, .64, .27, x, z);
+        soundTone(121, 36, .77, .24, 'sawtooth', x, z);
+        break;
+      case 'clear':
+        soundTone(292, 423, .57, .15, 'triangle', x, z);
+        soundTone(581, 840, .48, .05, 'sine', x, z);
+        break;
+      case 'pulse':
+        soundTone(147, 73, .45, .22, 'triangle', x, z);
+        soundTone(382, 185, .27, .055, 'sine', x, z);
+        break;
+      case 'ward':
+        soundTone(418, 295, .74, .14, 'triangle', x, z);
+        soundTone(655, 570, .48, .09, 'sine', x, z);
+        break;
+      case 'impact':
+        soundNoise(870, .19, .19, x, z);
+        soundTone(144, 63, .15, .14, 'triangle', x, z);
+        break;
+      case 'caught':
+        soundNoise(380, .82, .49, x, z, 'lowpass');
+        soundTone(84, 24, .98, .42, 'triangle', x, z);
+        break;
+      case 'street':
+        soundTone(220, 330, 1.6, .12, 'sine');
+        soundTone(330, 494, 1.9, .09, 'sine');
+        soundTone(439, 653, 1.6, .058, 'triangle');
+        break;
+    }
+  }
+
+  ui.sound.addEventListener('click', () => {
+    muted = !muted;
+    startAudio();
+    if (audio) audio.master.gain.setTargetAtTime(muted ? 0 : .41, audio.context.currentTime, .07);
+    ui.sound.textContent = muted ? '×' : '♪';
+    ui.sound.setAttribute('aria-pressed', String(muted));
+    ui.sound.setAttribute('aria-label', muted ? 'Unmute sound' : 'Mute sound');
+    ui.sound.title = ui.sound.getAttribute('aria-label');
+  });
+
+  const effectRandom = seeded(71280);
+  const effectRange = (a, b) => lerp(a, b, effectRandom());
+  const warm = new THREE.Color(0xffcc81);
+  const paper = new THREE.Color(0xcdd1b2);
+  const waterColor = new THREE.Color(0xa2cac0);
+  const capacity = 288;
+  const particles = Array.from({length: capacity}, () => ({life: 0, color: new THREE.Color()}));
+  let particleCursor = 0;
+  const particleGeo = new THREE.BufferGeometry();
+  const positionAttribute = new THREE.BufferAttribute(new Float32Array(capacity * 3), 3);
+  const colorAttribute = new THREE.BufferAttribute(new Float32Array(capacity * 3), 3);
+  particleGeo.setAttribute('position', positionAttribute.setUsage(THREE.DynamicDrawUsage));
+  particleGeo.setAttribute('color', colorAttribute.setUsage(THREE.DynamicDrawUsage));
+  particleGeo.setDrawRange(0, 0);
+  const particleCloud = new THREE.Points(particleGeo, new THREE.PointsMaterial({
+    size: .085, map: glowMap, transparent: true, vertexColors: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, toneMapped: false
+  }));
+  particleCloud.frustumCulled = false;
+  scene.add(particleCloud);
+
+  function spray(x, y, z, count, color, force, ttl = .72, spread = .075, fall = 3.8) {
+    for (let i = 0; i < count; i++) {
+      const particle = particles[particleCursor++ % capacity];
+      particle.x = x + effectRange(-spread, spread);
+      particle.y = y + effectRange(-.05, .06);
+      particle.z = z + effectRange(-spread, spread);
+      particle.dx = effectRange(-force, force);
+      particle.dy = effectRange(.08, force * 1.1);
+      particle.dz = effectRange(-force, force);
+      particle.fall = fall;
+      particle.life = particle.length = effectRange(ttl * .39, ttl);
+      particle.color.copy(color);
+    }
+  }
+
+  function animateParticles(dt) {
+    let count = 0;
+    for (const particle of particles) {
+      particle.life -= dt;
+      if (particle.life <= 0) continue;
+      particle.x += particle.dx * dt;
+      particle.y += particle.dy * dt;
+      particle.z += particle.dz * dt;
+      particle.dy -= particle.fall * dt;
+      const floor = floorAt(particle.x, particle.z) + .031;
+      if (particle.y < floor) {
+        particle.y = floor;
+        particle.dy = Math.abs(particle.dy) * .23;
+        particle.dx *= .66;
+        particle.dz *= .66;
+      }
+      const brightness = Math.min(1, particle.life / particle.length * 1.45);
+      positionAttribute.setXYZ(count, particle.x, particle.y, particle.z);
+      colorAttribute.setXYZ(count, particle.color.r * brightness, particle.color.g * brightness,
+        particle.color.b * brightness);
+      count++;
+    }
+    positionAttribute.needsUpdate = colorAttribute.needsUpdate = true;
+    particleGeo.setDrawRange(0, count);
+  }
+
+  const floorMists = [
+    [3, .49, -4, 5.9, .59], [-2.7, -.11, -8, 6.7, .53], [-3.4, -.1, 6.2, 5.7, .56],
+    [5.05, .46, -16.64, 4, .51], [11.2, .34, -21.9, 4.7, .68], [20.4, .42, -21.3, 5.6, .68],
+    [25.7, .45, -19.6, 5, .59], [28.89, .48, -13.08, 6.1, .59], [27.9, .4, 2.7, 4.94, .59],
+    [16.9, .36, 10.93, 6.1, .62]
+  ].map(([x, y, z, w, h], index) => ({sprite: halo(scene, 0x9fbcb5, .144, x, y, z, w, h), x, y, z, index}));
+
+  const effects = [];
+  const activeWards = [];
+  const ringGeometry = new THREE.RingGeometry(.87, 1, 52);
+  function effectMaterial(color, opacity = 1) {
+    return new THREE.MeshBasicMaterial({
+      color, opacity, transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, side: THREE.DoubleSide, toneMapped: false
+    });
+  }
+
+  function makePulse(x, y, z, color, maxSize, ttl = .62) {
+    const material = effectMaterial(color, .7);
+    const ring = primitive(ringGeometry, material, scene, x, y + .055, z, .22, .22, 1);
+    ring.rotation.x = -Math.PI / 2;
+    effects.push({root: ring, material, maxSize, started: state.time, ttl});
+  }
+
+  function animateEffects(dt) {
+    for (let i = effects.length - 1; i >= 0; i--) {
+      const effect = effects[i];
+      const progress = (state.time - effect.started) / effect.ttl;
+      if (progress >= 1) {
+        scene.remove(effect.root);
+        effect.material.dispose();
+        effects.splice(i, 1);
+        continue;
+      }
+      const size = lerp(.3, effect.maxSize, 1 - Math.pow(1 - progress, 2));
+      effect.root.scale.set(size, size, 1);
+      effect.material.opacity = (1 - progress) * .57;
+    }
+    for (let i = activeWards.length - 1; i >= 0; i--) {
+      const ward = activeWards[i];
+      const remaining = ward.until - state.time;
+      if (remaining <= 0) {
+        scene.remove(ward.root);
+        ward.material.dispose();
+        ward.glow.dispose();
+        activeWards.splice(i, 1);
+        continue;
+      }
+      const flicker = remaining < .65 ? .72 + .28 * Math.sin(state.time * 26) : 1;
+      ward.material.opacity = clamp(remaining * 1.9, 0, 1) * .87 * flicker;
+      ward.glow.opacity = clamp(remaining * 1.5, 0, 1) * .51 * flicker;
+      if (ward.ttl > 0) {
+        ward.ttl -= dt;
+        continue;
+      }
+      ward.ttl = .16;
+      const offset = effectRange(-ward.radius, ward.radius);
+      const x = ward.x + offset * ward.tx;
+      const z = ward.z + offset * ward.tz;
+      if (!blocked(x, z, .02, state.gateOpen)) {
+        spray(x, floorAt(x, z) + .06, z, 2, ward.color, .35, .48, .095, -1.3);
+      }
+    }
+  }
+
+  function targetGround(length) {
+    const step = Math.max(.85, length);
+    const x = player.x - Math.sin(player.yaw) * step;
+    const z = player.z - Math.cos(player.yaw) * step;
+    return clearLine(player.x, player.z, x, z, .13) ? {x, z} : {x: player.x, z: player.z};
+  }
+
+  function placeWard(index) {
+    const cross = index === 6;
+    const water = index === 4;
+    const at = water ? targetGround(2.45) : player;
+    const {x, z} = at;
+    const tx = Math.cos(player.yaw);
+    const tz = -Math.sin(player.yaw);
+    const color = powers[index].tint;
+    const radius = cross ? 4.67 : water ? 4.33 : 2.31;
+    const root = new THREE.Group();
+    const material = effectMaterial(color, .9);
+    const glow = effectMaterial(color, .49);
+    glow.map = glowMap;
+    scene.add(root);
+    if (cross) {
+      for (let offset = -radius; offset <= radius; offset += .32) {
+        const gx = x + tx * offset;
+        const gz = z + tz * offset;
+        if (blocked(gx, gz, .025, state.gateOpen)) continue;
+        const y = floorAt(gx, gz);
+        const bar = block(root, material, gx, y + .029, gz, .31, .023, .045);
+        bar.rotation.y = player.yaw;
+        if (Math.abs(offset) % .6 < .35) {
+          const fragment = primitive(planeGeometry, glow, root, gx, y + .395, gz, .71, .84, 1);
+          fragment.rotation.y = player.yaw;
+        }
+      }
+      if (areaAt(x, z) === 0 && x > -5.13 && x < .82 && state.gateOpen) {
+        say('Ward down. Keep moving!', 1.25);
+      }
+    } else {
+      for (let i = 0; i < 38; i++) {
+        const angle = i / 38 * TAU;
+        const dx = Math.cos(angle) * radius * (water ? .8 : 1);
+        const dz = Math.sin(angle) * radius;
+        if (blocked(x + dx, z + dz, .04, state.gateOpen)) continue;
+        const y = water ? Math.max(.101, floorAt(x + dx, z + dz)) : floorAt(x + dx, z + dz);
+        const fragment = block(root, material, x + dx, y + .029, z + dz, .24, .027, .046);
+        fragment.rotation.y = -angle - Math.PI / 2;
+      }
+      const y = water ? Math.max(.108, floorAt(x, z) + .037) : floorAt(x, z) + .041;
+      const patch = primitive(planeGeometry, glow, root, x, y, z, radius * 1.93, radius * 1.93, 1);
+      patch.rotation.x = -Math.PI / 2;
+    }
+    const y = floorAt(x, z);
+    activeWards.push({index, root, material, glow, color, x, z, tx, tz, radius,
+      until: state.time + (water ? 5.2 : 3.15), ttl: 0});
+    makePulse(x, y, z, color, cross ? 2.1 : radius, .72);
+    spray(x, y + .14, z, 24, color, 1.6, .93, .15, .6);
+    playSound('ward', x, z);
+  }
+
+  function wardAt(x, z, type) {
+    for (const ward of activeWards) {
+      if (state.time >= ward.until) continue;
+      if (type === 'water' && ward.index === 4 && distance(x, z, ward.x, ward.z) < ward.radius) return ward;
+      if (type === 'enemy' && ward.index === 5 && distance(x, z, ward.x, ward.z) < ward.radius) return ward;
+      if (type === 'enemy' && ward.index === 6) {
+        const dx = x - ward.x;
+        const dz = z - ward.z;
+        if (Math.abs(dx * ward.tx + dz * ward.tz) < ward.radius + .26 &&
+            Math.abs(dx * ward.tz - dz * ward.tx) < .54) return ward;
+      }
+    }
+    return null;
+  }
+
+  function castPower(index) {
+    const power = powers[index];
+    if (state.phase !== 'playing' || index === 0) return;
+    if (state.time < power.readyAt) {
+      ui['power-detail'].textContent = ' · Ready in ' + Math.ceil(power.readyAt - state.time) + 's';
+      state.wardHudAt = state.time + .85;
+      return;
+    }
+    power.readyAt = state.time + power.cooldown;
+    state.castKick = 1;
+    state.flare = .82;
+    castLight.color.copy(power.tint);
+    if (index >= 4) {
+      placeWard(index);
+      return;
+    }
+    const {x, y, z} = player;
+    const radius = index === 1 ? 5.5 : index === 2 ? 5.95 : 4.3;
+    makePulse(x, y, z, power.tint, radius);
+    spray(x, y + .24, z, 21, power.tint, 2.15, .69, .24, .8);
+    playSound('pulse', x, z);
+    if (index === 3) {
+      state.brightUntil = state.time + 3.4;
+      return;
+    }
+    for (const enemy of pursuers) {
+      const length = distance(enemy.x, enemy.z, x, z);
+      if (!enemy.active || (enemy.mode === 'retreat' || enemy.mode === 'recede') || length > radius || !clearLine(x, z, enemy.x, enemy.z)) continue;
+      if (index === 1) {
+        enemy.frozen = state.time + 2.3;
+      } else {
+        enemy.stagger = state.time + 1.08;
+        enemy.shoveX = (enemy.x - x) / Math.max(length, .07) * 5.9;
+        enemy.shoveZ = (enemy.z - z) / Math.max(length, .07) * 5.9;
+      }
+    }
+    if (index === 2) {
+      player.ratSlow = 0;
+      for (const rat of rats) {
+        if (distance(rat.x, rat.z, x, z) < radius) rat.coolUntil = state.time + 3.1;
+      }
+    }
+  }
+
+  const ambushes = [
+    [],
+    [[4.75, 10.05], [6.58, 12.12]],
+    [[11.8, -21.02], [10.85, -23.76], [25.1, -22.3]],
+    [[27.8, -18.21], [25.2, -18.75], [30.42, -18.96], [27.94, -19.68], [27.6, -23.26],
+      [25.83, -22.59], [28.98, -22.37], [26.15, -24.22], [29.14, -23.89]]
+  ];
+  const headingForward = vector();
+  const aimEnd = vector();
+  const beamStart = vector();
+  const axisUp = vector(0, 1, 0);
+  const beamDirection = vector();
+  const beam = new THREE.Group();
+  const beamCore = effectMaterial(0xffe4b5, .86);
+  const beamEdge = effectMaterial(0xffad5f, .22);
+  primitive(cylinderGeometry, beamEdge, beam, 0, 0, 0, .056, 1, .056);
+  primitive(cylinderGeometry, beamCore, beam, 0, 0, 0, .014, 1, .014);
+  beam.visible = false;
+  scene.add(beam);
+
+  function resetPlayer(point) {
+    Object.assign(player, point);
+    player.y = floorAt(point.x, point.z);
+    player.ratSlow = 0;
+    player.protectionUntil = state.time + 1.08;
+    player.moveAmount = 0;
+    player.footstep = .8;
+    state.flow = null;
+    state.flowCell = -1;
+    state.focusRitual = null;
+    state.focusPursuer = null;
+  }
+
+  function hideEnemy(enemy) {
+    enemy.active = false;
+    enemy.model.root.visible = false;
+    enemy.shade.visible = false;
+  }
+
+  function startAmbush(stage, retry = false) {
+    const positions = ambushes[stage];
+    const waiting = pursuers.filter((enemy) => !enemy.active || enemy.mode === 'recede');
+    let index = 0;
+    for (const [x, z] of positions) {
+      if (index === waiting.length) break;
+      if (distance(x, z, player.x, player.z) < 3.45 || blocked(x, z, .26, state.gateOpen)) continue;
+      const enemy = waiting[index++];
+      Object.assign(enemy, {active: true, x, z, mode: 'stalk', delay: state.time + (retry ? 1.3 : .52) + (index - 1) * .19,
+        frozen: 0, stagger: 0, shoveX: 0, shoveZ: 0, charge: 0, spit: false, shelter: null, retreatFlow: null, home: {x, z}});
+      enemy.yaw = Math.atan2(player.x - x, player.z - z);
+      enemy.model.eyes.forEach((eye) => eye.material = whiteEye);
+      enemy.model.root.position.set(x, floorAt(x, z), z);
+      enemy.model.root.rotation.y = enemy.yaw;
+      enemy.model.root.visible = true;
+      enemy.shade.visible = true;
+    }
+    state.blackUntil = state.time + (stage === 1 ? 4.3 : 5.35);
+    state.chaseStart = state.time;
+    state.flow = null;
+    state.wardHudAt = 0;
+    playSound('surge', player.x, player.z);
+  }
+
+  function breakRitual(ritual) {
+    ritual.done = true;
+    ritual.collapse = state.time;
+    ritual.progress = 1;
+    ritual.ring.visible = false;
+    ritual.beacon.visible = false;
+    state.completed++;
+    state.focusRitual = null;
+    state.flare = .96;
+    state.castKick = .69;
+    makePulse(ritual.x, ritual.y, ritual.z, 0xffd18b, 2.64, .94);
+    spray(ritual.x, ritual.y + .055, ritual.z, 51, warm, 2.4, 1.14, .8, 1.3);
+    playSound('clear', ritual.x, ritual.z);
+    if (state.completed === numberOfRituals) {
+      state.gateOpen = true;
+      powers[6].readyAt = 0;
+      gatePlaque.visible = false;
+      say(touchControls ? 'Gate open. Drop a ward on the tracks.' : 'Gate open. Press Q for a ward on the tracks.', 4.7);
+      ratGroups[0].last = -99;
+      ratGroups[0].first = state.time + 4.5;
+      ratGroups[4].last = state.time;
+    } else if (state.completed === 1) {
+      say('The lights are cutting out.', 2.4);
+    } else {
+      say('One circle left. Find maintenance.', 2.5);
+    }
+    displayObjective();
+    startAmbush(state.completed);
+  }
+
+  function releasePossession(enemy) {
+    const shelter = shelters.slice().sort((a, b) =>
+      distance(enemy.x, enemy.z, a.target.x, a.target.z) - distance(enemy.x, enemy.z, b.target.x, b.target.z))[0];
+    enemy.mode = 'retreat';
+    enemy.shelter = shelter;
+    enemy.retreatFlow = flowFrom(nearestNode(shelter.target.x, shelter.target.z));
+    enemy.model.eyes.forEach((eye) => eye.material = hollowEye);
+    makePulse(enemy.x, floorAt(enemy.x, enemy.z), enemy.z, 0xffdc95, 1.6, .6);
+    spray(enemy.x, floorAt(enemy.x, enemy.z) + 1.2, enemy.z, 22, warm, 1.46, .83, .26, 1.6);
+    playSound('clear', enemy.x, enemy.z);
+    say('Possession broken.', 1.65);
+  }
+
+  function spitAtPlayer(enemy) {
+    const y = floorAt(enemy.x, enemy.z) + 1.49;
+    const length = distance(enemy.x, enemy.z, player.x, player.z);
+    const dx = (player.x - enemy.x) / Math.max(.01, length);
+    const dz = (player.z - enemy.z) / Math.max(.01, length);
+    const droplets = 5;
+    spray(enemy.x + dx * .14, y, enemy.z + dz * .14, droplets, paper, .15, 1.25, .054, 8.6);
+    const speed = Math.min(length * 1.55, 9.5);
+    for (let i = 1; i <= droplets; i++) {
+      const particle = particles[(particleCursor - i + capacity) % capacity];
+      particle.dx += dx * speed;
+      particle.dz += dz * speed;
+      particle.dy = -.06;
+      particle.life = particle.length = .68 + i * .015;
+    }
+    playSound('spit', enemy.x, enemy.z);
+    enemy.spit = true;
+  }
+
+  function animateShelters(dt) {
+    for (const shelter of shelters) {
+      const close = distance(shelter.x, shelter.z, player.x, player.z) < 3.45 &&
+        clearLine(shelter.target.x, shelter.target.z, player.x, player.z, .04);
+      if (shelter.phase === 'open' && close && state.phase === 'playing') {
+        shelter.phase = 'shoo';
+        shelter.timer = state.time + .74;
+        if (!state.gateOpen) say(shelter.line, 1.65);
+      }
+      if (shelter.phase === 'shoo' && state.time >= shelter.timer) {
+        shelter.phase = 'shut';
+        playSound('door', shelter.x, shelter.z);
+      }
+      if (shelter.phase === 'admit' && state.time >= shelter.timer) {
+        shelter.phase = 'shut';
+        if (close) playSound('door', shelter.x, shelter.z);
+      }
+      if (shelter.phase === 'shut') {
+        shelter.angle = lerp(shelter.angle, 0, Math.min(1, dt * 24));
+      } else {
+        shelter.angle = lerp(shelter.angle, -1.42, Math.min(1, dt * 16));
+      }
+      shelter.hinge.rotation.y = shelter.angle;
+      shelter.resident.root.visible = shelter.angle < -.23;
+      poseStanding(shelter.resident, shelter.phase === 'shoo', state.time);
+    }
+  }
+
+  function posePursuer(enemy, moving, dt) {
+    const model = enemy.model;
+    const running = moving && enemy.mode === 'chase';
+    if (moving) enemy.runTime += dt * (running ? 13.3 : 7.0);
+    const phase = enemy.runTime;
+    const swing = moving ? Math.sin(phase) : 0;
+    const floor = floorAt(enemy.x, enemy.z);
+    const spring = moving ? Math.abs(Math.sin(phase)) * (running ? .068 : .033) : 0;
+    const bob = running ? Math.sin(phase * .5) * .024 : 0;
+    model.root.position.set(enemy.x, floor + spring, enemy.z);
+    model.root.rotation.y = enemy.yaw + bob;
+    model.upper.rotation.set(running ? .32 : -.04, .087 * swing, .061 * swing);
+    model.head.rotation.set(running ? -.24 : .11, Math.sin(phase * .32) * .1, .04 * swing);
+    for (let i = 0; i < 2; i++) {
+      const side = i % 2 ? 1 : -1;
+      const arm = model.arms[i];
+      const leg = model.legs[i];
+      arm.hinge.rotation.x = swing * side * (running ? .88 : .37) - (running ? .59 : .19);
+      arm.hinge.rotation.z = side * (running ? .21 : .1);
+      arm.end.rotation.x = running ? -1.05 - .49 * swing * side : -.19;
+      leg.hinge.rotation.x = -side * swing * (running ? .81 : .44);
+      leg.end.rotation.x = Math.max(0, side * swing * (running ? 1.06 : .61));
+    }
+    enemy.shade.position.set(enemy.x, floor + .019, enemy.z);
+  }
+
+  const frozenTint = new THREE.Color(0xa8d7f6);
+  function moveEnemy(enemy, dx, dz) {
+    const nx = enemy.x + dx;
+    const nz = enemy.z + dz;
+    const retreating = enemy.mode === 'retreat' || enemy.mode === 'recede';
+    const ward = retreating ? null : wardAt(nx, nz, 'enemy');
+    if (ward && ward !== wardAt(enemy.x, enemy.z, 'enemy')) {
+      if (state.time >= enemy.wardSoundAt) {
+        enemy.wardSoundAt = state.time + .57;
+        spray(nx, floorAt(nx, nz) + .47, nz, 13, ward.color, 1.73, .67, .1, 1.2);
+        playSound('impact', nx, nz);
+        if (state.gateOpen && ward.index === 6 && areaAt(ward.x, ward.z) === 0 &&
+            ward.x > -5.13 && ward.x < .82) state.chaseWardSeen = true;
+      }
+      return false;
+    }
+    if (!blocked(nx, enemy.z, .26, state.gateOpen, enemy.x)) enemy.x = nx;
+    if (!blocked(enemy.x, nz, .26, state.gateOpen, enemy.x)) enemy.z = nz;
+    return true;
+  }
+
+  function animatePursuers(dt) {
+    const cell = nearestNode(player.x, player.z);
+    if (!state.flow || (cell !== state.flowCell && state.time >= state.flowAt)) {
+      state.flow = flowFrom(cell);
+      state.flowAt = state.time + .16;
+      state.flowCell = cell;
+    }
+    let nearest = Infinity;
+    for (const enemy of pursuers) {
+      if (!enemy.active) continue;
+      const length = distance(enemy.x, enemy.z, player.x, player.z);
+      if (enemy.mode === 'stalk' && state.time >= enemy.delay) enemy.mode = 'chase';
+      if (enemy.mode === 'chase' && !state.gateOpen && state.time >= state.blackUntil) {
+        enemy.mode = 'recede';
+        enemy.retreatFlow = flowFrom(nearestNode(enemy.home.x, enemy.home.z));
+        enemy.model.eyes.forEach((eye) => eye.material = hollowEye);
+      }
+      if (enemy.mode === 'chase') {
+        nearest = Math.min(length, nearest);
+        if (!enemy.spit && length < 6.3 && clearLine(enemy.x, enemy.z, player.x, player.z)) {
+          spitAtPlayer(enemy);
+        }
+      }
+      const frozen = state.time < enemy.frozen;
+      const staggered = state.time < enemy.stagger;
+      let moved = false;
+      if (enemy.mode !== 'stalk' && !frozen) {
+        const freed = enemy.mode === 'retreat';
+        const retreating = freed || enemy.mode === 'recede';
+        const target = freed ? enemy.shelter.target : retreating ? enemy.home : player;
+        if (retreating && distance(enemy.x, enemy.z, target.x, target.z) < .52) {
+          if (freed) {
+            enemy.shelter.phase = 'admit';
+            enemy.shelter.timer = state.time + .85;
+          }
+          hideEnemy(enemy);
+          continue;
+        }
+        const waypoint = goal(target.x, target.z, enemy.x, enemy.z, retreating ? enemy.retreatFlow : state.flow);
+        const dx = waypoint.x - enemy.x;
+        const dz = waypoint.z - enemy.z;
+        const stepLength = Math.hypot(dx, dz);
+        if (stepLength > .035) {
+          const base = retreating ? 2.84 : state.gateOpen ? 5.04 : 3.12 + state.completed * .16;
+          const speed = Math.min(stepLength / Math.max(dt, .001), base * (staggered ? .24 : 1));
+          let separationX = 0;
+          let separationZ = 0;
+          if (!retreating) {
+            for (const other of pursuers) {
+              if (!other.active || other === enemy) continue;
+              const awayX = enemy.x - other.x;
+              const awayZ = enemy.z - other.z;
+              const gap = Math.hypot(awayX, awayZ);
+              if (gap > .01 && gap < .65) {
+                separationX += awayX / gap * (.65 - gap) * 3;
+                separationZ += awayZ / gap * (.65 - gap) * 3;
+              }
+            }
+          }
+          const mx = dx / stepLength * speed + separationX + enemy.shoveX;
+          const mz = dz / stepLength * speed + separationZ + enemy.shoveZ;
+          const startX = enemy.x;
+          const startZ = enemy.z;
+          moveEnemy(enemy, mx * dt, mz * dt);
+          moved = distance(startX, startZ, enemy.x, enemy.z) > dt * .11;
+          const targetYaw = Math.atan2(dx, dz);
+          const turn = Math.atan2(Math.sin(targetYaw - enemy.yaw), Math.cos(targetYaw - enemy.yaw));
+          enemy.yaw += turn * Math.min(1, dt * 11);
+        }
+        enemy.shoveX *= Math.exp(-dt * 7.1);
+        enemy.shoveZ *= Math.exp(-dt * 7.1);
+      }
+      if (frozen && state.time < enemy.frozen - 1.9 && effectRandom() < dt * 12) {
+        spray(enemy.x, floorAt(enemy.x, enemy.z) + .31, enemy.z, 1, frozenTint, .15, .6, .38, -.2);
+      }
+      posePursuer(enemy, moved, dt);
+      if (enemy.mode === 'chase' && !frozen && !staggered && state.time > player.protectionUntil &&
+          state.time > enemy.delay + .18 && distance(enemy.x, enemy.z, player.x, player.z) < .67 &&
+          !wardAt(player.x, player.z, 'enemy')) {
+        caught();
+        return;
+      }
+    }
+    if (nearest < 14 && state.time > state.rattles && state.time > state.chaseStart + .75) {
+      state.rattles = state.time + (nearest < 5 ? .55 : .86);
+      const close = pursuers.find((enemy) => enemy.active && enemy.mode === 'chase' &&
+        distance(enemy.x, enemy.z, player.x, player.z) <= nearest + .08);
+      if (close) playSound(nearest < 5.4 ? 'breath' : 'step', close.x, close.z);
+    }
+  }
+
+  function animateDolls(dt) {
+    for (const ritual of rituals) {
+      const {doll, material} = ritual;
+      const length = distance(player.x, player.z, ritual.x, ritual.z);
+      const isActive = ritual === rituals[state.completed];
+      if (!ritual.done && length < 12.8) ritual.turns += dt * (state.focusRitual === ritual ? .037 : .12);
+      const theta = ritual.turns * TAU;
+      const speed = reducedMotion ? .67 : 1;
+      let lift = .007 + .029 * Math.sin(theta * 13.8) * speed;
+      let slump = 0;
+      if (ritual.done) {
+        slump = clamp((state.time - ritual.collapse) * 3.5, 0, 1);
+        lift = -.043 * slump;
+      }
+      const offsetX = Math.cos(theta) * .98;
+      const offsetZ = Math.sin(theta) * .98;
+      doll.root.position.set(ritual.x + offsetX, ritual.y + lift, ritual.z + offsetZ);
+      doll.root.rotation.set(slump * 1.19, -theta, slump * .77, 'YXZ');
+      doll.head.rotation.x = .38 + .16 * Math.sin(theta * 9.6) * speed - slump * .21;
+      doll.head.rotation.y = -.45 + Math.sin(theta * 5.8) * .27;
+      doll.hips.rotation.x = -.16;
+      doll.torso.rotation.x = .12;
+      for (let i = 0; i < 2; i++) {
+        const phase = theta * 10.6 + i * Math.PI;
+        const drawingArm = i === 1;
+        doll.arms[i].hinge.rotation.set(-.82 + Math.sin(phase) * (drawingArm ? .27 : .6) + slump * .49,
+          drawingArm ? -.42 : .03, drawingArm ? .51 : -.17);
+        doll.arms[i].end.rotation.x = .62 + Math.cos(phase) * .43;
+        doll.legs[i].hinge.rotation.x = .93 + Math.sin(phase) * .51;
+        doll.legs[i].end.rotation.x = 1.01 - Math.cos(phase) * .46;
+      }
+      doll.shade.position.set(doll.root.position.x, ritual.y + .014, doll.root.position.z);
+      if (!ritual.done) {
+        material.uniforms.drawn.value = clamp(ritual.turns, .4, 1.03);
+        material.uniforms.broken.value = ritual.progress;
+        material.uniforms.focus.value = state.focusRitual === ritual ? 1 : isActive ? .38 : 0;
+        material.uniforms.time.value = state.time;
+        ritual.beacon.material.opacity = (isActive ? .26 : .08) * (.9 + .1 * Math.sin(state.time * 2.3));
+        if (length < 10.5 && state.time >= ritual.cooldown) {
+          ritual.cooldown = state.time + .36;
+          spray(ritual.x + offsetX * 1.12, ritual.y + .047, ritual.z + offsetZ * 1.12, 4, paper, .26, .48, .04, 1.9);
+          if (length < 5.6) playSound('chalk', doll.root.position.x, doll.root.position.z);
+        }
+      }
+    }
+  }
+
+  function ratPart(batch, index, x, y, z, yaw, sx, sy, sz, pitch = 0) {
+    dummy.position.set(x, y, z);
+    dummy.rotation.set(pitch, yaw, 0, 'YXZ');
+    dummy.scale.set(sx, sy, sz);
+    dummy.updateMatrix();
+    batch.setMatrixAt(index, dummy.matrix);
+  }
+  function animateRats() {
+    for (const group of ratGroups) {
+      if (state.time < group.first || state.time - group.last < 18.5) continue;
+      if (distance(player.x, player.z, group.triggerX, group.triggerZ) > group.radius) continue;
+      group.last = state.time;
+      playSound('rats', group.ax, group.az);
+    }
+    let count = 0;
+    for (const rat of rats) {
+      const group = rat.group;
+      const scattered = state.time < rat.coolUntil;
+      const age = (state.time - group.last - rat.delay) / rat.length;
+      if (age < 0 || age > (scattered ? .78 : 1)) continue;
+      const progress = clamp(age * (scattered ? 1.28 : 1), 0, 1);
+      const wave = Math.sin(progress * 7 + rat.bob) * rat.along;
+      const {ax, az, bx, bz} = group;
+      const yaw = Math.atan2(bx - ax, bz - az);
+      const x = lerp(ax, bx, progress) + Math.cos(yaw) * wave;
+      const z = lerp(az, bz, progress) - Math.sin(yaw) * wave;
+      const bottom = floorAt(x, z);
+      const y = bottom + .102 + Math.abs(Math.sin(state.time * 26 + rat.bob)) * .041;
+      const s = rat.size;
+      const dx = Math.sin(yaw);
+      const dz = Math.cos(yaw);
+      rat.x = x;
+      rat.z = z;
+      ratPart(ratBody, count, x, y, z, yaw, .083 * s, .072 * s, .172 * s);
+      ratPart(ratHead, count, x + dx * .145 * s, y + .015, z + dz * .145 * s, yaw, .056 * s, .051 * s, .089 * s);
+      for (let ear = 0; ear < 2; ear++) {
+        const sign = ear ? 1 : -1;
+        ratPart(ratEars, 2 * count + ear, x + (dx * .108 + dz * .045 * sign) * s,
+          y + .06 * s, z + (dz * .108 - dx * .045 * sign) * s, yaw, .023 * s, .033 * s, .021 * s);
+        const step = .109 * ear;
+        const swish = Math.sin(progress * 22 + rat.bob + ear) * .046;
+        ratPart(ratTail, 2 * count + ear, x + (dx * (-.201 - step) + dz * swish) * s,
+          y - .033 - .014 * ear, z + (dz * (-.201 - step) - dx * swish) * s,
+          yaw + swish * 3, (.012 - ear * .004) * s, .133 * s, (.012 - ear * .004) * s, Math.PI / 2 + .13);
+      }
+      if (!scattered && distance(x, z, player.x, player.z) < .47 && player.y < bottom + .34) {
+        player.ratSlow = Math.max(player.ratSlow, state.time + .41);
+      }
+      count++;
+    }
+    ratBatches.forEach((batch, index) => {
+      batch.count = count * (index >= 2 ? 2 : 1);
+      if (batch.count) batch.instanceMatrix.needsUpdate = true;
+    });
+  }
+
+  function inWater(x, z) {
+    return x > flood.xMin && x < flood.xMax && z > flood.zMin && z < flood.zMax && floorAt(x, z) < .08;
+  }
+
+  function movePlayer(dt) {
+    let sideways = Number(keys.has('KeyD') || keys.has('ArrowRight')) -
+      Number(keys.has('KeyA') || keys.has('ArrowLeft')) + joystick.x;
+    let forward = Number(keys.has('KeyW') || keys.has('ArrowUp')) -
+      Number(keys.has('KeyS') || keys.has('ArrowDown')) - joystick.y;
+    const strength = Math.hypot(sideways, forward);
+    const scale = Math.max(1, strength);
+    sideways /= scale;
+    forward /= scale;
+    const sprinting = keys.has('ShiftLeft') || keys.has('ShiftRight') || Math.hypot(joystick.x, joystick.y) > .91;
+    const wading = inWater(player.x, player.z) && !wardAt(player.x, player.z, 'water');
+    const slowed = state.time < player.ratSlow;
+    const grounding = casting.size && state.selected === 0 ? .82 : 1;
+    const speed = (sprinting ? 5.54 : 3.54) * (wading ? .56 : 1) * (slowed ? .69 : 1) * grounding;
+    const sx = Math.cos(player.yaw);
+    const sz = -Math.sin(player.yaw);
+    const dx = (sideways * sx + forward * sz) * dt * speed;
+    const dz = (sideways * sz - forward * sx) * dt * speed;
+    const startX = player.x;
+    const startZ = player.z;
+    const subdivisions = Math.max(1, Math.ceil(Math.hypot(dx, dz) / .3));
+    for (let i = 0; i < subdivisions; i++) {
+      const nx = player.x + dx / subdivisions;
+      const nz = player.z + dz / subdivisions;
+      if (!blocked(nx, player.z, .285, state.gateOpen, player.x)) player.x = nx;
+      if (!blocked(player.x, nz, .285, state.gateOpen, player.x)) player.z = nz;
+    }
+    const walked = distance(startX, startZ, player.x, player.z);
+    player.moveAmount = lerp(player.moveAmount, Math.min(1, walked / Math.max(.01, dt * 3.1)), Math.min(1, dt * 12));
+    player.y = lerp(player.y, floorAt(player.x, player.z), Math.min(1, dt * 15));
+    player.walkTime += walked * (sprinting ? 4.79 : 5.53);
+    player.footstep -= walked;
+    surfaceWater.uniforms.uRipple.value.set(player.x, player.z, wading ? player.moveAmount : 0);
+    if (walked > .005 && player.footstep <= 0) {
+      player.footstep = sprinting ? 1.82 : 1.4;
+      playSound(wading ? 'water' : 'step', player.x, player.z);
+      if (wading) spray(player.x, .102, player.z, 8, waterColor, .48, .4, .29, 4.2);
+    }
+    if (state.gateOpen && player.x < thresholds.streetX && player.z > 8.07 && player.z < 12.99) escape();
+  }
+
+  function updateCamera(dt) {
+    const gait = player.walkTime;
+    const bobStrength = reducedMotion ? 0 : player.moveAmount;
+    const knocked = state.phase === 'caught' ? clamp((state.caughtUntil - state.time) * 1.1, 0, 1) : 0;
+    camera.position.set(player.x + Math.cos(gait * .51) * bobStrength * .019,
+      player.y + 1.64 + Math.sin(gait) * bobStrength * .029 - knocked * .64, player.z);
+    camera.rotation.set(player.pitch - knocked * .34, player.yaw,
+      Math.sin(gait * .5) * bobStrength * .009 - knocked * (reducedMotion ? 0 : .16));
+    const lift = casting.size && state.selected === 0 && state.phase === 'playing';
+    state.lifted = lerp(state.lifted, lift ? 1 : 0, Math.min(1, dt * 11));
+    state.castKick = Math.max(0, state.castKick - dt * 2.7);
+    const kick = Math.sin(state.castKick * Math.PI) * (reducedMotion ? .42 : 1);
+    const narrow = Math.min(camera.aspect, 1.35);
+    handRig.position.set(lerp(.355 * narrow, .12 * narrow, state.lifted) + Math.sin(gait * .5) * bobStrength * .013,
+      lerp(-.295, -.235, state.lifted) + .063 * kick + Math.sin(gait) * .014 * bobStrength, -.65 - kick * .08);
+    handRig.rotation.set(-.12 + state.lifted * .1 - .33 * kick, -.12 - .59 * kick, -.16 + .14 * state.lifted);
+    crucifixGlow.material.opacity = .12 + state.lifted * .54 + state.flare * .42;
+    gripLight.intensity = .64 + state.lifted * 1.25 + state.flare * .87;
+    camera.updateMatrixWorld(true);
+  }
+
+  function rayDistance() {
+    const maximum = 8.1;
+    for (let t = .33; t < maximum; t += .18) {
+      const x = camera.position.x + headingForward.x * t;
+      const y = camera.position.y + headingForward.y * t;
+      const z = camera.position.z + headingForward.z * t;
+      if (blocked(x, z, .024, state.gateOpen) || y <= floorAt(x, z) + .025) return t;
+    }
+    return maximum;
+  }
+
+  function updateAiming(dt) {
+    camera.getWorldDirection(headingForward);
+    const hit = rayDistance();
+    state.focusRitual = null;
+    state.focusPursuer = null;
+    let focusDepth = hit + .12;
+    for (const enemy of pursuers) {
+      if (!enemy.active || enemy.mode === 'retreat' || enemy.mode === 'recede') continue;
+      const dx = enemy.x - camera.position.x;
+      const dy = floorAt(enemy.x, enemy.z) + 1.15 - camera.position.y;
+      const dz = enemy.z - camera.position.z;
+      const depth = headingForward.x * dx + headingForward.y * dy + headingForward.z * dz;
+      if (depth <= .01 || depth > focusDepth || depth > 7.2) continue;
+      const error = square(dx - headingForward.x * depth) + square(dy - headingForward.y * depth) +
+        square(dz - headingForward.z * depth);
+      if (error <= square(.59 + depth * .009)) {
+        state.focusPursuer = enemy;
+        focusDepth = depth;
+      }
+    }
+    for (const ritual of rituals) {
+      if (ritual.done || headingForward.y >= -.025) continue;
+      const depth = (ritual.y + .025 - camera.position.y) / headingForward.y;
+      if (depth < .01 || depth >= 6.5 || depth > focusDepth + .03) continue;
+      const x = camera.position.x + headingForward.x * depth;
+      const z = camera.position.z + headingForward.z * depth;
+      if (distance(x, z, ritual.x, ritual.z) < 1.26) {
+        state.focusRitual = ritual;
+        state.focusPursuer = null;
+        focusDepth = depth;
+      }
+    }
+    const on = casting.size > 0 && state.selected === 0 && state.phase === 'playing';
+    const ritual = state.focusRitual;
+    const enemy = state.focusPursuer;
+    const eligible = ritual && ritual === rituals[state.completed];
+    if (on && eligible) {
+      ritual.progress = Math.min(1, ritual.progress + dt / 2.5);
+      ritual.releasedAt = state.time + .36;
+      if (effectRandom() < dt * 35) {
+        const angle = ritual.progress * TAU;
+        spray(ritual.x + Math.cos(angle) * 1.11, ritual.y + .052,
+          ritual.z + Math.sin(angle) * 1.11, 4, warm, .57, .58, .09, .5);
+      }
+      if (ritual.progress >= 1) breakRitual(ritual);
+    }
+    for (const other of rituals) {
+      if (!other.done && other.progress && (!on || ritual !== other) && state.time >= other.releasedAt) {
+        other.progress = Math.max(0, other.progress - dt * .24);
+      }
+    }
+    for (const other of pursuers) {
+      if (!other.active || other.mode === 'retreat' || other.mode === 'recede') continue;
+      if (on && other === enemy) {
+        other.charge += dt;
+        other.stagger = Math.max(other.stagger, state.time + .085);
+        if (effectRandom() < dt * 24) {
+          spray(other.x, floorAt(other.x, other.z) + 1.1, other.z, 2, warm, .48, .53, .22, .5);
+        }
+        if (other.charge >= 1.02) releasePossession(other);
+      } else {
+        other.charge = Math.max(0, other.charge - dt * .85);
+      }
+    }
+    if (on) {
+      const depth = ritual || enemy ? focusDepth : hit;
+      aimEnd.copy(camera.position).addScaledVector(headingForward, depth);
+      crucifix.getWorldPosition(beamStart);
+      beamStart.y += .14;
+      beamDirection.copy(aimEnd).sub(beamStart);
+      beam.position.copy(beamStart).lerp(aimEnd, .5);
+      beam.scale.y = Math.max(.02, beamDirection.length());
+      beam.quaternion.setFromUnitVectors(axisUp, beamDirection.normalize());
+      beam.visible = true;
+      beamCore.opacity = .62 + .19 * Math.sin(state.time * 21);
+      castLight.position.copy(aimEnd);
+      castLight.position.y += .21;
+      castLight.color.copy(powers[0].tint);
+      castLight.intensity = 5.7 + 3.3 * Number(Boolean(eligible || enemy));
+      if ((eligible || enemy) && state.time >= state.audioAt) {
+        soundTone(173, 204, .24, .049, 'sine', aimEnd.x, aimEnd.z);
+        state.audioAt = state.time + .24;
+      }
+    } else {
+      beam.visible = false;
+      castLight.position.set(player.x, player.y + .65, player.z);
+      castLight.intensity = state.flare * 14;
+    }
+    state.flare = Math.max(0, state.flare - dt * 1.92);
+    const percentage = eligible ? ritual.progress : enemy ? enemy.charge / 1.02 : 0;
+    ui.aim.style.setProperty('--charge', clamp(percentage, 0, 1) * 360 + 'deg');
+    ui.dot.classList.toggle('target', Boolean(eligible || enemy));
+    let hint = '';
+    if (eligible) {
+      hint = state.selected !== 0 ? (touchControls ? 'Choose Light of Christ' : 'Press 1 for Light of Christ') :
+        on ? 'Breaking the circle…' : touchControls ? 'Hold CAST on the chalk' : 'Hold F on the chalk';
+    } else if (enemy && state.selected === 0) {
+      hint = on ? 'Breaking possession…' : touchControls ? 'Hold CAST to free them' : 'Hold F to free them';
+    }
+    ui.hint.hidden = !hint;
+    if (ui.hint.textContent !== hint) ui.hint.textContent = hint;
+  }
+
+  const offLamp = new THREE.Color(0x161c19);
+  const offEmergency = new THREE.Color(0x5d523a);
+  const dimFog = new THREE.Color(0x141d23);
+  const exitUnlocked = new THREE.Color(0xfbd4b1);
+  const exitLocked = new THREE.Color(0x8d756a);
+  function updateLights(dt) {
+    const dark = state.gateOpen || state.time < state.blackUntil;
+    const chaseLight = state.time < state.brightUntil;
+    const smoothDark = dark ? 1 : 0;
+    state.darkness = lerp(state.darkness, smoothDark, Math.min(1, dt * 5.7));
+    const darkness = state.darkness;
+    hemisphere.intensity = lerp(1.18, .53, darkness) + (chaseLight ? .38 : 0);
+    vision.intensity = lerp(12, 14.8, darkness) + (chaseLight ? 61 : 0);
+    scene.fog.color.copy(fogColor).lerp(dimFog, darkness * .85);
+    scene.background.copy(scene.fog.color);
+    scene.fog.density = .041 + darkness * .008;
+    surfaceWater.uniforms.uDark.value = darkness;
+    surfaceWater.uniforms.uTime.value = state.time;
+    const floodWard = activeWards.findLast((ward) => ward.index === 4);
+    surfaceWater.uniforms.uWard.value.set(floodWard?.x ?? 0, floodWard?.z ?? 0, floodWard?.radius ?? 0);
+    const closestLights = [];
+    for (const lamp of lamps) {
+      const n = state.time + lamp.phase;
+      const buzz = !reducedMotion && state.time > .5 && Math.sin(n * 1.63) > .955 ?
+        .69 + .14 * Math.sin(n * 31) : .95 + .05 * Math.sin(n * 2.8);
+      lamp.level = (1 - darkness) * buzz;
+      lamp.lit.color.set(lamp.color).multiplyScalar(lamp.level * 1.09).lerp(offLamp, darkness);
+      lamp.bloom.material.opacity = lamp.level * .25 + .018;
+      lamp.pool.material.opacity = lamp.level * .08;
+      const d = distance(lamp.x, lamp.z, player.x, player.z);
+      if (d < 14 && lamp.level > .03) closestLights.push({...lamp, d, power: lamp.strength * lamp.level});
+    }
+    for (const emergency of smallPools) {
+      emergency.shell.color.copy(offEmergency).lerp(emergency.bloom.material.color, .59 + darkness * .41);
+      emergency.bloom.material.opacity = .26 + darkness * .35;
+      emergency.pool.material.opacity = .094 + darkness * .19;
+      const d = distance(emergency.x, emergency.z, player.x, player.z);
+      if (d < 10.8) {
+        closestLights.push({...emergency, d: d + (dark ? 0 : 2.6), power: 2.1 + darkness * 9.2});
+      }
+    }
+    closestLights.sort((a, b) => a.d - b.d);
+    ambientFixtures.forEach((light, index) => {
+      const local = closestLights[index];
+      if (!local) {
+        light.intensity = 0;
+        return;
+      }
+      light.color.set(local.color);
+      light.position.set(local.x, local.y, local.z);
+      light.intensity = local.power * clamp((13.8 - local.d) / 4, 0, 1);
+    });
+    for (const mist of floorMists) {
+      const offset = reducedMotion ? 0 : Math.sin(state.time * .32 + mist.index * .72);
+      mist.sprite.position.set(mist.x + offset * .43, mist.y, mist.z + offset * .27);
+      mist.sprite.material.opacity = .116 + offset * .018 + darkness * .024;
+    }
+    gate.position.y = .34 + state.gateLift * 3.0;
+    gate.visible = state.gateLift < .997;
+    mainExitSign.material.color.copy(exitLocked).lerp(exitUnlocked, state.gateLift);
+    exitShine.intensity = 5.5 + state.gateLift * 35;
+    if (state.gateOpen) state.gateLift = Math.min(1, state.gateLift + dt * 2.6);
+    if (audio) {
+      audio.room.gain.setTargetAtTime(.045 + darkness * .036 + player.moveAmount * .013,
+        audio.context.currentTime, .25);
+    }
+  }
+
+  function updateHUD() {
+    const zone = locations[areaAt(player.x, player.z)];
+    if (ui.location.textContent !== zone) ui.location.textContent = zone;
+    if (!ui.caption.hidden && state.time >= state.captionUntil) ui.caption.hidden = true;
+    if (state.wardHudAt && state.time >= state.wardHudAt) {
+      state.wardHudAt = 0;
+      displaySelection();
+    }
+    for (const power of powers) {
+      const remaining = Math.max(0, power.readyAt - state.time);
+      const value = remaining ? Math.floor(100 * (1 - remaining / power.cooldown)) : 100;
+      if (value === power.readiness) continue;
+      power.readiness = value;
+      power.button.style.setProperty('--ready', value + '%');
+      power.button.classList.toggle('cooling', remaining > 0);
+    }
+    ui.cast.setAttribute('aria-pressed', String(casting.size > 0 && state.selected === 0));
+  }
+
+  function resetTransient() {
+    for (const enemy of pursuers) hideEnemy(enemy);
+    for (const ward of activeWards) {
+      scene.remove(ward.root);
+      ward.material.dispose();
+      ward.glow.dispose();
+    }
+    activeWards.length = 0;
+    for (const effect of effects) {
+      scene.remove(effect.root);
+      effect.material.dispose();
+    }
+    effects.length = 0;
+    for (const particle of particles) particle.life = 0;
+    beam.visible = false;
+    state.castKick = state.lifted = state.flare = 0;
+    state.blackUntil = state.brightUntil = 0;
+    state.rattles = state.audioAt = state.wardHudAt = 0;
+    state.focusPursuer = state.focusRitual = null;
+    powers.forEach((power) => power.readyAt = 0);
+    casting.clear();
+    keys.clear();
+    resetStick();
+  }
+
+  function caught() {
+    if (state.phase !== 'playing') return;
+    state.phase = 'caught';
+    state.caughtUntil = state.time + 1.55;
+    playSound('caught');
+    say('Caught. Returning to the last ritual…', 1.55);
+    ui.lens.style.backgroundColor = '#3617199e';
+    ui.hint.hidden = true;
+    ui.dot.classList.remove('target');
+    ui.aim.style.setProperty('--charge', '0deg');
+    beam.visible = false;
+  }
+
+  function retry() {
+    resetTransient();
+    resetPlayer(checkpoints[state.completed]);
+    ui.lens.style.backgroundColor = '';
+    state.phase = 'playing';
+    selectPower(0);
+    const ritual = rituals[state.completed];
+    if (ritual) ritual.progress = 0;
+    if (state.gateOpen) {
+      startAmbush(numberOfRituals, true);
+      say('The gate is open. Run for the street.', 3);
+    } else {
+      say('The last ritual is still broken.', state.completed ? 2 : 0);
+    }
+  }
+
+  function escape() {
+    state.phase = 'escaped';
+    resetTransient();
+    const length = Math.round(state.time - (state.startedAt ?? state.time));
+    const timer = Math.floor(length / 60) + ':' + String(length % 60).padStart(2, '0');
+    ui['end-detail'].textContent = (state.chaseWardSeen ? 'The ward held. You made it out.' :
+      'Three rituals broken. You made it out.') + ' · ' + timer;
+    ui.hud.hidden = true;
+    ui.end.hidden = false;
+    ui.replay.focus();
+    playSound('street');
+  }
+
+  function startNewRun() {
+    resetTransient();
+    state.completed = 0;
+    state.phase = 'playing';
+    state.gateOpen = false;
+    state.gateLift = 0;
+    state.darkness = 0;
+    state.chaseWardSeen = false;
+    state.startedAt = null;
+    state.captionUntil = 0;
+    gatePlaque.visible = true;
+    for (const ritual of rituals) {
+      ritual.done = false;
+      ritual.turns = .47;
+      ritual.progress = 0;
+      ritual.cooldown = 0;
+      ritual.ring.visible = ritual.beacon.visible = true;
+    }
+    for (const shelter of shelters) {
+      shelter.phase = 'open';
+      shelter.timer = 0;
+      shelter.angle = -1.42;
+    }
+    ratGroups.forEach((group, index) => {
+      group.last = -99;
+      group.first = state.time + index * .34;
+    });
+    rats.forEach((rat) => rat.coolUntil = 0);
+    resetPlayer(spawn);
+    selectPower(0);
+    displayObjective();
+    ui.caption.hidden = true;
+    ui.hud.hidden = false;
+    ui.end.hidden = true;
+    ui.lens.style.backgroundColor = '';
+  }
+
+  let lookPointer = null;
+  let castPointer = null;
+  let castPositionX = 0;
+  let castPositionY = 0;
+  let lookX = 0;
+  let lookY = 0;
+  const moveKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+    'ShiftLeft', 'ShiftRight', 'KeyQ', 'KeyF']);
+
+  function raise(source) {
+    if (state.phase !== 'playing') return;
+    beginInput();
+    if (state.selected === 0) casting.add(source);
+    else castPower(state.selected);
+  }
+
+  function look(dx, dy, touch = false) {
+    if (state.phase !== 'playing') return;
+    const gain = touch ? .0061 : .0043;
+    player.yaw -= dx * gain;
+    player.pitch = clamp(player.pitch - dy * gain, -1.27, 1.27);
+  }
+
+  function resetStick() {
+    joystick.pointer = null;
+    joystick.x = joystick.y = 0;
+    ui.stick.firstElementChild.style.transform = '';
+  }
+
+  function moveStick(event) {
+    const box = ui.stick.getBoundingClientRect();
+    const dx = event.clientX - (box.left + box.width / 2);
+    const dy = event.clientY - (box.top + box.height / 2);
+    const radius = box.width * .35;
+    const length = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const value = clamp((length - 3) / (radius - 3), 0, 1);
+    joystick.x = Math.cos(angle) * value;
+    joystick.y = Math.sin(angle) * value;
+    ui.stick.firstElementChild.style.transform = 'translate(' + joystick.x * radius + 'px,' + joystick.y * radius + 'px)';
+  }
+
+  window.addEventListener('keydown', (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const {code} = event;
+    if (moveKeys.has(code)) event.preventDefault();
+    if (state.phase !== 'playing') {
+      if (code === 'KeyR' && state.phase === 'escaped' && !event.repeat) startNewRun();
+      return;
+    }
+    if (!moveKeys.has(code) && !/^Digit[1-7]$/.test(code)) return;
+    keys.add(code);
+    if (event.repeat) return;
+    beginInput();
+    if (code === 'KeyF') raise('keyboard');
+    if (code === 'KeyQ') castPower(6);
+    if (/^Digit[1-7]$/.test(code)) selectPower(Number(code.at(-1)) - 1);
+  });
+  window.addEventListener('keyup', ({code}) => {
+    keys.delete(code);
+    if (code === 'KeyF') casting.delete('keyboard');
+  });
+  window.addEventListener('blur', () => {
+    keys.clear();
+    casting.clear();
+    lookPointer = castPointer = null;
+    resetStick();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      keys.clear();
+      casting.clear();
+      resetStick();
+    }
+  });
+
+  ui.world.addEventListener('pointerdown', (event) => {
+    if (state.phase !== 'playing') return;
+    beginInput();
+    if (event.pointerType === 'touch' && !touchControls) {
+      touchControls = true;
+      document.body.classList.add('touch');
+    }
+    if (event.button === 2) raise('mouse');
+    if (lookPointer === null) {
+      lookPointer = event.pointerId;
+      lookX = event.clientX;
+      lookY = event.clientY;
+      ui.world.setPointerCapture(event.pointerId);
+    }
+  });
+  ui.world.addEventListener('pointermove', (event) => {
+    if (lookPointer !== event.pointerId) return;
+    look(event.clientX - lookX, event.clientY - lookY, event.pointerType === 'touch');
+    lookX = event.clientX;
+    lookY = event.clientY;
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    ui.world.addEventListener(type, (event) => {
+      if (event.pointerId !== lookPointer) return;
+      lookPointer = null;
+      casting.delete('mouse');
+    });
+  }
+  ui.world.addEventListener('contextmenu', (event) => event.preventDefault());
+
+  ui.stick.addEventListener('pointerdown', (event) => {
+    if (joystick.pointer !== null || state.phase !== 'playing') return;
+    beginInput();
+    joystick.pointer = event.pointerId;
+    ui.stick.setPointerCapture(event.pointerId);
+    moveStick(event);
+  });
+  ui.stick.addEventListener('pointermove', (event) => {
+    if (event.pointerId === joystick.pointer) moveStick(event);
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    ui.stick.addEventListener(type, (event) => {
+      if (event.pointerId === joystick.pointer) resetStick();
+    });
+  }
+  ui.cast.addEventListener('pointerdown', (event) => {
+    if (castPointer !== null || state.phase !== 'playing') return;
+    castPointer = event.pointerId;
+    castPositionX = event.clientX;
+    castPositionY = event.clientY;
+    ui.cast.setPointerCapture(event.pointerId);
+    raise('touch');
+  });
+  ui.cast.addEventListener('pointermove', (event) => {
+    if (event.pointerId !== castPointer) return;
+    look(event.clientX - castPositionX, event.clientY - castPositionY, event.pointerType === 'touch');
+    castPositionX = event.clientX;
+    castPositionY = event.clientY;
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    ui.cast.addEventListener(type, (event) => {
+      if (event.pointerId !== castPointer) return;
+      castPointer = null;
+      casting.delete('touch');
+    });
+  }
+  ui.ward.addEventListener('click', () => {
+    beginInput();
+    castPower(6);
+  });
+  ui.replay.addEventListener('click', startNewRun);
+
+  function resize() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    camera.aspect = width / height;
+    camera.fov = camera.aspect < .72 ? 72 : 63;
+    camera.updateProjectionMatrix();
+    const maxPixels = touchDevice ? 880000 : 1850000;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, touchDevice ? 1.35 : 1.55,
+      Math.sqrt(maxPixels / (width * height))));
+    renderer.setSize(width, height, false);
+  }
+
+  resize();
+  window.addEventListener('resize', resize);
+  document.body.classList.toggle('touch', touchDevice);
+  ui.touch.hidden = false;
+  ui.kit.hidden = false;
+  status.hidden = true;
+  startNewRun();
+
+  let lastFrame = performance.now();
+  function frame(now) {
+    const dt = clamp((now - lastFrame) / 1000, 0, .075);
+    lastFrame = now;
+    state.time += dt;
+    if (state.phase === 'playing') movePlayer(dt);
+    if (state.phase === 'caught' && state.time >= state.caughtUntil) retry();
+    updateCamera(dt);
+    if (state.phase === 'playing') {
+      updateAiming(dt);
+      animatePursuers(dt);
+      animateRats();
+    } else {
+      castLight.intensity = 0;
+    }
+    animateDolls(dt);
+    animateShelters(dt);
+    animateEffects(dt);
+    animateParticles(dt);
+    updateLights(dt);
+    updateHUD();
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>
