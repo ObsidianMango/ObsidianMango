@@ -1736,7 +1736,10 @@ function start(T) {
       group.scale.setScalar(1);
       center.copy(slot.point);
       if (planted) center.set(planted.x, planted.y, planted.z);
-      if (id === 'void') center.y = Math.max(groundY + 1.18, slot.point.y + 0.22);
+      if (id === 'void') {
+        center.addScaledVector(slot.normal, 0.45);
+        center.y = Math.max(groundY + 1.4, center.y);
+      }
       if (id === 'frost' || id === 'tornado' || id === 'growth') center.y = elevation(center.x, center.z) + 0.035;
       if (id === 'wind') center.y = Math.max(groundY + 0.85, slot.point.y);
       rim.color.copy(tints.get(id));
@@ -1787,14 +1790,16 @@ function start(T) {
       const glow = tints.get(id);
       const pulse = Math.min(1, age * 16) * Math.min(1, live * 5);
       const particleFade = Math.min(1, age * 12) * (1 - T.MathUtils.smoothstep(t, 0.12, 1));
-      const count = compact ? 22 : 38;
+      const count = id === 'void' ? (compact ? 34 : 48) : (compact ? 22 : 38);
       rim.opacity = (0.42 + 0.23 * Math.sin(age * 8)) * live;
 
       if (id === 'void') {
-        core.scale.setScalar(0.30 + pulse * 0.72);
+        const swell = pulse * (1 + 0.045 * Math.sin(age * 8.5));
+        core.scale.setScalar(1.58 * swell);
+        rim.opacity = (0.62 + 0.17 * Math.sin(age * 8.5)) * pulse;
         for (let i = 0; i < bands.length; i++) {
-          bands[i].scale.setScalar((1.12 + i * 0.43) * (0.6 + pulse * 0.48));
-          bands[i].rotation.set(1.22 + i * 0.49, age * 0.94 + i * 1.82, age * 1.1);
+          bands[i].scale.setScalar((1.55 + i * 0.58) * swell);
+          bands[i].rotation.set(1.22 + i * 0.49, age * 1.6 + i * 1.82, age * 1.4);
         }
       } else if (id === 'tornado') {
         funnel.material.uniforms.clock.value = age;
@@ -1820,9 +1825,12 @@ function start(T) {
         let radius, height, angle = phase, size = (0.037 + seed * 0.051) * pulse;
         let drift = 0, tall = 1, tint = glow;
         if (id === 'void') {
-          radius = 0.82 + (1 - cycle) * (3.6 + seed * 1.7) * (0.45 + live * 0.55);
-          angle += age * 3.8 + cycle * 1.25;
-          height = Math.sin(phase + age * 2.3) * (0.30 + seed * 0.93) * (1 - cycle);
+          radius = 1.25 + (1 - cycle) ** 1.35 * (3.9 + seed * 3.0);
+          angle += age * 2.65 + cycle * 2.9;
+          height = Math.sin(phase + age * 2.3) * (0.6 + seed * 2.1) * (1 - cycle);
+          size *= 0.8 + cycle * 0.65;
+          tall = 2.4;
+          tint = i % 4 === 0 ? skyIce : glow;
         } else if (id === 'tornado') {
           radius = (0.36 + cycle * 1.68) * (0.84 + seed * 0.46);
           height = 0.15 + cycle * 5.65;
@@ -1855,12 +1863,13 @@ function start(T) {
         const z = center.z + Math.sin(angle) * radius + heading.z * drift;
         const y = id === 'growth' || id === 'frost' ? elevation(x, z) + height + 0.10
           : Math.max(elevation(x, z) + 0.06, center.y + height);
-        put(x, y, z, size, size * tall, tint, particleFade);
+        const tilt = id === 'void' ? delta.set(center.x - x, center.y - y, center.z - z).normalize() : null;
+        put(x, y, z, size, size * tall, tint, id === 'void' ? pulse : particleFade, tilt);
       }
 
       if (id === 'lightning') return 165 * Math.exp(-age * 11.5);
       if (id === 'tornado') return 17 * pulse;
-      if (id === 'void') return 15 * pulse;
+      if (id === 'void') return (30 + 8 * Math.sin(age * 8.5)) * pulse;
       return 10 * pulse * live;
     }
 
@@ -1974,11 +1983,15 @@ function start(T) {
         (id === 'lightning' ? 0.65 : 0.32) * force, length, id === 'lightning' ? 0.006 : 0.045);
       if (id === 'growth' || id === 'frost') {
         tone(master, time + 0.11, from * 1.5, to * 1.34, 0.11 * force, 0.52);
+      } else if (id === 'void') {
+        tone(master, time + 0.10, 76, 39, 0.31 * force, 4.2, 'triangle', 0.65);
+        burst(master, time + 0.25, 'lowpass', 600, 190, 0.80, 0.42 * force, 1.45, 0.32);
       }
     }
     return { charge, boom, magic };
   }
 
+  const blackHole = { reach: 8.8, duration: 5.8, capture: 1.76 };
   const demolition = (function buildDestruction(T, scene, buildings, boxGeometry, wedge, elevation, compact) {
   const step = 1 / 60, limit = compact ? 72 : 112, blastRadius = 3.15, cellWidth = 1.3;
   const piecesPerHit = compact ? 36 : 52;
@@ -2364,13 +2377,14 @@ function start(T) {
 
   function blast(point, object, index, mode = 'fire', heading, surfaceNormal) {
     const center = point.clone(), additions = [];
-    const reach = { void: 6.7, tornado: 5.8, lightning: 2.9, wind: 5.8 }[mode] ?? blastRadius;
+    const reach = { void: blackHole.reach, tornado: 5.8, lightning: 2.9, wind: 5.8 }[mode] ?? blastRadius;
     const push = heading?.clone();
-    if (mode === 'void' || mode === 'tornado') {
-      fields.push({ center, reach, mode, remaining: mode === 'void' ? 2.65 : 2.95 });
-    }
+    const vacuum = mode === 'void' ? { center, reach, mode, remaining: blackHole.duration - 0.16, nextPull: 0.20 } : null;
+    if (vacuum) fields.push(vacuum);
+    if (mode === 'tornado') fields.push({ center, reach, mode, remaining: 2.95 });
     let hit = object.userData.structure ?? object.userData.pieces?.[index]?.structure;
-    const budget = Math.min(piecesPerHit, Math.max(0, limit - active.length - waiting.length));
+    const burstLimit = vacuum ? (compact ? 55 : 82) : piecesPerHit;
+    const budget = Math.min(burstLimit, Math.max(0, limit - active.length - waiting.length));
     const directTree = object === trunks ? trees[index]
       : object === canopy ? trees[Math.floor(index / crownPieces)] : null;
     const opened = new Set();
@@ -2418,6 +2432,28 @@ function start(T) {
           priority: (releasedSection ? 100 : 0) + (direct ? 2 : 0) - distance });
       }
     }
+    if (vacuum) vacuum.hit = hit;
+    queueDamage(additions, budget, center);
+  }
+
+  function feedBlackHole({ center, reach, hit }) {
+    // Refill the pull as debris is crushed, leaving room for queued structural falls.
+    const budget = Math.min(compact ? 22 : 32, limit - active.length - Math.min(waiting.length, limit / 3 | 0));
+    if (budget <= 0) return;
+    const additions = [];
+    for (const structure of structures.values()) {
+      for (const piece of structure.pieces) {
+        if (piece.moving || piece.queued || piece.crushed || piece.crush) continue;
+        const distance = piece.position.distanceTo(center);
+        if (distance >= reach) continue;
+        const priority = (piece.attached && structure === hit ? 2.5 : 0) - distance;
+        additions.push({ piece, center, distance, thrown: true, mode: 'void', reach, priority });
+      }
+    }
+    queueDamage(additions, budget, center);
+  }
+
+  function queueDamage(additions, budget, center) {
     additions.sort((a, b) => b.priority - a.priority);
     additions.length = Math.min(additions.length, budget);
     const impacted = new Set(), falls = [];
@@ -2441,6 +2477,14 @@ function start(T) {
       piece.quiet = 0;
       return;
     }
+    if (mode === 'void') {
+      normal.copy(center).sub(piece.position).normalize();
+      piece.velocity.multiplyScalar(0.35).addScaledVector(normal, 4.5 + 5 * (1 - distance / reach));
+      piece.velocity.y += 1.3;
+      piece.spin.set((piece.id % 9 - 4) * 1.1, 3.4, (piece.id % 11 - 5) * 0.86);
+      piece.quiet = 0;
+      return;
+    }
     normal.copy(piece.position).sub(center);
     normal.y *= 0.34;
     if (normal.lengthSq() < 0.0001) normal.set(1, 0, 0);
@@ -2449,10 +2493,7 @@ function start(T) {
     piece.velocity.y += thrown ? 2.1 + (piece.id % 9) * 0.27 : -0.45;
     piece.velocity.clampLength(0, 16);
     piece.spin.set(piece.id % 9 - 4, (piece.id % 7 - 3) * 0.95, (piece.id % 11 - 5) * 0.73);
-    if (mode === 'void') {
-      piece.velocity.multiplyScalar(0.15);
-      piece.velocity.addScaledVector(normal, -power * 0.38);
-    } else if (mode === 'tornado') {
+    if (mode === 'tornado') {
       piece.velocity.multiplyScalar(0.25);
       piece.velocity.y += 3.3;
     } else if (mode === 'wind' && push) {
@@ -2469,32 +2510,47 @@ function start(T) {
   }
 
   function applyFields(piece) {
-    for (const { center, reach, mode } of fields) {
-      normal.copy(center).sub(piece.position);
+    let pull = null, closest = Infinity;
+    for (const field of fields) {
+      const { center, reach, mode } = field;
       if (mode === 'void') {
-        const distance = normal.length();
-        if (distance >= reach + 0.45) continue;
-        if (distance < 1.12) {
-          piece.crush = { center, remaining: 0.20 };
-          return;
+        const distanceSq = piece.position.distanceToSquared(center);
+        if (distanceSq < reach * reach && distanceSq < closest) {
+          pull = field;
+          closest = distanceSq;
         }
-        const strength = 0.40 + 0.60 * (1 - distance / (reach + 0.45));
-        piece.velocity.multiplyScalar(0.94).addScaledVector(normal.normalize(), 45 * strength * step);
-        piece.velocity.y += 15.5 * step;
-      } else {
-        if (piece.position.y > center.y + 9.5) continue;
-        normal.y = 0;
-        const radial = normal.length();
-        if (radial >= reach + 0.2) continue;
-        normal.normalize();
-        const strength = 1 - radial / (reach + 0.2);
-        piece.velocity.x += (normal.x * 9 - normal.z * 26) * step;
-        piece.velocity.z += (normal.z * 9 + normal.x * 26) * step;
-        piece.velocity.y = Math.min(piece.velocity.y + (23 + strength * 15) * step, 8.8);
-        piece.spin.y += step * 6;
+        continue;
       }
+      if (piece.position.y > center.y + 9.5) continue;
+      normal.copy(center).sub(piece.position);
+      normal.y = 0;
+      const radial = normal.length();
+      if (radial >= reach + 0.2) continue;
+      normal.normalize();
+      const strength = 1 - radial / (reach + 0.2);
+      piece.velocity.x += (normal.x * 9 - normal.z * 26) * step;
+      piece.velocity.z += (normal.z * 9 + normal.x * 26) * step;
+      piece.velocity.y = Math.min(piece.velocity.y + (23 + strength * 15) * step, 8.8);
+      piece.spin.y += step * 6;
       piece.velocity.clampLength(0, 18);
     }
+    if (!pull) return false;
+    const { center, reach } = pull;
+    if (closest < blackHole.capture ** 2) {
+      piece.crush = { center, remaining: 0.23 };
+      return true;
+    }
+    const distance = Math.sqrt(closest);
+    normal.copy(center).sub(piece.position).multiplyScalar(1 / distance);
+    const curl = 2.9 * (1 - distance / reach);
+    const tangentX = normal.z * curl, tangentZ = -normal.x * curl;
+    normal.multiplyScalar(11 + 8 * (1 - distance / reach));
+    normal.x += tangentX;
+    normal.z += tangentZ;
+    normal.y += 2.1;
+    piece.velocity.lerp(normal, 0.22);
+    piece.spin.y += step * 7;
+    return true;
   }
 
   function crushStep(piece) {
@@ -2600,7 +2656,7 @@ function start(T) {
     for (const piece of active) {
       piece.age += step;
       piece.supported = false;
-      if (!piece.crush) applyFields(piece);
+      piece.pulled = !piece.crush && applyFields(piece);
       if (piece.crush) {
         crushStep(piece);
         continue;
@@ -2648,7 +2704,7 @@ function start(T) {
       const speedSq = piece.velocity.lengthSq();
       const quiet = speedSq < 0.24 && piece.spin.lengthSq() < 0.64;
       piece.quiet = piece.supported && quiet ? piece.quiet + step : 0;
-      if (piece.quiet > 0.30 || (piece.supported && piece.age > 4.5 && speedSq < 2)) {
+      if (!piece.pulled && (piece.quiet > 0.30 || (piece.supported && piece.age > 4.5 && speedSq < 2))) {
         piece.velocity.set(0, 0, 0);
         piece.spin.set(0, 0, 0);
         piece.moving = false;
@@ -2659,8 +2715,17 @@ function start(T) {
       write(piece);
     }
     for (let i = fields.length - 1; i >= 0; i--) {
-      fields[i].remaining -= step;
-      if (fields[i].remaining <= 0) fields.splice(i, 1);
+      const field = fields[i];
+      field.remaining -= step;
+      if (field.remaining <= 0) {
+        fields.splice(i, 1);
+      } else if (field.mode === 'void' && field.remaining > 0.70) {
+        field.nextPull -= step;
+        if (field.nextPull <= 0) {
+          feedBlackHole(field);
+          field.nextPull += 0.20;
+        }
+      }
     }
   }
 
@@ -2688,7 +2753,7 @@ function start(T) {
   ], boxGeometry, wedge, elevation, compact);
   const spellBook = [
     { id: 'fire', name: 'Fire', color: '#ff9c4a', fuse: 0.53, duration: 4.24, path: 'M12 2c2 5-3 7-1 10 1-1 2-2 3-4 4 4 6 6 5 9a7 7 0 0 1-14-1c0-3 3-7 4-8-1 4 1 5 2 5' },
-    { id: 'void', name: 'Black Hole', color: '#c38aff', fuse: 0.65, duration: 2.85, path: 'M22 11c-1-5-7-8-12-6-5 2-6 8-2 11 3 3 8 1 8-2 0-2-2-4-4-3m-9 3c1 5 8 8 13 5' },
+    { id: 'void', name: 'Black Hole', color: '#c38aff', fuse: 0.65, duration: blackHole.duration, path: 'M22 11c-1-5-7-8-12-6-5 2-6 8-2 11 3 3 8 1 8-2 0-2-2-4-4-3m-9 3c1 5 8 8 13 5' },
     { id: 'tornado', name: 'Fire Tornado', color: '#ff6257', fuse: 0.50, duration: 3.18, path: 'M3 5c6-3 18-3 18 1s-15 5-14 8c0 2 10 0 10 2 0 2-6 3-8 6m2-3 4 1' },
     { id: 'frost', name: 'Frost', color: '#8ddaff', fuse: 0.47, duration: 1.60, path: 'M12 2v20M3 7l18 10M3 17 21 7M9 4l3 3 3-3M9 20l3-3 3 3M5 10l4 1-1-4m8 10-1-4 4 1M5 14l4-1-1 4m8-10-1 4 4-1' },
     { id: 'lightning', name: 'Lightning', color: '#ffe56a', fuse: 0.42, duration: 0.88, path: 'M14 2 5 14h6l-1 8 9-13h-6z' },
