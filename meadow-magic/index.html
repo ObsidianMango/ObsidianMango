@@ -15,13 +15,7 @@
   #world:active { cursor: grabbing; }
   .title { position: fixed; top: max(24px, env(safe-area-inset-top)); left: max(28px, env(safe-area-inset-left)); pointer-events: none; }
   h1 { margin: 0; color: #1c4131; font: 400 clamp(32px, 4vw, 56px)/1 "Instrument Serif", Georgia, serif; letter-spacing: -.055em; text-shadow: 0 1px 12px #e5f2d0aa; }
-  .controls { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: max(28px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 14px; padding: 8px 11px; border: 1px solid #f5f5da52; border-radius: 8px; background: #143427cb; box-shadow: 0 4px 22px #10312622; pointer-events: none; }
-  .control { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
-  .control + .control { border-left: 1px solid #f8fae044; padding-left: 13px; }
-  kbd { min-width: 19px; height: 20px; padding: 1px 3px; text-align: center; border: 1px solid #f8fae044; border-radius: 3px; font: 600 11px/16px "IBM Plex Mono", monospace; }
-  .keys { display: flex; gap: 2px; }
-  .mouse { width: 12px; height: 17px; border: 1px solid currentColor; border-radius: 7px; position: relative; }
-  .mouse::before { content: ""; position: absolute; width: 1px; height: 5px; background: currentColor; top: 2px; left: 4.5px; }
+  .controls { margin: 4px 10px 0; padding: 2px 7px; border-radius: 4px; background: #17352aba; text-align: center; font-size: 11px; }
   #aim { position: fixed; top: 50%; left: 50%; width: 7px; height: 7px; border: 1px solid #fff8e5e0; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 1px #25241c70; pointer-events: none; }
   #aim[data-state="charging"] { border-color: #fff4d0; box-shadow: 0 0 9px 2px var(--rune-light, #ff7e30); }
   #aim[data-state="miss"] { border-color: #f09774; }
@@ -37,18 +31,18 @@
   .spell-number { position: absolute; top: 2px; left: 3px; color: #fff7dd; font: 500 9px/1 monospace; }
   #active-spell { margin-top: 4px; border-radius: 4px; padding: 2px 8px; background: #17352ad9; font-size: 11px; }
   @media (max-width: 900px) {
-    .title { top: calc(max(13px, env(safe-area-inset-top)) + 76px); }
+    .title { top: calc(max(13px, env(safe-area-inset-top)) + 96px); }
   }
   @media (max-height: 470px) and (min-width: 901px) {
     .title { top: max(12px, env(safe-area-inset-top)); }
     h1 { font-size: 27px; }
   }
-  #stick { position: fixed; z-index: 2; left: max(22px, env(safe-area-inset-left)); bottom: max(24px, env(safe-area-inset-bottom)); width: 93px; height: 93px; border-radius: 50%; border: 1px solid #fff9e78c; background: #183b2e63; touch-action: none; }
-  #stick span { position: absolute; inset: 27px; border-radius: 50%; background: #fff9e7b8; box-shadow: 0 2px 8px #14342777; pointer-events: none; }
+  #stick { position: fixed; z-index: 2; width: 80px; height: 80px; border-radius: 50%; border: 1px solid #fff9e78c; background: #183b2e63; pointer-events: none; transform: translate(-50%, -50%); }
+  #stick span { position: absolute; inset: 24px; border-radius: 50%; background: #fff9e7b8; }
+  #stick[hidden] { display: none; }
   @media (pointer: coarse) {
     .touch { display: block; }
     .desktop { display: none; }
-    .controls { left: auto; right: max(15px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom)); }
     .title { left: max(17px, env(safe-area-inset-left)); }
   }
 </style>
@@ -61,14 +55,10 @@
 <div class="spell-hud">
   <nav id="spell-bar" aria-label="Spells"></nav>
   <output id="active-spell" aria-live="polite">Fire</output>
+  <p class="controls desktop">WASD to walk · Drag to look · Click to cast</p>
+  <p class="controls touch">Drag lower left to walk · Drag elsewhere to look · Tap to cast</p>
 </div>
-<div class="controls desktop" aria-label="W A S D to walk. Drag to look. Click to cast. Keys 1 through 7 select spells.">
-  <span class="control"><span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> Walk</span>
-  <span class="control"><span class="mouse" aria-hidden="true"></span> Drag to look</span>
-  <span class="control">Click to cast</span>
-</div>
-<div id="stick" class="touch" role="group" aria-label="Drag to walk"><span></span></div>
-<div class="controls touch">Drag to look · Tap to cast</div>
+<div id="stick" aria-hidden="true" hidden><span></span></div>
 <div id="status" role="status">Opening the meadow…</div>
 <script type="module">
 const status = document.querySelector('#status');
@@ -2987,6 +2977,10 @@ function start(T) {
   let yaw = 0.071, pitchAngle = 0.018, walking = 0, stride = 0;
   let lookPointer = null, pointerX = 0, pointerY = 0;
   let pressX = 0, pressY = 0, dragged = false;
+  const stick = document.querySelector('#stick');
+  const knob = stick.querySelector('span');
+  const analog = new T.Vector2();
+  let stickPointer = null, stickX = 0, stickY = 0, walkingDrag = false;
   const keys = new Set();
   const directions = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']);
   window.addEventListener('keydown', (event) => {
@@ -3004,7 +2998,16 @@ function start(T) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); });
 
   canvas.addEventListener('pointerdown', (event) => {
-    if (lookPointer !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (event.pointerType === 'touch' && stickPointer === null &&
+      event.clientX < canvas.clientWidth * 0.43 && event.clientY > canvas.clientHeight * 0.58) {
+      stickPointer = event.pointerId;
+      stickX = event.clientX;
+      stickY = event.clientY;
+      canvas.setPointerCapture(event.pointerId);
+      return;
+    }
+    if (lookPointer !== null) return;
     lookPointer = event.pointerId;
     pressX = pointerX = event.clientX;
     pressY = pointerY = event.clientY;
@@ -3012,6 +3015,19 @@ function start(T) {
     canvas.setPointerCapture(event.pointerId);
   });
   canvas.addEventListener('pointermove', (event) => {
+    if (event.pointerId === stickPointer) {
+      const dx = event.clientX - stickX, dy = event.clientY - stickY;
+      if (!walkingDrag && Math.hypot(dx, dy) < 8) return;
+      if (!walkingDrag) {
+        walkingDrag = true;
+        stick.style.left = `${stickX}px`;
+        stick.style.top = `${stickY}px`;
+        stick.hidden = false;
+      }
+      analog.set(dx / 34, dy / 34).clampLength(0, 1);
+      knob.style.transform = `translate(${analog.x * 26}px, ${analog.y * 26}px)`;
+      return;
+    }
     if (event.pointerId !== lookPointer) return;
     const threshold = event.pointerType === 'touch' ? 8 : 4;
     if (!dragged && Math.hypot(event.clientX - pressX, event.clientY - pressY) < threshold) return;
@@ -3023,6 +3039,13 @@ function start(T) {
     pointerY = event.clientY;
   });
   canvas.addEventListener('pointerup', (event) => {
+    if (event.pointerId === stickPointer) {
+      if (!walkingDrag && lookPointer === null && Math.hypot(event.clientX - stickX, event.clientY - stickY) < 8) {
+        fire.cast(player, yaw, pitchAngle, elapsed);
+      }
+      stopStick(event);
+      return;
+    }
     if (event.pointerId !== lookPointer) return;
     const threshold = event.pointerType === 'touch' ? 8 : 4;
     if (!dragged && Math.hypot(event.clientX - pressX, event.clientY - pressY) < threshold) {
@@ -3036,36 +3059,24 @@ function start(T) {
     lookPointer = null;
     if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
   }
-  for (const type of ['pointercancel', 'lostpointercapture']) canvas.addEventListener(type, stopLook);
+  for (const type of ['pointercancel', 'lostpointercapture']) {
+    canvas.addEventListener(type, (event) => {
+      stopLook(event);
+      stopStick(event);
+    });
+  }
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
-  const stick = document.querySelector('#stick');
-  const knob = stick.querySelector('span');
-  const analog = new T.Vector2();
-  let stickPointer = null;
-  function moveStick(event) {
-    if (event.pointerId !== stickPointer) return;
-    const bounds = stick.getBoundingClientRect();
-    analog.set((event.clientX - bounds.x - bounds.width / 2) / 31,
-      (event.clientY - bounds.y - bounds.height / 2) / 31).clampLength(0, 1);
-    knob.style.transform = `translate(${analog.x * 29}px, ${analog.y * 29}px)`;
-  }
   function stopStick(event) {
     if (event && event.pointerId !== stickPointer) return;
     const id = stickPointer;
     stickPointer = null;
-    if (id !== null && stick.hasPointerCapture(id)) stick.releasePointerCapture(id);
+    walkingDrag = false;
+    if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
     analog.set(0, 0);
+    stick.hidden = true;
     knob.style.transform = '';
   }
-  stick.addEventListener('pointerdown', (event) => {
-    if (stickPointer !== null) return;
-    stickPointer = event.pointerId;
-    stick.setPointerCapture(event.pointerId);
-    moveStick(event);
-  });
-  stick.addEventListener('pointermove', moveStick);
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) stick.addEventListener(type, stopStick);
 
   function passable(x, z) {
     if (Math.hypot(x, (z + 11) * 1.04) > 44) return false;
