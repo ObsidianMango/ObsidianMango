@@ -564,13 +564,14 @@ function start(T) {
   const trees = [];
   const trunkBatches = [];
   const crowns = [];
+  const crownPieces = 7;
   const leafColors = [0x548152, 0x69924d, 0x7e9d4e, 0x5d9059, 0x47774a, 0x659756, 0x88a55d];
   function tree(x, z, size) {
     const y = elevation(x, z);
-    trees.push({ x, z, radius: 0.31 * size });
+    trees.push({ x, y, z, size, radius: 0.31 * size, index: trees.length, felled: false });
     trunkBatches.push(entry(x, y + 1.27 * size, z, size, size, size, pick([0x79614a, 0x634f3d, 0x82664b]), 0, between(-0.12, 0.12)));
     crowns.push(entry(x, y + 3.39 * size, z, 1.50 * size, 1.59 * size, 1.34 * size, pick(leafColors), between(0, TAU)));
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < crownPieces - 1; i++) {
       const a = i * TAU / 6 + between(-0.25, 0.25), r = between(0.77, 1.45) * size;
       const d = between(0.93, 1.26) * size;
       crowns.push(entry(x + Math.cos(a) * r, y + between(2.78, 3.67) * size, z + Math.sin(a) * r,
@@ -1091,14 +1092,15 @@ function start(T) {
       direction.set(-Math.sin(yaw) * cos, Math.sin(pitch), -Math.cos(yaw) * cos);
       raycaster.set(origin, direction);
       intersections.length = 0;
-      raycaster.intersectObjects(targets, true, intersections);
+      raycaster.intersectObjects(targets.concat(demolition.targets), true, intersections);
       const hit = intersections[0];
       if (!hit) {
         missUntil = now + 0.20;
         return;
       }
       slot.point.copy(hit.point);
-      slot.structure = hit.object.userData.structure;
+      slot.hitObject = hit.object;
+      slot.hitInstance = hit.instanceId;
       worldMatrix.copy(hit.object.matrixWorld);
       if (hit.instanceId !== undefined) {
         hit.object.getMatrixAt(hit.instanceId, instanceMatrix);
@@ -1155,7 +1157,7 @@ function start(T) {
     }
 
     function detonate(slot) {
-      demolition.blast(slot.point, slot.structure);
+      demolition.blast(slot.point, slot.hitObject, slot.hitInstance);
       slot.exploded = true;
       slot.rune.visible = false;
       const origin = slot.point.clone().addScaledVector(slot.normal, 0.30);
@@ -1408,41 +1410,91 @@ function start(T) {
   const structures = new Map(), geometries = new Map(), dirty = new Set();
   const anchored = new Map(), sleeping = new Map(), moving = new Map();
   const material = new T.MeshStandardMaterial({ roughness: 0.96, flatShading: true });
+  const sailMaterial = material.clone();
+  sailMaterial.side = T.DoubleSide;
   const matrix = new T.Matrix4(), local = new T.Matrix4();
   const offset = new T.Matrix4(), pose = new T.Matrix4();
+  const hiddenTree = new T.Matrix4().makeTranslation(0, -500, 0);
   const spinStep = new T.Quaternion(), axis = new T.Vector3(), normal = new T.Vector3();
   const tint = new T.Color(), instanceTint = new T.Color();
   let accumulator = 0, nextId = 0;
 
   scene.updateMatrixWorld(true);
-  for (const [root, site, type] of buildings) {
+  const millMeshes = new Set();
+  mill.traverse(object => { if (object.isMesh) millMeshes.add(object); });
+  const fallenTrunks = createBatch(trunks.geometry, trees.length, new T.Sphere(V(0, 4, -11), 120));
+  const fallenCrowns = createBatch(canopy.geometry, crowns.length, new T.Sphere(V(0, 4, -11), 120));
+  for (const batch of [fallenTrunks, fallenCrowns]) {
+    batch.count = 0;
+    batch.userData.pieces = [];
+  }
+  for (const [root, site, type] of buildings) splitBuilding(root, site, type);
+  upload();
+
+  function createBatch(geometry, count, bounds) {
+    const batch = new T.InstancedMesh(geometry, geometry === canvasSail ? sailMaterial : material, count);
+    batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
+    batch.castShadow = batch.receiveShadow = true;
+    batch.frustumCulled = false;
+    batch.boundingSphere = bounds;
+    scene.add(batch);
+    targets.push(batch);
+    return batch;
+  }
+
+  function attachPiece(piece, batch, index) {
+    piece.batch = batch;
+    piece.index = index;
+    batch.setColorAt(index, piece.color);
+    piece.fixedCell = addTo(anchored, piece);
+    write(piece);
+  }
+
+  function splitBuilding(root, site, type) {
     const structure = { site, type, pieces: [], batches: new Map(), attached: 0 };
     structures.set(site, structure);
+    root.updateWorldMatrix(true, true);
     root.traverse(object => {
       if (object.isMesh) splitMesh(structure, object);
     });
     structure.attached = structure.pieces.length;
     root.clear();
     for (const [geometry, pieces] of structure.batches) {
-      const batch = new T.InstancedMesh(geometry, material, pieces.length);
-      batch.instanceMatrix.setUsage(T.DynamicDrawUsage);
-      batch.castShadow = batch.receiveShadow = true;
-      batch.frustumCulled = false;
-      batch.boundingSphere = new T.Sphere(new T.Vector3(site.x, root.position.y + 4, site.z), 90);
+      const batch = createBatch(geometry, pieces.length, new T.Sphere(V(site.x, root.position.y + 4, site.z), 90));
       batch.userData.structure = structure;
       for (let i = 0; i < pieces.length; i++) {
-        const piece = pieces[i];
-        piece.batch = batch;
-        piece.index = i;
-        batch.setColorAt(i, piece.color);
-        piece.fixedCell = addTo(anchored, piece);
-        write(piece);
+        attachPiece(pieces[i], batch, i);
       }
-      scene.add(batch);
-      targets.push(batch);
     }
+    structure.batches.clear();
+    return structure;
   }
-  upload();
+
+  function fellTree(tree) {
+    const structure = { site: tree, type: 'tree', pieces: [], batches: new Map(), attached: 0 };
+    structures.set(tree, structure);
+    tree.felled = true;
+    detachTreePiece(structure, trunks, tree.index, fallenTrunks, true);
+    for (let i = 0; i < crownPieces; i++) {
+      detachTreePiece(structure, canopy, tree.index * crownPieces + i, fallenCrowns, false);
+    }
+    trunks.instanceMatrix.needsUpdate = canopy.instanceMatrix.needsUpdate = true;
+    structure.attached = structure.pieces.length;
+    structure.batches.clear();
+    return structure;
+  }
+
+  function detachTreePiece(structure, source, index, batch, log) {
+    source.getMatrixAt(index, local);
+    source.getColorAt(index, instanceTint);
+    const piece = addPiece(structure, source.geometry,
+      matrix.multiplyMatrices(source.matrixWorld, local), instanceTint);
+    piece.log = log;
+    batch.userData.pieces.push(piece);
+    attachPiece(piece, batch, batch.count++);
+    batch.instanceColor.needsUpdate = true;
+    source.setMatrixAt(index, hiddenTree);
+  }
 
   function addPiece(structure, geometry, transform, color) {
     if (!geometries.has(geometry)) {
@@ -1468,6 +1520,7 @@ function start(T) {
     if (!structure.batches.has(centered)) structure.batches.set(centered, []);
     structure.batches.get(centered).push(piece);
     structure.pieces.push(piece);
+    return piece;
   }
 
   function panel(transform, structure, color, x, y, z, w, h, d) {
@@ -1514,6 +1567,23 @@ function start(T) {
     }
   }
 
+  function splitMillCylinder(structure, transform, geometry, color) {
+    const { height, radiusTop, radiusBottom, radialSegments } = geometry.parameters;
+    const rows = Math.ceil(height / 0.4);
+    for (let row = 0; row < rows; row++) {
+      const level = (row + 0.5) / rows;
+      const radius = T.MathUtils.lerp(radiusBottom, radiusTop, level);
+      const course = wedge(radius, height / rows - 0.012, Math.PI / radialSegments - 0.004,
+        clamp(radius * 0.4, 0.12, 0.4));
+      for (let i = 0; i < radialSegments; i++) {
+        const angle = (i + row * 0.5) * TAU / radialSegments;
+        local.makeRotationY(angle).setPosition(0, (level - 0.5) * height, 0);
+        tint.copy(color).multiplyScalar(0.91 + ((i * 3 + row) % 8) * 0.013);
+        addPiece(structure, course, matrix.multiplyMatrices(transform, local), tint);
+      }
+    }
+  }
+
   function splitMesh(structure, object) {
     const transform = object.matrixWorld;
     const geometry = object.geometry, color = object.material.color;
@@ -1529,6 +1599,9 @@ function start(T) {
         matrix.copy(transform).multiply(local.makeRotationY(i * Math.PI / 10));
         addPiece(structure, course, matrix, color);
       }
+    } else if (structure.type === 'windmill' && geometry.type === 'CylinderGeometry' &&
+      geometry.parameters.radiusBottom >= 0.56) {
+      splitMillCylinder(structure, transform, geometry, color);
     } else if (cottageWall && geometry === boxGeometry) {
       wallPanels(structure, transform, color, w, d);
     } else if (cottageWall && geometry.type === 'ExtrudeGeometry') {
@@ -1554,12 +1627,28 @@ function start(T) {
     }
   }
 
-  function blast(point, hit) {
+  function blast(point, object, index) {
     const center = point.clone(), additions = [];
+    const hit = object.userData.structure ?? object.userData.pieces?.[index]?.structure;
+    const directTree = object === trunks ? trees[index]
+      : object === canopy ? trees[Math.floor(index / crownPieces)] : null;
+    const opened = new Set();
+    const millDistance = Math.max(0, Math.hypot(center.x - millSite.x, center.z - millSite.z) - millSite.radius);
+    const millHeight = center.y - clamp(center.y, mill.position.y, mill.position.y + 6.8);
+    if (!structures.has(millSite) && (millMeshes.has(object) || Math.hypot(millDistance, millHeight) < blastRadius)) {
+      opened.add(splitBuilding(mill, millSite, 'windmill'));
+      millMeshes.clear();
+    }
+    for (const tree of trees) {
+      const height = center.y - clamp(center.y, tree.y, tree.y + 4.7 * tree.size);
+      if (!tree.felled && (tree === directTree || Math.hypot(center.x - tree.x, height, center.z - tree.z) < blastRadius)) {
+        opened.add(fellTree(tree));
+      }
+    }
     for (const structure of structures.values()) {
       const direct = hit === structure;
       const close = structure.pieces.some(piece => piece.attached && piece.position.distanceToSquared(center) < 9);
-      const collapse = structure.type === 'tower' ? direct || close : direct && close;
+      const collapse = opened.has(structure) || (structure.type === 'tower' ? direct || close : direct && close);
       for (const piece of structure.pieces) {
         const distance = piece.position.distanceTo(center);
         const near = distance < blastRadius;
@@ -1587,6 +1676,12 @@ function start(T) {
     piece.velocity.y += thrown ? 2.1 + (piece.id % 9) * 0.27 : -0.45;
     piece.velocity.clampLength(0, 16);
     piece.spin.set(piece.id % 9 - 4, (piece.id % 7 - 3) * 0.95, (piece.id % 11 - 5) * 0.73);
+    if (piece.log) {
+      axis.set(normal.z, 0, -normal.x);
+      if (axis.lengthSq() < 0.001) axis.set(0, 0, -1);
+      piece.spin.copy(axis.normalize()).multiplyScalar(3.4);
+      piece.velocity.y *= 0.32;
+    }
     piece.quiet = 0;
   }
 
@@ -1664,7 +1759,13 @@ function start(T) {
       piece.fixedCell = piece.restCell = null;
       piece.queued = false;
       piece.moving = true;
-      if (piece.attached) piece.structure.attached--;
+      if (piece.attached) {
+        piece.structure.attached--;
+        if (piece.structure.type === 'tree' && !piece.log) {
+          piece.scale.multiplyScalar(0.64);
+          piece.half.multiplyScalar(0.64);
+        }
+      }
       piece.attached = false;
       piece.age = 0;
       piece.velocity.set(0, 0, 0);
@@ -1742,7 +1843,7 @@ function start(T) {
 })(T, scene, [
     [tower, towerSite, 'tower'], [cottage, cottageSite, 'cottage'], [ruins, ruinSite, 'ruins']
   ], boxGeometry, wedge, elevation, compact);
-  const fire = makeFireSpell([ground, ...demolition.targets, mill, trunks, canopy, trailStones, fenceMesh]);
+  const fire = makeFireSpell([ground, mill, trunks, canopy, trailStones, fenceMesh]);
 
   // Drag-to-look and WASD share movement with the optional touch stick.
   const player = V(roadX(16), elevation(roadX(16), 16) + 1.69, 16);
@@ -1837,7 +1938,7 @@ function start(T) {
       if (site.radius && Math.hypot(dx, dz) < site.radius + 0.23) return false;
       if (!site.radius && Math.abs(dx) < site.width / 2 + 0.25 && Math.abs(dz) < site.depth / 2 + 0.22) return false;
     }
-    return !trees.some((tree) => Math.hypot(x - tree.x, z - tree.z) < tree.radius + 0.19);
+    return !trees.some(tree => !tree.felled && Math.hypot(x - tree.x, z - tree.z) < tree.radius + 0.19);
   }
 
   function resize() {
@@ -1873,10 +1974,10 @@ function start(T) {
     player.y = T.MathUtils.damp(player.y, elevation(player.x, player.z) + 1.69, 15, dt);
     camera.position.set(player.x, player.y + Math.sin(stride * 2) * 0.019 * walking, player.z);
     camera.rotation.set(pitchAngle, yaw, 0);
+    if (rotor.parent) rotor.rotation.z = 0.44 - elapsed * 0.34;
     fire.update(elapsed, dt);
     demolition.update(dt);
     sky.position.copy(camera.position);
-    rotor.rotation.z = 0.44 - elapsed * 0.34;
     if (elapsed - lastShadow > 0.073) {
       renderer.shadowMap.needsUpdate = true;
       lastShadow = elapsed;
