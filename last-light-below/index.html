@@ -36,6 +36,11 @@
     pointer-events: none;
     background: radial-gradient(ellipse at 50% 43%, transparent 30%, #04080b29 66%, #040709a9 100%);
   }
+  #lens::before {
+    position: absolute; inset: 0; content: "";
+    background: radial-gradient(ellipse at center, transparent 42%, #8f271f66 76%, #b34027eb);
+    opacity: var(--hurt, 0);
+  }
   #lens::after {
     position: absolute; inset: 0; content: ""; opacity: .12;
     background: repeating-linear-gradient(0deg, #020609 0 1px, transparent 1px 4px);
@@ -53,7 +58,10 @@
   #location { display: block; margin-top: 5px; color: var(--dim); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; }
   .is-chase .masthead { border-color: #ff896b; }
   .is-chase #objective { color: var(--danger); }
-  .meters { position: absolute; top: var(--top); right: var(--right); display: flex; align-items: start; gap: 7px; }
+  .meters {
+    position: absolute; top: var(--top); right: var(--right);
+    display: grid; grid-template-columns: max-content 44px; align-items: start; gap: 5px 7px;
+  }
   .ritual-meter, #sound { min-height: 42px; border: 1px solid var(--line); background: var(--panel); }
   .ritual-meter { padding: 6px 11px 8px; color: var(--dim); }
   .ritual-meter > span { display: block; letter-spacing: .13em; font-size: 9px; }
@@ -63,6 +71,16 @@
   .lights i.next { border-color: var(--brass); }
   #sound { width: 44px; height: 44px; pointer-events: auto; font-size: 18px; line-height: 1; }
   #sound[aria-pressed="true"] { color: var(--dim); }
+  .health-meter {
+    grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 7px;
+    padding: 4px 6px; border: 1px solid var(--line); background: var(--panel);
+    color: #bfd4c9; font-size: 9px; line-height: 14px; letter-spacing: .09em;
+  }
+  .health-meter[data-low="true"] { color: #ffad8f; }
+  .health-cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+  .health-cells i { height: 9px; background: #202b2b; border: 1px solid #738b8166; }
+  .health-cells i.full { background: #bdd6c1; border-color: #d5efda; }
+  .health-meter[data-low="true"] i.full { background: #ed8c71; border-color: #ffc3ab; }
   #aim {
     position: absolute; width: 27px; height: 27px; left: 50%; top: 50%;
     transform: translate(-50%, -50%);
@@ -176,6 +194,10 @@
       <span>RITUALS</span><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
     </div>
     <button id="sound" type="button" aria-label="Mute sound" aria-pressed="false" title="Mute sound">♪</button>
+    <div id="health-meter" class="health-meter" role="meter" aria-label="Health" aria-valuemin="0" aria-valuemax="4" aria-valuenow="4">
+      <span aria-hidden="true">HEALTH</span>
+      <div class="health-cells" aria-hidden="true"><i class="full"></i><i class="full"></i><i class="full"></i><i class="full"></i></div>
+    </div>
   </div>
   <div id="aim" aria-hidden="true"></div><div id="dot" aria-hidden="true"></div>
   <div id="hint" hidden></div><div id="caption" aria-live="polite" hidden></div>
@@ -212,7 +234,7 @@ try {
 
 function startGame() {
   const ui = Object.fromEntries([
-    'world', 'lens', 'hud', 'objective', 'location', 'ritual-meter', 'sound', 'aim', 'dot',
+    'world', 'lens', 'hud', 'objective', 'location', 'ritual-meter', 'health-meter', 'sound', 'aim', 'dot',
     'hint', 'caption', 'kit', 'power-row', 'power-name', 'power-detail', 'touch', 'stick',
     'cast', 'ward', 'end', 'end-detail', 'replay'
   ].map((id) => [id, document.getElementById(id)]));
@@ -811,8 +833,11 @@ function startGame() {
       '  ripple *= uRipple.z * exp(-length(p-uRipple.xy) * 3.0);',
       '  vec3 dark = vec3(.017, .036, .04) + wave * .009;',
       '  vec3 light = vec3(.12, .23, .21) * mirror * (1.0-uDark*.84);',
-      '  float ward = uWard.z > .0 ? 1.0-smoothstep(uWard.z-.6,uWard.z,length(p-uWard.xy)) : .0;',
-      '  gl_FragColor = vec4(dark + light + ripple * .026 + vec3(.025,.13,.12)*ward, (.73 + mirror * .2) * (1.0-ward*.82));',
+      '  float fromWard = length(p-uWard.xy);',
+      '  float ward = uWard.z > .0 ? 1.0-smoothstep(uWard.z-.42,uWard.z,fromWard) : .0;',
+      '  float foam = uWard.z > .0 ? exp(-abs(fromWard-uWard.z-wave*.105)*13.0) : .0;',
+      '  gl_FragColor = vec4(dark + light + ripple * .026 + vec3(.035,.21,.19)*foam,',
+      '    (.73 + mirror * .2) * (1.0-ward*.95));',
       '  #include <tonemapping_fragment>',
       '  #include <colorspace_fragment>',
       '  #include <fog_fragment>',
@@ -1389,20 +1414,73 @@ function startGame() {
   const objectiveLabels = ['Break the platform ritual', 'Find the ritual in the flooded passage',
     'Find the ritual in the maintenance room', 'Street exit open · Run to the stairs'];
   const markers = [...ui['ritual-meter'].querySelectorAll('i')];
+  const healthCells = [...ui['health-meter'].querySelectorAll('i')];
+  const maxHealth = 4;
   const keys = new Set();
   const casting = new Set();
   const joystick = {pointer: null, x: 0, y: 0};
   const player = {
     ...spawn, y: floorAt(spawn.x, spawn.z), moveAmount: 0, ratSlow: 0,
-    walkTime: 0, footstep: 0, protectionUntil: 0
+    walkTime: 0, footstep: 0, health: maxHealth, protectionUntil: 0
   };
   const state = {
     time: 0, startedAt: null, completed: 0, phase: 'playing', gateOpen: false, gateLift: 0,
-    blackUntil: 0, darkness: 0, brightUntil: 0, selected: 0, lifted: 0, castKick: 0,
-    captionUntil: 0, caughtUntil: 0, chaseStart: 0, rattles: 0, flare: 0,
+    blackUntil: 0, darkness: 0, brightUntil: 0, brightStarted: 0, selected: 0, lifted: 0,
+    gesture: -1, gestureStarted: 0, lastPower: 0,
+    captionUntil: 0, caughtUntil: 0, chaseStart: 0, rattles: 0, flare: 0, hurt: 0, hurtSide: 0,
     flow: null, flowCell: -1, flowAt: 0, audioAt: 0, wardHudAt: 0,
     focusRitual: null, focusPursuer: null, chaseWardSeen: false
   };
+
+  const rest = (progress) => handPose(progress, 0, 0, 0, 0, 0, 0);
+
+  function handPose(progress, x, y, z, pitch, yaw, roll) {
+    return {progress, x, y, z, pitch, yaw, roll};
+  }
+
+  const castMotions = [
+    {duration: .37, poses: [rest(0), handPose(.28, -.043, .054, -.131, -.12, .07, -.045), rest(1)]},
+    {duration: .59, poses: [rest(0), handPose(.25, -.16, .119, -.067, .21, .10, .14),
+      handPose(.62, -.149, .106, -.054, .17, .075, .14), rest(1)]},
+    {duration: .59, poses: [rest(0), handPose(.25, .089, -.018, .06, .09, -.43, .39),
+      handPose(.53, -.276, .063, -.135, -.25, .91, -.74), rest(1)]},
+    {duration: .84, poses: [rest(0), handPose(.38, -.129, .324, -.097, .29, -.09, .06),
+      handPose(.72, -.082, .218, -.068, .34, -.11, .08), rest(1)]},
+    {duration: .76, poses: [rest(0), handPose(.27, .006, -.086, -.075, -.52, -.31, .36),
+      handPose(.63, -.192, .158, -.151, .39, .16, -.51), rest(1)]},
+    {duration: .81, poses: [rest(0), handPose(.42, -.155, .071, .102, .37, .09, .26),
+      handPose(.74, -.096, .107, -.115, .17, .16, .16), rest(1)]},
+    {duration: .67, poses: [rest(0), handPose(.25, -.118, .208, .056, .59, .09, .33),
+      handPose(.53, -.132, -.138, -.237, -.63, .14, -.04), rest(1)]}
+  ];
+
+  function beginGesture(index) {
+    state.gesture = index;
+    state.gestureStarted = state.time;
+    state.lastPower = index;
+  }
+
+  function animateGesture(narrow) {
+    if (state.gesture < 0) return;
+    const motion = castMotions[state.gesture];
+    const progress = (state.time - state.gestureStarted) / motion.duration;
+    if (progress >= 1) {
+      state.gesture = -1;
+      return;
+    }
+    const next = motion.poses.findIndex((pose) => pose.progress > progress);
+    const from = motion.poses[next - 1];
+    const to = motion.poses[next];
+    const weight = (progress - from.progress) / (to.progress - from.progress);
+    const mix = weight * weight * (3 - 2 * weight);
+    const amount = reducedMotion ? .43 : 1;
+    handRig.position.x += lerp(from.x, to.x, mix) * amount * narrow;
+    handRig.position.y += lerp(from.y, to.y, mix) * amount;
+    handRig.position.z += lerp(from.z, to.z, mix) * amount;
+    handRig.rotation.x += lerp(from.pitch, to.pitch, mix) * amount;
+    handRig.rotation.y += lerp(from.yaw, to.yaw, mix) * amount;
+    handRig.rotation.z += lerp(from.roll, to.roll, mix) * amount;
+  }
 
   function displaySelection() {
     const selected = powers[state.selected];
@@ -1448,6 +1526,17 @@ function startGame() {
       marker.classList.toggle('next', index === state.completed);
     });
     ui.hud.classList.toggle('is-chase', state.gateOpen);
+  }
+
+  function displayHealth() {
+    ui['health-meter'].setAttribute('aria-valuenow', String(player.health));
+    ui['health-meter'].setAttribute('data-low', String(player.health === 1));
+    healthCells.forEach((cell, index) => cell.classList.toggle('full', index < player.health));
+  }
+
+  function refillHealth() {
+    player.health = maxHealth;
+    displayHealth();
   }
 
   function say(message, duration = 2.25) {
@@ -1682,17 +1771,40 @@ function startGame() {
         soundTone(292, 423, .57, .15, 'triangle', x, z);
         soundTone(581, 840, .48, .05, 'sine', x, z);
         break;
-      case 'pulse':
-        soundTone(147, 73, .45, .22, 'triangle', x, z);
-        soundTone(382, 185, .27, .055, 'sine', x, z);
+      case 'freeze':
+        soundTone(751, 1142, .58, .092, 'sine', x, z);
+        soundTone(510, 380, .74, .085, 'triangle', x, z);
+        soundNoise(2720, .45, .061, x, z);
+        break;
+      case 'push':
+        soundNoise(788, .42, .36, x, z);
+        soundTone(159, 69, .39, .16, 'triangle', x, z);
+        break;
+      case 'kindle':
+        soundTone(384, 708, .83, .105, 'sine', x, z);
+        soundTone(684, 952, .66, .073, 'sine', x, z);
+        break;
+      case 'part':
+        soundNoise(1220, .81, .24, x, z);
+        soundTone(181, 306, .55, .095, 'sine', x, z);
+        break;
+      case 'sanctuary':
+        soundTone(219, 223, 1.15, .09, 'sine', x, z);
+        soundTone(327, 330, 1.03, .074, 'sine', x, z);
+        soundTone(436, 441, .97, .061, 'triangle', x, z);
         break;
       case 'ward':
-        soundTone(418, 295, .74, .14, 'triangle', x, z);
-        soundTone(655, 570, .48, .09, 'sine', x, z);
+        soundTone(194, 76, .48, .22, 'triangle', x, z);
+        soundNoise(600, .72, .18, x, z);
+        soundTone(655, 573, .73, .07, 'sine', x, z);
         break;
       case 'impact':
         soundNoise(870, .19, .19, x, z);
         soundTone(144, 63, .15, .14, 'triangle', x, z);
+        break;
+      case 'hurt':
+        soundNoise(310, .28, .32, x, z, 'lowpass');
+        soundTone(116, 53, .25, .26, 'triangle', x, z);
         break;
       case 'caught':
         soundNoise(380, .82, .49, x, z, 'lowpass');
@@ -1788,60 +1900,335 @@ function startGame() {
   const effects = [];
   const activeWards = [];
   const ringGeometry = new THREE.RingGeometry(.87, 1, 52);
-  function effectMaterial(color, opacity = 1) {
+  const thinRing = new THREE.RingGeometry(.965, 1, 52);
+
+  function effectMaterial(color, opacity = 1, map = null) {
     return new THREE.MeshBasicMaterial({
-      color, opacity, transparent: true, blending: THREE.AdditiveBlending,
+      color, opacity, map, transparent: true, blending: THREE.AdditiveBlending,
       depthWrite: false, side: THREE.DoubleSide, toneMapped: false
     });
   }
 
-  function makePulse(x, y, z, color, maxSize, ttl = .62) {
-    const material = effectMaterial(color, .7);
-    const ring = primitive(ringGeometry, material, scene, x, y + .055, z, .22, .22, 1);
-    ring.rotation.x = -Math.PI / 2;
-    effects.push({root: ring, material, maxSize, started: state.time, ttl});
+  function floorEffect(geometry, material, parent, x, y, z, size) {
+    const mesh = primitive(geometry, material, parent, x, y, z, size, size, 1);
+    mesh.rotation.order = 'YXZ';
+    mesh.rotation.x = -Math.PI / 2;
+    return mesh;
+  }
+
+  function playEffect(root, duration, materials, animate) {
+    scene.add(root);
+    effects.push({root, started: state.time, duration, materials, animate});
+  }
+
+  function removeEffect(effect) {
+    scene.remove(effect.root);
+    effect.materials.forEach((material) => material.dispose());
+    effect.geometries?.forEach((geometry) => geometry.dispose());
   }
 
   function animateEffects(dt) {
     for (let i = effects.length - 1; i >= 0; i--) {
       const effect = effects[i];
-      const progress = (state.time - effect.started) / effect.ttl;
+      const progress = (state.time - effect.started) / effect.duration;
       if (progress >= 1) {
-        scene.remove(effect.root);
-        effect.material.dispose();
+        removeEffect(effect);
         effects.splice(i, 1);
-        continue;
+      } else {
+        effect.animate(progress);
       }
-      const size = lerp(.3, effect.maxSize, 1 - Math.pow(1 - progress, 2));
-      effect.root.scale.set(size, size, 1);
-      effect.material.opacity = (1 - progress) * .57;
     }
     for (let i = activeWards.length - 1; i >= 0; i--) {
       const ward = activeWards[i];
       const remaining = ward.until - state.time;
       if (remaining <= 0) {
-        scene.remove(ward.root);
-        ward.material.dispose();
-        ward.glow.dispose();
+        removeEffect(ward);
         activeWards.splice(i, 1);
-        continue;
-      }
-      const flicker = remaining < .65 ? .72 + .28 * Math.sin(state.time * 26) : 1;
-      ward.material.opacity = clamp(remaining * 1.9, 0, 1) * .87 * flicker;
-      ward.glow.opacity = clamp(remaining * 1.5, 0, 1) * .51 * flicker;
-      if (ward.ttl > 0) {
-        ward.ttl -= dt;
-        continue;
-      }
-      ward.ttl = .16;
-      const offset = effectRange(-ward.radius, ward.radius);
-      const x = ward.x + offset * ward.tx;
-      const z = ward.z + offset * ward.tz;
-      if (!blocked(x, z, .02, state.gateOpen)) {
-        spray(x, floorAt(x, z) + .06, z, 2, ward.color, .35, .48, .095, -1.3);
+      } else {
+        ward.animate(state.time - ward.started, Math.min(1, remaining * 2.3), dt);
       }
     }
   }
+
+  function makePulse(x, y, z, color, radius, ttl = .62) {
+    const root = new THREE.Group();
+    const material = effectMaterial(color, .7);
+    const ring = floorEffect(ringGeometry, material, root, x, y + .055, z, .22);
+    playEffect(root, ttl, [material], (progress) => {
+      const size = lerp(.3, radius, easeOut(progress));
+      ring.scale.set(size, size, 1);
+      material.opacity = (1 - progress) * .57;
+    });
+  }
+
+  function easeOut(value) {
+    return 1 - square(1 - clamp(value, 0, 1));
+  }
+
+  const snowSeal = paint(256, 256, (pen) => {
+    pen.translate(128, 128);
+    pen.strokeStyle = '#d9f3ff';
+    pen.lineJoin = 'round';
+    pen.lineWidth = 2.2;
+    for (const radius of [93, 114]) {
+      pen.beginPath();
+      pen.arc(0, 0, radius, 0, TAU);
+      pen.stroke();
+    }
+    for (let i = 0; i < 6; i++) {
+      pen.save();
+      pen.rotate(i * TAU / 6);
+      pen.beginPath();
+      pen.moveTo(0, -26);
+      pen.lineTo(0, -115);
+      for (const offset of [-1, 1]) {
+        pen.moveTo(0, -76);
+        pen.lineTo(21 * offset, -57);
+        pen.moveTo(0, -100);
+        pen.lineTo(28 * offset, -76);
+      }
+      pen.stroke();
+      pen.restore();
+    }
+  });
+
+  const windStreak = paint(256, 96, (pen, w, h) => {
+    const fade = pen.createLinearGradient(0, 0, w, 0);
+    fade.addColorStop(0, '#fff0d300');
+    fade.addColorStop(.3, '#fff0d359');
+    fade.addColorStop(.76, '#fff0d3f0');
+    fade.addColorStop(1, '#fff0d300');
+    pen.strokeStyle = fade;
+    pen.lineCap = 'round';
+    for (let i = 0; i < 7; i++) {
+      pen.beginPath();
+      pen.lineWidth = i === 2 ? 3.5 : 1.6;
+      const y = h * (.22 + i * .103);
+      pen.moveTo(i * 5, y + 11);
+      pen.bezierCurveTo(90, y + 13, 176, y, w - 9 - i * 7, y - 12);
+      pen.stroke();
+    }
+  });
+
+  const sunRays = paint(192, 192, (pen) => {
+    pen.translate(96, 96);
+    for (let i = 0; i < 12; i++) {
+      pen.save();
+      pen.rotate(i * TAU / 12);
+      const reach = i % 3 === 0 ? 91 : 47 + (i % 3) * 7;
+      const fade = pen.createLinearGradient(0, 0, reach, 0);
+      fade.addColorStop(0, '#fff6dc');
+      fade.addColorStop(.24, '#fff6dcbb');
+      fade.addColorStop(1, '#fff6dc00');
+      pen.fillStyle = fade;
+      pen.beginPath();
+      pen.moveTo(0, -5);
+      pen.lineTo(reach, 0);
+      pen.lineTo(0, 5);
+      pen.fill();
+      pen.restore();
+    }
+    pen.fillStyle = '#fff7e5';
+    pen.beginPath();
+    pen.arc(0, 0, 7, 0, TAU);
+    pen.fill();
+  });
+
+  const roseSeal = paint(256, 256, (pen) => {
+    pen.translate(128, 128);
+    pen.lineWidth = 2.2;
+    pen.strokeStyle = '#ffe3ed';
+    for (const radius of [22, 93, 106, 115]) {
+      pen.beginPath();
+      pen.arc(0, 0, radius, 0, TAU);
+      pen.stroke();
+    }
+    for (let i = 0; i < 8; i++) {
+      pen.save();
+      pen.rotate(i * TAU / 8);
+      pen.fillStyle = i % 2 ? '#ffd8ec32' : '#ffe9ee6d';
+      pen.beginPath();
+      pen.moveTo(0, -24);
+      pen.bezierCurveTo(-26, -47, -26, -70, 0, -91);
+      pen.bezierCurveTo(26, -70, 26, -47, 0, -24);
+      pen.fill();
+      pen.stroke();
+      pen.beginPath();
+      pen.moveTo(0, -108);
+      pen.lineTo(0, -117);
+      pen.stroke();
+      pen.restore();
+    }
+  });
+
+  const wardPanel = paint(128, 320, (pen) => {
+    const tint = pen.createLinearGradient(0, 0, 0, 320);
+    tint.addColorStop(0, '#fff4d744');
+    tint.addColorStop(.28, '#fff4d7ea');
+    tint.addColorStop(.73, '#fff4d7ff');
+    tint.addColorStop(1, '#fff4d7da');
+    pen.strokeStyle = tint;
+    pen.lineWidth = 3;
+    pen.beginPath();
+    pen.moveTo(7, 310);
+    pen.lineTo(7, 125);
+    pen.lineTo(19, 71);
+    pen.lineTo(64, 11);
+    pen.lineTo(109, 71);
+    pen.lineTo(121, 125);
+    pen.lineTo(121, 310);
+    pen.closePath();
+    pen.stroke();
+    pen.lineWidth = 1.35;
+    for (const side of [-1, 1]) {
+      pen.beginPath();
+      pen.moveTo(64 + side * 47, 305);
+      pen.lineTo(64 + side * 47, 133);
+      pen.lineTo(64, 31);
+      pen.stroke();
+    }
+    pen.lineWidth = 5;
+    pen.beginPath();
+    pen.moveTo(64, 104);
+    pen.lineTo(64, 260);
+    pen.moveTo(30, 157);
+    pen.lineTo(98, 157);
+    pen.stroke();
+    pen.lineWidth = 1.5;
+    pen.beginPath();
+    pen.ellipse(64, 184, 42, 92, 0, 0, TAU);
+    pen.stroke();
+  });
+
+  const waveFoam = paint(192, 128, (pen, w, h) => {
+    const fade = pen.createLinearGradient(0, 0, 0, h);
+    fade.addColorStop(0, '#e6fffbc9');
+    fade.addColorStop(.12, '#e6fffb7d');
+    fade.addColorStop(.37, '#b2faef66');
+    fade.addColorStop(1, '#b2faef03');
+    pen.fillStyle = fade;
+    pen.fillRect(0, 0, w, h);
+    const random = seeded(805);
+    pen.lineCap = 'round';
+    for (let i = 0; i < 106; i++) {
+      const x = random() * w;
+      const y = square(random()) * h;
+      pen.strokeStyle = 'rgba(235,255,249,' + (.14 + random() * .46) * (1 - y / h) + ')';
+      pen.lineWidth = .7 + random() * 1.9;
+      pen.beginPath();
+      pen.moveTo(x, y);
+      pen.quadraticCurveTo(x + 4, y + 2, x + 3 + random() * 21, y + 1 - random() * 4);
+      pen.stroke();
+    }
+  });
+
+  function showPeace(x, y, z, radius, color) {
+    const root = new THREE.Group();
+    const seal = effectMaterial(0xd3eeff, .8, snowSeal);
+    const glow = effectMaterial(color, .49);
+    const glyph = floorEffect(planeGeometry, seal, root, x, y + .055, z, .8);
+    const rings = [0, 1].map(() => floorEffect(thinRing, glow, root, x, y + .12, z, .4));
+    playEffect(root, 1.02, [seal, glow], (progress) => {
+      const growth = easeOut(progress * 1.52);
+      const size = lerp(.8, radius * 1.58, growth);
+      glyph.scale.set(size, size, 1);
+      glyph.rotation.y = progress * .46;
+      seal.opacity = .83 * (1 - progress);
+      glow.opacity = .59 * (1 - progress);
+      rings.forEach((ring, index) => {
+        const diameter = lerp(.4, radius, easeOut(progress * (1.61 - index * .4)));
+        ring.scale.set(diameter, diameter, 1);
+        ring.position.y = y + .12 + (index ? .77 : .32) * Math.sin(progress * Math.PI);
+      });
+    });
+  }
+
+  function showDrive(x, y, z, radius, color) {
+    const root = new THREE.Group();
+    const streak = effectMaterial(color, .8, windStreak);
+    const blades = Array.from({length: 12}, (_, index) => {
+      const angle = player.yaw + index * TAU / 12;
+      const blade = primitive(planeGeometry, streak, root, x, y + .25, z, 1, .65, 1);
+      blade.rotation.set(-.79, -angle - Math.PI / 2, index % 2 ? .17 : -.19, 'YXZ');
+      return {blade, dx: Math.cos(angle), dz: Math.sin(angle)};
+    });
+    playEffect(root, .67, [streak], (progress) => {
+      const reach = lerp(.54, radius, easeOut(progress));
+      streak.opacity = .97 * Math.pow(1 - progress, .53);
+      blades.forEach(({blade, dx, dz}, index) => {
+        const distanceOut = reach * (.83 + index % 3 * .085);
+        const px = x + dx * distanceOut;
+        const pz = z + dz * distanceOut;
+        blade.visible = !blocked(px, pz, .06, state.gateOpen);
+        blade.position.set(px, floorAt(px, pz) + .31 + .42 * progress, pz);
+        blade.scale.set(lerp(.64, 2.52, progress), .64 + progress * .23, 1);
+      });
+    });
+  }
+
+  const lantern = new THREE.Group();
+  const lanternHalo = halo(lantern, 0xffd694, .36, 0, 0, 0, .83, .83);
+  const lanternStar = halo(lantern, 0xfff5bc, .96, 0, 0, 0, .52, .52);
+  lanternStar.material.map = sunRays;
+  const lanternRing = floorEffect(thinRing, effectMaterial(0xffe4a9, .44), lantern, 0, -.02, -.025, .17);
+  lanternRing.rotation.x = .16;
+  camera.add(lantern);
+  lantern.visible = false;
+  const visionTint = new THREE.Color(0xd0dbc1);
+  const lanternTint = new THREE.Color(0xffe5b1);
+
+  function animateLantern(narrow) {
+    const remaining = state.brightUntil - state.time;
+    lantern.visible = remaining > 0;
+    if (!lantern.visible) return;
+    const elapsed = state.time - state.brightStarted;
+    const rise = easeOut(elapsed / .48);
+    const fade = clamp(remaining * 1.8, 0, 1);
+    lantern.position.set(lerp(handRig.position.x, .279 * narrow, rise),
+      lerp(handRig.position.y + .18, .286, rise) + (reducedMotion ? 0 : Math.sin(elapsed * 4) * .018),
+      lerp(-.74, -1.27, rise));
+    lanternHalo.material.opacity = fade * (.22 + .14 * rise);
+    lanternStar.material.opacity = fade * .95;
+    lanternStar.material.rotation = elapsed * (reducedMotion ? .08 : .42);
+    lanternRing.rotation.z = -elapsed * 1.3;
+    lanternRing.material.opacity = fade * .4;
+  }
+
+  const crystal = new THREE.OctahedronGeometry(1);
+  const frostShells = pursuers.map(() => {
+    const root = new THREE.Group();
+    const ice = effectMaterial(0xa4dfff, .31);
+    const rim = effectMaterial(0xe3f5ff, .8);
+    for (let i = 0; i < 5; i++) {
+      const angle = i * TAU / 5;
+      const shard = primitive(crystal, ice, root, Math.cos(angle) * .43, .59 + (i % 2) * .34,
+        Math.sin(angle) * .43, .112, .37 - (i % 2) * .06, .089);
+      shard.rotation.set(.17, angle, -.18);
+    }
+    const low = floorEffect(thinRing, rim, root, 0, .21, 0, .56);
+    const high = floorEffect(thinRing, rim, root, 0, 1.42, 0, .45);
+    high.rotation.x -= .28;
+    root.visible = false;
+    scene.add(root);
+    return {root, ice, rim, high, low};
+  });
+
+  function animateFrost(enemy) {
+    const shell = enemy.frost;
+    const remaining = enemy.frozen - state.time;
+    shell.root.visible = enemy.active && remaining > 0 && enemy.mode === 'chase';
+    if (!shell.root.visible) return;
+    const age = 2.3 - remaining;
+    const flare = clamp(Math.min(age * 13, remaining * 4.8), 0, 1);
+    shell.root.position.set(enemy.x, floorAt(enemy.x, enemy.z), enemy.z);
+    shell.root.rotation.y = (reducedMotion ? .35 : 1.45) * age + enemy.yaw;
+    shell.high.position.y = 1.37 + Math.sin(age * 4.1) * .11;
+    shell.low.position.y = .17 + Math.sin(age * 4.1) * .09;
+    shell.ice.opacity = flare * .41;
+    shell.rim.opacity = flare * .82;
+  }
+
+  pursuers.forEach((enemy, index) => enemy.frost = frostShells[index]);
 
   function targetGround(length) {
     const step = Math.max(.85, length);
@@ -1850,56 +2237,192 @@ function startGame() {
     return clearLine(player.x, player.z, x, z, .13) ? {x, z} : {x: player.x, z: player.z};
   }
 
+  const arch = new THREE.TorusGeometry(1, .009, 5, 44, Math.PI);
+  const canopy = new THREE.SphereGeometry(1, 26, 10, 0, TAU, 0, Math.PI / 2);
+
+  function waterWardSpread(ward) {
+    return Math.min(easeOut((state.time - ward.started) / .61),
+      easeOut((ward.until - state.time) / .42));
+  }
+
+  function buildWaterWard(ward) {
+    const foam = effectMaterial(0x80f7e7, .69, waveFoam);
+    const segments = 22;
+    const curlShape = [.18, -.055, -.26];
+    const ribbons = [-1, 1].map((side) => {
+      const geometry = new THREE.BufferGeometry();
+      const positions = new THREE.BufferAttribute(new Float32Array((segments + 1) * 3 * 3), 3);
+      const uv = [];
+      const indices = [];
+      for (let i = 0; i <= segments; i++) {
+        for (let row = 0; row < 3; row++) {
+          uv.push(i / segments, row / 2);
+          if (i === segments || row === 2) continue;
+          const vertex = i * 3 + row;
+          indices.push(vertex, vertex + 3, vertex + 1, vertex + 1, vertex + 3, vertex + 4);
+        }
+      }
+      geometry.setAttribute('position', positions.setUsage(THREE.DynamicDrawUsage));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geometry.setIndex(indices);
+      const sheet = new THREE.Mesh(geometry, foam);
+      sheet.frustumCulled = false;
+      ward.root.add(sheet);
+      return {geometry, positions, side};
+    });
+    ward.materials.push(foam);
+    ward.geometries = ribbons.map(({geometry}) => geometry);
+    ward.animate = (age, visibility) => {
+      const spread = waterWardSpread(ward);
+      const surge = Math.sin(Math.min(age / .88, 1) * Math.PI);
+      foam.opacity = visibility * (.52 + surge * .42);
+      for (const {positions, side} of ribbons) {
+        for (let i = 0; i <= segments; i++) {
+          const fraction = i / segments * 2 - 1;
+          const along = fraction * ward.radius;
+          const rim = Math.sqrt(Math.max(0, 1 - fraction * fraction));
+          const lateral = side * (ward.radius * rim * spread + Math.sin(age * 6 - fraction * 10) * .09 * rim * spread);
+          const baseX = ward.x + ward.tz * along + ward.tx * lateral;
+          const baseZ = ward.z - ward.tx * along + ward.tz * lateral;
+          const floor = inWater(baseX, baseZ) ? .087 : floorAt(baseX, baseZ) + .031;
+          const aboveFloor = !blocked(baseX, baseZ, .06, state.gateOpen);
+          const current = .79 + .21 * Math.sin(age * 6.9 + fraction * 13 + side);
+          const height = aboveFloor ? rim * spread * current * (.67 + surge * .55) : 0;
+          for (let row = 0; row < 3; row++) {
+            const curl = side * height * curlShape[row];
+            const y = floor + height * row / 2;
+            positions.setXYZ(i * 3 + row, baseX + ward.tx * curl, y, baseZ + ward.tz * curl);
+          }
+        }
+        positions.needsUpdate = true;
+      }
+      if (state.time >= ward.sparksAt) {
+        ward.sparksAt = state.time + .10;
+        const ribbon = ribbons[Math.floor(effectRange(0, 2))];
+        const sample = Math.floor(effectRange(3, segments - 2)) * 3 + 2;
+        const {positions} = ribbon;
+        const x = positions.getX(sample);
+        const y = positions.getY(sample);
+        const z = positions.getZ(sample);
+        if (!blocked(x, z, .06, state.gateOpen)) spray(x, y, z, 3, ward.color, .58, .57, .14, 4.6);
+      }
+    };
+  }
+
+  function buildMercyWard(ward) {
+    const {root, x, z, y, radius, color} = ward;
+    const ink = effectMaterial(color, .84, roseSeal);
+    const rib = effectMaterial(0xffbbd3, .62);
+    const glass = effectMaterial(color, .083);
+    const seal = floorEffect(planeGeometry, ink, root, x, y + .06, z, radius * 2.23);
+    floorEffect(thinRing, rib, root, x, y + .081, z, radius);
+    const dome = new THREE.Group();
+    dome.position.set(x, y + .065, z);
+    root.add(dome);
+    primitive(canopy, glass, dome, 0, 0, 0, radius, 2.09, radius);
+    for (let i = 0; i < 4; i++) {
+      const frame = primitive(arch, rib, dome, 0, 0, 0, radius, 2.11, 1);
+      frame.rotation.y = i * Math.PI / 4;
+    }
+    ward.materials.push(ink, rib, glass);
+    ward.animate = (age, visibility) => {
+      const rise = easeOut(age / .48);
+      const size = radius * 2.23 * lerp(.67, 1, rise);
+      seal.scale.set(size, size, 1);
+      seal.rotation.y = age * (reducedMotion ? .032 : .19);
+      ink.opacity = visibility * rise * .86;
+      rib.opacity = visibility * rise * .68;
+      glass.opacity = visibility * rise * .071;
+      dome.scale.y = Math.max(.015, rise);
+      dome.rotation.y = age * (reducedMotion ? .025 : .105);
+      if (state.time >= ward.sparksAt) {
+        ward.sparksAt = state.time + .16;
+        const angle = age * 5.2;
+        const px = x + Math.cos(angle) * radius * .86;
+        const pz = z + Math.sin(angle) * radius * .86;
+        if (!blocked(px, pz, .04, state.gateOpen)) {
+          spray(px, floorAt(px, pz) + .11, pz, 2, color, .26, .81, .11, -1.75);
+        }
+      }
+    };
+  }
+
+  function buildCrossWard(ward) {
+    const {root, x, z, tx, tz, yaw, color, radius} = ward;
+    const gold = effectMaterial(color, .91, wardPanel);
+    const foot = effectMaterial(0xffe3a7, .87);
+    const bloom = effectMaterial(color, .48, glowMap);
+    const width = .735;
+    const count = Math.floor(radius / width);
+    const panels = [];
+    for (let i = -count; i <= count; i++) {
+      const gx = x + tx * i * width;
+      const gz = z + tz * i * width;
+      if (blocked(gx, gz, .055, state.gateOpen)) continue;
+      const y = floorAt(gx, gz) + .027;
+      const frame = new THREE.Group();
+      frame.position.set(gx, y, gz);
+      frame.rotation.y = yaw;
+      frame.visible = false;
+      root.add(frame);
+      const height = 2.02 + (i === 0 ? .26 : 0);
+      primitive(planeGeometry, gold, frame, 0, height / 2, 0, width * 1.06, height, 1);
+      block(frame, foot, 0, .013, 0, width * 1.02, .027, .064);
+      const wash = primitive(planeGeometry, bloom, frame, 0, .057, 0, width * 1.35, .65, 1);
+      wash.rotation.x = -Math.PI / 2;
+      panels.push({frame, delay: Math.abs(i) * .044, lit: false});
+    }
+    ward.materials.push(gold, foot, bloom);
+    ward.animate = (age, visibility) => {
+      gold.opacity = visibility * .92;
+      foot.opacity = visibility * .83;
+      bloom.opacity = visibility * .48;
+      for (const segment of panels) {
+        const lift = easeOut((age - segment.delay) / .32);
+        const {frame} = segment;
+        frame.visible = lift > 0;
+        frame.scale.y = Math.max(.015, lift);
+        if (lift > .14 && !segment.lit) {
+          segment.lit = true;
+          const {x, y, z} = frame.position;
+          spray(x, y + .1, z, 7, color, 1.41, .74, .09, 2.2);
+        }
+      }
+    };
+  }
+
+  const wardBuilders = [buildWaterWard, buildMercyWard, buildCrossWard];
+
   function placeWard(index) {
     const cross = index === 6;
     const water = index === 4;
-    const at = water ? targetGround(2.45) : player;
-    const {x, z} = at;
-    const tx = Math.cos(player.yaw);
-    const tz = -Math.sin(player.yaw);
-    const color = powers[index].tint;
-    const radius = cross ? 4.67 : water ? 4.33 : 2.31;
-    const root = new THREE.Group();
-    const material = effectMaterial(color, .9);
-    const glow = effectMaterial(color, .49);
-    glow.map = glowMap;
-    scene.add(root);
-    if (cross) {
-      for (let offset = -radius; offset <= radius; offset += .32) {
-        const gx = x + tx * offset;
-        const gz = z + tz * offset;
-        if (blocked(gx, gz, .025, state.gateOpen)) continue;
-        const y = floorAt(gx, gz);
-        const bar = block(root, material, gx, y + .029, gz, .31, .023, .045);
-        bar.rotation.y = player.yaw;
-        if (Math.abs(offset) % .6 < .35) {
-          const fragment = primitive(planeGeometry, glow, root, gx, y + .395, gz, .71, .84, 1);
-          fragment.rotation.y = player.yaw;
-        }
-      }
-      if (areaAt(x, z) === 0 && x > -5.13 && x < .82 && state.gateOpen) {
-        say('Ward down. Keep moving!', 1.25);
-      }
-    } else {
-      for (let i = 0; i < 38; i++) {
-        const angle = i / 38 * TAU;
-        const dx = Math.cos(angle) * radius * (water ? .8 : 1);
-        const dz = Math.sin(angle) * radius;
-        if (blocked(x + dx, z + dz, .04, state.gateOpen)) continue;
-        const y = water ? Math.max(.101, floorAt(x + dx, z + dz)) : floorAt(x + dx, z + dz);
-        const fragment = block(root, material, x + dx, y + .029, z + dz, .24, .027, .046);
-        fragment.rotation.y = -angle - Math.PI / 2;
-      }
-      const y = water ? Math.max(.108, floorAt(x, z) + .037) : floorAt(x, z) + .041;
-      const patch = primitive(planeGeometry, glow, root, x, y, z, radius * 1.93, radius * 1.93, 1);
-      patch.rotation.x = -Math.PI / 2;
-    }
+    const {x, z} = water ? targetGround(2.45) : player;
+    const yaw = player.yaw;
     const y = floorAt(x, z);
-    activeWards.push({index, root, material, glow, color, x, z, tx, tz, radius,
-      until: state.time + (water ? 5.2 : 3.15), ttl: 0});
-    makePulse(x, y, z, color, cross ? 2.1 : radius, .72);
-    spray(x, y + .14, z, 24, color, 1.6, .93, .15, .6);
-    playSound('ward', x, z);
+    const ward = {
+      index, root: new THREE.Group(), materials: [], x, y, z, yaw, tx: Math.cos(yaw), tz: -Math.sin(yaw),
+      color: powers[index].tint, radius: cross ? 4.67 : water ? 4.33 : 2.31,
+      started: state.time, until: state.time + (water ? 5.2 : 3.15), sparksAt: 0
+    };
+    wardBuilders[index - 4](ward);
+    scene.add(ward.root);
+    activeWards.push(ward);
+    if (cross && areaAt(x, z) === 0 && x > -5.13 && x < .82 && state.gateOpen) {
+      say('Ward down. Keep moving!', 1.25);
+    }
+  }
+
+  function wardImpact(ward, x, z) {
+    const y = floorAt(x, z);
+    const root = new THREE.Group();
+    const material = effectMaterial(ward.color, .94);
+    const ripple = primitive(thinRing, material, root, x, y + .78, z, .16, .16, 1);
+    ripple.rotation.y = ward.index === 6 ? ward.yaw : Math.atan2(x - ward.x, z - ward.z);
+    playEffect(root, .45, [material], (progress) => {
+      const radius = lerp(.16, .86, easeOut(progress));
+      ripple.scale.set(radius, radius, 1);
+      material.opacity = .9 * (1 - progress);
+    });
   }
 
   function wardAt(x, z, type) {
@@ -1917,6 +2440,8 @@ function startGame() {
     return null;
   }
 
+  const castSounds = ['', 'freeze', 'push', 'kindle', 'part', 'sanctuary', 'ward'];
+
   function castPower(index) {
     const power = powers[index];
     if (state.phase !== 'playing' || index === 0) return;
@@ -1926,22 +2451,24 @@ function startGame() {
       return;
     }
     power.readyAt = state.time + power.cooldown;
-    state.castKick = 1;
+    beginGesture(index);
     state.flare = .82;
     castLight.color.copy(power.tint);
+    const {x, y, z} = player;
+    playSound(castSounds[index], x, z);
     if (index >= 4) {
       placeWard(index);
       return;
     }
-    const {x, y, z} = player;
-    const radius = index === 1 ? 5.5 : index === 2 ? 5.95 : 4.3;
-    makePulse(x, y, z, power.tint, radius);
-    spray(x, y + .24, z, 21, power.tint, 2.15, .69, .24, .8);
-    playSound('pulse', x, z);
     if (index === 3) {
+      state.brightStarted = state.time;
       state.brightUntil = state.time + 3.4;
       return;
     }
+    const radius = index === 1 ? 5.5 : 5.95;
+    if (index === 1) showPeace(x, y, z, radius, power.tint);
+    else showDrive(x, y, z, radius, power.tint);
+    spray(x, y + .24, z, 19, power.tint, 2.15, .69, .24, .8);
     for (const enemy of pursuers) {
       const length = distance(enemy.x, enemy.z, x, z);
       if (!enemy.active || (enemy.mode === 'retreat' || enemy.mode === 'recede') || length > radius || !clearLine(x, z, enemy.x, enemy.z)) continue;
@@ -1974,18 +2501,35 @@ function startGame() {
   const axisUp = vector(0, 1, 0);
   const beamDirection = vector();
   const beam = new THREE.Group();
-  const beamCore = effectMaterial(0xffe4b5, .86);
-  const beamEdge = effectMaterial(0xffad5f, .22);
-  primitive(cylinderGeometry, beamEdge, beam, 0, 0, 0, .056, 1, .056);
-  primitive(cylinderGeometry, beamCore, beam, 0, 0, 0, .014, 1, .014);
-  beam.visible = false;
+  const beamCore = effectMaterial(0xfff4da, .91);
+  const beamEdge = effectMaterial(0xffb45f, .18);
+  const thread = effectMaterial(0xffdb92, .88);
+  primitive(cylinderGeometry, beamEdge, beam, 0, 0, 0, .059, 1, .059);
+  primitive(cylinderGeometry, beamCore, beam, 0, 0, 0, .017, 1, .017);
+  const helix = Array.from({length: 55}, (_, index) => {
+    const fraction = index / 54;
+    const angle = fraction * TAU * 3.3;
+    const radius = .02 + .043 * Math.sin(fraction * Math.PI);
+    return vector(Math.cos(angle) * radius, fraction - .5, Math.sin(angle) * radius);
+  });
+  const threadGeometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(helix), 54, .0067, 5, false);
+  const filaments = [0, 1].map(() => primitive(threadGeometry, thread, beam, 0, 0, 0, 1, 1, 1));
   scene.add(beam);
+  const beamSpark = halo(scene, 0xffdf9e, .9, 0, 0, 0, .39, .39);
+  beamSpark.material.map = sunRays;
+  hideBeam();
+
+  function hideBeam() {
+    beam.visible = false;
+    beamSpark.visible = false;
+  }
 
   function resetPlayer(point) {
     Object.assign(player, point);
     player.y = floorAt(point.x, point.z);
     player.ratSlow = 0;
     player.protectionUntil = state.time + 1.08;
+    refillHealth();
     player.moveAmount = 0;
     player.footstep = .8;
     state.flow = null;
@@ -1998,6 +2542,7 @@ function startGame() {
     enemy.active = false;
     enemy.model.root.visible = false;
     enemy.shade.visible = false;
+    enemy.frost.root.visible = false;
   }
 
   function startAmbush(stage, retry = false) {
@@ -2031,9 +2576,10 @@ function startGame() {
     ritual.ring.visible = false;
     ritual.beacon.visible = false;
     state.completed++;
+    refillHealth();
     state.focusRitual = null;
     state.flare = .96;
-    state.castKick = .69;
+    beginGesture(0);
     makePulse(ritual.x, ritual.y, ritual.z, 0xffd18b, 2.64, .94);
     spray(ritual.x, ritual.y + .055, ritual.z, 51, warm, 2.4, 1.14, .8, 1.3);
     playSound('clear', ritual.x, ritual.z);
@@ -2150,6 +2696,7 @@ function startGame() {
       if (state.time >= enemy.wardSoundAt) {
         enemy.wardSoundAt = state.time + .57;
         spray(nx, floorAt(nx, nz) + .47, nz, 13, ward.color, 1.73, .67, .1, 1.2);
+        wardImpact(ward, nx, nz);
         playSound('impact', nx, nz);
         if (state.gateOpen && ward.index === 6 && areaAt(ward.x, ward.z) === 0 &&
             ward.x > -5.13 && ward.x < .82) state.chaseWardSeen = true;
@@ -2236,12 +2783,13 @@ function startGame() {
       if (frozen && state.time < enemy.frozen - 1.9 && effectRandom() < dt * 12) {
         spray(enemy.x, floorAt(enemy.x, enemy.z) + .31, enemy.z, 1, frozenTint, .15, .6, .38, -.2);
       }
-      posePursuer(enemy, moved, dt);
+      if (!frozen) posePursuer(enemy, moved, dt);
+      animateFrost(enemy);
       if (enemy.mode === 'chase' && !frozen && !staggered && state.time > player.protectionUntil &&
           state.time > enemy.delay + .18 && distance(enemy.x, enemy.z, player.x, player.z) < .67 &&
-          !wardAt(player.x, player.z, 'enemy')) {
-        caught();
-        return;
+          !wardAt(player.x, player.z, 'enemy') && clearLine(enemy.x, enemy.z, player.x, player.z, .05)) {
+        takeHit(enemy);
+        if (state.phase === 'caught') return;
       }
     }
     if (nearest < 14 && state.time > state.rattles && state.time > state.chaseStart + .75) {
@@ -2404,19 +2952,26 @@ function startGame() {
     const gait = player.walkTime;
     const bobStrength = reducedMotion ? 0 : player.moveAmount;
     const knocked = state.phase === 'caught' ? clamp((state.caughtUntil - state.time) * 1.1, 0, 1) : 0;
+    const recoil = reducedMotion ? 0 : state.hurt * state.hurt;
     camera.position.set(player.x + Math.cos(gait * .51) * bobStrength * .019,
-      player.y + 1.64 + Math.sin(gait) * bobStrength * .029 - knocked * .64, player.z);
-    camera.rotation.set(player.pitch - knocked * .34, player.yaw,
-      Math.sin(gait * .5) * bobStrength * .009 - knocked * (reducedMotion ? 0 : .16));
+      player.y + 1.64 + Math.sin(gait) * bobStrength * .029 - knocked * .64 - recoil * .095, player.z);
+    camera.rotation.set(player.pitch - knocked * .34 - recoil * .048, player.yaw,
+      Math.sin(gait * .5) * bobStrength * .009 - knocked * (reducedMotion ? 0 : .16) + recoil * state.hurtSide * .074);
+    if (state.hurt > 0) {
+      state.hurt = Math.max(0, state.hurt - dt * 1.82);
+      ui.lens.style.setProperty('--hurt', (state.hurt * (reducedMotion ? .49 : .79)).toFixed(3));
+    }
     const lift = casting.size && state.selected === 0 && state.phase === 'playing';
     state.lifted = lerp(state.lifted, lift ? 1 : 0, Math.min(1, dt * 11));
-    state.castKick = Math.max(0, state.castKick - dt * 2.7);
-    const kick = Math.sin(state.castKick * Math.PI) * (reducedMotion ? .42 : 1);
     const narrow = Math.min(camera.aspect, 1.35);
     handRig.position.set(lerp(.355 * narrow, .12 * narrow, state.lifted) + Math.sin(gait * .5) * bobStrength * .013,
-      lerp(-.295, -.235, state.lifted) + .063 * kick + Math.sin(gait) * .014 * bobStrength, -.65 - kick * .08);
-    handRig.rotation.set(-.12 + state.lifted * .1 - .33 * kick, -.12 - .59 * kick, -.16 + .14 * state.lifted);
+      lerp(-.295, -.235, state.lifted) + Math.sin(gait) * .014 * bobStrength, -.65);
+    handRig.rotation.set(-.12 + state.lifted * .1, -.12, -.16 + .14 * state.lifted);
+    animateGesture(narrow);
+    animateLantern(narrow);
+    crucifixGlow.material.color.copy(warm).lerp(powers[state.lastPower].tint, state.flare);
     crucifixGlow.material.opacity = .12 + state.lifted * .54 + state.flare * .42;
+    gripLight.color.copy(warm).lerp(powers[state.lastPower].tint, state.flare);
     gripLight.intensity = .64 + state.lifted * 1.25 + state.flare * .87;
     camera.updateMatrixWorld(true);
   }
@@ -2499,14 +3054,20 @@ function startGame() {
     if (on) {
       const depth = ritual || enemy ? focusDepth : hit;
       aimEnd.copy(camera.position).addScaledVector(headingForward, depth);
-      crucifix.getWorldPosition(beamStart);
-      beamStart.y += .14;
+      crucifix.localToWorld(beamStart.set(0, .126, -.029));
       beamDirection.copy(aimEnd).sub(beamStart);
       beam.position.copy(beamStart).lerp(aimEnd, .5);
       beam.scale.y = Math.max(.02, beamDirection.length());
       beam.quaternion.setFromUnitVectors(axisUp, beamDirection.normalize());
       beam.visible = true;
-      beamCore.opacity = .62 + .19 * Math.sin(state.time * 21);
+      const braid = state.time * (reducedMotion ? 1.7 : 10.3);
+      filaments.forEach((strand, index) => strand.rotation.y = braid + index * Math.PI);
+      beamCore.opacity = .84 + (reducedMotion ? 0 : .08 * Math.sin(state.time * 16));
+      beamSpark.visible = true;
+      beamSpark.position.copy(aimEnd).addScaledVector(headingForward, -.16);
+      const sparkSize = eligible || enemy ? .47 : .25;
+      beamSpark.scale.set(sparkSize, sparkSize, 1);
+      beamSpark.material.rotation = braid * -.21;
       castLight.position.copy(aimEnd);
       castLight.position.y += .21;
       castLight.color.copy(powers[0].tint);
@@ -2516,7 +3077,7 @@ function startGame() {
         state.audioAt = state.time + .24;
       }
     } else {
-      beam.visible = false;
+      hideBeam();
       castLight.position.set(player.x, player.y + .65, player.z);
       castLight.intensity = state.flare * 14;
     }
@@ -2542,19 +3103,22 @@ function startGame() {
   const exitLocked = new THREE.Color(0x8d756a);
   function updateLights(dt) {
     const dark = state.gateOpen || state.time < state.blackUntil;
-    const chaseLight = state.time < state.brightUntil;
+    const glow = Math.min(easeOut((state.time - state.brightStarted) / .4),
+      clamp((state.brightUntil - state.time) * 1.8, 0, 1));
     const smoothDark = dark ? 1 : 0;
     state.darkness = lerp(state.darkness, smoothDark, Math.min(1, dt * 5.7));
     const darkness = state.darkness;
-    hemisphere.intensity = lerp(1.18, .53, darkness) + (chaseLight ? .38 : 0);
-    vision.intensity = lerp(12, 14.8, darkness) + (chaseLight ? 61 : 0);
+    hemisphere.intensity = lerp(1.18, .53, darkness) + glow * .38;
+    vision.intensity = lerp(12, 14.8, darkness) + glow * 61;
+    vision.color.copy(visionTint).lerp(lanternTint, glow * .61);
     scene.fog.color.copy(fogColor).lerp(dimFog, darkness * .85);
     scene.background.copy(scene.fog.color);
     scene.fog.density = .041 + darkness * .008;
     surfaceWater.uniforms.uDark.value = darkness;
     surfaceWater.uniforms.uTime.value = state.time;
     const floodWard = activeWards.findLast((ward) => ward.index === 4);
-    surfaceWater.uniforms.uWard.value.set(floodWard?.x ?? 0, floodWard?.z ?? 0, floodWard?.radius ?? 0);
+    const clearedRadius = floodWard ? floodWard.radius * waterWardSpread(floodWard) : 0;
+    surfaceWater.uniforms.uWard.value.set(floodWard?.x ?? 0, floodWard?.z ?? 0, clearedRadius);
     const closestLights = [];
     for (const lamp of lamps) {
       const n = state.time + lamp.phase;
@@ -2624,20 +3188,16 @@ function startGame() {
 
   function resetTransient() {
     for (const enemy of pursuers) hideEnemy(enemy);
-    for (const ward of activeWards) {
-      scene.remove(ward.root);
-      ward.material.dispose();
-      ward.glow.dispose();
-    }
+    activeWards.forEach(removeEffect);
     activeWards.length = 0;
-    for (const effect of effects) {
-      scene.remove(effect.root);
-      effect.material.dispose();
-    }
+    effects.forEach(removeEffect);
     effects.length = 0;
     for (const particle of particles) particle.life = 0;
-    beam.visible = false;
-    state.castKick = state.lifted = state.flare = 0;
+    hideBeam();
+    state.gesture = -1;
+    state.lastPower = 0;
+    state.lifted = state.flare = state.hurt = 0;
+    ui.lens.style.setProperty('--hurt', '0');
     state.blackUntil = state.brightUntil = 0;
     state.rattles = state.audioAt = state.wardHudAt = 0;
     state.focusPursuer = state.focusRitual = null;
@@ -2645,6 +3205,26 @@ function startGame() {
     casting.clear();
     keys.clear();
     resetStick();
+  }
+
+  function takeHit(enemy) {
+    player.health--;
+    player.protectionUntil = state.time + 1.45;
+    displayHealth();
+    if (!player.health) {
+      caught();
+      return;
+    }
+    const bearing = Math.atan2(enemy.x - player.x, enemy.z - player.z);
+    const dx = Math.sin(bearing);
+    const dz = Math.cos(bearing);
+    enemy.stagger = Math.max(enemy.stagger, state.time + .54);
+    enemy.shoveX = dx * 5.7;
+    enemy.shoveZ = dz * 5.7;
+    moveEnemy(enemy, dx * .29, dz * .29);
+    state.hurt = 1;
+    state.hurtSide = dx * Math.cos(player.yaw) - dz * Math.sin(player.yaw);
+    playSound('hurt', enemy.x, enemy.z);
   }
 
   function caught() {
@@ -2657,7 +3237,7 @@ function startGame() {
     ui.hint.hidden = true;
     ui.dot.classList.remove('target');
     ui.aim.style.setProperty('--charge', '0deg');
-    beam.visible = false;
+    hideBeam();
   }
 
   function retry() {
@@ -2738,8 +3318,12 @@ function startGame() {
   function raise(source) {
     if (state.phase !== 'playing') return;
     beginInput();
-    if (state.selected === 0) casting.add(source);
-    else castPower(state.selected);
+    if (state.selected === 0) {
+      if (!casting.size) beginGesture(0);
+      casting.add(source);
+    } else {
+      castPower(state.selected);
+    }
   }
 
   function look(dx, dy, touch = false) {
