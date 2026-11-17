@@ -5,10 +5,10 @@ const minGuests = 1;
 const maxGuests = 250;
 const durations = ["1–2 hr", "3–4 hr", "5+ hr"];
 const levels = [
-  { value: "normal", name: "Standard", percent: 100 },
-  { value: "heavy", name: "50% more", percent: 150 },
-  { value: "extreme", name: "Double", percent: 200 },
   { value: "off", name: "Skip", percent: 0 },
+  { value: "normal", name: "Standard", percent: 100 },
+  { value: "heavy", name: "+50%", percent: 150 },
+  { value: "extreme", name: "Double", percent: 200 },
 ];
 const drinks = [
   { type: "wine", title: "Wine", rates: [29, 50, 60], units: ["bottle", "bottles"] },
@@ -27,12 +27,14 @@ const kegs = [
 
 const byId = (id) => document.getElementById(id);
 const guestInput = byId("guests");
+const guestSlider = byId("guest-slider");
 const fewerGuests = byId("fewer-guests");
 const moreGuests = byId("more-guests");
 const resetButton = byId("reset");
 const copyButton = byId("copy");
 const copyLabel = byId("copy-label");
 const shopKegs = byId("shop-kegs");
+const drinkSettings = byId("drink-settings");
 const durationInputs = Array.from(document.querySelectorAll('input[name="duration"]'));
 const navLinks = Array.from(document.querySelectorAll(".nav a"));
 
@@ -91,36 +93,45 @@ function beerCount() {
 }
 
 function buildDrinkSettings() {
-  const options = levels.map(({ value, name }) => `<option value="${value}">${name}</option>`).join("");
-  byId("drink-settings").innerHTML = drinks.map(({ type, title }) => `
+  drinkSettings.innerHTML = drinks.map(({ type, title }) => `
     <div class="drink-setting" data-type="${type}">
-      <label class="drink-label" for="mix-${type}">
-        <span class="drink-art"><img src="../dplan/${type}-normal.png" alt=""></span>
-        <span>${title}</span>
-      </label>
-      <div class="select-wrap"><select id="mix-${type}">${options}</select></div>
+      <span class="drink-label" id="mix-title-${type}">${title}</span>
+      <div class="mix-options" role="radiogroup" aria-labelledby="mix-title-${type}">
+        ${levels.map(({ value, name }) => `
+          <label class="mix-option" data-level="${value}">
+            <input type="radio" name="mix-${type}" value="${value}">
+            <span class="mix-tile">
+              <span class="mix-art" aria-hidden="true">
+                ${value === "off" ? '<span class="mix-none"></span>'
+                  : `<img src="../dplan/${type}-${value}.png" alt="" decoding="async">`}
+              </span>
+              ${name}
+              <span class="mix-mark" aria-hidden="true"></span>
+            </span>
+          </label>
+        `).join("")}
+      </div>
     </div>
   `).join("");
 
-  for (const { type } of drinks) {
-    const select = byId("mix-" + type);
-    select.addEventListener("change", () => {
-      plan.mix[type] = select.value;
-      savePlan();
-    });
-  }
+  drinkSettings.addEventListener("change", (event) => {
+    const input = event.target;
+    const { type } = input.closest(".drink-setting").dataset;
+    plan.mix[type] = input.value;
+    savePlan();
+  });
 }
 
 function renderPlan({ preserveInput = false } = {}) {
   if (!preserveInput) guestInput.value = plan.guests;
+  guestSlider.value = plan.guests;
   fewerGuests.disabled = plan.guests === minGuests;
   moreGuests.disabled = plan.guests === maxGuests;
   for (const input of durationInputs) input.checked = Number(input.value) === plan.duration;
 
-  for (const { type } of drinks) {
-    const select = byId("mix-" + type);
-    select.value = plan.mix[type];
-    select.closest(".drink-setting").toggleAttribute("data-skipped", select.value === "off");
+  for (const row of drinkSettings.children) {
+    const amount = plan.mix[row.dataset.type];
+    for (const input of row.querySelectorAll("input")) input.checked = input.value === amount;
   }
 
   const items = shoppingList();
@@ -152,28 +163,30 @@ function savePlan(options) {
   if (activePage === "kegs") renderKegDetail();
 }
 
+function setGuests(value, options) {
+  plan.guests = clampGuests(value);
+  savePlan(options);
+}
+
 guestInput.addEventListener("input", () => {
-  if (!/^\d+$/.test(guestInput.value)) return;
-  plan.guests = clampGuests(Number(guestInput.value));
-  savePlan({ preserveInput: true });
+  if (/^\d+$/.test(guestInput.value)) {
+    setGuests(Number(guestInput.value), { preserveInput: true });
+  }
 });
+
+guestSlider.addEventListener("input", () => setGuests(guestSlider.valueAsNumber));
 
 guestInput.addEventListener("blur", () => { guestInput.value = plan.guests; });
 guestInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") guestInput.blur();
   if (event.key === "ArrowUp" || event.key === "ArrowDown") {
     event.preventDefault();
-    stepGuests(event.key === "ArrowUp" ? 1 : -1);
+    setGuests(plan.guests + (event.key === "ArrowUp" ? 1 : -1));
   }
 });
 
-function stepGuests(by) {
-  plan.guests = clampGuests(plan.guests + by);
-  savePlan();
-}
-
-fewerGuests.addEventListener("click", () => stepGuests(-1));
-moreGuests.addEventListener("click", () => stepGuests(1));
+fewerGuests.addEventListener("click", () => setGuests(plan.guests - 1));
+moreGuests.addEventListener("click", () => setGuests(plan.guests + 1));
 for (const input of durationInputs) {
   input.addEventListener("change", () => {
     plan.duration = Number(input.value);
