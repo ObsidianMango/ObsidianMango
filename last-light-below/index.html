@@ -588,14 +588,15 @@ function startGame() {
   const walkFloor = (texture, x1, x2, z1, z2, y, color = 0xa1aaa1, rough = .82) =>
     panel(texture, x2 - x1, z2 - z1, (x1 + x2) / 2, y, (z1 + z2) / 2,
       0, -Math.PI / 2, 5.25, 5.25, color, rough);
-  const ceiling = (x1, x2, z1, z2, y) =>
+  const ceiling = (x1, x2, z1, z2, y, color = 0x626967) =>
     panel(concreteMap, x2 - x1, z2 - z1, (x1 + x2) / 2, y, (z1 + z2) / 2,
-      0, Math.PI / 2, 5.3, 5.3, 0x626967, .94);
+      0, Math.PI / 2, 5.3, 5.3, color, .94);
 
-  function wallX(x, z1, z2, side, tiled, height = 4.28, y = -.41) {
+  function wallX(x, z1, z2, side, tiled, height = 4.28, y = -.41,
+      color = tiled ? 0x7b8074 : 0x929885) {
     const yaw = side * Math.PI / 2;
     panel(concreteMap, z2 - z1, height - y, x, (height + y) / 2, (z1 + z2) / 2,
-      yaw, 0, 5, 5, tiled ? 0x7b8074 : 0x929885, .95);
+      yaw, 0, 5, 5, color, .95);
     if (tiled) {
       panel(tileMap, z2 - z1, 2.52, x + .013 * side, 1.63, (z1 + z2) / 2,
         yaw, 0, 2.15, 1.15, 0xb0aea0, .7);
@@ -604,7 +605,8 @@ function startGame() {
     }
   }
 
-  function wallZ(z, x1, x2, side, tiled, height = 4.28, y = -.41) {
+  function wallZ(z, x1, x2, side, tiled, height = 4.28, y = -.41,
+      color = tiled ? 0x7b8074 : 0x929885) {
     const yaw = side > 0 ? 0 : Math.PI;
     panel(concreteMap, x2 - x1, height - y, (x1 + x2) / 2, (height + y) / 2, z,
       yaw, 0, 5, 5, tiled ? 0x7b8074 : 0x979d93, .95);
@@ -658,6 +660,7 @@ function startGame() {
     background: '#2b1411', accent: '#ffd8bb', border: '#ba6752', kind: 'exit', width: 689
   });
   const serviceSign = makeSign(['SERVICE TUNNEL', 'NORTHBOUND  ›'], {accent: '#d9d8a6'});
+  const roomWall = 0x8d9ca8;
   const maintenanceSign = makeSign(['MAINTENANCE', 'AUTHORIZED PERSONNEL'], {accent: '#d1c19b'});
   const corridorSign = makeSign(['STREET  ›'], {
     background: '#1d3028', accent: '#daedcd', kind: 'arrow', width: 580
@@ -676,19 +679,31 @@ function startGame() {
 
   const lamps = [];
   const smallPools = [];
-  function addLamp(x, y, z, axis, color = 0xb6d6c8, strength = 23) {
+  function addLamp(x, y, z, axis, color = 0xb6d6c8, strength = 23, profile = null) {
     const assembly = new THREE.Group();
     assembly.position.set(x, y, z);
     assembly.rotation.y = axis ? Math.PI / 2 : 0;
     scene.add(assembly);
     block(assembly, standard(0x343e3b, .46, .28), 0, .05, 0, 2.76, .16, .33);
     const lit = new THREE.MeshBasicMaterial({color});
-    block(assembly, lit, 0, -.053, -.079, 2.58, .064, .071);
-    block(assembly, lit, 0, -.052, .079, 2.58, .066, .07);
+    if (profile) {
+      for (const offset of [-.079, .079]) {
+        const tube = primitive(cylinderGeometry, lit, assembly, 0, -.053, offset, .037, 2.48, .036);
+        tube.rotation.z = Math.PI / 2;
+        for (const end of [-1.27, 1.27]) {
+          block(assembly, steel, end, -.048, offset, .108, .089, .097);
+        }
+      }
+    } else {
+      block(assembly, lit, 0, -.053, -.079, 2.58, .064, .071);
+      block(assembly, lit, 0, -.052, .079, 2.58, .066, .07);
+    }
     const bloom = halo(assembly, color, .24, 0, -.065, 0, 3.6, .96);
     const floor = floorAt(x, z);
-    const pool = floorGlow(color, .075, x, floor + .011, z, 6.7, 6);
-    lamps.push({x, y: y - .14, z, lit, bloom, pool, strength, color, phase: rand(0, 20), level: 1});
+    const pool = floorGlow(color, .075, x, floor + .011, z, profile?.width ?? 6.7, profile?.length ?? 6);
+    if (axis && profile) pool.rotation.y = Math.PI / 2;
+    lamps.push({x, y: y - .14, z, lit, bloom, pool, strength, color, phase: rand(0, 20), level: 1,
+      spill: profile?.spill ?? .08, halo: profile?.bloom ?? .25});
   }
 
   function addEmergency(x, y, z, yaw, color = 0xff7652) {
@@ -781,8 +796,8 @@ function startGame() {
   wallX(29.8, -25, -19.8, -1, false, 3.25);
   wallZ(-25, 2.8, 29.8, 1, false, 3.25);
   wallZ(-19.8, 7.6, 25.5, -1, false, 3.25);
-  wallZ(-19.8, 21.8, 25.5, 1, false, 3.7);
-  wallZ(-19.8, 29.8, 33.5, 1, false, 3.7);
+  wallZ(-19.8, 21.8, 25.5, 1, false, 3.7, -.41, roomWall);
+  wallZ(-19.8, 29.8, 33.5, 1, false, 3.7, -.41, roomWall);
   staticBox(steel, 0x5b6255, 27.65, 2.92, -19.793, 4.34, .61, .224);
   decal(maintenanceSign, 3.4, .93, 27.72, 2.94, -19.921, Math.PI, 0, {color: 0xafb6a5});
   addLamp(5.16, 3.02, -18.03, false, 0xc9d8c0, 15);
@@ -854,12 +869,12 @@ function startGame() {
   poolPiece(22.36, 24.05, -25, flood.ledge);
 
   // Pad shapes, piping and torn seams give the room its silhouette.
-  walkFloor(concreteMap, 21.8, 33.5, -19.8, -6, .18, 0xa4a28c, .92);
-  ceiling(21.8, 33.5, -19.8, -6, 3.7);
-  wallX(21.8, -19.8, -6, 1, false, 3.7);
-  wallX(33.5, -19.8, -6, -1, false, 3.7);
-  wallZ(-6, 21.8, 25.5, -1, false, 3.7);
-  wallZ(-6, 30.3, 33.5, -1, false, 3.7);
+  walkFloor(concreteMap, 21.8, 33.5, -19.8, -6, .18, 0xa7adae, .92);
+  ceiling(21.8, 33.5, -19.8, -6, 3.7, 0x666e75);
+  wallX(21.8, -19.8, -6, 1, false, 3.7, -.41, roomWall);
+  wallX(33.5, -19.8, -6, -1, false, 3.7, -.41, roomWall);
+  wallZ(-6, 21.8, 25.5, -1, false, 3.7, -.41, roomWall);
+  wallZ(-6, 30.3, 33.5, -1, false, 3.7, -.41, roomWall);
   const quilt = paint(512, 512, (pen, w, h) => {
     pen.drawImage(canvasFabric.image, 0, 0, w, h);
     const random = seeded(228);
@@ -894,9 +909,9 @@ function startGame() {
     cushionPosition.setXYZ(i, innerX + normal.x * .056, innerY + normal.y * .26, innerZ + normal.z * .05);
     cushionNormal.setXYZ(i, normal.x, normal.y, normal.z);
   }
-  const ticking = standard(0xbfb7a6);
+  const ticking = standard(0xc2b2a0);
   ticking.map = quilt;
-  const filthyTicking = standard(0x9c9785);
+  const filthyTicking = standard(0xa39689);
   filthyTicking.map = quilt;
   const seamMaterial = standard(0x5e5645);
   const fillingMaterial = standard(0xb0a28e);
@@ -918,11 +933,29 @@ function startGame() {
       }
     }
   }
+  const fabricFootprint = paint(128, 128, (pen, width, height) => {
+    for (let inset = 0; inset < 24; inset += 2) {
+      pen.beginPath();
+      pen.roundRect(3 + inset, 3 + inset, width - 6 - inset * 2, height - 6 - inset * 2, 20);
+      pen.fillStyle = 'rgba(255,255,255,.14)';
+      pen.fill();
+    }
+  });
+  const underMattress = new THREE.MeshBasicMaterial({
+    map: fabricFootprint, color: 0x090b0d, transparent: true, opacity: .8, depthWrite: false
+  });
+
+  function mattressShadow(x, z, width, length, angle) {
+    const patch = primitive(planeGeometry, underMattress, scene, x, .185, z, width, length, 1);
+    patch.rotation.set(-Math.PI / 2, angle, 0, 'YXZ');
+  }
+
   const piles = [
     [23.3, -9.34, 4, -.24], [32.1, -9.15, 5, .43], [32.0, -15.14, 4, -.14],
     [23.25, -15.52, 3, .19], [23.17, -17.78, 3, -.37], [31.8, -18.0, 2, .21]
   ];
   for (const [x, z, count, angle] of piles) {
+    mattressShadow(x + (x - 27.5) * .065, z + (z + 13.22) * .06, 2.04, 2.83, angle);
     obstacles.push([x - .94, x + .94, z - 1.22, z + 1.22]);
     for (let i = 0; i < count; i++) {
       mattress(x + rand(-.23, .23), .3 + i * .227, z + rand(-.24, .24), angle + rand(-.23, .23),
@@ -931,8 +964,10 @@ function startGame() {
   }
   mattress(33.2, 1.19, -12.41, Math.PI / 2, -1.35, .04, 1.49, 2.15, true);
   mattress(22.09, 1.07, -13.38, -Math.PI / 2, -1.34, -.18, 1.49, 2.1, false);
-  addLamp(27.5, 3.45, -13.22, false, 0xe4d2ad, 22);
-  addLamp(28.14, 3.45, -7.91, true, 0xc1d1bd, 15);
+  mattressShadow(32.91, -12.4, 1.12, 1.9, 0);
+  mattressShadow(22.43, -13.39, 1.14, 1.9, 0);
+  addLamp(27.5, 3.45, -13.22, false, 0xd9e7f0, 32, {width: 7.6, length: 5.3, spill: .13, bloom: .18});
+  addLamp(28.14, 3.45, -7.91, true, 0xe2e2d6, 16, {width: 6.7, length: 4.9, spill: .1, bloom: .19});
   addEmergency(27.87, 2.73, -6.19, Math.PI, 0xff8055);
   decal(forwardSign, 2.76, .71, 27.9, 3.06, -6.14, Math.PI, 0, {color: 0xc4d0bc});
 
@@ -1047,8 +1082,8 @@ function startGame() {
 
   const capGeometry = new THREE.CylinderGeometry(.78, 1.09, 1, 10);
   const bootMaterial = standard(0x211f1b, .79);
-  const dollCeramic = standard(0xd9d1b7, .35);
-  const dollCloth = standard(0x858377, .93);
+  const dollCeramic = standard(0xdad1c2, .36);
+  const dollCloth = standard(0x8b8175, .93);
   const dullFlesh = standard(0x9b9782, .8);
   const hollowEye = new THREE.MeshBasicMaterial({color: 0x171415});
   const whiteEye = new THREE.MeshBasicMaterial({color: 0xdbf1ce, toneMapped: false});
@@ -1188,8 +1223,47 @@ function startGame() {
     }
   });
   const faceMaterial = new THREE.MeshBasicMaterial({
-    map: crackedFace, transparent: true, color: 0xbfc5a8, depthWrite: false
+    map: crackedFace, transparent: true, color: 0xc9c1b8, depthWrite: false
   });
+
+  const porcelainGlaze = paint(256, 128, (pen, width, height) => {
+    const random = seeded(968);
+    pen.fillStyle = '#e2d9c9';
+    pen.fillRect(0, 0, width, height);
+    for (let i = 0; i < 18; i++) {
+      stain(pen, random() * width, random() * height, 5 + random() * 26, 3 + random() * 13, '#7c715847');
+    }
+    for (let i = 0; i < 17; i++) {
+      const x = random() * width;
+      const y = 10 + random() * (height - 20);
+      let px = x;
+      pen.beginPath();
+      pen.moveTo(px, y);
+      for (let j = 1; j < 6; j++) {
+        px += (random() - .45) * 12;
+        pen.lineTo(px, y + j * (2 + i % 3));
+      }
+      pen.strokeStyle = '#4d413164';
+      pen.lineWidth = .53 + random() * .55;
+      pen.stroke();
+    }
+    speckle(pen, width, height, random, 980, .1);
+  });
+  const glazedHead = standard(0xe9dfd1, .33);
+  glazedHead.map = porcelainGlaze;
+  const chalkStick = standard(0xe7dfc8, .91);
+  const dollTrackRadius = .98;
+  const crawlSteps = 18;
+
+  function dollLimb(root, knee) {
+    const upper = primitive(capGeometry, dollCeramic, root, 0, 0, 0, 1, 1, 1);
+    const lower = primitive(capGeometry, dollCeramic, root, 0, 0, 0, 1, 1, 1);
+    const jointRadius = knee ? .046 : .037;
+    const joint = sphere(root, dollCeramic, 0, 0, 0, jointRadius, jointRadius, jointRadius);
+    const tip = knee ? sphere(root, dollCeramic, 0, 0, 0, .037, .027, .065) :
+      sphere(root, dollCeramic, 0, 0, 0, .043, .022, .057);
+    return {upper, lower, joint, tip, contact: vector()};
+  }
 
   function babyDoll() {
     const root = new THREE.Group();
@@ -1199,14 +1273,87 @@ function startGame() {
     const head = new THREE.Group();
     head.position.set(0, .359, .183);
     root.add(head);
-    sphere(head, dollCeramic, 0, 0, 0, .139, .158, .143);
+    sphere(head, glazedHead, 0, 0, 0, .139, .158, .143);
     sphere(head, dollCeramic, 0, -.034, .13, .024, .024, .028);
-    primitive(planeGeometry, faceMaterial, head, 0, -.013, .132, .217, .159, 1);
+    const faceSurface = new THREE.PlaneGeometry(.217, .159, 12, 10);
+    const vertices = faceSurface.getAttribute('position');
+    for (let i = 0; i < vertices.count; i++) {
+      const x = vertices.getX(i);
+      const y = vertices.getY(i) - .013;
+      const z = .143 * Math.sqrt(Math.max(0, 1 - square(x / .139) - square(y / .158)));
+      vertices.setXYZ(i, x, y, z + .003);
+    }
+    primitive(faceSurface, faceMaterial, head, 0, 0, 0, 1, 1, 1);
     for (const x of [-.132, .132]) sphere(head, dollCeramic, x, -.017, -.012, .027, .04, .025);
-    const arms = [-1, 1].map((side) => limb(root, side * .134, .228, .061, .143, .049, dollCeramic, dollCeramic));
-    const legs = [-1, 1].map((side) => limb(root, side * .088, .208, -.186, .122, .052, dollCeramic, dollCeramic));
-    block(arms[1].end, standard(0xe5dec6, .7), 0, -.128, .032, .024, .073, .023);
-    return {root, hips, torso, head, arms, legs, shade: shadow(.96, .7, 0, .02, 0)};
+    const arms = [dollLimb(root, false), dollLimb(root, false)];
+    const legs = [dollLimb(root, true), dollLimb(root, true)];
+    const chalk = block(root, chalkStick, 0, 0, 0, .023, .069, .024);
+    return {root, hips, torso, head, arms, legs, chalk, shade: shadow(1.06, .94, 0, .02, 0)};
+  }
+
+  // A planted hand or knee stays at its strike point until it lifts for the next stride.
+  function crawlContact(point, turns, offset, sideOffset, reach, height, lift) {
+    const stride = turns * crawlSteps + offset;
+    const step = Math.floor(stride);
+    const swing = clamp((stride - step - .67) / .33, 0, 1);
+    const blend = swing * swing * (3 - 2 * swing);
+    const last = (step - offset) * TAU / crawlSteps;
+    const next = last + TAU / crawlSteps;
+    const radial = dollTrackRadius + sideOffset;
+    const x = lerp(Math.cos(last) * radial - Math.sin(last) * reach,
+      Math.cos(next) * radial - Math.sin(next) * reach, blend);
+    const z = lerp(Math.sin(last) * radial + Math.cos(last) * reach,
+      Math.sin(next) * radial + Math.cos(next) * reach, blend);
+    const heading = turns * TAU;
+    const cosine = Math.cos(heading);
+    const sine = Math.sin(heading);
+    point.set(cosine * x + sine * z - dollTrackRadius,
+      height + Math.sin(Math.PI * swing) * lift, cosine * z - sine * x);
+  }
+
+  const dollOrigin = vector();
+  const dollBend = vector();
+  const dollReach = vector();
+  const dollSegment = vector();
+  const dollUpright = vector(0, 1, 0);
+
+  function dollBone(mesh, from, to, width) {
+    dollSegment.copy(to).sub(from);
+    mesh.position.copy(from).lerp(to, .5);
+    mesh.scale.set(width, Math.max(.02, dollSegment.length()), width);
+    mesh.quaternion.setFromUnitVectors(dollUpright, dollSegment.normalize());
+  }
+
+  function poseDollArm(arm, side, torso) {
+    const palm = arm.contact;
+    dollOrigin.set(torso.x + side * .119, torso.y - .016, torso.z + .063);
+    dollReach.copy(palm).sub(dollOrigin);
+    const length = Math.max(.018, dollReach.length());
+    dollReach.multiplyScalar(1 / length);
+    const upper = .14;
+    const lower = .128;
+    const along = clamp((square(upper) - square(lower) + square(length)) / (2 * length), 0, length);
+    const bendHeight = Math.sqrt(Math.max(0, square(upper) - square(along)));
+    dollBend.set(side * .83, .36, -.17);
+    dollBend.addScaledVector(dollReach, -dollBend.dot(dollReach)).normalize();
+    dollBend.multiplyScalar(bendHeight).add(dollOrigin).addScaledVector(dollReach, along);
+    dollBone(arm.upper, dollOrigin, dollBend, .045);
+    dollBone(arm.lower, dollBend, palm, .037);
+    arm.joint.position.copy(dollBend);
+    arm.tip.position.copy(palm);
+    arm.tip.rotation.y = side * -.16;
+  }
+
+  function poseDollLeg(leg, side, hips, slump) {
+    const knee = leg.contact;
+    dollOrigin.set(hips.x + side * .079, hips.y - .035, hips.z - .007);
+    dollBend.set(knee.x + side * (.023 + slump * .045), knee.y * .77,
+      knee.z - .129 + slump * .035);
+    dollBone(leg.upper, dollOrigin, knee, .052);
+    dollBone(leg.lower, knee, dollBend, .04);
+    leg.joint.position.copy(knee);
+    leg.tip.position.copy(dollBend);
+    leg.tip.rotation.y = side * -.21;
   }
 
   const chalkMap = paint(512, 512, (pen, w, h) => {
@@ -1297,9 +1444,10 @@ function startGame() {
         '  float reveal = (1.0-smoothstep(drawn-.026, drawn+.018, line));',
         '  float erase = broken > .002 ? smoothstep(broken-.018, broken+.027, line) : 1.0;',
         '  float burning = step(.002,broken)*exp(-abs(line-broken)*37.0);',
-        '  vec3 color = mix(vec3(.68,.65,.52), vec3(.98,.82,.54), focus*.59);',
+        '  vec3 color = mix(vec3(.46,.43,.365), vec3(.93,.78,.53), focus*.43);',
         '  color += vec3(.74,.38,.07)*burning*(1.4+.6*sin(17.0*time+noise*6.0));',
-        '  gl_FragColor = vec4(color,mark.a*reveal*(.18 + .77*erase)*(.82+.18*focus));',
+        '  float pigment = mix(.62,1.0,smoothstep(.08,.91,noise));',
+        '  gl_FragColor = vec4(color,mark.a*reveal*(.18 + .77*erase)*(.82+.18*focus)*mix(pigment,1.0,burning));',
         '  #include <tonemapping_fragment>',
         '  #include <colorspace_fragment>',
         '  #include <fog_fragment>',
@@ -1310,7 +1458,7 @@ function startGame() {
     ring.rotation.x = -Math.PI / 2;
     const beacon = halo(scene, 0xd0b680, .26, x, y + .18, z, 1.39, .59);
     const doll = babyDoll();
-    return {x, y, z, area, ring, material, beacon, doll, turns: .47, progress: 0, cooldown: 0, done: false, collapse: 0};
+    return {x, y, z, area, ring, material, beacon, doll, turns: .47, progress: 0, cooldown: 0, dustAt: 0, done: false, collapse: 0};
   }
 
   const rituals = [
@@ -1888,6 +2036,61 @@ function startGame() {
     }
     positionAttribute.needsUpdate = colorAttribute.needsUpdate = true;
     particleGeo.setDrawRange(0, count);
+  }
+
+  const chalkRandom = seeded(1181);
+  const chalkRange = (min, max) => lerp(min, max, chalkRandom());
+  const chalkMotes = Array.from({length: 48}, () => ({life: 0}));
+  let chalkCursor = 0;
+  const chalkGeometry = new THREE.BufferGeometry();
+  const chalkPositions = new THREE.BufferAttribute(new Float32Array(chalkMotes.length * 3), 3);
+  const chalkPigment = new THREE.BufferAttribute(new Float32Array(chalkMotes.length * 4), 4);
+  chalkGeometry.setAttribute('position', chalkPositions.setUsage(THREE.DynamicDrawUsage));
+  chalkGeometry.setAttribute('color', chalkPigment.setUsage(THREE.DynamicDrawUsage));
+  chalkGeometry.setDrawRange(0, 0);
+  const chalkDust = new THREE.Points(chalkGeometry, new THREE.PointsMaterial({
+    color: 0xd8ceb9, size: .056, map: glowMap, transparent: true, vertexColors: true, depthWrite: false
+  }));
+  chalkDust.frustumCulled = false;
+  scene.add(chalkDust);
+
+  function shedChalk(tip, heading) {
+    const floor = floorAt(tip.x, tip.z) + .012;
+    if (tip.y > floor + .041) return;
+    for (let i = 0; i < 3; i++) {
+      const mote = chalkMotes[chalkCursor++ % chalkMotes.length];
+      mote.x = tip.x + chalkRange(-.032, .032);
+      mote.y = Math.max(floor, tip.y) + chalkRange(0, .015);
+      mote.z = tip.z + chalkRange(-.035, .035);
+      mote.dx = chalkRange(-.075, .075) + Math.sin(heading) * .116;
+      mote.dy = chalkRange(.048, .24);
+      mote.dz = chalkRange(-.075, .075) - Math.cos(heading) * .116;
+      mote.life = mote.duration = chalkRange(.53, .85);
+    }
+  }
+
+  function animateChalk(dt) {
+    let count = 0;
+    const damping = Math.exp(-dt * 2.75);
+    for (const mote of chalkMotes) {
+      if (mote.life <= 0) continue;
+      mote.life -= dt;
+      if (mote.life <= 0) continue;
+      mote.x += mote.dx * dt;
+      mote.z += mote.dz * dt;
+      mote.dx *= damping;
+      mote.dz *= damping;
+      mote.dy -= dt * .93;
+      const floor = floorAt(mote.x, mote.z) + .012;
+      mote.y = Math.max(floor, mote.y + mote.dy * dt);
+      if (mote.y <= floor) mote.dy = 0;
+      const alpha = .64 * Math.min(1, (mote.duration - mote.life) * 16) * square(mote.life / mote.duration);
+      chalkPositions.setXYZ(count, mote.x, mote.y, mote.z);
+      chalkPigment.setXYZW(count, 1, 1, 1, alpha);
+      count++;
+    }
+    chalkPositions.needsUpdate = chalkPigment.needsUpdate = true;
+    chalkGeometry.setDrawRange(0, count);
   }
 
   const floorMists = [
@@ -2530,7 +2733,7 @@ function startGame() {
     player.ratSlow = 0;
     player.protectionUntil = state.time + 1.08;
     refillHealth();
-    player.moveAmount = 0;
+    player.moveAmount = player.walkTime = 0;
     player.footstep = .8;
     state.flow = null;
     state.flowCell = -1;
@@ -2800,48 +3003,72 @@ function startGame() {
     }
   }
 
+  const chalkTip = vector();
+
   function animateDolls(dt) {
     for (const ritual of rituals) {
       const {doll, material} = ritual;
       const length = distance(player.x, player.z, ritual.x, ritual.z);
-      const isActive = ritual === rituals[state.completed];
       if (!ritual.done && length < 12.8) ritual.turns += dt * (state.focusRitual === ritual ? .037 : .12);
       const theta = ritual.turns * TAU;
-      const speed = reducedMotion ? .67 : 1;
-      let lift = .007 + .029 * Math.sin(theta * 13.8) * speed;
-      let slump = 0;
-      if (ritual.done) {
-        slump = clamp((state.time - ritual.collapse) * 3.5, 0, 1);
-        lift = -.043 * slump;
-      }
-      const offsetX = Math.cos(theta) * .98;
-      const offsetZ = Math.sin(theta) * .98;
-      doll.root.position.set(ritual.x + offsetX, ritual.y + lift, ritual.z + offsetZ);
-      doll.root.rotation.set(slump * 1.19, -theta, slump * .77, 'YXZ');
-      doll.head.rotation.x = .38 + .16 * Math.sin(theta * 9.6) * speed - slump * .21;
-      doll.head.rotation.y = -.45 + Math.sin(theta * 5.8) * .27;
-      doll.hips.rotation.x = -.16;
-      doll.torso.rotation.x = .12;
+      const pace = theta * crawlSteps;
+      const slump = ritual.done ? easeOut((state.time - ritual.collapse) * 2.8) : 0;
+      const sway = Math.sin(pace * .5) * (1 - slump);
+      const rise = Math.sin(pace * 2) * (1 - slump);
+      const jointLift = reducedMotion ? .72 : 1;
+      const offsetX = Math.cos(theta) * dollTrackRadius;
+      const offsetZ = Math.sin(theta) * dollTrackRadius;
+      doll.root.position.set(ritual.x + offsetX, ritual.y, ritual.z + offsetZ);
+      doll.root.rotation.y = -theta;
+      doll.torso.position.set(sway * .013 + slump * .028, lerp(.225, .112, slump) + rise * .013 * jointLift, .036);
+      doll.torso.rotation.set(.13 + slump * .17, 0, sway * .11 + slump * .34);
+      doll.hips.position.set(-sway * .011, lerp(.206, .12, slump) - rise * .012 * jointLift, -.154);
+      doll.hips.rotation.set(-.11, sway * .16, -sway * .09 + slump * .21);
+      doll.head.position.set(doll.torso.position.x + slump * .022,
+        lerp(.346, .152, slump) + rise * .015 * jointLift, .199 + slump * .065);
+      doll.head.rotation.set(.28 + Math.sin(pace) * .105 * jointLift + slump * .19,
+        .23 + Math.sin(theta * 4.8) * .25, -.09 * sway + slump * .44);
+
+      const leftPalm = doll.arms[0].contact;
+      crawlContact(leftPalm, ritual.turns, .48, -.132, .248, .028, .087 * jointLift);
+      leftPalm.x -= slump * .062;
+      leftPalm.y = lerp(leftPalm.y, .025, slump);
+
+      // The chalk hand drags along the rim while the other hand and knees carry the weight.
+      const chalkHand = doll.arms[1].contact;
+      const pressure = Math.pow(Math.max(0, Math.sin(pace + .44)), 5);
+      chalkHand.set(.128 + .022 * Math.sin(pace) + slump * .069,
+        .028 + pressure * .052 * (1 - slump), .148 + .04 * Math.sin(pace - .52) + slump * .045);
+      doll.chalk.position.set(chalkHand.x + .021, chalkHand.y + .007, chalkHand.z + .047);
+      doll.chalk.rotation.set(.49, 0, -.24 - pressure * .22);
+
       for (let i = 0; i < 2; i++) {
-        const phase = theta * 10.6 + i * Math.PI;
-        const drawingArm = i === 1;
-        doll.arms[i].hinge.rotation.set(-.82 + Math.sin(phase) * (drawingArm ? .27 : .6) + slump * .49,
-          drawingArm ? -.42 : .03, drawingArm ? .51 : -.17);
-        doll.arms[i].end.rotation.x = .62 + Math.cos(phase) * .43;
-        doll.legs[i].hinge.rotation.x = .93 + Math.sin(phase) * .51;
-        doll.legs[i].end.rotation.x = 1.01 - Math.cos(phase) * .46;
+        const side = i ? 1 : -1;
+        const leg = doll.legs[i];
+        crawlContact(leg.contact, ritual.turns, i ? .73 : .17, side * .104, -.048, .047, .048 * jointLift);
+        leg.contact.x += side * slump * .061;
+        leg.contact.y = lerp(leg.contact.y, .045, slump);
+        poseDollArm(doll.arms[i], side, doll.torso.position);
+        poseDollLeg(leg, side, doll.hips.position, slump);
       }
-      doll.shade.position.set(doll.root.position.x, ritual.y + .014, doll.root.position.z);
+
+      doll.shade.position.set(doll.root.position.x, ritual.y + .009, doll.root.position.z);
+      doll.shade.rotation.set(-Math.PI / 2, -theta, 0, 'YXZ');
       if (!ritual.done) {
-        material.uniforms.drawn.value = clamp(ritual.turns, .4, 1.03);
+        const isActive = ritual === rituals[state.completed];
+        material.uniforms.drawn.value = clamp(ritual.turns + .024, .4, 1.03);
         material.uniforms.broken.value = ritual.progress;
         material.uniforms.focus.value = state.focusRitual === ritual ? 1 : isActive ? .38 : 0;
         material.uniforms.time.value = state.time;
         ritual.beacon.material.opacity = (isActive ? .26 : .08) * (.9 + .1 * Math.sin(state.time * 2.3));
-        if (length < 10.5 && state.time >= ritual.cooldown) {
+        if (length < 10.5 && state.time >= ritual.dustAt) {
+          ritual.dustAt = state.time + .135;
+          doll.chalk.localToWorld(chalkTip.set(0, -.5, 0));
+          shedChalk(chalkTip, theta);
+        }
+        if (length < 5.6 && state.time >= ritual.cooldown) {
           ritual.cooldown = state.time + .36;
-          spray(ritual.x + offsetX * 1.12, ritual.y + .047, ritual.z + offsetZ * 1.12, 4, paper, .26, .48, .04, 1.9);
-          if (length < 5.6) playSound('chalk', doll.root.position.x, doll.root.position.z);
+          playSound('chalk', doll.root.position.x, doll.root.position.z);
         }
       }
     }
@@ -2937,11 +3164,12 @@ function startGame() {
     const walked = distance(startX, startZ, player.x, player.z);
     player.moveAmount = lerp(player.moveAmount, Math.min(1, walked / Math.max(.01, dt * 3.1)), Math.min(1, dt * 12));
     player.y = lerp(player.y, floorAt(player.x, player.z), Math.min(1, dt * 15));
-    player.walkTime += walked * (sprinting ? 4.79 : 5.53);
+    const stepLength = sprinting ? 1.82 : 1.4;
+    player.walkTime += walked * TAU / stepLength;
     player.footstep -= walked;
     surfaceWater.uniforms.uRipple.value.set(player.x, player.z, wading ? player.moveAmount : 0);
     if (walked > .005 && player.footstep <= 0) {
-      player.footstep = sprinting ? 1.82 : 1.4;
+      player.footstep = stepLength;
       playSound(wading ? 'water' : 'step', player.x, player.z);
       if (wading) spray(player.x, .102, player.z, 8, waterColor, .48, .4, .29, 4.2);
     }
@@ -2953,10 +3181,13 @@ function startGame() {
     const bobStrength = reducedMotion ? 0 : player.moveAmount;
     const knocked = state.phase === 'caught' ? clamp((state.caughtUntil - state.time) * 1.1, 0, 1) : 0;
     const recoil = reducedMotion ? 0 : state.hurt * state.hurt;
-    camera.position.set(player.x + Math.cos(gait * .51) * bobStrength * .019,
-      player.y + 1.64 + Math.sin(gait) * bobStrength * .029 - knocked * .64 - recoil * .095, player.z);
-    camera.rotation.set(player.pitch - knocked * .34 - recoil * .048, player.yaw,
-      Math.sin(gait * .5) * bobStrength * .009 - knocked * (reducedMotion ? 0 : .16) + recoil * state.hurtSide * .074);
+    const sway = Math.sin(gait / 2) * bobStrength;
+    const stepBob = (Math.cos(gait) * .82 + Math.sin(gait * 2) * .18) * bobStrength;
+    camera.position.set(player.x + sway * Math.cos(player.yaw) * .017,
+      player.y + 1.64 + stepBob * .036 - knocked * .64 - recoil * .095,
+      player.z - sway * Math.sin(player.yaw) * .017);
+    camera.rotation.set(player.pitch - stepBob * .007 - knocked * .34 - recoil * .048, player.yaw,
+      sway * .01 - knocked * (reducedMotion ? 0 : .16) + recoil * state.hurtSide * .074);
     if (state.hurt > 0) {
       state.hurt = Math.max(0, state.hurt - dt * 1.82);
       ui.lens.style.setProperty('--hurt', (state.hurt * (reducedMotion ? .49 : .79)).toFixed(3));
@@ -2964,8 +3195,10 @@ function startGame() {
     const lift = casting.size && state.selected === 0 && state.phase === 'playing';
     state.lifted = lerp(state.lifted, lift ? 1 : 0, Math.min(1, dt * 11));
     const narrow = Math.min(camera.aspect, 1.35);
-    handRig.position.set(lerp(.355 * narrow, .12 * narrow, state.lifted) + Math.sin(gait * .5) * bobStrength * .013,
-      lerp(-.295, -.235, state.lifted) + Math.sin(gait) * .014 * bobStrength, -.65);
+    const portrait = clamp((.86 - camera.aspect) / .44, 0, 1);
+    handRig.scale.setScalar(1 - portrait * .20);
+    handRig.position.set(lerp((.355 - portrait * .151) * narrow, .12 * narrow, state.lifted) + sway * .011,
+      lerp(-.295 + portrait * .016, -.235, state.lifted) + stepBob * .013, -.65 - portrait * .05);
     handRig.rotation.set(-.12 + state.lifted * .1, -.12, -.16 + .14 * state.lifted);
     animateGesture(narrow);
     animateLantern(narrow);
@@ -3126,8 +3359,8 @@ function startGame() {
         .69 + .14 * Math.sin(n * 31) : .95 + .05 * Math.sin(n * 2.8);
       lamp.level = (1 - darkness) * buzz;
       lamp.lit.color.set(lamp.color).multiplyScalar(lamp.level * 1.09).lerp(offLamp, darkness);
-      lamp.bloom.material.opacity = lamp.level * .25 + .018;
-      lamp.pool.material.opacity = lamp.level * .08;
+      lamp.bloom.material.opacity = lamp.level * lamp.halo + .018;
+      lamp.pool.material.opacity = lamp.level * lamp.spill;
       const d = distance(lamp.x, lamp.z, player.x, player.z);
       if (d < 14 && lamp.level > .03) closestLights.push({...lamp, d, power: lamp.strength * lamp.level});
     }
@@ -3193,6 +3426,7 @@ function startGame() {
     effects.forEach(removeEffect);
     effects.length = 0;
     for (const particle of particles) particle.life = 0;
+    for (const mote of chalkMotes) mote.life = 0;
     hideBeam();
     state.gesture = -1;
     state.lastPower = 0;
@@ -3284,7 +3518,7 @@ function startGame() {
       ritual.done = false;
       ritual.turns = .47;
       ritual.progress = 0;
-      ritual.cooldown = 0;
+      ritual.cooldown = ritual.dustAt = 0;
       ritual.ring.visible = ritual.beacon.visible = true;
     }
     for (const shelter of shelters) {
@@ -3497,6 +3731,7 @@ function startGame() {
     animateShelters(dt);
     animateEffects(dt);
     animateParticles(dt);
+    animateChalk(dt);
     updateLights(dt);
     updateHUD();
     renderer.render(scene, camera);
