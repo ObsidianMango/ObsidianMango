@@ -37,6 +37,24 @@
   #stick { position: fixed; z-index: 2; width: 80px; height: 80px; border-radius: 50%; border: 1px solid #fff9e78c; background: #183b2e63; pointer-events: none; transform: translate(-50%, -50%); }
   #stick span { position: absolute; inset: 24px; border-radius: 50%; background: #fff9e7b8; }
   #stick[hidden] { display: none; }
+  .trial-button { border: 1px solid #efe0af66; border-radius: 6px; padding: 6px 10px; color: #fff4d4; background: #214438; font: inherit; cursor: pointer; touch-action: manipulation; }
+  .trial-button:focus-visible { outline: 2px solid #f8e4a2; outline-offset: 2px; }
+  #open-trials, #trial-hud { pointer-events: auto; }
+  .title #open-trials { margin-top: 6px; }
+  #trial-hud { margin-top: 6px; width: max-content; max-width: min(360px, calc(100vw - 44px)); padding: 8px 10px; border: 1px solid #ebdca24d; border-radius: 8px; color: #fff4d4; background: #17352aeb; }
+  #trial-hud p { margin: 2px 0 0; }
+  #trial-hud [data-state="won"] { color: #ebd68b; }
+  #trial-hud [data-state="lost"] { color: #ffccae; }
+  .trial-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; font-size: 11px; }
+  #trial-board { width: min(430px, calc(100% - 30px)); max-height: calc(100% - 24px); padding: 18px; border: 1px solid #bfa979; border-radius: 12px; color: #fff4d4; background: #19392e; box-shadow: 0 16px 58px #0b211e80; }
+  #trial-board::backdrop { background: #12281d98; }
+  .trial-board-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #trial-board h2 { margin: 0; font: 400 31px/1 "Instrument Serif", Georgia, serif; }
+  #trial-board p { margin: 8px 0 12px; color: #eddfc0; }
+  #trial-options { display: grid; gap: 7px; }
+  #trial-options button { padding: 9px 11px; text-align: left; line-height: 1.3; }
+  #trial-options strong, #trial-options span { display: block; }
+  #trial-options span { margin-top: 3px; color: #eddfc0; }
   @media (pointer: coarse) {
     .touch { display: block; }
     .desktop { display: none; }
@@ -53,7 +71,26 @@
   <h1>Meadow Magic</h1>
   <p class="controls desktop">WASD to walk · Drag to look · Click to cast</p>
   <p class="controls touch">Drag lower left to walk · Drag to look · Tap to cast</p>
+  <button id="open-trials" class="trial-button" type="button" aria-haspopup="dialog" hidden>Wizard Trials</button>
+  <section id="trial-hud" aria-label="Active trial" hidden>
+    <strong id="trial-title"></strong>
+    <p id="trial-objective"></p>
+    <p id="trial-status" aria-live="polite"></p>
+    <div class="trial-actions">
+      <button id="retry-trial" class="trial-button" type="button">Retry</button>
+      <button id="change-trial" class="trial-button" type="button" aria-haspopup="dialog">Trials</button>
+      <button id="leave-trial" class="trial-button" type="button">Leave trial</button>
+    </div>
+  </section>
 </header>
+<dialog id="trial-board" aria-labelledby="trial-board-title">
+  <div class="trial-board-header">
+    <h2 id="trial-board-title">Wizard Trials</h2>
+    <form method="dialog"><button class="trial-button" type="submit">Close</button></form>
+  </div>
+  <p id="trial-board-summary"></p>
+  <div id="trial-options"></div>
+</dialog>
 <div class="spell-hud">
   <output id="active-spell" aria-live="polite">Fire</output>
   <nav id="spell-bar" aria-label="Spells"></nav>
@@ -1360,6 +1397,10 @@ function start(T) {
       }
       raycaster.intersectObjects(castTargets, true, intersections);
       const hit = intersections[0];
+      if (hit?.object.userData.trialSign) {
+        trials.openBoard();
+        return;
+      }
       if (!hit) {
         missUntil = now + 0.20;
         return;
@@ -1394,6 +1435,7 @@ function start(T) {
       slot.radius = 0;
       staffCastAt = now;
       staffCastFuse = slot.spell.fuse;
+      trials.cast(slot);
       audio.charge(clamp(1 / (1 + hit.distance * 0.053), 0.21, 1));
     }
     function makePuff(point, smoke, ember = false) {
@@ -1466,10 +1508,12 @@ function start(T) {
           gustDirection.value.set(slot.heading.x, slot.heading.z);
         }
         if (spell === 'frost') {
-          demolition.freeze(slot.point, slot.hitObject);
+          trials.frozeTower(demolition.freeze(slot.point, slot.hitObject));
         } else if (spell !== 'growth') {
-          slot.visual.shatter = demolition.blast(origin, slot.hitObject, slot.hitInstance, spell,
+          const impact = demolition.blast(origin, slot.hitObject, slot.hitInstance, spell,
             slot.heading, slot.normal, spell === 'void' ? towerFracture : null);
+          slot.visual.shatter = impact?.point;
+          if (spell === 'wind') trials.shatteredTower(impact?.towerBlocks ?? 0);
           if (slot.visual.shatter) audio.fracture('ice', 1 / (1 + camera.position.distanceTo(origin) * 0.060));
         }
         audio.magic(spell, 1 / (1 + camera.position.distanceTo(origin) * 0.076));
@@ -2484,6 +2528,7 @@ function start(T) {
   }
 
   function freeze(point, object) {
+    let towerBlocks = 0;
     if (millMeshes.has(object) && !structures.has(millSite)) {
       splitBuilding(mill, millSite, 'windmill');
       millMeshes.clear();
@@ -2494,12 +2539,14 @@ function start(T) {
       for (const piece of structure.pieces) {
         if (!piece.attached || piece.queued || piece.position.distanceToSquared(point) > 3.65 ** 2) continue;
         piece.frostUntil = clock + 12;
+        if (structure.type === 'tower') towerBlocks++;
         frozen.add(piece);
         piece.batch.setColorAt(piece.index, tint.copy(piece.color).lerp(iceTint, 0.81));
         piece.batch.instanceColor.needsUpdate = true;
       }
     }
     upload();
+    return towerBlocks;
   }
 
   function blast(point, object, index, mode = 'fire', heading, surfaceNormal, fracture) {
@@ -2598,7 +2645,7 @@ function start(T) {
     additions.sort((a, b) => b.priority - a.priority);
     additions.length = Math.min(additions.length, budget);
     const impacted = new Set(), falls = [];
-    let icyCenter = null, icyCount = 0;
+    let icyCenter = null, icyCount = 0, towerBlocks = 0;
     for (const { piece, mode } of additions) {
       piece.queued = true;
       if (piece.attached && piece.bonds) impacted.add(piece.structure);
@@ -2606,12 +2653,13 @@ function start(T) {
         icyCenter ??= new T.Vector3();
         icyCenter.add(piece.position);
         icyCount++;
+        if (piece.structure.type === 'tower') towerBlocks++;
       }
     }
     for (const structure of impacted) checkSupports(structure, center, falls, vacuum);
     falls.sort((a, b) => a.piece.position.y - b.piece.position.y);
     waiting.unshift(...additions, ...falls);
-    return icyCenter?.multiplyScalar(1 / icyCount);
+    if (icyCount) return { point: icyCenter.multiplyScalar(1 / icyCount), towerBlocks };
   }
 
   function launch(piece, center, distance, thrown, mode, push, reach) {
@@ -2689,7 +2737,10 @@ function start(T) {
       normal.y = 0;
       const radial = normal.length();
       if (radial >= reach + 0.2) continue;
-      if (piece.position.y > center.y + 2.5 && piece.velocity.y > 1.9) piece.loftedUntil = clock + 1.55;
+      if (piece.position.y > center.y + 2.5 && piece.velocity.y > 1.9) {
+        piece.loftedUntil = clock + 1.55;
+        piece.tornadoAirborne = true;
+      }
       normal.normalize();
       const strength = 1 - radial / (reach + 0.2);
       piece.velocity.x += (normal.x * 9 - normal.z * 26) * step;
@@ -2701,7 +2752,7 @@ function start(T) {
     if (!pull) return false;
     const { center } = pull;
     if (closest < blackHole.capture ** 2) {
-      piece.crush = { center, remaining: 0.23 };
+      piece.crush = { center, remaining: 0.23, midair: piece.tornadoAirborne };
       return true;
     }
     const distance = Math.sqrt(closest);
@@ -2726,6 +2777,7 @@ function start(T) {
     if (crush.remaining <= 0) {
       piece.position.set(0, -500, 0);
       piece.crushed = true;
+      if (crush.midair) trials.caughtPiece();
     }
   }
 
@@ -2760,6 +2812,7 @@ function start(T) {
     const floor = elevation(piece.position.x, piece.position.z) + height;
     if (piece.position.y > floor) return;
     piece.position.y = floor;
+    piece.tornadoAirborne = false;
     piece.supported = true;
     if (piece.velocity.y < 0) piece.velocity.y *= Math.abs(piece.velocity.y) > 0.65 ? -0.24 : 0;
     piece.spin.x = piece.spin.x * 0.69 + piece.velocity.z * 0.58;
@@ -2922,7 +2975,16 @@ function start(T) {
     return Boolean(structure && structure.attached < structure.pieces.length * 0.44);
   }
 
-  return { targets, blast, update, cleared, freeze };
+  function millTrialState() {
+    const structure = structures.get(millSite);
+    const lost = structure?.pieces.filter(piece => !piece.attached || piece.queued).length ?? 0;
+    return {
+      blades: blades.filter(blade => blade.root.parent === rotor).length,
+      standing: Boolean(rotor.parent) && (!structure || lost <= structure.pieces.length * 0.20)
+    };
+  }
+
+  return { targets, blast, update, cleared, freeze, millTrialState };
 })(T, scene, [
     [tower, towerSite, 'tower'], [cottage, cottageSite, 'cottage'], [ruins, ruinSite, 'ruins']
   ], boxGeometry, wedge, elevation, compact);
@@ -2970,7 +3032,48 @@ function start(T) {
     return () => index;
   }
 
-  const fire = makeFireSpell([ground, mill, trunks, canopy, trailStones, fenceMesh]);
+  const towerView = { x: towerSite.x + 8, z: towerSite.z, yaw: Math.PI / 2, pitch: -0.055 };
+  const trialList = [
+    { id: 'clean-cut', name: 'Clean Cut', objective: 'Knock off a windmill blade in one cast and keep the mill standing.',
+      tip: 'Aim at the outer cloth as a blade comes around.', view: { x: -10.1, z: -7.1, yaw: 0.19, pitch: 0.48 } },
+    { id: 'brittle-wall', name: 'Brittle Wall', objective: 'Freeze the tower wall, then shatter 20 frozen blocks with one Wind Blast.',
+      tip: 'Start with Frost (4) on the tower wall.', view: towerView },
+    { id: 'midair-catch', name: 'Midair Catch', objective: 'Lift rubble with Fire Tornado, then swallow 10 airborne pieces with Black Hole.',
+      tip: 'Start with Fire Tornado (3) at the tower.', view: towerView }
+  ];
+  const board = makeTrialSign();
+  const fire = makeFireSpell([ground, mill, trunks, canopy, trailStones, fenceMesh, board]);
+
+  function makeTrialSign() {
+    const z = 11.4, x = roadX(z) + 2.4;
+    const sign = place({ x, z });
+    sign.rotation.y = -0.14;
+    const wood = 0x604331;
+    for (const side of [-1, 1]) box(sign, wood, side * 1.20, 0.89, 0, 0.15, 1.78, 0.20);
+    box(sign, wood, 0, 1.55, 0, 2.87, 1.29, 0.21);
+    box(sign, 0xa28457, 0, 2.21, 0.02, 2.96, 0.11, 0.24);
+    const canvas = document.createElement('canvas');
+    canvas.width = 720;
+    canvas.height = 300;
+    const paint = canvas.getContext('2d');
+    paint.fillStyle = '#1b3b30';
+    paint.fillRect(0, 0, 720, 300);
+    paint.strokeStyle = '#d1a765';
+    paint.lineWidth = 5;
+    paint.strokeRect(15, 15, 690, 270);
+    paint.textAlign = 'center';
+    paint.fillStyle = '#f7e4ae';
+    paint.font = '61px Georgia, serif';
+    paint.fillText('Wizard Trials', 360, 89);
+    paint.font = '31px Georgia, serif';
+    trialList.forEach((trial, i) => paint.fillText(trial.name, 360, 145 + i * 46));
+    const texture = new T.CanvasTexture(canvas);
+    texture.colorSpace = T.SRGBColorSpace;
+    mesh(sign, new T.PlaneGeometry(2.72, 1.13),
+      new T.MeshBasicMaterial({ map: texture }), 0, 1.55, 0.11, false);
+    sign.traverse(object => { if (object.isMesh) object.userData.trialSign = true; });
+    return sign;
+  }
 
   // Drag-to-look and WASD share movement with the optional touch stick.
   const player = V(roadX(16), elevation(roadX(16), 16) + 1.69, 16);
@@ -2984,7 +3087,7 @@ function start(T) {
   const keys = new Set();
   const directions = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']);
   window.addEventListener('keydown', (event) => {
-    if (!directions.has(event.code) || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (!directions.has(event.code) || trials.boardOpen() || event.ctrlKey || event.metaKey || event.altKey) return;
     event.preventDefault();
     keys.add(event.code);
   });
@@ -2994,6 +3097,171 @@ function start(T) {
     stopLook();
     stopStick();
   };
+  const trials = makeTrials();
+
+  function makeTrials() {
+    const boardButton = document.querySelector('#open-trials');
+    const dialog = document.querySelector('#trial-board');
+    const summary = document.querySelector('#trial-board-summary');
+    const options = document.querySelector('#trial-options');
+    const hud = document.querySelector('#trial-hud');
+    const title = document.querySelector('#trial-title');
+    const objective = document.querySelector('#trial-objective');
+    const status = document.querySelector('#trial-status');
+    const url = new URL(window.location.href);
+    const storageKey = 'meadow-magic-trials';
+    const completed = new Set();
+    try {
+      const saved = (window.localStorage.getItem(storageKey) || '').split(',');
+      for (const trial of trialList) if (saved.includes(trial.id)) completed.add(trial.id);
+    } catch {
+      // Trial progress can still be tracked until the page closes.
+    }
+
+    let current = trialList.find(trial => trial.id === url.searchParams.get('trial'));
+    let result = '', castCount = 0, caught = 0, deadline = Infinity;
+    const nearBoard = () => player.distanceToSquared(board.position) < 8 ** 2;
+
+    const choices = trialList.map(trial => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'trial-button';
+      const name = document.createElement('strong');
+      const detail = document.createElement('span');
+      detail.textContent = trial.objective;
+      button.append(name, detail);
+      button.addEventListener('click', () => restart(trial));
+      options.append(button);
+      return { trial, name };
+    });
+
+    function tell(message) {
+      status.dataset.state = result;
+      status.textContent = message;
+    }
+
+    function finish(won, message) {
+      result = won ? 'won' : 'lost';
+      if (won) {
+        completed.add(current.id);
+        try { window.localStorage.setItem(storageKey, [...completed].join(',')); } catch {}
+      }
+      tell(message);
+    }
+
+    function restart(trial) {
+      resetInput();
+      if (url.searchParams.get('trial') === trial.id) {
+        window.location.reload();
+        return;
+      }
+      url.searchParams.set('trial', trial.id);
+      window.location.replace(url.href);
+    }
+
+    function openBoard() {
+      if ((!current && !nearBoard()) || dialog.open) return;
+      resetInput();
+      for (const { trial, name } of choices) {
+        name.textContent = completed.has(trial.id) ? trial.name + ' ✓' : trial.name;
+      }
+      summary.textContent = completed.size + ' of 3 complete. Starting a trial resets the meadow.';
+      dialog.showModal();
+    }
+
+    boardButton.addEventListener('click', openBoard);
+    document.querySelector('#change-trial').addEventListener('click', openBoard);
+    document.querySelector('#retry-trial').addEventListener('click', () => { if (current) restart(current); });
+    document.querySelector('#leave-trial').addEventListener('click', () => {
+      current = undefined;
+      url.searchParams.delete('trial');
+      window.history.replaceState(null, '', url.href);
+      hud.hidden = true;
+    });
+    window.addEventListener('keydown', event => {
+      if (event.code !== 'KeyE' || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+      openBoard();
+    });
+
+    if (current) {
+      const view = current.view;
+      player.set(view.x, elevation(view.x, view.z) + 1.69, view.z);
+      yaw = view.yaw;
+      pitchAngle = view.pitch;
+      title.textContent = current.name;
+      objective.textContent = current.objective;
+      tell(current.tip);
+      hud.hidden = false;
+    }
+
+    function cast(slot) {
+      if (!current || result) return;
+      const { id, fuse, duration } = slot.spell;
+      castCount++;
+      if (current.id === 'clean-cut') {
+        if (castCount > 1) finish(false, 'One cast per attempt. Try again.');
+        else {
+          deadline = slot.time + fuse + (id === 'void' || id === 'tornado' ? duration : 0.22);
+          tell('Watching the mill settle…');
+        }
+        return;
+      }
+      const brittle = current.id === 'brittle-wall';
+      const opening = brittle ? 'frost' : 'tornado';
+      const followup = brittle ? 'wind' : 'void';
+      if (castCount === 1 && id === opening) {
+        if (!brittle) {
+          deadline = slot.time + fuse + 4.15;
+          tell('As rubble rises, aim Black Hole (2) into the funnel.');
+        }
+      } else if (castCount === 2 && id === followup) {
+        deadline = slot.time + fuse + (brittle ? 0.5 : duration + 0.25);
+        tell(brittle ? 'Checking the frozen wall…' : '0 / 10 caught in midair');
+      } else {
+        finish(false, brittle ? 'Use Frost, then one Wind Blast.' : 'Use Fire Tornado, then one Black Hole.');
+      }
+    }
+
+    function frozeTower(blocks) {
+      if (current?.id !== 'brittle-wall' || result || castCount !== 1) return;
+      if (blocks < 20) finish(false, 'Aim Frost at a solid section of the tower wall.');
+      else {
+        deadline = windTime.value + 12;
+        tell('Hit the blue masonry with Wind Blast (6) before it thaws.');
+      }
+    }
+
+    function shatteredTower(blocks) {
+      if (current?.id !== 'brittle-wall' || result || castCount !== 2) return;
+      finish(blocks >= 20, blocks + ' / 20 frozen blocks shattered. ' +
+        (blocks >= 20 ? 'Trial complete!' : 'Try hitting closer to the center of the ice.'));
+    }
+
+    function caughtPiece() {
+      if (current?.id !== 'midair-catch' || result || castCount !== 2) return;
+      caught++;
+      if (caught >= 10) finish(true, '10 / 10 caught in midair. Trial complete!');
+      else tell(caught + ' / 10 caught in midair');
+    }
+
+    function update(now) {
+      const hideBoard = Boolean(current) || !nearBoard();
+      if (boardButton.hidden !== hideBoard) boardButton.hidden = hideBoard;
+      if (!current || result || now < deadline) return;
+      if (current.id === 'clean-cut') {
+        const { blades, standing } = demolition.millTrialState();
+        if (blades === 3 && standing) finish(true, 'Blade down. Mill standing. Trial complete!');
+        else finish(false, standing ? 'The blade stayed on. Aim at the outer cloth.' : 'The mill took too much damage.');
+      } else if (current.id === 'midair-catch') {
+        finish(false, castCount === 1 ? 'The funnel faded. Cast Black Hole sooner.' : caught + ' / 10 caught in midair. Try again.');
+      } else {
+        finish(false, 'The ice has thawed. Try again.');
+      }
+    }
+
+    return { openBoard, boardOpen: () => dialog.open, cast, frozeTower, shatteredTower, caughtPiece, update };
+  }
+
   window.addEventListener('blur', resetInput);
   document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); });
 
@@ -3080,6 +3348,7 @@ function start(T) {
 
   function passable(x, z) {
     if (Math.hypot(x, (z + 11) * 1.04) > 44) return false;
+    if (Math.abs(x - board.position.x) < 1.48 && Math.abs(z - board.position.z) < 0.35) return false;
     for (const site of sites) {
       const dx = x - site.x, dz = z - site.z;
       if (site === ruinSite || demolition.cleared(site)) continue;
@@ -3129,6 +3398,7 @@ function start(T) {
     if (rotor.parent) rotor.rotation.z = 0.44 - elapsed * 0.34;
     fire.update(elapsed, dt);
     demolition.update(dt);
+    trials.update(elapsed);
     growth.update(dt);
     sky.position.copy(camera.position);
     if (elapsed - lastShadow > 0.073) {
