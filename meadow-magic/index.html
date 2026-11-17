@@ -23,11 +23,26 @@
   .mouse { width: 12px; height: 17px; border: 1px solid currentColor; border-radius: 7px; position: relative; }
   .mouse::before { content: ""; position: absolute; width: 1px; height: 5px; background: currentColor; top: 2px; left: 4.5px; }
   #aim { position: fixed; top: 50%; left: 50%; width: 7px; height: 7px; border: 1px solid #fff8e5e0; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 0 1px #25241c70; pointer-events: none; }
-  #aim[data-state="charging"] { border-color: #ffd385; box-shadow: 0 0 9px 2px #ff7e30; }
+  #aim[data-state="charging"] { border-color: #fff4d0; box-shadow: 0 0 9px 2px var(--rune-light, #ff7e30); }
   #aim[data-state="miss"] { border-color: #f09774; }
   #blast-flash { position: fixed; inset: 0; background: radial-gradient(ellipse at var(--flash-x, 50%) var(--flash-y, 50%), #fff3c5 0%, #ffd29a 24%, #f6a66960 70%, transparent 100%); opacity: 0; pointer-events: none; }
   #status { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: max-content; max-width: 85vw; color: #1c4131; background: #f7f7e7; border-radius: 7px; padding: 12px 18px; }
   .touch { display: none; }
+  .spell-hud { position: fixed; z-index: 3; inset: max(13px, env(safe-area-inset-top)) 0 auto; display: grid; justify-items: center; pointer-events: none; }
+  #spell-bar { display: flex; gap: 4px; padding: 5px; border: 1px solid #ede5c76b; border-radius: 10px; background: #17352ae8; box-shadow: 0 4px 19px #172c323d; pointer-events: auto; }
+  .spell { position: relative; display: grid; place-items: center; width: clamp(36px, 7.2vw, 49px); height: clamp(36px, 7.2vw, 46px); border: 1px solid #cfe9d42f; border-radius: 5px; background: #112820ab; color: var(--spell); cursor: pointer; padding: 0; touch-action: manipulation; }
+  .spell:hover, .spell:focus-visible { border-color: currentColor; outline: none; }
+  .spell[aria-pressed="true"] { border-color: currentColor; box-shadow: inset 0 -2px currentColor; background: #496050; }
+  .spell svg { width: 23px; height: 23px; }
+  .spell-number { position: absolute; top: 2px; left: 3px; color: #fff7dd; font: 500 9px/1 monospace; }
+  #active-spell { margin-top: 4px; border-radius: 4px; padding: 2px 8px; background: #17352ad9; font-size: 11px; }
+  @media (max-width: 900px) {
+    .title { top: calc(max(13px, env(safe-area-inset-top)) + 76px); }
+  }
+  @media (max-height: 470px) and (min-width: 901px) {
+    .title { top: max(12px, env(safe-area-inset-top)); }
+    h1 { font-size: 27px; }
+  }
   #stick { position: fixed; z-index: 2; left: max(22px, env(safe-area-inset-left)); bottom: max(24px, env(safe-area-inset-bottom)); width: 93px; height: 93px; border-radius: 50%; border: 1px solid #fff9e78c; background: #183b2e63; touch-action: none; }
   #stick span { position: absolute; inset: 27px; border-radius: 50%; background: #fff9e7b8; box-shadow: 0 2px 8px #14342777; pointer-events: none; }
   @media (pointer: coarse) {
@@ -43,10 +58,14 @@
 <div id="blast-flash" aria-hidden="true"></div>
 <div id="aim" aria-hidden="true" hidden></div>
 <header class="title"><h1>Meadow Magic</h1></header>
-<div class="controls desktop" aria-label="W A S D to walk. Drag to look. Click to cast fire at the crosshair.">
+<div class="spell-hud">
+  <nav id="spell-bar" aria-label="Spells"></nav>
+  <output id="active-spell" aria-live="polite">Fire</output>
+</div>
+<div class="controls desktop" aria-label="W A S D to walk. Drag to look. Click to cast. Keys 1 through 7 select spells.">
   <span class="control"><span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> Walk</span>
   <span class="control"><span class="mouse" aria-hidden="true"></span> Drag to look</span>
-  <span class="control">Click to cast fire</span>
+  <span class="control">Click to cast</span>
 </div>
 <div id="stick" class="touch" role="group" aria-label="Drag to walk"><span></span></div>
 <div class="controls touch">Drag to look · Tap to cast</div>
@@ -250,8 +269,9 @@ function start(T) {
     scene.add(group);
     return group;
   }
-  function instance(parent, geometry, surface, data, shadows = true) {
-    const batch = new T.InstancedMesh(geometry, surface, data.length);
+  function instance(parent, geometry, surface, data, shadows = true, reserve = 0) {
+    const batch = new T.InstancedMesh(geometry, surface, data.length + reserve);
+    batch.count = data.length;
     const dummy = new T.Object3D();
     data.forEach((item, index) => {
       dummy.position.copy(item.position);
@@ -296,12 +316,15 @@ function start(T) {
   const ground = mesh(scene, terrain, new T.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), 0, 0, 0, false);
   ground.receiveShadow = true;
   const scorch = makeScorch();
+  const frost = makeScorch('frost');
+  const gustWave = { value: new T.Vector4(0, 0, 0, -1) };
+  const gustDirection = { value: new T.Vector2(0, -1) };
   ground.material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, scorch.uniforms);
+    Object.assign(shader.uniforms, scorch.uniforms, frost.uniforms);
     shader.vertexShader = 'attribute float grassCover;\nvarying float burnable;\nvarying vec2 scorchPosition;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>', '#include <begin_vertex>\nscorchPosition = position.xz;\nburnable = grassCover;'
     );
-    shader.fragmentShader = scorch.glsl + 'varying float burnable;\nvarying vec2 scorchPosition;\n' + shader.fragmentShader.replace(
+    shader.fragmentShader = scorch.glsl + frost.glsl + 'varying float burnable;\nvarying vec2 scorchPosition;\n' + shader.fragmentShader.replace(
       '#include <color_fragment>', `
         #include <color_fragment>
         float burned = scorchAt(scorchPosition) * burnable;
@@ -309,6 +332,8 @@ function start(T) {
           float ashGrain = fract(sin(dot(floor(scorchPosition * 47.0), vec2(12.9898, 78.233))) * 43758.5453);
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.021, 0.015, 0.011) * (0.75 + ashGrain * 0.5), burned * 0.93);
         }
+        float frozen = frostAt(scorchPosition) * burnable;
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.54, 0.74, 0.83), frozen * 0.78);
       `
     );
   };
@@ -565,6 +590,7 @@ function start(T) {
   const trunkBatches = [];
   const crowns = [];
   const crownPieces = 7;
+  const growthReserve = 48;
   const leafColors = [0x548152, 0x69924d, 0x7e9d4e, 0x5d9059, 0x47774a, 0x659756, 0x88a55d];
   function tree(x, z, size) {
     const y = elevation(x, z);
@@ -577,6 +603,7 @@ function start(T) {
       crowns.push(entry(x + Math.cos(a) * r, y + between(2.78, 3.67) * size, z + Math.sin(a) * r,
         d * between(1.0, 1.27), d * between(0.83, 1.19), d, pick(leafColors), a));
     }
+    return trees[trees.length - 1];
   }
   for (const [x, z, size] of [
     [-10, 8, 1.2], [13.9, 5.8, 1.26], [15.5, -1.8, 0.95], [-8.8, -4.8, 0.92],
@@ -588,8 +615,9 @@ function start(T) {
     const x = Math.cos(a) * r, z = -11 + Math.sin(a) * (r + 1);
     if (z < 27 && sites.every(s => Math.hypot(s.x - x, s.z - z) > s.pad + 2)) tree(x, z, between(0.77, 1.58));
   }
-  const trunks = instance(scene, new T.CylinderGeometry(0.17, 0.34, 2.76, 8), matte(0xffffff), trunkBatches);
-  const canopy = instance(scene, detailedRock, matte(0xffffff), crowns);
+  const trunks = instance(scene, new T.CylinderGeometry(0.17, 0.34, 2.76, 8), matte(0xffffff), trunkBatches, true, growthReserve);
+  const canopy = instance(scene, detailedRock, matte(0xffffff), crowns, true, growthReserve * crownPieces);
+  const originalTreeCount = trees.length;
 
   const pebbles = [];
   for (let i = 0; i < 380; i++) {
@@ -618,25 +646,35 @@ function start(T) {
     const material = new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide });
     material.customProgramCacheKey = () => String(bend);
     material.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, scorch.uniforms);
+      Object.assign(shader.uniforms, scorch.uniforms, frost.uniforms, { gustWave, gustDirection });
       shader.uniforms.meadowTime = windTime;
-      shader.vertexShader = scorch.glsl + 'uniform float meadowTime;\nvarying float charAmount;\n' + shader.vertexShader;
+      shader.vertexShader = scorch.glsl + frost.glsl +
+        'uniform float meadowTime;\nuniform vec4 gustWave;\nuniform vec2 gustDirection;\nvarying float charAmount, iceAmount;\n' + shader.vertexShader;
       shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
         #include <begin_vertex>
         vec2 root = instanceMatrix[3].xz;
         charAmount = scorchAt(root);
+        iceAmount = frostAt(root);
         float strength = sin(meadowTime * 1.65 + root.x * 0.24 + root.y * 0.36)
           * 0.50 + sin(meadowTime * 2.45 + root.y * 0.94) * 0.21 + 0.36;
         vec2 wind = vec2(0.94, 0.34) * strength;
+        float gustAge = meadowTime - gustWave.z;
+        if (gustWave.w > 0.0 && gustAge < 1.25 && gustAge >= 0.0) {
+          vec2 fromWave = root - (gustWave.xy + gustDirection * gustAge * 6.0);
+          float crest = 1.0 - smoothstep(0.4, 5.8, length(fromWave));
+          wind += gustDirection * crest * (1.0 - gustAge / 1.25) * 5.0;
+        }
+        wind *= 1.0 - iceAmount * 0.98;
         vec2 localWind = vec2(dot(normalize(instanceMatrix[0].xz), wind),
           dot(normalize(instanceMatrix[2].xz), wind));
         transformed.xz += localWind * position.y * position.y * ${bend.toFixed(3)};
         transformed.xz += localWind * position.y * charAmount * 0.13;
         transformed.y *= 1.0 - charAmount * 0.39;
       `);
-      shader.fragmentShader = 'varying float charAmount;\n' + shader.fragmentShader.replace('#include <color_fragment>', `
+      shader.fragmentShader = 'varying float charAmount, iceAmount;\n' + shader.fragmentShader.replace('#include <color_fragment>', `
         #include <color_fragment>
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.010, 0.008, 0.006), charAmount);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.48, 0.77, 0.92), iceAmount * 0.94);
       `);
     };
     return material;
@@ -754,7 +792,89 @@ function start(T) {
     [0x548edc, 0xf7e7a2, 5], [0xe984aa, 0xf0c671, 7],
     [0xf5a8bf, 0xeaa666, 5], [0x658cde, 0xf6da9f, 7]
   ];
-  flowers.forEach((data, i) => instance(scene, flowerGeometry(...petalSchemes[i]), flowerMaterial, data, false));
+  const flowerBatches = flowers.map((data, i) => instance(scene,
+    flowerGeometry(...petalSchemes[i]), flowerMaterial, data, false, growthReserve * 7));
+  const growth = makeGrowth();
+
+  function makeGrowth() {
+    const plots = [], transform = new T.Object3D();
+
+    function fits(x, z) {
+      return Math.hypot(x, (z + 11) * 1.04) < 43.4 && clearOfStructure(x, z) &&
+        Math.hypot(x - camera.position.x, z - camera.position.z) > 1.65 &&
+        trees.every(tree => tree.felled || Math.hypot(x - tree.x, z - tree.z) > 2.7);
+    }
+
+    function plant(point) {
+      if (trees.length - originalTreeCount >= growthReserve) return;
+      let x = point.x, z = point.z;
+      for (let i = 0; i < 40 && !fits(x, z); i++) {
+        const angle = i * 2.39996;
+        const distance = 0.65 * Math.sqrt(i + 1);
+        x = point.x + Math.cos(angle) * distance;
+        z = point.z + Math.sin(angle) * distance;
+      }
+      if (!fits(x, z)) return;
+      const sapling = tree(x, z, between(0.93, 1.16));
+      const stems = [];
+      for (let i = 0; i < 28; i++) {
+        const angle = i * 2.39996, radius = between(0.6, 2.75);
+        const fx = x + Math.cos(angle) * radius, fz = z + Math.sin(angle) * radius;
+        if (!clearOfStructure(fx, fz)) continue;
+        const height = between(0.66, 1.20);
+        const batch = flowerBatches[i % flowerBatches.length];
+        stems.push({ batch, index: batch.count++,
+          data: entry(fx, elevation(fx, fz), fz, height, height, height, undefined, angle), delay: between(0, 0.48) });
+      }
+      const plot = { sapling, stems, age: 0 };
+      for (const [batch, start, count, data] of [
+        [trunks, sapling.index, 1, trunkBatches],
+        [canopy, sapling.index * crownPieces, crownPieces, crowns]
+      ]) {
+        batch.count += count;
+        for (let i = start; i < start + count; i++) batch.setColorAt(i, new T.Color(data[i].color));
+        batch.instanceColor.needsUpdate = true;
+        batch.boundingSphere = new T.Sphere(V(0, 4, -11), 80);
+      }
+      for (const batch of flowerBatches) batch.boundingSphere = new T.Sphere(V(0, 4, -11), 62);
+      plots.push(plot);
+      paint(plot);
+      return sapling;
+    }
+
+    function draw(batch, index, data, scale, root, localScale = scale) {
+      transform.position.copy(root).lerp(data.position, scale);
+      transform.scale.copy(data.scale).multiplyScalar(Math.max(0.008, localScale));
+      transform.rotation.set(0, data.yaw, data.roll);
+      transform.updateMatrix();
+      batch.setMatrixAt(index, transform.matrix);
+      batch.instanceMatrix.needsUpdate = true;
+    }
+
+    function paint({ sapling, stems, age }) {
+      const root = V(sapling.x, sapling.y, sapling.z);
+      if (!sapling.felled) {
+        const stem = T.MathUtils.smoothstep(age, 0, 1.44);
+        const leaves = T.MathUtils.smoothstep(age, 0.28, 1.68);
+        draw(trunks, sapling.index, trunkBatches[sapling.index], stem, root);
+        const first = sapling.index * crownPieces;
+        for (let i = first; i < first + crownPieces; i++) draw(canopy, i, crowns[i], stem, root, leaves);
+      }
+      for (const { batch, index, data, delay } of stems) {
+        draw(batch, index, data, T.MathUtils.smoothstep(age, delay, delay + 0.70), data.position);
+      }
+    }
+
+    function update(dt) {
+      for (let i = plots.length - 1; i >= 0; i--) {
+        const plot = plots[i];
+        plot.age += dt;
+        paint(plot);
+        if (plot.age >= 1.68) plots.splice(i, 1);
+      }
+    }
+    return { plant, update };
+  }
 
   // The view-model pass keeps the player's hand and staff clear of terrain.
   const foreground = new T.Scene();
@@ -822,16 +942,16 @@ function start(T) {
   thumb.rotation.z = -0.70;
 
   // A world-space mask keeps each burn in place for the rest of the session.
-  function makeScorch() {
+  function makeScorch(kind = 'scorch') {
     const size = 512, min = -88, span = 176, step = span / size;
     const pixels = new Uint8Array(size * size);
     const texture = new T.DataTexture(pixels, size, size, T.RedFormat);
     texture.minFilter = texture.magFilter = T.LinearFilter;
     texture.needsUpdate = true;
     const uniforms = {
-      scorchMap: { value: texture },
-      scorchTransform: { value: new T.Vector2(-min / span, 1 / span) },
-      scorchReady: { value: 0 }
+      [kind + 'Map']: { value: texture },
+      [kind + 'Transform']: { value: new T.Vector2(-min / span, 1 / span) },
+      [kind + 'Ready']: { value: 0 }
     };
     const glsl = `
       uniform sampler2D scorchMap;
@@ -841,7 +961,7 @@ function start(T) {
         if (scorchReady < 0.5) return 0.0;
         return texture2D(scorchMap, p * scorchTransform.y + scorchTransform.x).r;
       }
-    `;
+    `.replaceAll('scorch', kind);
     function stamp(x, z, radius) {
       const reach = (radius * 1.13 + step) / step;
       const cx = (x - min) / step - 0.5, cz = (z - min) / step - 0.5;
@@ -862,7 +982,7 @@ function start(T) {
         }
       }
       if (changed) {
-        uniforms.scorchReady.value = 1;
+        uniforms[kind + 'Ready'].value = 1;
         texture.needsUpdate = true;
       }
     }
@@ -870,8 +990,7 @@ function start(T) {
   }
 
   function makeFireSpell(targets) {
-    const fuse = 0.53, cooldown = 0.60, maxCasts = 7, blastRadius = 4.4;
-    const maxAge = 3.60, range = 66;
+    const cooldown = 0.60, maxCasts = 7, blastRadius = 4.4, range = 66;
     const aim = document.querySelector('#aim');
     const flash = document.querySelector('#blast-flash');
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -888,7 +1007,11 @@ function start(T) {
     effects.add(firelight);
 
     const runeMaterial = new T.ShaderMaterial({
-      uniforms: { progress: { value: 0 } },
+      uniforms: {
+        progress: { value: 0 }, sigil: { value: 0 },
+        runeOuter: { value: new T.Color().setRGB(1, 0.16, 0.015) },
+        runeInner: { value: new T.Color().setRGB(1, 0.77, 0.37) }
+      },
       transparent: true,
       side: T.DoubleSide,
       depthWrite: false,
@@ -902,6 +1025,8 @@ function start(T) {
       `,
       fragmentShader: `
         uniform float progress;
+        uniform float sigil;
+        uniform vec3 runeOuter, runeInner;
         varying vec2 paintedUV;
         const float TAU = 6.283185307;
         float segment(vec2 p, vec2 a, vec2 b) {
@@ -923,13 +1048,37 @@ function start(T) {
           symbol = min(symbol, segment(p, vec2(0.0, 0.43), vec2(0.38, -0.23)));
           symbol = min(symbol, segment(p, vec2(-0.38, -0.23), vec2(0.38, -0.23)));
           symbol = min(symbol, abs(length(p - vec2(0.0, -0.04)) - 0.105));
+          if (sigil > 0.5) {
+            float inset = 0.61 + 0.055 * sin(a * (sigil + 2.0));
+            ring = min(abs(r - 0.88), min(abs(r - (0.80 - 0.006 * sigil)), abs(r - inset)));
+            if (sigil < 1.5) {
+              symbol = abs(r - 0.18 - 0.036 * a);
+            } else if (sigil < 2.5) {
+              vec2 funnel = vec2(p.x / max(0.12, 0.55 + p.y * 0.6), p.y);
+              symbol = abs(funnel.x - sin(funnel.y * 16.0) * 0.47);
+              symbol = max(symbol, abs(funnel.y) - 0.43);
+            } else if (sigil < 3.5) {
+              float ray = sin(a * 3.0) * r;
+              symbol = min(abs(ray) + max(0.0, r - 0.42), abs(r - 0.19) + abs(cos(a * 3.0)) * 0.09);
+            } else if (sigil < 4.5) {
+              symbol = segment(p, vec2(0.16, 0.46), vec2(-0.15, 0.04));
+              symbol = min(symbol, segment(p, vec2(-0.15, 0.04), vec2(0.14, 0.09)));
+              symbol = min(symbol, segment(p, vec2(0.14, 0.09), vec2(-0.15, -0.43)));
+            } else if (sigil < 5.5) {
+              float band = abs(mod(p.y + 0.075 * sin(p.x * 8.0) + 0.075, 0.15) - 0.075);
+              symbol = max(band, r - 0.44);
+            } else {
+              symbol = abs(length(vec2(abs(p.x) - 0.12, p.y - 0.13)) - 0.14);
+              symbol = min(symbol, segment(p, vec2(0.0, -0.37), vec2(0.0, 0.15)));
+            }
+          }
           float dist = min(min(ring, glyph * 0.11), symbol);
           float glow = exp(-dist * 55.0);
           float line = 1.0 - smoothstep(0.004, 0.014, dist);
           float draw = 1.0 - smoothstep(progress - 0.12, progress + 0.025, a / TAU);
           draw = max(draw, (0.32 + progress * 0.42) * (1.0 - smoothstep(0.54, 0.59, r)));
           float intensity = (0.7 + 0.3 * sin(progress * 15.0)) * draw;
-          vec3 color = mix(vec3(1.0, 0.16, 0.015), vec3(1.0, 0.77, 0.37), line);
+          vec3 color = mix(runeOuter, runeInner, line);
           gl_FragColor = vec4(color, (line * 0.88 + glow * 0.36) * intensity);
           #include <colorspace_fragment>
         }
@@ -945,12 +1094,14 @@ function start(T) {
       rune.renderOrder = 2;
       effects.add(rune);
       return {
-        rune, point: new T.Vector3(), normal: new T.Vector3(),
+        rune, point: new T.Vector3(), normal: new T.Vector3(), heading: new T.Vector3(),
+        spell: null, visual: null,
         flames: [], smoke: [], shards: [], sparks: [], time: -Infinity,
         exploded: false, charStage: 0, radius: 0
       };
     });
     initialPlane.dispose();
+    const special = makeSpellEffects(effects, maxCasts);
 
     const counts = compact ? { flame: 28, ember: 7, smoke: 24, spark: 46, shard: 16 }
       : { flame: 43, ember: 10, smoke: 33, spark: 73, shard: 27 };
@@ -1086,7 +1237,7 @@ function start(T) {
 
     function cast(origin, yaw, pitch, now) {
       if (now - lastCast < cooldown) return;
-      const slot = casts.find(item => now - item.time >= maxAge + fuse);
+      const slot = casts.find(item => !item.spell || now - item.time >= item.spell.duration + item.spell.fuse);
       if (!slot) return;
       const cos = Math.cos(pitch);
       direction.set(-Math.sin(yaw) * cos, Math.sin(pitch), -Math.cos(yaw) * cos);
@@ -1099,8 +1250,22 @@ function start(T) {
         return;
       }
       slot.point.copy(hit.point);
+      if (slot.visual) slot.visual.group.visible = false;
       slot.hitObject = hit.object;
       slot.hitInstance = hit.instanceId;
+      const choice = spellSelection();
+      slot.spell = spellBook[choice];
+      slot.heading.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+      const { sigil, runeOuter, runeInner } = slot.rune.material.uniforms;
+      sigil.value = choice;
+      if (choice === 0) {
+        runeOuter.value.setRGB(1, 0.16, 0.015);
+        runeInner.value.setRGB(1, 0.77, 0.37);
+      } else {
+        runeOuter.value.set(slot.spell.color).multiplyScalar(0.68);
+        runeInner.value.set(slot.spell.color).lerp(special.white, 0.55);
+      }
+      aim.style.setProperty('--rune-light', slot.spell.color);
       worldMatrix.copy(hit.object.matrixWorld);
       if (hit.instanceId !== undefined) {
         hit.object.getMatrixAt(hit.instanceId, instanceMatrix);
@@ -1157,9 +1322,23 @@ function start(T) {
     }
 
     function detonate(slot) {
-      demolition.blast(slot.point, slot.hitObject, slot.hitInstance);
       slot.exploded = true;
       slot.rune.visible = false;
+      const spell = slot.spell.id;
+      if (spell !== 'fire') {
+        const planted = spell === 'growth' ? growth.plant(slot.point) : null;
+        const origin = special.begin(slot, planted);
+        if (spell === 'wind') {
+          gustWave.value.set(origin.x, origin.z, windTime.value, 1);
+          gustDirection.value.set(slot.heading.x, slot.heading.z);
+        }
+        if (spell !== 'growth' && spell !== 'frost') {
+          demolition.blast(origin, slot.hitObject, slot.hitInstance, spell, slot.heading);
+        }
+        audio.magic(spell, 1 / (1 + camera.position.distanceTo(origin) * 0.076));
+        return;
+      }
+      demolition.blast(slot.point, slot.hitObject, slot.hitInstance);
       const origin = slot.point.clone().addScaledVector(slot.normal, 0.30);
       const height = Math.max(0, slot.point.y - elevation(slot.point.x, slot.point.z));
       slot.radius = Math.sqrt(Math.max(0, blastRadius ** 2 - height ** 2));
@@ -1252,8 +1431,11 @@ function start(T) {
       camera.updateMatrixWorld();
       camera.getWorldDirection(forward);
       puffs.length = haze.length = 0;
-      let sparkCount = 0, debrisCount = 0, light = 0, charging = false;
+      let sparkCount = 0, debrisCount = 0, light = 0, charging = false, lightColor = 0xff922d;
+      special.startFrame();
       for (const slot of casts) {
+        if (!slot.spell) continue;
+        const { id, fuse, duration } = slot.spell;
         const age = now - slot.time, blastAge = age - fuse;
         if (blastAge < 0) {
           charging = true;
@@ -1261,15 +1443,35 @@ function start(T) {
           const glow = 1.6 + 4.0 * age / fuse;
           if (glow > light) {
             light = glow;
+            lightColor = id === 'fire' ? 0xff922d : slot.spell.color;
             firelight.position.copy(slot.point).addScaledVector(slot.normal, 0.62);
           }
           continue;
         }
-        if (blastAge >= maxAge) continue;
+        if (blastAge >= duration) {
+          if (slot.visual) slot.visual.group.visible = false;
+          continue;
+        }
         if (!slot.exploded) detonate(slot);
+        if (id !== 'fire') {
+          const glow = special.draw(slot, blastAge);
+          if (glow > light) {
+            light = glow;
+            lightColor = slot.spell.color;
+            firelight.position.copy(slot.visual.center).add(V(0, 0.65, 0));
+          }
+          const stage = Math.min(5, 1 + Math.floor(blastAge * 12.0));
+          if (id === 'frost' && stage > slot.charStage) {
+            const { x, z } = slot.visual.center;
+            frost.stamp(x, z, 0.85 + stage * 0.84);
+            slot.charStage = stage;
+          }
+          continue;
+        }
         const glow = 185 * Math.exp(-blastAge * 9.4) + 15 * Math.exp(-blastAge * 2.8);
         if (glow > light) {
           light = glow;
+          lightColor = 0xff922d;
           firelight.position.copy(slot.point).addScaledVector(slot.normal, 0.83);
         }
         const stage = Math.min(5, 1 + Math.floor(blastAge * 12.0));
@@ -1283,6 +1485,8 @@ function start(T) {
         debrisCount = drawFragments(slot.shards, blastAge, dt, false, debris, debrisCount);
       }
       firelight.intensity = light;
+      firelight.color.set(lightColor);
+      special.finishFrame();
       drawPuffs(fireCloud, puffs);
       drawPuffs(smokeCloud, haze);
       finishBatch(sparks, sparkCount);
@@ -1316,9 +1520,243 @@ function start(T) {
     return { cast, update };
   }
 
+  function makeSpellEffects(parent, capacity) {
+    const white = new T.Color(0xffffff);
+    const tints = new Map(spellBook.map(spell => [spell.id, new T.Color(spell.color)]));
+    const ember = new T.Color(0xffbc42), skyIce = new T.Color(0xeaf9ff);
+    const sparks = new T.InstancedMesh(new T.OctahedronGeometry(1, 0),
+      new T.MeshBasicMaterial({ toneMapped: false }), capacity * 48);
+    sparks.instanceMatrix.setUsage(T.DynamicDrawUsage);
+    sparks.setColorAt(0, white);
+    sparks.instanceColor.setUsage(T.DynamicDrawUsage);
+    sparks.frustumCulled = false;
+    sparks.count = 0;
+    parent.add(sparks);
+
+    const dummy = new T.Object3D();
+    const axis = V(0, 1, 0), delta = new T.Vector3(), glint = new T.Color();
+    const ringGeometry = new T.RingGeometry(0.90, 1, 64);
+    const ringBand = new T.TorusGeometry(1, 0.065, 6, 64);
+    const coreGeometry = new T.SphereGeometry(0.84, 24, 16);
+    const coreMaterial = new T.MeshBasicMaterial({ color: 0x130924, toneMapped: false });
+    const vortexGeometry = new T.CylinderGeometry(1.89, 0.35, 5.8, 40, 14, true);
+    const vortexMaterial = new T.ShaderMaterial({
+      transparent: true, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending,
+      uniforms: { clock: { value: 0 }, opacity: { value: 0 } },
+      vertexShader: `
+        varying vec2 ribbon;
+        void main() {
+          ribbon = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float clock, opacity;
+        varying vec2 ribbon;
+        void main() {
+          float braid = sin(6.2831853 * (ribbon.x * 3.0 - ribbon.y * 2.75 - clock * 2.3));
+          float flicker = sin(ribbon.y * 49.0 + clock * 17.0) * sin(ribbon.x * 62.83 + clock * 7.2);
+          float band = smoothstep(0.23, 0.94, braid + 0.25 * flicker);
+          float tips = smoothstep(0.0, 0.09, ribbon.y) * (1.0 - smoothstep(0.70, 1.0, ribbon.y));
+          vec3 color = mix(vec3(1.0, 0.12, 0.012), vec3(1.0, 0.73, 0.16), band);
+          gl_FragColor = vec4(color, band * tips * opacity * 0.74);
+          #include <colorspace_fragment>
+        }
+      `
+    });
+    let used = 0;
+
+    function ornaments() {
+      const group = new T.Group();
+      group.name = 'Spell impact';
+      parent.add(group);
+      const rim = new T.MeshBasicMaterial({ color: 0xffffff, side: T.DoubleSide,
+        transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false });
+      const rings = [new T.Mesh(ringGeometry, rim), new T.Mesh(ringGeometry, rim)];
+      const bands = [new T.Mesh(ringBand, rim), new T.Mesh(ringBand, rim)];
+      const core = new T.Mesh(coreGeometry, coreMaterial);
+      const funnel = new T.Mesh(vortexGeometry, vortexMaterial.clone());
+      funnel.position.y = 2.9;
+      group.add(...rings, ...bands, core, funnel);
+      return { group, center: group.position, rings, bands, core, funnel, rim };
+    }
+
+    function buildBolt(center, heading) {
+      const nodes = [];
+      for (let i = 0; i <= 12; i++) {
+        const t = i / 12;
+        const jitter = Math.sin(t * Math.PI) * 0.95;
+        nodes.push(center.clone().add(V(
+          Math.sin(i * 11.9 + center.x) * jitter + t * heading.x * 0.8,
+          t * 12.0, Math.cos(i * 8.77 + center.z) * jitter + t * heading.z * 0.8)));
+      }
+      const segments = nodes.slice(1).map((point, i) => [nodes[i], point, 0.071]);
+      for (const index of [3, 6, 8]) {
+        const root = nodes[index];
+        let from = root;
+        for (let j = 1; j <= 4; j++) {
+          const sign = index === 6 ? -1 : 1;
+          const to = root.clone().add(V(j * sign * 0.47, -j * 0.50, Math.sin(j * 8 + index) * j * 0.24));
+          segments.push([from, to, 0.042 * (1 - (j - 1) * 0.15)]);
+          from = to;
+        }
+      }
+      return segments;
+    }
+
+    function begin(slot, planted) {
+      const visual = slot.visual ??= ornaments();
+      const { group, center, rings, bands, core, funnel, rim } = visual;
+      const { id } = slot.spell;
+      const groundY = elevation(slot.point.x, slot.point.z);
+      group.visible = true;
+      group.scale.setScalar(1);
+      center.copy(slot.point);
+      if (planted) center.set(planted.x, planted.y, planted.z);
+      if (id === 'void') center.y = Math.max(groundY + 1.18, slot.point.y + 0.22);
+      if (id === 'frost' || id === 'tornado' || id === 'growth') center.y = elevation(center.x, center.z) + 0.035;
+      if (id === 'wind') center.y = Math.max(groundY + 0.85, slot.point.y);
+      rim.color.copy(tints.get(id));
+      for (const ring of rings) {
+        ring.visible = id !== 'void';
+        ring.rotation.set(-Math.PI / 2, 0, 0);
+        ring.position.set(0, 0.07, 0);
+      }
+      for (const band of bands) band.visible = id === 'void';
+      if (id === 'wind') {
+        const rotation = new T.Quaternion().setFromUnitVectors(V(0, 0, 1), slot.heading);
+        for (const ring of rings) ring.quaternion.copy(rotation);
+      }
+      core.visible = id === 'void';
+      funnel.visible = id === 'tornado';
+      visual.bolt = id === 'lightning' ? buildBolt(center, slot.heading) : null;
+      return center;
+    }
+
+    function put(x, y, z, width, length, color, tilt) {
+      if (used >= sparks.instanceMatrix.count) return;
+      dummy.position.set(x, y, z);
+      dummy.scale.set(width, length, width);
+      if (tilt && tilt.lengthSq() > 0) dummy.quaternion.setFromUnitVectors(axis, tilt);
+      else dummy.rotation.set(0.39, x * 0.47, z * 0.32);
+      dummy.updateMatrix();
+      sparks.setColorAt(used, color);
+      sparks.setMatrixAt(used++, dummy.matrix);
+    }
+
+    function bolt(segments, t, color) {
+      for (const [a, b, width] of segments) {
+        const length = delta.copy(b).sub(a).length();
+        delta.divideScalar(length);
+        const flicker = t < 0.16 ? 1 : 0.78 + Math.sin(t * 83) * 0.22;
+        put((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, (a.z + b.z) * 0.5,
+          width * flicker * (1 - t * 0.63), length * 0.535, color, delta);
+      }
+    }
+
+    function draw({ spell, visual, heading }, age) {
+      const { center, rings, bands, rim, core, funnel } = visual;
+      const { id, duration } = spell;
+      const t = clamp(age / duration, 0, 1);
+      const live = 1 - t;
+      const glow = tints.get(id);
+      const pulse = Math.min(1, age * 16) * Math.min(1, live * 5);
+      const count = compact ? 22 : 38;
+      rim.opacity = (0.42 + 0.23 * Math.sin(age * 8)) * live;
+
+      if (id === 'void') {
+        core.scale.setScalar(0.30 + pulse * 0.72);
+        for (let i = 0; i < bands.length; i++) {
+          bands[i].scale.setScalar((1.12 + i * 0.43) * (0.6 + pulse * 0.48));
+          bands[i].rotation.set(1.22 + i * 0.49, age * 0.94 + i * 1.82, age * 1.1);
+        }
+      } else if (id === 'tornado') {
+        funnel.material.uniforms.clock.value = age;
+        funnel.material.uniforms.opacity.value = pulse;
+        funnel.scale.set(0.7 + pulse * 0.36, 0.85 + pulse * 0.15, 0.7 + pulse * 0.36);
+      } else if (id === 'lightning' && age < 0.53) {
+        bolt(visual.bolt, t, glint.copy(glow).lerp(white, 0.62));
+      }
+
+      for (let i = 0; i < rings.length; i++) {
+        const ring = rings[i];
+        const ripple = clamp(t * (1.2 - i * 0.1) - i * 0.12, 0, 1);
+        const radius = id === 'tornado' ? 0.55 + i * 0.72 + age * 0.20
+          : 0.50 + ripple * (id === 'frost' ? 5.5 : 5.1);
+        ring.scale.setScalar(radius);
+        if (id === 'wind') ring.position.set(heading.x * age * (5.7 - i), 0.03, heading.z * age * (5.7 - i));
+      }
+
+      for (let i = 0; i < count; i++) {
+        const phase = i * 2.39996;
+        const seed = (i * 0.61803399) % 1;
+        const cycle = (seed + age * 0.71) % 1;
+        let radius, height, angle = phase, size = (0.037 + seed * 0.051) * pulse;
+        let drift = 0, tall = 1, tint = glow;
+        if (id === 'void') {
+          radius = 0.82 + (1 - cycle) * (3.6 + seed * 1.7) * (0.45 + live * 0.55);
+          angle += age * 3.8 + cycle * 1.25;
+          height = Math.sin(phase + age * 2.3) * (0.30 + seed * 0.93) * (1 - cycle);
+        } else if (id === 'tornado') {
+          radius = (0.36 + cycle * 1.68) * (0.84 + seed * 0.46);
+          height = 0.15 + cycle * 5.65;
+          angle += cycle * 8.8 - age * 7.7;
+          tint = i % 3 === 0 ? glow : ember;
+          tall = 2.1;
+        } else if (id === 'frost') {
+          radius = (0.36 + t * 4.56) * (0.72 + seed * 0.36);
+          height = Math.sin(Math.PI * Math.min(1, t * 1.4)) * (0.35 + seed * 0.8);
+          tint = i % 3 === 0 ? skyIce : glow;
+          tall = 2.9;
+        } else if (id === 'wind') {
+          radius = (0.6 + t * 4.3) * (0.77 + seed * 0.43);
+          drift = age * (4.1 + seed * 4.8);
+          height = 0.12 + Math.sin(age * 4.0 + phase) * radius * 0.22;
+          tall = 1.4;
+        } else if (id === 'growth') {
+          radius = (0.44 + seed * 2.2) * (0.83 - t * 0.42);
+          angle += age * 1.36;
+          height = cycle * (2.10 + t * 4.21);
+          tint = i % 5 === 0 ? skyIce : glow;
+        } else {
+          if (i >= 15) break;
+          radius = (0.15 + t * 3.9) * (0.77 + seed * 0.45);
+          height = Math.sin(t * Math.PI) * (0.42 + seed * 1.9);
+          tall = 1.7;
+        }
+        if (size < 0.006) continue;
+        const x = center.x + Math.cos(angle) * radius + heading.x * drift;
+        const z = center.z + Math.sin(angle) * radius + heading.z * drift;
+        const y = id === 'growth' || id === 'frost' ? elevation(x, z) + height + 0.10
+          : Math.max(elevation(x, z) + 0.06, center.y + height);
+        put(x, y, z, size, size * tall, tint);
+      }
+
+      if (id === 'lightning') return 165 * Math.exp(-age * 11.5);
+      if (id === 'tornado') return 17 * pulse;
+      if (id === 'void') return 15 * pulse;
+      return 10 * pulse * live;
+    }
+
+    function startFrame() { used = 0; }
+    function finishFrame() {
+      sparks.count = used;
+      if (used) sparks.instanceMatrix.needsUpdate = sparks.instanceColor.needsUpdate = true;
+    }
+    return { white, begin, draw, startFrame, finishFrame };
+  }
+
   // The charge, crack, bass impact, and low rumble are synthesized at runtime.
   function makeFireAudio() {
     let context, master, noise;
+    const voices = {
+      void: [124, 32, 'sine', 540, 110, 0.90],
+      tornado: [185, 58, 'triangle', 1460, 360, 1.18],
+      frost: [910, 1250, 'sine', 3850, 930, 0.49],
+      lightning: [147, 38, 'triangle', 5700, 340, 0.58],
+      wind: [320, 118, 'sine', 2710, 170, 0.65],
+      growth: [390, 725, 'sine', 1230, 2410, 0.85]
+    };
     function unlock() {
       const Audio = window.AudioContext || window.webkitAudioContext;
       if (!Audio) return;
@@ -1401,12 +1839,24 @@ function start(T) {
       burst(output, time, 'lowpass', 990, 128, 1.05, 0.83 * force, 1.22, 0.031);
       burst(output, time + 0.044, 'bandpass', 1870, 310, 0.78, 0.37 * force, 0.71, 0.035);
     }
-    return { charge, boom };
+    function magic(id, force) {
+      if (context?.state !== 'running') return;
+      const [from, to, type, noiseFrom, noiseTo, length] = voices[id];
+      const time = context.currentTime;
+      tone(master, time, from, to, 0.21 * force, length, type);
+      burst(master, time, 'bandpass', noiseFrom, noiseTo, 0.69,
+        (id === 'lightning' ? 0.65 : 0.32) * force, length, id === 'lightning' ? 0.006 : 0.045);
+      if (id === 'growth' || id === 'frost') {
+        tone(master, time + 0.11, from * 1.5, to * 1.34, 0.11 * force, 0.52);
+      }
+    }
+    return { charge, boom, magic };
   }
 
   const demolition = (function buildDestruction(T, scene, buildings, boxGeometry, wedge, elevation, compact) {
   const step = 1 / 60, limit = compact ? 72 : 112, blastRadius = 4.4, cellWidth = 1.3;
   const active = [], waiting = [], targets = [];
+  const fields = [];
   const structures = new Map(), geometries = new Map(), dirty = new Set();
   const anchored = new Map(), sleeping = new Map(), moving = new Map();
   const material = new T.MeshStandardMaterial({ roughness: 0.96, flatShading: true });
@@ -1422,8 +1872,8 @@ function start(T) {
   scene.updateMatrixWorld(true);
   const millMeshes = new Set();
   mill.traverse(object => { if (object.isMesh) millMeshes.add(object); });
-  const fallenTrunks = createBatch(trunks.geometry, trees.length, new T.Sphere(V(0, 4, -11), 120));
-  const fallenCrowns = createBatch(canopy.geometry, crowns.length, new T.Sphere(V(0, 4, -11), 120));
+  const fallenTrunks = createBatch(trunks.geometry, trunks.instanceMatrix.count, new T.Sphere(V(0, 4, -11), 120));
+  const fallenCrowns = createBatch(canopy.geometry, canopy.instanceMatrix.count, new T.Sphere(V(0, 4, -11), 120));
   for (const batch of [fallenTrunks, fallenCrowns]) {
     batch.count = 0;
     batch.userData.pieces = [];
@@ -1627,39 +2077,48 @@ function start(T) {
     }
   }
 
-  function blast(point, object, index) {
+  function blast(point, object, index, mode = 'fire', heading) {
     const center = point.clone(), additions = [];
+    const reach = { void: 6.7, tornado: 5.8, lightning: 2.9, wind: 5.8 }[mode] ?? blastRadius;
+    const push = heading?.clone();
+    if (mode === 'void' || mode === 'tornado') {
+      fields.push({ center, reach, mode, remaining: mode === 'void' ? 2.65 : 2.95 });
+    }
     const hit = object.userData.structure ?? object.userData.pieces?.[index]?.structure;
     const directTree = object === trunks ? trees[index]
       : object === canopy ? trees[Math.floor(index / crownPieces)] : null;
     const opened = new Set();
     const millDistance = Math.max(0, Math.hypot(center.x - millSite.x, center.z - millSite.z) - millSite.radius);
     const millHeight = center.y - clamp(center.y, mill.position.y, mill.position.y + 6.8);
-    if (!structures.has(millSite) && (millMeshes.has(object) || Math.hypot(millDistance, millHeight) < blastRadius)) {
+    if (!structures.has(millSite) && (millMeshes.has(object) || Math.hypot(millDistance, millHeight) < reach)) {
       opened.add(splitBuilding(mill, millSite, 'windmill'));
       millMeshes.clear();
     }
     for (const tree of trees) {
       const height = center.y - clamp(center.y, tree.y, tree.y + 4.7 * tree.size);
-      if (!tree.felled && (tree === directTree || Math.hypot(center.x - tree.x, height, center.z - tree.z) < blastRadius)) {
+      if (!tree.felled && (tree === directTree || Math.hypot(center.x - tree.x, height, center.z - tree.z) < reach)) {
         opened.add(fellTree(tree));
       }
     }
     for (const structure of structures.values()) {
       const direct = hit === structure;
       const close = structure.pieces.some(piece => piece.attached && piece.position.distanceToSquared(center) < 9);
-      const collapse = opened.has(structure) || (structure.type === 'tower' ? direct || close : direct && close);
+      const collapse = opened.has(structure) ||
+        (mode === 'fire' && (structure.type === 'tower' ? direct || close : direct && close));
       for (const piece of structure.pieces) {
-        const distance = piece.position.distanceTo(center);
-        const near = distance < blastRadius;
+        if (piece.crushed || piece.crush) continue;
+        const distance = mode === 'tornado' ? Math.hypot(piece.position.x - center.x,
+          Math.max(0, piece.position.y - center.y - 7.2), piece.position.z - center.z)
+          : piece.position.distanceTo(center);
+        const near = distance < reach;
         if (piece.moving) {
-          if (near) launch(piece, center, distance, true);
+          if (near) launch(piece, center, distance, true, mode, push, reach);
           continue;
         }
         if (piece.queued || (!near && !(collapse && piece.attached))) continue;
         const thrown = near && (distance < 3 || !collapse);
         piece.queued = true;
-        additions.push({ piece, center, distance, thrown,
+        additions.push({ piece, center, distance, thrown, mode, push, reach,
           priority: thrown ? 30 - distance : piece.position.y * 0.65 - distance * 0.11 });
       }
     }
@@ -1667,15 +2126,25 @@ function start(T) {
     waiting.unshift(...additions);
   }
 
-  function launch(piece, center, distance, thrown) {
+  function launch(piece, center, distance, thrown, mode, push, reach) {
     normal.copy(piece.position).sub(center);
     normal.y *= 0.34;
     if (normal.lengthSq() < 0.0001) normal.set(1, 0, 0);
-    const power = thrown ? 3 + 8 * Math.max(0, 1 - distance / blastRadius) : 0.75;
+    const power = thrown ? 3 + 8 * Math.max(0, 1 - distance / reach) : 0.75;
     piece.velocity.addScaledVector(normal.normalize(), power);
     piece.velocity.y += thrown ? 2.1 + (piece.id % 9) * 0.27 : -0.45;
     piece.velocity.clampLength(0, 16);
     piece.spin.set(piece.id % 9 - 4, (piece.id % 7 - 3) * 0.95, (piece.id % 11 - 5) * 0.73);
+    if (mode === 'void') {
+      piece.velocity.multiplyScalar(0.15);
+      piece.velocity.addScaledVector(normal, -power * 0.38);
+    } else if (mode === 'tornado') {
+      piece.velocity.multiplyScalar(0.25);
+      piece.velocity.y += 3.3;
+    } else if (mode === 'wind' && push) {
+      piece.velocity.multiplyScalar(0.36).addScaledVector(push, power * 1.37 + 2);
+      piece.velocity.y += 0.9;
+    }
     if (piece.log) {
       axis.set(normal.z, 0, -normal.x);
       if (axis.lengthSq() < 0.001) axis.set(0, 0, -1);
@@ -1683,6 +2152,46 @@ function start(T) {
       piece.velocity.y *= 0.32;
     }
     piece.quiet = 0;
+  }
+
+  function applyFields(piece) {
+    for (const { center, reach, mode } of fields) {
+      normal.copy(center).sub(piece.position);
+      if (mode === 'void') {
+        const distance = normal.length();
+        if (distance >= reach + 0.45) continue;
+        if (distance < 1.12) {
+          piece.crush = { center, remaining: 0.20 };
+          return;
+        }
+        const strength = 0.40 + 0.60 * (1 - distance / (reach + 0.45));
+        piece.velocity.multiplyScalar(0.94).addScaledVector(normal.normalize(), 45 * strength * step);
+        piece.velocity.y += 15.5 * step;
+      } else {
+        if (piece.position.y > center.y + 9.5) continue;
+        normal.y = 0;
+        const radial = normal.length();
+        if (radial >= reach + 0.2) continue;
+        normal.normalize();
+        const strength = 1 - radial / (reach + 0.2);
+        piece.velocity.x += (normal.x * 9 - normal.z * 26) * step;
+        piece.velocity.z += (normal.z * 9 + normal.x * 26) * step;
+        piece.velocity.y = Math.min(piece.velocity.y + (23 + strength * 15) * step, 8.8);
+        piece.spin.y += step * 6;
+      }
+      piece.velocity.clampLength(0, 18);
+    }
+  }
+
+  function crushStep(piece) {
+    const crush = piece.crush;
+    piece.position.lerp(crush.center, 0.26);
+    piece.scale.multiplyScalar(0.72);
+    crush.remaining -= step;
+    if (crush.remaining <= 0) {
+      piece.position.set(0, -500, 0);
+      piece.crushed = true;
+    }
   }
 
   function key(x, z) {
@@ -1753,7 +2262,7 @@ function start(T) {
 
   function tick() {
     for (let i = 0; i < 11 && waiting.length && active.length < limit; i++) {
-      const { piece, center, distance, thrown } = waiting.shift();
+      const { piece, center, distance, thrown, mode, push, reach } = waiting.shift();
       piece.fixedCell?.delete(piece);
       piece.restCell?.delete(piece);
       piece.fixedCell = piece.restCell = null;
@@ -1769,7 +2278,7 @@ function start(T) {
       piece.attached = false;
       piece.age = 0;
       piece.velocity.set(0, 0, 0);
-      launch(piece, center, distance, thrown);
+      launch(piece, center, distance, thrown, mode, push, reach);
       active.push(piece);
     }
 
@@ -1777,6 +2286,11 @@ function start(T) {
     for (const piece of active) {
       piece.age += step;
       piece.supported = false;
+      if (!piece.crush) applyFields(piece);
+      if (piece.crush) {
+        crushStep(piece);
+        continue;
+      }
       piece.velocity.y -= 17 * step;
       piece.position.addScaledVector(piece.velocity, step);
       const speed = piece.spin.length();
@@ -1791,6 +2305,7 @@ function start(T) {
 
     // Collide only with pieces in neighboring grid cells.
     for (const piece of active) {
+      if (piece.crush) continue;
       const x = Math.floor(piece.position.x / cellWidth), z = Math.floor(piece.position.z / cellWidth);
       for (let dx = -1; dx <= 1; dx++) {
         for (let dz = -1; dz <= 1; dz++) {
@@ -1805,6 +2320,16 @@ function start(T) {
 
     for (let i = active.length - 1; i >= 0; i--) {
       const piece = active[i];
+      if (piece.crush) {
+        if (piece.crushed) {
+          piece.crush = null;
+          piece.moving = false;
+          active[i] = active[active.length - 1];
+          active.pop();
+        }
+        write(piece);
+        continue;
+      }
       land(piece);
       const speedSq = piece.velocity.lengthSq();
       const quiet = speedSq < 0.24 && piece.spin.lengthSq() < 0.64;
@@ -1819,10 +2344,14 @@ function start(T) {
       }
       write(piece);
     }
+    for (let i = fields.length - 1; i >= 0; i--) {
+      fields[i].remaining -= step;
+      if (fields[i].remaining <= 0) fields.splice(i, 1);
+    }
   }
 
   function update(dt) {
-    if (!active.length && !waiting.length) {
+    if (!active.length && !waiting.length && !fields.length) {
       accumulator = 0;
       return;
     }
@@ -1843,6 +2372,50 @@ function start(T) {
 })(T, scene, [
     [tower, towerSite, 'tower'], [cottage, cottageSite, 'cottage'], [ruins, ruinSite, 'ruins']
   ], boxGeometry, wedge, elevation, compact);
+  const spellBook = [
+    { id: 'fire', name: 'Fire', color: '#ff9c4a', fuse: 0.53, duration: 3.60, path: 'M12 2c2 5-3 7-1 10 1-1 2-2 3-4 4 4 6 6 5 9a7 7 0 0 1-14-1c0-3 3-7 4-8-1 4 1 5 2 5' },
+    { id: 'void', name: 'Black Hole', color: '#c38aff', fuse: 0.65, duration: 2.85, path: 'M22 11c-1-5-7-8-12-6-5 2-6 8-2 11 3 3 8 1 8-2 0-2-2-4-4-3m-9 3c1 5 8 8 13 5' },
+    { id: 'tornado', name: 'Fire Tornado', color: '#ff6257', fuse: 0.50, duration: 3.18, path: 'M3 5c6-3 18-3 18 1s-15 5-14 8c0 2 10 0 10 2 0 2-6 3-8 6m2-3 4 1' },
+    { id: 'frost', name: 'Frost', color: '#8ddaff', fuse: 0.47, duration: 1.60, path: 'M12 2v20M3 7l18 10M3 17 21 7M9 4l3 3 3-3M9 20l3-3 3 3M5 10l4 1-1-4m8 10-1-4 4 1M5 14l4-1-1 4m8-10-1 4 4-1' },
+    { id: 'lightning', name: 'Lightning', color: '#ffe56a', fuse: 0.42, duration: 0.88, path: 'M14 2 5 14h6l-1 8 9-13h-6z' },
+    { id: 'wind', name: 'Wind Blast', color: '#b7ffeb', fuse: 0.39, duration: 1.30, path: 'M2 8h13c5 0 4-6 0-5m-13 9h17c5 0 4 6 0 5M4 16h8c4 0 4 5 0 5' },
+    { id: 'growth', name: 'Growth', color: '#9deb58', fuse: 0.60, duration: 1.85, path: 'M12 22v-9m0 3C4 16 2 11 3 7c6 0 9 4 9 9zm0-3c0-6 3-9 9-10 1 6-4 11-9 10z' }
+  ];
+  const spellSelection = makeSpellBar();
+
+  function makeSpellBar() {
+    const bar = document.querySelector('#spell-bar');
+    const label = document.querySelector('#active-spell');
+    let index = 0;
+    const buttons = spellBook.map((spell, i) => {
+      const button = document.createElement('button');
+      button.className = 'spell';
+      button.type = 'button';
+      button.title = (i + 1) + ' · ' + spell.name;
+      button.setAttribute('aria-label', button.title);
+      button.style.setProperty('--spell', spell.color);
+      button.innerHTML = '<span aria-hidden="true" class="spell-number">' + (i + 1) + '</span>' +
+        '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="' +
+        spell.path + '"/></svg>';
+      button.addEventListener('click', () => select(i));
+      bar.append(button);
+      return button;
+    });
+    function select(next) {
+      index = next;
+      buttons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === index)));
+      label.textContent = spellBook[index].name;
+    }
+    window.addEventListener('keydown', event => {
+      const match = /^(?:Digit|Numpad)([1-7])$/.exec(event.code);
+      if (!match || event.ctrlKey || event.metaKey || event.altKey) return;
+      event.preventDefault();
+      select(Number(match[1]) - 1);
+    });
+    select(0);
+    return () => index;
+  }
+
   const fire = makeFireSpell([ground, mill, trunks, canopy, trailStones, fenceMesh]);
 
   // Drag-to-look and WASD share movement with the optional touch stick.
@@ -1977,6 +2550,7 @@ function start(T) {
     if (rotor.parent) rotor.rotation.z = 0.44 - elapsed * 0.34;
     fire.update(elapsed, dt);
     demolition.update(dt);
+    growth.update(dt);
     sky.position.copy(camera.position);
     if (elapsed - lastShadow > 0.073) {
       renderer.shadowMap.needsUpdate = true;
