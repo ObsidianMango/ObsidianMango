@@ -432,18 +432,68 @@
             this.triangle(points[points.length - 1], last[j], last[next], tint);
           }
         }
-        geometry() {
+        geometry(smoothing = 0.92) {
           const geometry = new THREE.BufferGeometry();
           geometry.setAttribute("position", new THREE.Float32BufferAttribute(this.positions, 3));
           geometry.setAttribute("color", new THREE.Float32BufferAttribute(this.colors, 3));
           geometry.computeVertexNormals();
+          if (smoothing) smoothSurface(geometry, smoothing);
           return geometry;
         }
       }
 
+      // Blend normals at shared positions while retaining separate colors on each plate or fin.
+      function smoothSurface(geometry, amount) {
+        const vertices = geometry.attributes.position;
+        const normals = geometry.attributes.normal;
+        const groups = new Map();
+        const shared = new Array(vertices.count);
+        const n = new THREE.Vector3();
+        for (let i = 0; i < vertices.count; i++) {
+          const key = [vertices.getX(i), vertices.getY(i), vertices.getZ(i)]
+            .map(v => Math.round(v * 100000)).join(",");
+          if (!groups.has(key)) groups.set(key, new THREE.Vector3());
+          shared[i] = groups.get(key);
+          shared[i].add(n.fromBufferAttribute(normals, i));
+        }
+        for (const direction of groups.values()) direction.normalize();
+        for (let i = 0; i < normals.count; i++) {
+          n.fromBufferAttribute(normals, i);
+          if (n.dot(shared[i]) > 0.1) n.lerp(shared[i], amount).normalize();
+          normals.setXYZ(i, n.x, n.y, n.z);
+        }
+      }
+
+      // Apply procedural surface detail in the model's own coordinates, before its swim deformation.
+      function surfaceDetail(material, detail) {
+        const original = material.onBeforeCompile;
+        const key = material.customProgramCacheKey();
+        material.customProgramCacheKey = () => key + detail;
+        material.onBeforeCompile = function(shader, renderer) {
+          original.call(this, shader, renderer);
+          shader.vertexShader = shader.vertexShader
+            .replace("#include <common>", "#include <common>\nvarying vec3 vSkin;")
+            .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSkin = position;");
+          shader.fragmentShader = shader.fragmentShader
+            .replace("#include <common>", `
+              #include <common>
+              varying vec3 vSkin;
+              float stipple(vec2 p) {
+                vec2 cell = floor(p);
+                vec2 f = fract(p);
+                vec2 jitter = fract(sin(vec2(dot(cell,vec2(17.7,91.2)),dot(cell,vec2(37.1,23.9))))*4375.23);
+                return 1.0 - smoothstep(0.055, 0.21, length(f - 0.5 - (jitter - 0.5)*0.44));
+              }
+            `)
+            .replace("#include <color_fragment>", "#include <color_fragment>\n" + detail);
+        };
+        return material;
+      }
+
       const cube = new THREE.BoxGeometry();
-      const smallSphere = new THREE.SphereGeometry(1, 10, 6);
-      const facet = new THREE.IcosahedronGeometry(1, 0);
+      const smallSphere = new THREE.SphereGeometry(1, 14, 8);
+      const eyeGeometry = new THREE.IcosahedronGeometry(1, 0);
+      const facet = new THREE.IcosahedronGeometry(1, 1);
       const scenery = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
       const instanceTransform = new THREE.Object3D();
 
@@ -478,10 +528,10 @@
               #include <color_fragment>
               vec2 p = vSand;
               float phase = p.y * 10.8 + p.x * 2.81 + 2.8 * sin(p.x * 0.37 + p.y * 0.23)
-                + 1.1 * sin(p.y * 0.95 - p.x * 0.37) + 1.4 * cos(p.x * 0.73 + p.y * 0.27);
+                + 2.1 * sin(p.y * 0.95 - p.x * 0.37) + 1.4 * cos(p.x * 0.73 + p.y * 0.27);
               float detail = 1.0 - smoothstep(0.065, 0.22, max(length(dFdx(p)), length(dFdy(p))));
               float ripple = smoothstep(-0.44, 0.96, sin(phase));
-              float patches = 0.66 + 0.24 * sin(p.x * 0.53 + p.y * 0.18) * cos(p.y * 0.54);
+              float patches = 0.43 + 0.31 * sin(p.x * 0.53 + p.y * 0.18) * cos(p.y * 0.54);
               float grains = fract(sin(dot(floor(p * 22.0), vec2(127.1, 19.7))) * 43758.5453);
               vec2 skull = (p - vec2(8.0, -3.0)) * vec2(0.13, 0.42);
               vec2 ship = (p - vec2(21.0, -14.0)) * vec2(0.20, 0.17);
@@ -682,7 +732,8 @@
         const addRock = (x, z, sx, sy, sz) => {
           const y = seabed(x, z) + sy * 0.17;
           const tint = varied.copy(base).lerp(color(0x69736a), random() * 0.72).multiplyScalar(range(0.58, 1.21));
-          buckets[Math.floor(random() * buckets.length)].push({
+          const variation = Math.floor(random() * 2);
+          buckets[sx > 2 ? 0 : 1 + variation].push({
             center: vec(x, y, z),
             scale: vec(sx, sy, sz),
             rotation: new THREE.Euler(range(-0.2, 0.2), range(0, TAU), range(-0.2, 0.2)),
@@ -720,7 +771,7 @@
         }
 
         for (let i = 0; i < buckets.length; i++) {
-          const geometry = new THREE.IcosahedronGeometry(1, 1);
+          const geometry = new THREE.IcosahedronGeometry(1, i === 0 ? 2 : 1);
           const position = geometry.attributes.position;
           const colors = [];
           for (let j = 0; j < position.count; j++) {
@@ -734,6 +785,7 @@
             colors.push(tone * 0.93, tone, tone * 1.03);
           }
           geometry.computeVertexNormals();
+          smoothSurface(geometry, 0.74);
           geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
           const material = new THREE.MeshLambertMaterial({ vertexColors: true });
           material.onBeforeCompile = (shader) => {
@@ -819,6 +871,7 @@
             }
           }
 
+          // Air bladders sit at the base of each blade.
           let azimuth = phase;
           for (let leaf = 0; leaf < fullness; leaf++) {
             const h = lerp(0.18, 0.98, leaf / (fullness - 1)) + range(-0.018, 0.018);
@@ -826,12 +879,29 @@
             azimuth += 2.4 + range(-0.30, 0.30);
             const outward = vec(Math.cos(azimuth), 0, Math.sin(azimuth));
             const lateral = vec(-outward.z, 0, outward.x);
-            const length = range(0.63, 1.78) * (1.23 - 0.39 * h);
-            const width = range(0.125, 0.275) * (1.17 - 0.24 * h);
+            const length = range(0.95, 2.05) * (1.23 - 0.39 * h);
+            const width = range(0.105, 0.224) * (1.17 - 0.24 * h);
             const twist = range(-1.5, 1.5);
             const upwards = range(0.34, 0.85);
-            const segments = fullness >= 17 ? 8 : 6;
+            const segments = fullness >= 17 ? 10 : 7;
             const leafTint = bladeTint.clone().lerp(lightTint, range(0.0, 0.56)).multiplyScalar(range(0.81, 1.22));
+            if (leaf % (fullness >= 17 ? 3 : 5) === 0) {
+              const bulbStart = positions.length / 3;
+              for(let r=0;r<=3;r++){
+                const t=r/3, rad=.049*Math.sin(t*Math.PI);
+                for(let k=0;k<5;k++){
+                  const a=k*TAU/5;
+                  const bulb=base.clone().addScaledVector(outward,.045+.15*t)
+                    .addScaledVector(lateral,rad*Math.cos(a));
+                  bulb.y+=.015+.12*t+rad*Math.sin(a);
+                  vertex(bulb,h,phase,0,0,lightTint);
+                  if(r>0){
+                    const a0=bulbStart+(r-1)*5+k,b0=bulbStart+(r-1)*5+(k+1)%5;
+                    indices.push(a0,b0,a0+5,b0,b0+5,a0+5);
+                  }
+                }
+              }
+            }
             for (let row = 0; row <= segments; row++) {
               const t = row / segments;
               const center = base.clone().addScaledVector(outward, length * t);
@@ -841,9 +911,9 @@
               const radius = width * Math.max(0.015, Math.sin(Math.PI * (t * 0.91 + 0.09)) ** 0.72);
               for (let col = 0; col < 3; col++) {
                 const edge = col - 1;
-                const ruffle = 1 + 0.13 * Math.sin(t * 33 + edge * 2.1 + phase);
+                const ruffle = 1 + 0.24 * Math.sin(t * 33 + edge * 2.1 + phase);
                 const point = center.clone().addScaledVector(lateral, edge * radius * Math.cos(a) * ruffle);
-                point.y += edge * radius * Math.sin(a) * ruffle + (col === 1 ? radius * 0.23 : 0);
+                point.y += edge * radius * Math.sin(a) * ruffle + Math.abs(edge) * radius * 0.31 * Math.sin(t * 28 + phase) + (col === 1 ? radius * 0.23 : 0);
                 tint.copy(rootTint).lerp(leafTint, clamp(0.26 + t * 1.25, 0, 1));
                 tint.multiplyScalar(col === 1 ? 1.09 : 0.91);
                 tint.lerp(lightTint, t * t * 0.19);
@@ -974,7 +1044,11 @@
             }
           }
         }
-        scene.add(new THREE.Mesh(batch.geometry(), scenery));
+        const coralSurface=surfaceDetail(scenery.clone(),`
+          float polyps = stipple(vec2(vSkin.x*39.0+vSkin.z*27.0,vSkin.y*45.0));
+          diffuseColor.rgb *= 0.89+0.31*polyps;
+        `);
+        scene.add(new THREE.Mesh(batch.geometry(), coralSurface));
       }
 
       function buildWhale() {
@@ -992,7 +1066,22 @@
           const y = spineHeight(x);
           const width = lerp(0.38, 0.18, i / 22);
           const tint = shade(bone, range(0.67, 1.08));
-          batch.shape(smallSphere, vec(x, y, 0), vec(0.235, width * 0.88, width), tint);
+          // A short centrum with flared end plates gives each vertebra a weight-bearing surface.
+          const rings = [[-.239,.95],[-.19,1],[-.10,.82],[.115,.80],[.199,1],[.241,.93]];
+          let prior;
+          for (const [offset,rim] of rings) {
+            const ring = Array.from({length:10}, (_,k) => {
+              const a=k*TAU/10;
+              return vec(x+offset,y+Math.sin(a)*width*rim*.87,Math.cos(a)*width*rim);
+            });
+            for (let k=0;k<10;k++) {
+              const next=(k+1)%10;
+              if (prior) batch.quad(prior[k],ring[k],ring[next],prior[next],tint);
+              else batch.triangle(vec(x+offset,y,0),ring[k],ring[next],shade(tint,.83));
+              if (offset===rings[rings.length-1][0]) batch.triangle(vec(x+offset,y,0),ring[next],ring[k],tint);
+            }
+            prior=ring;
+          }
           if (i < 17) {
             batch.shape(facet, vec(x - 0.03, y + width * 0.68, -0.012), vec(0.19, width * 0.76, width * 0.43),
               shade(tint, 0.83), new THREE.Euler(0, 0, -0.27));
@@ -1028,10 +1117,20 @@
         }
 
         batch.shape(smallSphere, vec(-4.49, 1.79, 0), vec(1.35, 0.84, 1.00), skullColor, new THREE.Euler(0, 0, 0.27));
-        batch.shape(smallSphere, vec(-5.62, 1.39, 0), vec(1.62, 0.40, 0.77), shade(bone, 1.03),
-          new THREE.Euler(0, 0, 0.27));
-        batch.shape(smallSphere, vec(-6.61, 1.12, 0), vec(1.29, 0.22, 0.50), worn,
-          new THREE.Euler(0, 0, 0.18));
+        // Paired maxillae taper away from the braincase and leave an open median groove.
+        for (const side of [-1, 1]) {
+          let prior;
+          for (const [x,y,span,radius,depth] of [[-4.25,1.87,.32,.63,.53],[-4.75,1.81,.39,.60,.49],
+            [-5.25,1.63,.41,.46,.38],[-5.91,1.44,.35,.34,.27],[-6.54,1.28,.29,.25,.19],
+            [-7.10,1.17,.21,.18,.13],[-7.58,1.08,.12,.10,.073],[-7.92,1.03,.055,.032,.029]]) {
+            const ring=Array.from({length:10},(_,k)=>{
+              const a=k*TAU/10;
+              return vec(x,y+Math.sin(a)*depth,side*(span+Math.cos(a)*radius));
+            });
+            if(prior) for(let k=0;k<10;k++) batch.quad(prior[k],prior[(k+1)%10],ring[(k+1)%10],ring[k],skullColor);
+            prior=ring;
+          }
+        }
         for (const side of [-1, 1]) {
           batch.tube([
             vec(-4.03, 1.31, side * 0.80), vec(-4.57, 0.65, side * 1.22),
@@ -1051,9 +1150,16 @@
           batch.shape(facet, vec(range(-6.9, 7.2), range(0.06, 0.18), side * range(1.14, 3.4)),
             vec(range(0.12, 0.31), range(0.07, 0.17), range(0.14, 0.28)), shade(worn, range(0.7, 1.1)));
         }
-        const whale = new THREE.Mesh(batch.geometry(), scenery);
+        const ivory = surfaceDetail(scenery.clone(), `
+          vec2 grain = vec2(vSkin.x*24.0+vSkin.z*8.0, vSkin.y*36.0);
+          float pits = stipple(grain);
+          float stain = (1.0-smoothstep(0.06,0.82,vSkin.y))*(0.62+0.32*sin(vSkin.x*3.9+vSkin.z*5.6));
+          diffuseColor.rgb *= (1.0-0.19*pits) * mix(vec3(1.0),vec3(0.49,0.56,0.37),stain);
+        `);
+        const whale = new THREE.Mesh(batch.geometry(), ivory);
         whale.position.set(8, seabed(8, -3) + 0.04, -3);
         whale.rotation.y = -0.10;
+        whale.name = "Whale skeleton";
         scene.add(whale);
       }
 
@@ -1159,6 +1265,18 @@
           box(x, -0.07 + range(-0.18, 0.18), z, range(0.1, 0.24), range(0.08, 0.15), range(0.48, 1.85),
             shade(planks, range(0.50, 0.93)), range(-0.39, 0.39), range(-0.65, 0.65));
         }
+        // Split plank ends, iron fastenings and small clusters of barnacles on the outer hull.
+        for(const side of [-1,1]) {
+          for(let i=0;i<29;i++){
+            const z=-6.65+i*.46, belt=.23+.24*(1+Math.sin(i*3.63));
+            const pt=hullPoint(z,belt,side,-.022);
+            batch.shape(eyeGeometry,pt,vec(.035,.059,.061),shade(oxidized,.53));
+            for(let j=0;j<3;j++){
+              const root=hullPoint(z+.091*j,belt+.023*Math.cos(i+j),side,-.021);
+              batch.tube([root,root.clone().add(vec(side*.043,.012,0))],.050,.027,6,color(0xaca790));
+            }
+          }
+        }
         const ship = new THREE.Group();
         ship.position.set(21, seabed(21, -14) + 0.43, -14);
         ship.quaternion.setFromAxisAngle(unitY, -0.63)
@@ -1175,31 +1293,59 @@
               float along = vPlank.y + vPlank.x * 0.48;
               float grain = sin(along * 77.0 + sin(vPlank.z * 1.56 + along * 13.0) * 2.2);
               float wear = sin(vPlank.z * 4.7 + along * 9.0) * cos(vPlank.z * 2.2 - along * 21.0);
-              diffuseColor.rgb *= 1.0 + 0.077 * grain + 0.115 * wear;
+              float growth = smoothstep(0.16,0.88,wear+0.33*sin(vPlank.z*1.53+vPlank.y*2.3));
+              diffuseColor.rgb *= 1.0 + 0.14 * grain + 0.20 * wear;
+              diffuseColor.rgb = mix(diffuseColor.rgb,vec3(0.074,0.097,0.061),growth*0.42);
             `);
         };
-        ship.add(new THREE.Mesh(batch.geometry(), wood));
+        ship.add(new THREE.Mesh(batch.geometry(0), wood));
         scene.add(ship);
         return ship;
       }
 
 
-      function fishBody(batch, sections, sides, upper, lower, mottled = false) {
-        const rings = sections.map(([z, width, height, y]) => {
+      function fishBody(batch, sections, sides, upper, lower) {
+        const profile = new THREE.CatmullRomCurve3(sections.map(([z,w,h]) => vec(z,w,h)), false, "catmullrom", 0.42);
+        const length = (sections.length - 1) * 2;
+        let previous;
+        for (let j = 0; j <= length; j++) {
+          const sample = profile.getPoint(j / length);
+          const offset = lerp(sections[Math.floor(j / 2)][3], sections[Math.ceil(j / 2)][3], j % 2 * 0.5);
           const ring = [];
           for (let i = 0; i < sides; i++) {
-            const a = i / sides * TAU;
-            ring.push(vec(width * Math.cos(a), y + height * Math.sin(a), z));
+            const a = TAU * i / sides;
+            ring.push(vec(sample.y * Math.cos(a), offset + sample.z * Math.sin(a), sample.x));
           }
-          return ring;
-        });
-        for (let row = 0; row < rings.length - 1; row++) {
-          for (let col = 0; col < sides; col++) {
-            const next = (col + 1) % sides;
-            const tint = lower.clone().lerp(upper, 0.5 + 0.48 * Math.sin((col + 0.5) * TAU / sides));
-            if (mottled && Math.sin(col * 11 + row * 9.8) > 0.38) tint.multiplyScalar(0.62);
-            batch.quad(rings[row][col], rings[row][next], rings[row + 1][next], rings[row + 1][col], tint);
+          if (previous) {
+            for (let i = 0; i < sides; i++) {
+              const k = (i + 1) % sides;
+              const paint = angle => lower.clone().lerp(upper, THREE.MathUtils.smoothstep(Math.sin(angle), -0.62, 0.68));
+              const c = paint(i * TAU / sides), d = paint(k * TAU / sides);
+              batch.triangle(previous[i], previous[k], ring[k], c,d,d);
+              batch.triangle(previous[i], ring[k], ring[i], c,d,c);
+            }
           }
+          previous = ring;
+        }
+      }
+
+      // Cross sections give fins a rounded leading edge, convex faces and a tapered tip.
+      function foil(batch, stations, thicknessAxis, paint, sides = 8) {
+        let previous;
+        for (const [x, y, front, rear, thickness] of stations) {
+          const ring = [];
+          for (let i = 0; i < sides; i++) {
+            const a = i * TAU / sides;
+            ring.push(vec(x,y,lerp(rear,front,(1 + Math.cos(a)) * 0.5))
+              .addScaledVector(thicknessAxis, thickness * Math.sin(a)));
+          }
+          if (previous) {
+            for (let i = 0; i < sides; i++) {
+              const next = (i + 1) % sides;
+              batch.quad(previous[i], previous[next], ring[next], ring[i], paint);
+            }
+          }
+          previous = ring;
         }
       }
 
@@ -1210,16 +1356,16 @@
         const fin = color(0x82a2a0);
         fishBody(batch, [[-0.52, 0.008, 0.013, 0], [-0.30, 0.049, 0.056, 0.002],
           [-0.02, 0.070, 0.099, 0.008], [0.23, 0.059, 0.079, 0.009], [0.43, 0.005, 0.013, 0.011]],
-        6, upper, lower);
-        const tail = vec(0, 0, -0.46);
-        batch.triangle(tail, vec(0, 0.122, -0.69), vec(0, 0.017, -0.60), fin);
-        batch.triangle(tail, vec(0, -0.114, -0.68), vec(0, 0.017, -0.60), shade(fin, 0.83));
-        batch.triangle(vec(0, 0.079, -0.12), vec(0, 0.176, -0.13), vec(0, 0.088, 0.11), upper);
+        10, upper, lower);
         for (const side of [-1, 1]) {
-          batch.triangle(vec(side * 0.05, 0, 0.10), vec(side * 0.116, -0.038, -0.04),
-            vec(side * 0.05, -0.02, -0.12), fin);
-          batch.shape(facet, vec(side * 0.051, 0.044, 0.265), vec(0.014, 0.018, 0.019), color(0x193843));
+          foil(batch, [[0,0,-0.45,-0.57,0.011],[0,side*0.054,-0.53,-0.63,0.006],
+            [0,side*0.12,-0.66,-0.68,0.002]], unitX, fin, 4);
+          foil(batch, [[side*0.05,0,0.10,-0.06,0.01],[side*0.103,-0.027,0.014,-0.055,0.005],
+            [side*0.123,-0.039,-0.035,-0.042,0.002]], unitY, fin, 4);
+          batch.shape(eyeGeometry, vec(side * 0.051, 0.044, 0.265), vec(0.014, 0.018, 0.019), color(0x193843));
         }
+        foil(batch, [[0,.077,.09,-.16,.014],[0,.132,-.01,-.132,.008],
+          [0,.167,-.094,-.121,.002]], unitX, upper, 4);
         const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
         material.onBeforeCompile = (shader) => {
           shader.uniforms.waterTime = waterTime;
@@ -1295,17 +1441,22 @@
         const batch = new MeshBuilder();
         const back = color(0x7f7463);
         const belly = color(0xcab994);
-        const outline = [vec(0, 0.04, 0.81), vec(0.54, 0.02, 0.60), vec(1.17, -0.04, 0.31),
-          vec(1.52, 0.04, -0.23), vec(0.83, 0.01, -0.53), vec(0.30, 0.01, -0.59),
-          vec(0, 0.00, -0.76)];
         for (const side of [-1, 1]) {
-          for (let i = 0; i < outline.length - 1; i++) {
-            const a = outline[i].clone().multiply(vec(side, 1, 1));
-            const b = outline[i + 1].clone().multiply(vec(side, 1, 1));
-            const top = vec(0, 0.21, -0.08);
-            const underside = vec(0, -0.11, -0.06);
-            batch.triangle(top, side > 0 ? a : b, side > 0 ? b : a, back, shade(back, 0.79), shade(back, 0.88));
-            batch.triangle(underside, side > 0 ? b : a, side > 0 ? a : b, belly);
+          const stations = [[0,.80,-.77,.145],[.23,.74,-.69,.13],[.50,.59,-.54,.098],
+            [.78,.48,-.44,.077],[1.06,.31,-.40,.049],[1.31,.09,-.39,.027],[1.51,-.20,-.26,.009]];
+          let previous;
+          for (const [span, front, rear, thick] of stations) {
+            const ring=[];
+            for(let k=0;k<16;k++){
+              const angle=TAU*k/16;
+              ring.push(vec(side*span, .024*span + thick*Math.sin(angle),
+                lerp(rear,front,0.5+0.5*Math.cos(angle))));
+            }
+            if(previous) for(let k=0;k<16;k++){
+              const n=(k+1)%16;
+              batch.quad(previous[k],previous[n],ring[n],ring[k], k<8 ? back : belly);
+            }
+            previous=ring;
           }
           batch.shape(facet, vec(side * 0.20, 0.14, 0.43), vec(0.086, 0.055, 0.073), shade(back, 0.73));
         }
@@ -1321,6 +1472,10 @@
               transformed.y += pow(abs(position.x), 1.38) * 0.27 * sin(waterTime * 2.12 + position.z * 1.75);
             `);
         };
+        surfaceDetail(material, `
+          diffuseColor.rgb *= 0.91 + 0.14*sin(vSkin.x*19.0+vSkin.z*8.0)*sin(vSkin.z*12.0)
+            + 0.12*stipple(vSkin.xz*22.0);
+        `);
         const ray = new THREE.Mesh(batch.geometry(), material);
         scene.add(ray);
         return (t) => {
@@ -1334,23 +1489,38 @@
 
       function buildShark() {
         const batch = new MeshBuilder();
-        const upper = color(0x6e7566);
-        const lower = color(0xb4b8a1);
-        const fin = color(0x666b61);
-        fishBody(batch, [[-1.61, 0.015, 0.05, 0], [-1.31, 0.078, 0.10, 0], [-0.93, 0.138, 0.16, 0],
-          [-0.49, 0.22, 0.22, 0], [0.04, 0.29, 0.23, 0.015], [0.53, 0.28, 0.21, 0.01],
-          [1.0, 0.23, 0.153, -0.018], [1.38, 0.11, 0.081, -0.03], [1.5, 0.018, 0.027, -0.02]],
-        10, upper, lower, true);
-        batch.triangle(vec(0, 0.18, 0.34), vec(0, 0.61, -0.03), vec(0, 0.20, -0.50), fin);
-        batch.triangle(vec(0, 0.10, -0.94), vec(0, 0.32, -1.12), vec(0, 0.08, -1.34), fin);
-        batch.triangle(vec(0, -0.04, -1.47), vec(0, 0.61, -2.02), vec(0, 0.10, -1.83), fin);
-        batch.triangle(vec(0, -0.02, -1.47), vec(0, -0.36, -1.87), vec(0, -0.08, -1.67), shade(fin, 0.83));
-        for (const side of [-1, 1]) {
-          batch.triangle(vec(side * 0.18, -0.09, 0.42), vec(side * 0.82, -0.13, -0.44),
-            vec(side * 0.21, -0.09, -0.25), fin);
-          batch.shape(facet, vec(side * 0.204, 0.034, 1.02), vec(0.026, 0.034, 0.033), color(0x263a39));
+        const upper = color(0x829084);
+        const lower = color(0xe4dfc6);
+        const fin = color(0x7a8170);
+        fishBody(batch, [[-1.67,.012,.023,.03],[-1.38,.064,.085,.025],[-1.02,.117,.132,.005],
+          [-.60,.192,.205,0],[-.16,.278,.273,.015],[.31,.313,.277,.024],[.64,.302,.232,.014],
+          [.96,.247,.172,-.006],[1.22,.198,.115,-.028],[1.42,.104,.062,-.045],[1.49,.004,.009,-.051]],
+          24, upper, lower);
+        foil(batch, [[0,.19,.37,-.49,.085],[0,.31,.25,-.32,.065],[0,.49,.09,-.18,.044],
+          [0,.66,-.075,-.15,.019],[0,.69,-.135,-.144,.003]],unitX,fin);
+        foil(batch, [[0,.09,-.96,-1.34,.041],[0,.24,-1.10,-1.25,.026],[0,.31,-1.21,-1.23,.004]],unitX,fin);
+        foil(batch, [[0,.005,-1.38,-1.76,.061],[0,.19,-1.56,-1.82,.043],[0,.41,-1.76,-1.96,.025],
+          [0,.54,-1.91,-2.01,.012],[0,.61,-2.04,-2.055,.003]],unitX,fin);
+        foil(batch, [[0,0,-1.41,-1.72,.049],[0,-.17,-1.56,-1.79,.028],[0,-.31,-1.78,-1.82,.009],
+          [0,-.335,-1.82,-1.83,.003]],unitX,fin);
+        for (const side of [-1,1]) {
+          foil(batch, [[side*.235,-.067,.54,-.18,.070],[side*.41,-.095,.34,-.23,.055],
+            [side*.60,-.14,.12,-.32,.038],[side*.79,-.17,-.15,-.40,.018],
+            [side*.89,-.17,-.38,-.415,.004]],unitY,fin);
+          foil(batch, [[side*.14,-.089,-.52,-.81,.034],[side*.32,-.14,-.66,-.88,.022],
+            [side*.40,-.15,-.85,-.88,.004]],unitY,fin);
+          batch.shape(smallSphere,vec(side*.223,.043,1.02),vec(.045,.045,.058),color(0xc4ad72));
+          batch.shape(smallSphere,vec(side*.252,.045,1.025),vec(.019,.032,.038),color(0x14252a));
+          batch.shape(facet,vec(side*.241,.061,1.057),vec(.008,.009,.010),lower);
+          for(let i=0;i<5;i++){
+            const z=.41+i*.069, x=.304-i*.0034;
+            batch.tube([vec(side*(x-.014),.11,z),vec(side*(x+.005),.017,z-.027),
+              vec(side*(x-.030),-.086,z-.008)],.008,.0035,5,color(0x51584c));
+          }
+          batch.tube([vec(side*.222,-.086,1.001),vec(side*.171,-.115,1.163),
+            vec(side*.095,-.099,1.309),vec(side*.011,-.092,1.345)],.012,.005,6,color(0x55574d));
         }
-        const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+        const material = new THREE.MeshPhongMaterial({vertexColors:true, side:THREE.DoubleSide, shininess:18,specular:0x425252});
         material.onBeforeCompile = (shader) => {
           shader.uniforms.waterTime = waterTime;
           shader.vertexShader = shader.vertexShader
@@ -1361,7 +1531,16 @@
               transformed.x += tail * tail * 0.32 * sin(waterTime * 4.7 + position.z * 2.1);
             `);
         };
+        surfaceDetail(material, `
+          float height = vSkin.y;
+          float saddle = cos(vSkin.z * 12.5 + 1.7*sin(vSkin.z*4.2) + 0.8*cos(vSkin.x*11.0));
+          float dorsal = smoothstep(-0.045,0.11,height + 0.042*sin(vSkin.z*17.3));
+          float mask = 1.0 - smoothstep(0.91,1.31,vSkin.z);
+          float spots = stipple(vec2(vSkin.z*9.0 + height*2.3, height*14.0 + abs(vSkin.x)*5.0));
+          diffuseColor.rgb *= 1.0 - mask * dorsal * (0.49*smoothstep(0.02,0.75,saddle) + 0.28*spots);
+        `);
         const shark = new THREE.Mesh(batch.geometry(), material);
+        shark.name = "Leopard shark";
         scene.add(shark);
         return (t) => {
           const a = t * 0.13 + 1.21;
@@ -1371,7 +1550,7 @@
       }
 
       function buildJellies() {
-        const bellGeometry = new THREE.SphereGeometry(1, 16, 9, 0, TAU, 0, Math.PI * 0.54);
+        const bellGeometry = new THREE.SphereGeometry(1, 32, 12, 0, TAU, 0, Math.PI * 0.54);
         const bellMaterial = new THREE.MeshLambertMaterial({
           color: 0x9bdedc,
           emissive: 0x73c6cb,
@@ -1382,6 +1561,17 @@
           forceSinglePass: true,
           depthWrite: false
         });
+        const bellPos = bellGeometry.attributes.position;
+        for(let i=0;i<bellPos.count;i++){
+          const x=bellPos.getX(i), z=bellPos.getZ(i), y=bellPos.getY(i);
+          bellPos.setY(i,y + 0.048*Math.cos(12*Math.atan2(z,x))*(1-THREE.MathUtils.smoothstep(y,-0.13,0.28)));
+        }
+        bellGeometry.computeVertexNormals();
+        surfaceDetail(bellMaterial, `
+          float canals = pow(abs(cos(8.0*atan(vSkin.z,vSkin.x)+0.39*sin(vSkin.y*5.0))),26.0);
+          diffuseColor.a *= 0.42 + 0.54*canals + 0.54*(1.0-smoothstep(-0.1,0.1,vSkin.y));
+          diffuseColor.rgb += vec3(0.16,0.30,0.28)*canals;
+        `);
         const bells = [];
         const jellies = [];
         const bases = [[-9.5, -4.2, -9.4], [-7.4, -3.9, -11.6], [-11.9, -3.5, -11.2]];
@@ -1397,11 +1587,33 @@
             lines.push(...strandPoint(row / 6).toArray(), ...strandPoint((row + 1) / 6).toArray());
           }
         }
+        for (let lobe=0;lobe<4;lobe++) {
+          const angle=lobe*TAU/4;
+          let previous;
+          for(let i=0;i<=15;i++){
+            const a=lerp(-2.5,2.5,i/15)+angle;
+            const point=vec(.090*Math.cos(angle)+.055*Math.cos(a),.124,
+              .09*Math.sin(angle)+.052*Math.sin(a));
+            if(previous) lines.push(...previous.toArray(),...point.toArray());
+            previous=point;
+          }
+        }
         const tentacleGeometry = new THREE.BufferGeometry();
         tentacleGeometry.setAttribute("position", new THREE.Float32BufferAttribute(lines, 3));
         const tentacleMaterial = new THREE.LineBasicMaterial({
           color: 0xbbdbe0, transparent: true, opacity: 0.40, depthWrite: false
         });
+        tentacleMaterial.onBeforeCompile = shader => {
+          shader.uniforms.waterTime=waterTime;
+          shader.vertexShader=shader.vertexShader
+            .replace("#include <common>", "#include <common>\nuniform float waterTime;")
+            .replace("#include <begin_vertex>", `
+              #include <begin_vertex>
+              float reach=max(0.0,-position.y);
+              transformed.x += reach*0.17*sin(waterTime*1.5 + reach*5.0 + position.z*14.0);
+              transformed.z += reach*0.10*cos(waterTime*1.1 + reach*4.0 + position.x*10.0);
+            `);
+        };
         for (let i = 0; i < bases.length; i++) {
           const jelly = new THREE.Group();
           const bell = new THREE.Mesh(bellGeometry, bellMaterial);
@@ -1438,13 +1650,35 @@
             points.push(vec(Math.cos(turn) * reach, 0.10 + 0.18 * Math.sin(t * 4.8 + i) * t,
               Math.sin(turn) * reach));
           }
-          batch.tube(points, 0.108, 0.016, 5, shade(mantle, range(0.71, 1.08)));
+          for(let j=1;j<points.length-1;j++) {
+            const r=0.051*(1-j/11);
+            for(const side of [-1,1]){
+              const sucker=points[j].clone().add(vec(Math.sin(a)*side*r,-r*0.76,Math.cos(a)*side*r));
+              batch.shape(eyeGeometry,sucker,vec(r*.69,r*.44,r*.70),color(0xd09b85));
+            }
+          }
+          batch.tube(points, 0.108, 0.012, 9, shade(mantle, range(0.71, 1.08)));
         }
         for (const side of [-1, 1]) {
           batch.shape(facet, vec(side * 0.21, 0.46, 0.259), vec(0.076, 0.070, 0.059), color(0xe2b071));
           batch.shape(facet, vec(side * 0.21, 0.46, 0.309), vec(0.048, 0.016, 0.019), color(0x402b2c));
         }
-        const octopus = new THREE.Mesh(batch.geometry(), scenery);
+        const skin = scenery.clone();
+        skin.onBeforeCompile = shader => {
+          shader.uniforms.waterTime=waterTime;
+          shader.vertexShader=shader.vertexShader
+            .replace("#include <common>", "#include <common>\nuniform float waterTime;")
+            .replace("#include <begin_vertex>", `
+              #include <begin_vertex>
+              float reach=smoothstep(0.30,0.95,length(position.xz));
+              float wave=waterTime*1.17 + atan(position.z,position.x)*2.0 + length(position.xz)*4.0;
+              transformed.y+=reach*.115*sin(wave);
+              transformed.xz+=vec2(sin(wave*.9),cos(wave))*reach*.062;
+            `);
+        };
+        surfaceDetail(skin,`diffuseColor.rgb *= 0.86 + 0.23*stipple(vSkin.xz*26.0+vSkin.y*14.0)
+            + 0.14*sin(vSkin.x*20.0+vSkin.y*11.0)*cos(vSkin.z*16.0);`);
+        const octopus = new THREE.Mesh(batch.geometry(), skin);
         octopus.rotation.y = -0.67;
         ship.add(octopus);
         return (t) => {
@@ -1463,9 +1697,9 @@
         for (const [x, z] of urchinPlaces) {
           const p = vec(x, ledgeHeight(x, z) + 0.075, z);
           batch.shape(facet, p, vec(0.18, 0.13, 0.18), urchin);
-          for (let i = 0; i < 24; i++) {
-            const turn = i * 2.4;
-            const height = 1 - i / 27;
+          for (let i = 0; i < 42; i++) {
+            const turn = i * 2.39996;
+            const height = 1 - i / 44;
             const radial = Math.sqrt(1 - height * height);
             const dir = vec(Math.cos(turn) * radial, height, Math.sin(turn) * radial);
             const tip = p.clone().addScaledVector(dir, range(0.21, 0.31));
@@ -1476,15 +1710,25 @@
         for (const [index, [x, z]] of [[-18.4, -8.5], [-12.9, -9.0], [-9.25, -7.0],
           [-16.8, 8.9], [-5.4, -11.0], [13.6, -4.7]].entries()) {
           const p = vec(x, ledgeHeight(x, z) + 0.12, z);
-          const tips = [];
-          const angle = range(0, TAU);
-          for (let i = 0; i < 10; i++) {
-            const a = angle + i * TAU / 10;
-            const extent = i % 2 === 0 ? range(0.25, 0.39) : 0.107;
-            tips.push(p.clone().add(vec(Math.cos(a) * extent, i % 2 === 0 ? -0.065 : 0, Math.sin(a) * extent)));
-          }
-          for (let i = 0; i < tips.length; i++) {
-            batch.triangle(p.clone().add(vec(0, 0.075, 0)), tips[i], tips[(i + 1) % tips.length], stars[index % stars.length]);
+          const turn = range(0, TAU);
+          const top = p.clone().add(vec(0,.057,0));
+          const tint = stars[index % stars.length];
+          for(let arm=0;arm<5;arm++){
+            const angle = turn+arm*TAU/5;
+            const axis=vec(Math.cos(angle),0,Math.sin(angle)), side=vec(-axis.z,0,axis.x);
+            let previous;
+            for(let j=0;j<=5;j++){
+              const t=j/5;
+              const center=p.clone().addScaledVector(axis,.066+t*(.227+.035*Math.sin(arm*3.8)))
+                .addScaledVector(side,.048*t*t*Math.sin(arm+index));
+              center.y-=.052*t;
+              const w=.074*(1-t)+.009;
+              const row=[center.clone().addScaledVector(side,-w),center.clone().add(vec(0,w*.72,0)),
+                center.clone().addScaledVector(side,w)];
+              if(previous) for(let k=0;k<2;k++) batch.quad(previous[k],row[k],row[k+1],previous[k+1],tint);
+              else batch.triangle(row[0],top,row[2],tint);
+              previous=row;
+            }
           }
         }
         scene.add(new THREE.Mesh(batch.geometry(), scenery));
@@ -1506,7 +1750,17 @@
           }
         }
         const lobster = new THREE.Group();
-        lobster.add(new THREE.Mesh(body.geometry(), scenery));
+        for(const side of [-1,1]){
+          for(let i=0;i<6;i++){
+            const z=0.20-i*.065;
+            body.tube([vec(side*.122,.196,z),vec(side*.178,.24,z+.027)],.019,.002,5,color(0xc29a76));
+          }
+        }
+        const carapace = surfaceDetail(scenery.clone(), `
+          diffuseColor.rgb *= 0.84+0.26*stipple(vSkin.xz*48.0+vSkin.y*13.0)
+            + 0.12*smoothstep(.52,1.0,sin(vSkin.z*77.0));
+        `);
+        lobster.add(new THREE.Mesh(body.geometry(), carapace));
         lobster.position.set(9.53, seabed(9.53, -1.22) + 0.02, -1.22);
         lobster.rotation.y = 1.02;
         const feelers = [];
@@ -1575,18 +1829,16 @@
             [-0.365, 0.008, 0.012, 0], [-0.22, 0.040, 0.054 * height, 0],
             [-0.045, 0.063, 0.077 * height, 0.003], [0.15, 0.055, 0.067 * height, 0.004],
             [0.31, 0.003, 0.017, -0.005]
-          ], 6, back, body);
-          const tail = vec(0, 0, -0.357);
-          const fork = vec(0, 0.008, -0.474);
-          batch.triangle(tail, vec(0, 0.104 * height, -0.546), fork, fin);
-          batch.triangle(tail, fork, vec(0, -0.096 * height, -0.529), shade(fin, 0.88));
-          batch.triangle(vec(0, 0.066 * height, 0.11), vec(0, 0.143 * height, -0.065),
-            vec(0, 0.051 * height, -0.18), back, fin, back);
-          for (const side of [-1, 1]) {
-            batch.triangle(vec(side * 0.043, 0.011, 0.075), vec(side * 0.115, -0.049, -0.077),
-              vec(side * 0.052, -0.027, -0.097), fin, shade(fin, 0.70), fin);
-            batch.quad(vec(side * 0.044, 0.032, 0.221), vec(side * 0.049, 0.046, 0.203),
-              vec(side * 0.054, 0.030, 0.185), vec(side * 0.048, 0.015, 0.205), eye);
+          ], isReefFish ? 16 : 10, back, body);
+          foil(batch, [[0,0.051*height,0.16,-0.212,0.020],[0,0.091*height,0.099,-0.179,0.014],
+            [0,0.12*height,-0.025,-0.136,0.007],[0,0.126*height,-0.088,-0.096,0.002]],unitX,back,4);
+          for (const side of [-1,1]) {
+            foil(batch, [[0,0,-.34,-.46,.01],[0,side*.048*height,-.407,-.494,.007],
+              [0,side*.095*height,-.52,-.535,.002]],unitX,fin,4);
+            foil(batch, [[side*.039,-.003,.102,.039,.013],[side*.083,-.006,.081,-.016,.011],
+              [side*.133,-.023,.025,-.062,.006],[side*.145,-.032,-.024,-.049,.002]],unitY,fin,4);
+            batch.shape(eyeGeometry,vec(side*.041,.024*height,.204),vec(.009,.020,.021),fin);
+            batch.shape(eyeGeometry,vec(side*.048,.025*height,.207),vec(.006,.013,.014),eye);
           }
           const geometry = batch.geometry();
           const phases = Float32Array.from({ length: count }, (_, index) => index * 2.39996 % TAU);
@@ -1604,6 +1856,9 @@
               .replace("#include <begin_vertex>", `
                 #include <begin_vertex>
                 vFish = position;
+                float pectoral = smoothstep(0.063, 0.14, abs(position.x));
+                transformed.y += pectoral * 0.052 * sin(waterTime * 7.1 + swimPhase + sign(position.x)*1.3);
+                transformed.z += pectoral * 0.032 * cos(waterTime * 7.1 + swimPhase + sign(position.x)*1.3);
                 float tail = max(0.0, 0.23 - position.z);
                 float gait = waterTime * (8.2 + 1.9 * sin(swimPhase)) + swimPhase;
                 transformed.x += tail * tail * 0.23 * sin(gait + position.z * 8.8);
@@ -1616,7 +1871,10 @@
                   float flank = smoothstep(0.027, 0.057, abs(vFish.x));
                   float bars = smoothstep(0.42, 0.81, sin(vFish.z * 30.0 + vFish.y * 6.5)) * flank;
                   float tail = (1.0 - smoothstep(-0.47, -0.34, vFish.z)) * 0.72;
-                  diffuseColor.rgb *= 1.0 - 0.43 * bars;
+                  float scale = cos(vFish.z*189.0 + 2.4*cos(vFish.y*198.0));
+                  diffuseColor.rgb *= 1.0 - 0.43 * bars + 0.085*flank*scale;
+                  float stripe = exp(-pow(abs(vFish.y-0.013-0.011*sin(vFish.z*10.0))*94.0,2.0));
+                  diffuseColor.rgb += vec3(0.14,0.13,0.07)*stripe*flank;
                   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.84, 0.49, 0.066), tail);
                 `);
             }
@@ -1856,6 +2114,13 @@
           }
           batch.tube([vec(0, 0.010, -0.82), vec(0.012, 0.018, -1.15), vec(0.03, 0.026, -1.59),
             vec(0.071, 0.047, -2.09), vec(0.09, 0.098, -2.56)], 0.046, 0.007, 6, slate);
+          for(const side of [-1,1]) {
+            for(let i=0;i<5;i++){
+              const z=0.61-i*0.112;
+              batch.tube([vec(side*.105,-.108,z+.013),vec(side*.22,-.103,z-.024),
+                vec(side*.33,-.091,z-.041)],.014,.005,5,slate);
+            }
+          }
           return batch.geometry();
         }
 
@@ -1890,6 +2155,11 @@
               `)
               .replace("#include <begin_vertex>", "#include <begin_vertex>\ntransformed.y += bend;");
           };
+          surfaceDetail(material, `
+            float speckle = stipple(vSkin.xz * vec2(7.5,8.3));
+            float belly = 1.0 - smoothstep(-0.04, 0.02, vSkin.y);
+            diffuseColor.rgb *= 1.0 - speckle * belly * (1.0-smoothstep(0.65,1.30,abs(vSkin.x))) * 0.5;
+          `);
           const manta = new THREE.Group();
           manta.name = name;
           manta.scale.setScalar(size);
@@ -1909,6 +2179,7 @@
           batch.shape(carapace, vec(0, 0.015, 0), vec(0.574, 0.323, 0.824), shell);
           batch.shape(smallSphere, vec(0, -0.054, 0.013), vec(0.569, 0.112, 0.808), color(0xa8a176));
 
+          const shellBands = [];
           const cells = [[0, -0.72], [0, -0.38], [0, 0], [0, 0.38], [0, 0.72]];
           for (const side of [-1, 1]) {
             for (const z of [-0.65, -0.22, 0.22, 0.62]) cells.push([side * 0.51, z]);
@@ -1946,6 +2217,7 @@
             const plate = shade(scute, lerp(0.70, 1.13, driftRandom())).lerp(shell, Math.abs(x) * 0.38);
             for (let i = 0; i < rim.length; i++) {
               const next = (i + 1) % rim.length;
+              shellBands.push([batch.positions.length / 3, [0,.49,.49,.49,.49,1,.49,1,1]]);
               batch.triangle(dome(center), dome(midway[next]), dome(midway[i]), shade(plate, 1.10), plate, plate);
               batch.quad(dome(midway[i]), dome(midway[next]), dome(rim[next]), dome(rim[i]), plate);
             }
@@ -1968,9 +2240,30 @@
           batch.tube([vec(0, -0.09, -0.71), vec(0.015, -0.106, -0.858), vec(0.053, -0.109, -1.02)],
             0.051, 0.009, 6, skin);
 
+          for (const side of [-1,1]) {
+            batch.tube([vec(side*.14,-.039,.925),vec(side*.112,-.057,.985),
+              vec(side*.071,-.049,1.075),vec(side*.019,-.054,1.105)],.008,.004,5,dark);
+          }
           const turtle = new THREE.Group();
           turtle.name = "Sea turtle";
-          turtle.add(new THREE.Mesh(batch.geometry(), scenery));
+          const turtleBase = scenery.clone();
+          turtleBase.onBeforeCompile = shader => {
+            shader.vertexShader = shader.vertexShader.replace("#include <common>",
+              "#include <common>\nattribute float plateRadius; varying float vPlate;")
+              .replace("#include <begin_vertex>", "#include <begin_vertex>\nvPlate = plateRadius;");
+            shader.fragmentShader = shader.fragmentShader.replace("#include <common>",
+              "#include <common>\nvarying float vPlate;");
+          };
+          const turtleSkin = surfaceDetail(turtleBase, `
+            float ridge = sin(vPlate*33.0 + 0.54*sin(vSkin.x*30.0+vSkin.z*19.0));
+            float scales = stipple(vec2(vSkin.z*48.0,vSkin.y*47.0+abs(vSkin.x)*18.0));
+            diffuseColor.rgb *= vPlate >= 0.0 ? 0.98+0.060*ridge : 1.0-0.22*scales;
+          `);
+          const shellGeometry = batch.geometry();
+          const plateRadius = new Float32Array(shellGeometry.attributes.position.count).fill(-1);
+          for (const [start, radii] of shellBands) plateRadius.set(radii, start);
+          shellGeometry.setAttribute("plateRadius",new THREE.BufferAttribute(plateRadius,1));
+          turtle.add(new THREE.Mesh(shellGeometry, turtleSkin));
           const swimmerSkin = scenery.clone();
           const strokePhase = { value: 0 };
           const strokeEffort = { value: 1 };
@@ -2002,18 +2295,8 @@
             const stations = [[0, 0.14, -0.11, 0.00, 0.052], [0.16, 0.17, -0.15, 0.001, 0.065],
               [0.37, 0.14, -0.22, -0.023, 0.048], [0.61, 0.059, -0.33, -0.054, 0.026],
               [0.81, -0.14, -0.392, -0.086, 0.019], [0.98, -0.339, -0.356, -0.100, 0.006]];
-            const rows = stations.map(([x, front, rear, y, thickness]) => {
-              const center = lerp(front, rear, 0.47);
-              return [vec(side * x, y, front), vec(side * x, y + thickness, center),
-                vec(side * x, y, rear), vec(side * x, y - thickness * 0.74, center)];
-            });
-            for (let i = 1; i < rows.length; i++) {
-              for (let j = 0; j < 4; j++) {
-                const next = (j + 1) % 4;
-                const tint = shade(skin, (j < 2 ? 0.91 : 1.09) + 0.10 * Math.sin(i * 4.7));
-                fin.quad(rows[i - 1][j], rows[i][j], rows[i][next], rows[i - 1][next], tint);
-              }
-            }
+            foil(fin, stations.map(([x, front, rear, y, thickness]) =>
+              [side*x,y,front,rear,thickness]),unitY,skin);
             const geometry = fin.geometry();
             const front = new THREE.Mesh(geometry, swimmerSkin);
             front.position.set(side * 0.423, -0.054, 0.396);
