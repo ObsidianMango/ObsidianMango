@@ -1114,7 +1114,100 @@ function startGame() {
     return {hinge, end};
   }
 
-  function person(jacketColor, pantsColor, skinColor, hat, possessed = false) {
+  const felt = standard(0x26252b, .92);
+  const hatBand = standard(0x45404b, .78);
+  const brimGeometry = new THREE.LatheGeometry([
+    [.132, -.014], [.233, -.016], [.259, -.009], [.268, .002], [.266, .013],
+    [.251, .016], [.224, .009], [.151, .008], [.132, -.014]
+  ].map(([radius, height]) => new THREE.Vector2(radius, height)), 32);
+  const crownGeometry = new THREE.LatheGeometry([
+    [0, 0], [.156, 0], [.158, .022], [.153, .117], [.143, .159],
+    [.122, .181], [.083, .187], [0, .181]
+  ].map(([radius, height]) => new THREE.Vector2(radius, height)), 32);
+  const bandGeometry = new THREE.CylinderGeometry(1, 1, 1, 32, 1, true);
+  const knitDome = new THREE.SphereGeometry(1, 24, 9, 0, TAU, 0, Math.PI / 2);
+  const knitRim = new THREE.TorusGeometry(1, .038, 5, 28);
+  const knitPattern = paint(112, 96, (pen, width, height) => {
+    pen.fillStyle = '#404a5a';
+    pen.fillRect(0, 0, width, height);
+    pen.lineWidth = 1;
+    for (let y = 4; y < height; y += 6) {
+      for (let x = 2; x < width; x += 5) {
+        const shift = Math.floor(y / 6) % 2 ? 2 : 0;
+        pen.beginPath();
+        pen.moveTo(x + shift, y - 2);
+        pen.lineTo(x + shift + 2, y + 1);
+        pen.lineTo(x + shift + 4, y - 2);
+        pen.strokeStyle = '#64738a';
+        pen.stroke();
+      }
+    }
+  });
+  const knit = standard(0x8794aa, .94);
+  knit.map = knitPattern;
+  const knitEdge = standard(0x505970, .93);
+  const darkHair = standard(0x392b25, .87);
+  const softHair = standard(0x514035, .91);
+
+  function addSidelock(head, side, length, coils, material) {
+    const points = Array.from({length: 34}, (_, index) => {
+      const t = index / 33;
+      const angle = t * TAU * coils;
+      const width = Math.sin(t * Math.PI) * .015 + .006;
+      return vector(side * (.122 + t * .024 + width * Math.sin(angle)),
+        .166 - t * length, .074 + width * Math.cos(angle) + t * .012);
+    });
+    const curl = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 34, .014, 7, false);
+    // Taper the ends while keeping the centerline of the corkscrew visible in shadow.
+    const coordinates = curl.getAttribute('position');
+    const centers = curl.parameters.path.getSpacedPoints(34);
+    for (let i = 0; i < coordinates.count; i++) {
+      const section = Math.floor(i / 8);
+      const center = centers[section];
+      const taper = lerp(1.08, .42, Math.pow(section / 34, 2.3));
+      coordinates.setXYZ(i, lerp(center.x, coordinates.getX(i), taper),
+        lerp(center.y, coordinates.getY(i), taper), lerp(center.z, coordinates.getZ(i), taper));
+    }
+    const lock = primitive(curl, material, head, 0, 0, 0, 1, 1, 1);
+    lock.name = 'Payot';
+  }
+
+  function addResidentAttire(head, upper, jacket, style) {
+    const brim = style === 'felt';
+    const hair = brim ? darkHair : softHair;
+    sphere(head, hair, 0, .188, -.041, .137, .071, .105);
+    for (const side of [-1, 1]) {
+      sphere(head, hair, side * .114, .155, .022, .029, .047, .046);
+      addSidelock(head, side, (brim ? .271 : .171) + side * .01, (brim ? 3.1 : 2.1) + side * .14, hair);
+    }
+    if (brim) {
+      const hat = new THREE.Group();
+      hat.name = 'Felt hat';
+      hat.position.set(0, .226, -.014);
+      hat.rotation.set(-.04, .17, -.045);
+      head.add(hat);
+      primitive(brimGeometry, felt, hat, 0, 0, 0, 1, 1, .87);
+      primitive(crownGeometry, felt, hat, 0, .006, 0, 1, 1, .89);
+      primitive(bandGeometry, hatBand, hat, 0, .037, 0, .161, .029, .145);
+      sphere(head, hair, 0, -.058, .084, .106, .079, .067);
+    } else {
+      const cap = new THREE.Group();
+      cap.name = 'Knitted kippah';
+      cap.position.set(0, .225, -.026);
+      cap.rotation.x = -.10;
+      head.add(cap);
+      primitive(knitDome, knit, cap, 0, 0, 0, .126, .063, .116);
+      const seam = primitive(knitRim, knitEdge, cap, 0, .001, 0, .123, .114, .115);
+      seam.rotation.x = -Math.PI / 2;
+    }
+    block(upper, jacket, 0, -.209, -.014, .441, .328, .299);
+    for (const side of [-1, 1]) {
+      const lapel = block(upper, jacket, side * .077, .326, .161, .071, .231, .028);
+      lapel.rotation.z = side * -.29;
+    }
+  }
+
+  function person(jacketColor, pantsColor, skinColor, attire, possessed = false) {
     const jacket = standard(jacketColor);
     const pants = standard(pantsColor);
     const skin = possessed ? dullFlesh : standard(skinColor, .74);
@@ -1134,21 +1227,20 @@ function startGame() {
       sphere(head, possessed ? whiteEye : hollowEye, x, .083, .12, .024, .014, .011));
     sphere(head, skin, 0, .044, .128, .032, .044, .04);
     block(head, hollowEye, 0, -.022, .125, .082, .016, .018);
-    if (hat === 'brim') {
-      primitive(cylinderGeometry, jacket, head, 0, .228, -.013, .21, .027, .17);
-      primitive(capGeometry, jacket, head, 0, .276, -.015, .132, .105, .123);
+    if (attire) {
+      addResidentAttire(head, upper, jacket, attire);
+    } else {
+      sphere(head, pants, 0, .193, -.029, .137, .07, .116);
     }
-    if (hat === 'knit') sphere(head, jacket, 0, .224, -.021, .114, .052, .111);
-    if (!hat) sphere(head, pants, 0, .193, -.029, .137, .07, .116);
     if (possessed) block(upper, standard(0xb09c5c), .132, .3, .143, .09, .038, .026);
     const arms = [-1, 1].map((side) => limb(upper, side * .251, .395, 0, .293, .073, jacket, skin));
     const legs = [-1, 1].map((side) => limb(root, side * .121, .81, 0, .387, .096, pants, bootMaterial, true));
     return {root, upper, head, eyes, arms, legs};
   }
 
-  function poseStanding(model, waving, time) {
+  function poseStanding(model, waving, time, look = 0) {
     model.upper.rotation.x = -.05 + Math.sin(time * 3) * .026;
-    model.head.rotation.y = Math.sin(time * 1.2) * .13;
+    model.head.rotation.y = look + Math.sin(time * 1.2) * .13;
     model.arms[0].hinge.rotation.set(waving ? -1.68 : -.18, 0, waving ? -.63 : -.09);
     model.arms[0].end.rotation.x = waving ? -.44 + Math.sin(time * 18) * .46 : -.08;
     model.arms[1].hinge.rotation.set(-.14, 0, .14);
@@ -1157,14 +1249,16 @@ function startGame() {
 
   const shelterMaterial = standard(0x343c35, .88);
   const shelterSteel = standard(0x68716a, .53, .24);
+  const shelterLampColor = 0xffdfae;
+  const shelterLamp = new THREE.MeshBasicMaterial({color: shelterLampColor});
   const shelters = [];
-  function makeShelter(x, z, yaw, jacket, hat, line) {
+  function makeShelter(x, z, yaw, jacket, attire, line, hingeSide = 1) {
     const y = floorAt(x, z);
     const root = new THREE.Group();
     root.position.set(x, y, z);
     root.rotation.y = yaw;
     scene.add(root);
-    const resident = person(jacket, 0x333431, 0xb7a48b, hat);
+    const resident = person(jacket, 0x333431, 0xb7a48b, attire);
     resident.root.position.set(0, .015, .27);
     root.add(resident.root);
     block(root, shelterMaterial, 0, 1.09, .028, 1.86, 2.2, .14);
@@ -1173,23 +1267,31 @@ function startGame() {
     }
     block(root, shelterSteel, 0, 2.203, .33, 1.82, .16, .7);
     const hinge = new THREE.Group();
-    hinge.position.set(-.824, 0, .633);
+    hinge.position.set(-.824 * hingeSide, 0, .633);
     root.add(hinge);
-    block(hinge, shelterMaterial, .825, 1.076, 0, 1.65, 2.15, .104);
+    block(hinge, shelterMaterial, .825 * hingeSide, 1.076, 0, 1.65, 2.15, .104);
     for (const yOffset of [.46, 1.17, 1.71]) {
-      block(hinge, coatWood, .825, yOffset, .093, 1.84, .22, .113);
-      for (const xOffset of [.08, 1.34]) block(hinge, shelterSteel, xOffset, yOffset, .166, .052, .047, .022);
+      block(hinge, coatWood, .825 * hingeSide, yOffset, .093, 1.84, .22, .113);
+      for (const xOffset of [.08, 1.34]) {
+        block(hinge, shelterSteel, xOffset * hingeSide, yOffset, .166, .052, .047, .022);
+      }
     }
-    block(hinge, shelterSteel, 1.432, 1.05, .114, .068, .242, .071);
+    block(hinge, shelterSteel, 1.432 * hingeSide, 1.05, .114, .068, .242, .071);
     const target = {x: x + Math.sin(yaw) * 1.3, z: z + Math.cos(yaw) * 1.3};
-    shelters.push({root, resident, hinge, x, z, line, target, phase: 'open', timer: 0, angle: -1.38});
+    let lamp = null;
+    if (attire) {
+      block(root, shelterSteel, .84, 1.99, .671, .16, .22, .164);
+      block(root, shelterLamp, .84, 1.993, .76, .1, .129, .028);
+      lamp = root.localToWorld(vector(.53, 1.95, .985));
+    }
+    shelters.push({root, resident, hinge, hingeSide, x, z, line, target, lamp, phase: 'open', timer: 0, angle: -1.38});
     if (Math.abs(Math.sin(yaw)) > .5) {
       obstacles.push([Math.min(x, x + Math.sin(yaw) * .79), Math.max(x, x + Math.sin(yaw) * .79),
         z - .88, z + .88]);
     }
   }
-  makeShelter(8.65, -.91, -Math.PI / 2, 0x262b2d, 'knit', '“Keep moving.”');
-  makeShelter(2.94, -17.69, Math.PI / 2, 0x333332, 'brim', '“Get away from the door.”');
+  makeShelter(8.65, -.91, -Math.PI / 2, 0x26262d, 'felt', '“Keep moving.”');
+  makeShelter(2.94, -17.69, Math.PI / 2, 0x2c2e35, 'kippah', '“Get away from the door.”', -1);
   makeShelter(30.15, 5.64, -Math.PI / 2, 0x343a36, '', '“Get back!”');
 
   const crackedFace = paint(192, 160, (pen, w, h) => {
@@ -1550,7 +1652,7 @@ function startGame() {
   handRig.add(gripLight);
 
   const powers = [
-    {name: 'Light of Christ', dot: '†', color: '#ffe6b3', detail: 'Hold on chalk or a pursuer', cooldown: 0},
+    {name: 'Light of Christ', dot: '†', color: '#ffe6b3', detail: 'Hold on chalk or white eyes', cooldown: 0},
     {name: 'Peace, Be Still', dot: 'Ⅱ', color: '#86cfff', detail: 'Stop nearby pursuers', cooldown: 7},
     {name: 'Drive Them Out', dot: '↟', color: '#ffa95e', detail: 'Push back pursuers and rats', cooldown: 5.5},
     {name: 'Let There Be Light', dot: '☼', color: '#ffee9f', detail: 'Light the way for a moment', cooldown: 7},
@@ -2790,7 +2892,8 @@ function startGame() {
       state.gateOpen = true;
       powers[6].readyAt = 0;
       gatePlaque.visible = false;
-      say(touchControls ? 'Gate open. Drop a ward on the tracks.' : 'Gate open. Press Q for a ward on the tracks.', 4.7);
+      say(touchControls ? 'Gate open. Run, then tap WARD if the pack closes in.' :
+        'Gate open. Sprint, then press Q if the pack closes in.', 4.7);
       ratGroups[0].last = -99;
       ratGroups[0].first = state.time + 4.5;
       ratGroups[4].last = state.time;
@@ -2841,7 +2944,7 @@ function startGame() {
         clearLine(shelter.target.x, shelter.target.z, player.x, player.z, .04);
       if (shelter.phase === 'open' && close && state.phase === 'playing') {
         shelter.phase = 'shoo';
-        shelter.timer = state.time + .74;
+        shelter.timer = state.time + (shelter.lamp ? 1.6 : .74);
         if (!state.gateOpen) say(shelter.line, 1.65);
       }
       if (shelter.phase === 'shoo' && state.time >= shelter.timer) {
@@ -2857,9 +2960,22 @@ function startGame() {
       } else {
         shelter.angle = lerp(shelter.angle, -1.42, Math.min(1, dt * 16));
       }
-      shelter.hinge.rotation.y = shelter.angle;
-      shelter.resident.root.visible = shelter.angle < -.23;
-      poseStanding(shelter.resident, shelter.phase === 'shoo', state.time);
+      shelter.hinge.rotation.y = shelter.angle * shelter.hingeSide;
+      const resident = shelter.resident;
+      const waving = shelter.phase === 'shoo';
+      resident.root.visible = shelter.angle < -.23;
+      let look = 0;
+      if (shelter.lamp) {
+        const bearing = Math.atan2(player.x - shelter.x, player.z - shelter.z) - shelter.root.rotation.y;
+        const towardPlayer = Math.atan2(Math.sin(bearing), Math.cos(bearing));
+        look = clamp(towardPlayer, -.61, .61);
+        const turn = Math.min(1, dt * 8);
+        const front = waving ? .466 : shelter.phase === 'open' ? .34 : .27;
+        resident.root.position.z = lerp(resident.root.position.z, front, turn);
+        resident.root.rotation.y = lerp(resident.root.rotation.y, look * .48, turn);
+        look *= .52;
+      }
+      poseStanding(resident, waving, state.time, look);
     }
   }
 
@@ -3323,7 +3439,7 @@ function startGame() {
       hint = state.selected !== 0 ? (touchControls ? 'Choose Light of Christ' : 'Press 1 for Light of Christ') :
         on ? 'Breaking the circle…' : touchControls ? 'Hold CAST on the chalk' : 'Hold F on the chalk';
     } else if (enemy && state.selected === 0) {
-      hint = on ? 'Breaking possession…' : touchControls ? 'Hold CAST to free them' : 'Hold F to free them';
+      hint = on ? 'Breaking possession…' : touchControls ? 'Hold CAST to break possession' : 'Hold F to break possession';
     }
     ui.hint.hidden = !hint;
     if (ui.hint.textContent !== hint) ui.hint.textContent = hint;
@@ -3372,6 +3488,12 @@ function startGame() {
       if (d < 10.8) {
         closestLights.push({...emergency, d: d + (dark ? 0 : 2.6), power: 2.1 + darkness * 9.2});
       }
+    }
+    for (const shelter of shelters) {
+      if (!shelter.lamp || !shelter.resident.root.visible) continue;
+      const {x, y, z} = shelter.lamp;
+      const d = distance(x, z, player.x, player.z);
+      if (d < 5) closestLights.push({x, y, z, d, color: shelterLampColor, power: 1.65 * clamp(5 - d, 0, 1)});
     }
     closestLights.sort((a, b) => a.d - b.d);
     ambientFixtures.forEach((light, index) => {
