@@ -1526,6 +1526,594 @@
         };
       }
 
+      function buildAddedWildlife() {
+        const wildlife = new THREE.Group();
+        wildlife.name = "Added wildlife";
+        scene.add(wildlife);
+        const transform = new THREE.Object3D();
+        transform.rotation.order = "YXZ";
+        const slot = new THREE.Vector3();
+        const smoothstep = THREE.MathUtils.smoothstep;
+        let wildlifeSeed = 3167443;
+        let lastTime = 0;
+
+        function driftRandom() {
+          wildlifeSeed = (Math.imul(wildlifeSeed, 1664525) + 1013904223) >>> 0;
+          return wildlifeSeed / 4294967296;
+        }
+
+        function turnAngle(from, to) {
+          return THREE.MathUtils.euclideanModulo(to - from + Math.PI, TAU) - Math.PI;
+        }
+
+        function swimmer(position, yaw) {
+          return { position: position.clone(), yaw, speed: 0, lift: 0, pitch: 0, bank: 0 };
+        }
+
+        // The models face +Z. Steering limits the yaw rate and banks into the turn.
+        function steer(animal, heading, depth, speed, turnLimit, dt) {
+          const turn = clamp(turnAngle(animal.yaw, heading) * 2.8, -turnLimit, turnLimit);
+          const ease = 1 - Math.exp(-3.0 * dt);
+          animal.yaw += turn * dt;
+          animal.speed = lerp(animal.speed, speed, ease);
+          animal.lift = lerp(animal.lift, clamp((depth - animal.position.y) * 1.5, -0.7, 0.7), ease);
+          animal.pitch = lerp(animal.pitch, -Math.atan2(animal.lift, Math.max(0.75, speed)) * 0.58, ease);
+          animal.bank = lerp(animal.bank, clamp(-turn * 0.21, -0.40, 0.40), ease);
+          animal.position.x += Math.sin(animal.yaw) * animal.speed * dt;
+          animal.position.z += Math.cos(animal.yaw) * animal.speed * dt;
+          animal.position.y += animal.lift * dt;
+        }
+
+        function makeFish(count, isReefFish) {
+          const batch = new MeshBuilder();
+          const back = color(isReefFish ? 0xc1cebe : 0x7f9f9f);
+          const body = color(isReefFish ? 0xfff7dd : 0xe3eeec);
+          const fin = color(isReefFish ? 0xead9a5 : 0xb8cacc);
+          const eye = color(0x1b343f);
+          const height = isReefFish ? 1.65 : 1;
+          fishBody(batch, [
+            [-0.365, 0.008, 0.012, 0], [-0.22, 0.040, 0.054 * height, 0],
+            [-0.045, 0.063, 0.077 * height, 0.003], [0.15, 0.055, 0.067 * height, 0.004],
+            [0.31, 0.003, 0.017, -0.005]
+          ], 6, back, body);
+          const tail = vec(0, 0, -0.357);
+          const fork = vec(0, 0.008, -0.474);
+          batch.triangle(tail, vec(0, 0.104 * height, -0.546), fork, fin);
+          batch.triangle(tail, fork, vec(0, -0.096 * height, -0.529), shade(fin, 0.88));
+          batch.triangle(vec(0, 0.066 * height, 0.11), vec(0, 0.143 * height, -0.065),
+            vec(0, 0.051 * height, -0.18), back, fin, back);
+          for (const side of [-1, 1]) {
+            batch.triangle(vec(side * 0.043, 0.011, 0.075), vec(side * 0.115, -0.049, -0.077),
+              vec(side * 0.052, -0.027, -0.097), fin, shade(fin, 0.70), fin);
+            batch.quad(vec(side * 0.044, 0.032, 0.221), vec(side * 0.049, 0.046, 0.203),
+              vec(side * 0.054, 0.030, 0.185), vec(side * 0.048, 0.015, 0.205), eye);
+          }
+          const geometry = batch.geometry();
+          const phases = Float32Array.from({ length: count }, (_, index) => index * 2.39996 % TAU);
+          geometry.setAttribute("swimPhase", new THREE.InstancedBufferAttribute(phases, 1));
+          const material = new THREE.MeshPhongMaterial({
+            vertexColors: true, side: THREE.DoubleSide,
+            shininess: isReefFish ? 17 : 32,
+            specular: isReefFish ? 0x35515b : 0x809eaa
+          });
+          material.customProgramCacheKey = () => isReefFish ? "reef fish" : "silver fish";
+          material.onBeforeCompile = (shader) => {
+            shader.uniforms.waterTime = waterTime;
+            shader.vertexShader = shader.vertexShader
+              .replace("#include <common>", "#include <common>\nattribute float swimPhase;\nuniform float waterTime;\nvarying vec3 vFish;")
+              .replace("#include <begin_vertex>", `
+                #include <begin_vertex>
+                vFish = position;
+                float tail = max(0.0, 0.23 - position.z);
+                float gait = waterTime * (8.2 + 1.9 * sin(swimPhase)) + swimPhase;
+                transformed.x += tail * tail * 0.23 * sin(gait + position.z * 8.8);
+              `);
+            if (isReefFish) {
+              shader.fragmentShader = shader.fragmentShader
+                .replace("#include <common>", "#include <common>\nvarying vec3 vFish;")
+                .replace("#include <color_fragment>", `
+                  #include <color_fragment>
+                  float flank = smoothstep(0.027, 0.057, abs(vFish.x));
+                  float bars = smoothstep(0.42, 0.81, sin(vFish.z * 30.0 + vFish.y * 6.5)) * flank;
+                  float tail = (1.0 - smoothstep(-0.47, -0.34, vFish.z)) * 0.72;
+                  diffuseColor.rgb *= 1.0 - 0.43 * bars;
+                  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.84, 0.49, 0.066), tail);
+                `);
+            }
+          };
+          const mesh = new THREE.InstancedMesh(geometry, material, count);
+          mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          mesh.frustumCulled = false;
+          mesh.name = isReefFish ? "Colorful reef fish" : "Silver fish schools";
+          wildlife.add(mesh);
+          return mesh;
+        }
+
+        const schoolSize = 23;
+        const silverFish = makeFish(schoolSize * 2, false);
+        const schoolSpawns = [[vec(-14.1, -8.47, 3.4), 1.06], [vec(9.2, -7.83, -5.9), -0.73]];
+        const schools = schoolSpawns.map(([home, yaw], schoolIndex) => {
+          const leader = swimmer(home, yaw);
+          leader.speed = 1.45;
+          return {
+            home, leader, heading: yaw, formationYaw: yaw, alarm: 0, phase: schoolIndex * 2.37,
+            members: Array.from({ length: schoolSize }, (_, i) => {
+              const phase = (i + schoolIndex * 2.8) * 2.39996;
+              const spread = Math.sqrt((i + 0.5) / schoolSize);
+              const x = Math.cos(phase) * spread * 2.24;
+              const y = Math.sin(phase) * spread * 0.74;
+              const z = (driftRandom() - 0.5) * 3.8;
+              const index = schoolIndex * schoolSize + i;
+              silverFish.setColorAt(index, shade(color(0xe1f2ef), lerp(0.78, 1.13, driftRandom())));
+              return {
+                index, x, y, z, phase, size: lerp(0.41, 0.68, driftRandom()),
+                position: home.clone().add(vec(x * Math.cos(yaw) + z * Math.sin(yaw), y,
+                  z * Math.cos(yaw) - x * Math.sin(yaw)))
+              };
+            })
+          };
+        });
+
+        function swimSchool(school, time, dt) {
+          const leader = school.leader;
+          const center = leader.position;
+          const dx = center.x - camera.position.x;
+          const dz = center.z - camera.position.z;
+          const dy = center.y - camera.position.y;
+          const horizontal = Math.hypot(dx, dz);
+          const nearby = 1 - smoothstep(Math.hypot(horizontal, dy * 1.42), 2.75, 9.1);
+          school.alarm = lerp(school.alarm, nearby, 1 - Math.exp(-(nearby > school.alarm ? 7.5 : 2.1) * dt));
+          school.heading += dt * (0.23 + 0.46 * Math.sin(time * 0.31 + school.phase)
+            + 0.22 * Math.cos(time * 0.137 + school.phase * 2));
+          const leash = 0.15 + 0.059 * Math.max(0, center.distanceTo(school.home) - 4.2);
+          const awayX = horizontal > 0.05 ? dx / horizontal : Math.cos(leader.yaw);
+          const awayZ = horizontal > 0.05 ? dz / horizontal : -Math.sin(leader.yaw);
+          const aimX = Math.sin(school.heading) + (school.home.x - center.x) * leash + awayX * 4.0 * school.alarm;
+          const aimZ = Math.cos(school.heading) + (school.home.z - center.z) * leash + awayZ * 4.0 * school.alarm;
+          const rise = school.home.y + 0.62 * Math.sin(time * 0.36 + school.phase)
+            + 0.57 * school.alarm * clamp(dy, -1, 1);
+          const altitude = Math.max(rise, ledgeHeight(center.x, center.z) + 1.30);
+          steer(leader, Math.atan2(aimX, aimZ), altitude, 1.45 + school.alarm * 1.30,
+            1.24 + school.alarm * 2.45, dt);
+          school.formationYaw += turnAngle(school.formationYaw, leader.yaw) * (1 - Math.exp(-4.6 * dt));
+
+          const cos = Math.cos(school.formationYaw);
+          const sin = Math.sin(school.formationYaw);
+          const spread = 1 + school.alarm * 0.19;
+          for (const fish of school.members) {
+            const lateral = (fish.x + 0.135 * Math.sin(time * 1.76 + fish.phase)) * spread;
+            slot.set(center.x + lateral * cos + fish.z * sin,
+              center.y + fish.y * spread + 0.13 * Math.sin(time * 1.39 + fish.phase),
+              center.z - lateral * sin + fish.z * cos);
+            const closeX = fish.position.x - camera.position.x;
+            const closeZ = fish.position.z - camera.position.z;
+            const distance = Math.hypot(closeX, fish.position.y - camera.position.y, closeZ);
+            const dodge = 1 - smoothstep(distance, 0.3, 2.1);
+            if (dodge > 0 && distance > 0.01) {
+              slot.x += closeX / distance * dodge * 0.72;
+              slot.z += closeZ / distance * dodge * 0.72;
+            }
+            fish.position.lerp(slot, 1 - Math.exp(-(5.2 + Math.cos(fish.phase) * 0.63) * dt));
+            transform.position.copy(fish.position);
+            transform.rotation.set(leader.pitch + Math.sin(time * 1.69 + fish.phase) * 0.08,
+              leader.yaw + 0.13 * Math.sin(time * 2.28 + fish.phase),
+              leader.bank + 0.13 * Math.cos(time * 1.2 + fish.phase));
+            transform.scale.setScalar(fish.size);
+            transform.updateMatrix();
+            silverFish.setMatrixAt(fish.index, transform.matrix);
+          }
+        }
+
+        const rocks = scene.children.filter((object) =>
+          object.isInstancedMesh && object.geometry.type === "IcosahedronGeometry");
+        const downRay = new THREE.Raycaster(vec(0, 0, 0), vec(0, -1, 0), 0, 30);
+        const hits = [];
+        function coralHabitat(x, z) {
+          const count = 15;
+          const step = 0.5;
+          const left = x - step * (count - 1) * 0.5;
+          const front = z - step * (count - 1) * 0.5;
+          const heights = new Float32Array(count * count);
+          // Sample the rock surfaces once. Fish use the surrounding samples for clearance.
+          for (let row = 0; row < count; row++) {
+            const sampleZ = front + row * step;
+            for (let col = 0; col < count; col++) {
+              const sampleX = left + col * step;
+              downRay.ray.origin.set(sampleX, -0.5, sampleZ);
+              hits.length = 0;
+              downRay.intersectObjects(rocks, false, hits);
+              heights[row * count + col] = Math.max(
+                seabed(sampleX, sampleZ), hits[0]?.point.y ?? -Infinity);
+            }
+          }
+          return {
+            x, z,
+            floorAt(px, pz) {
+              const col = clamp(Math.floor((px - left) / step), 0, count - 2);
+              const row = clamp(Math.floor((pz - front) / step), 0, count - 2);
+              const cell = row * count + col;
+              return Math.max(heights[cell], heights[cell + 1], heights[cell + count], heights[cell + count + 1]);
+            }
+          };
+        }
+        const coralHomes = [[-17.36, -6.98], [-13.7, -7.1], [-8.55, -6.37], [-16.22, 7.69], [14.54, -7.88]]
+          .map(([x, z]) => coralHabitat(x, z));
+        const reefFish = makeFish(12, true);
+        const reefColors = [0xff8760, 0x55cac4, 0xf3c75a, 0xe37ca4, 0x7c94ff].map(color);
+        const coralSwimmers = Array.from({ length: reefFish.count }, (_, i) => {
+          const habitat = coralHomes[i % coralHomes.length];
+          const { x, z } = habitat;
+          const phase = i * 2.39996;
+          const home = vec(x, habitat.floorAt(x, z) + 0.92 + 0.29 * (i % 3), z);
+          const start = home.clone().add(vec(Math.cos(phase), 0, Math.sin(phase)).multiplyScalar(0.53 + i % 3 * 0.24));
+          start.y = Math.max(start.y, habitat.floorAt(start.x, start.z) + 0.75);
+          reefFish.setColorAt(i, reefColors[i % reefColors.length]);
+          return {
+            home, habitat, target: home.clone(), animal: swimmer(start, phase), phase,
+            scale: lerp(0.50, 0.77, driftRandom()), nextPick: 0
+          };
+        });
+
+        function swimCoralFish(fish, i, time, dt) {
+          const { animal, home, habitat, target, phase } = fish;
+          const p = animal.position;
+          if (time >= fish.nextPick || Math.hypot(p.x - target.x, p.z - target.z) < 0.4) {
+            const bearing = TAU * driftRandom();
+            const offset = lerp(0.58, 2.0, driftRandom());
+            target.set(home.x + Math.sin(bearing) * offset,
+              home.y + 0.72 * (driftRandom() - 0.4), home.z + Math.cos(bearing) * offset);
+            fish.nextPick = time + lerp(3.1, 6.8, driftRandom());
+          }
+          const heading = Math.atan2(target.x - p.x, target.z - p.z);
+          const floor = habitat.floorAt(p.x, p.z);
+          const ahead = habitat.floorAt(p.x + Math.sin(animal.yaw) * 0.69, p.z + Math.cos(animal.yaw) * 0.69);
+          const altitude = Math.max(target.y, floor + 0.62, ahead + 0.62);
+          const pace = 0.57 + 0.23 * smoothstep(Math.hypot(target.x - p.x, target.z - p.z), 0.24, 1.3)
+            + 0.10 * Math.sin(time * 1.7 + phase);
+          const slowdown = 1 - 0.86 * smoothstep(ahead + 0.62 - p.y, 0.22, 1.04);
+          const previousX = p.x;
+          const previousZ = p.z;
+          steer(animal, heading, altitude, pace * slowdown, 2.8, dt);
+          if (p.y - habitat.floorAt(p.x, p.z) < 0.35) {
+            p.x = previousX;
+            p.z = previousZ;
+          }
+          transform.position.copy(p);
+          transform.rotation.set(animal.pitch, animal.yaw, animal.bank);
+          transform.scale.set(fish.scale, fish.scale, fish.scale * (0.92 + 0.09 * Math.sin(phase)));
+          transform.updateMatrix();
+          reefFish.setMatrixAt(i, transform.matrix);
+        }
+
+        function mantaWings() {
+          // Each station describes the chord and thickness from the body to a wingtip.
+          const outline = [
+            [0, 0.97, -0.93, 0.18], [0.31, 0.94, -0.87, 0.15], [0.57, 0.84, -0.65, 0.105],
+            [0.87, 0.68, -0.48, 0.072], [1.18, 0.47, -0.33, 0.050], [1.50, 0.21, -0.27, 0.035],
+            [1.80, -0.08, -0.35, 0.024], [2.09, -0.36, -0.55, 0.015], [2.24, -0.67, -0.685, 0.006]
+          ];
+          const stations = outline.slice(1).reverse().map(([x, ...section]) => [-x, ...section]).concat(outline);
+          const positions = [];
+          const colors = [];
+          const indices = [];
+          const back = color(0x293e48);
+          const shoulder = color(0x7c9f97);
+          const belly = color(0xc9cebc);
+          const rim = color(0x526e75);
+          const tint = new THREE.Color();
+          const cuts = 8;
+
+          for (const top of [true, false]) {
+            const start = positions.length / 3;
+            for (let i = 0; i < stations.length; i++) {
+              const [x, front, rear, thickness] = stations[i];
+              for (let j = 0; j <= cuts; j++) {
+                const s = j / cuts;
+                const z = lerp(front, rear, s);
+                const rounded = Math.sin(s * Math.PI) ** 0.72;
+                const camber = 0.038 * Math.sin(Math.abs(x) * 1.26);
+                const y = camber + (top ? 1 : -0.63) * thickness * rounded;
+                const edge = smoothstep(Math.abs(x), 1.29, 2.27);
+                const paleShoulder = Math.exp(-(((Math.abs(x) - 0.41) / 0.39) ** 2 + ((z - 0.53) / 0.35) ** 2));
+                if (top) tint.copy(back).lerp(shoulder, paleShoulder * 0.54);
+                else tint.copy(belly).lerp(rim, edge * 0.82 + (1 - rounded) * 0.12);
+                positions.push(x, y, z);
+                colors.push(tint.r, tint.g, tint.b);
+                if (i === 0 || j === 0) continue;
+                const d = start + i * (cuts + 1) + j;
+                const a = d - cuts - 2;
+                const b = d - 1;
+                const c = d - cuts - 1;
+                if (top) indices.push(a, b, d, a, d, c);
+                else indices.push(a, d, b, a, c, d);
+              }
+            }
+          }
+          const geometry = new THREE.BufferGeometry();
+          geometry.setIndex(indices);
+          geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+          geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+          geometry.computeVertexNormals();
+          geometry.computeBoundingSphere();
+          geometry.boundingSphere.radius += 0.48;
+          return geometry;
+        }
+
+        function mantaDetails() {
+          const batch = new MeshBuilder();
+          const slate = color(0x3c5055);
+          const dark = color(0x23313b);
+          const pale = color(0xaeb9a9);
+          batch.shape(smallSphere, vec(0, -0.024, 0.81), vec(0.34, 0.091, 0.21), dark);
+          batch.tube([vec(-0.25, -0.052, 0.94), vec(-0.09, -0.076, 1.035),
+            vec(0.09, -0.076, 1.035), vec(0.25, -0.052, 0.94)], 0.020, 0.020, 5, pale);
+          for (const side of [-1, 1]) {
+            batch.tube([vec(side * 0.258, 0.012, 0.89), vec(side * 0.339, -0.021, 1.07),
+              vec(side * 0.348, 0.002, 1.24), vec(side * 0.273, 0.047, 1.28)],
+            0.075, 0.035, 7, pale);
+            batch.shape(facet, vec(side * 0.334, 0.043, 0.887), vec(0.061, 0.042, 0.075), slate);
+            batch.shape(facet, vec(side * 0.375, 0.065, 0.904), vec(0.024, 0.026, 0.034), dark);
+          }
+          batch.tube([vec(0, 0.010, -0.82), vec(0.012, 0.018, -1.15), vec(0.03, 0.026, -1.59),
+            vec(0.071, 0.047, -2.09), vec(0.09, 0.098, -2.56)], 0.046, 0.007, 6, slate);
+          return batch.geometry();
+        }
+
+        const wingGeometry = mantaWings();
+        const mantaTrim = mantaDetails();
+        function buildManta(name, phase, size) {
+          const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+          const swimPhase = { value: phase };
+          material.onBeforeCompile = (shader) => {
+            shader.uniforms.waterTime = waterTime;
+            shader.uniforms.swimPhase = swimPhase;
+            shader.vertexShader = shader.vertexShader
+              .replace("#include <common>", `
+                #include <common>
+                uniform float waterTime;
+                uniform float swimPhase;
+                float mantaBend(vec3 p) {
+                  float wing = smoothstep(0.31, 2.23, abs(p.x));
+                  float beat = waterTime * 1.66 + swimPhase + 0.31 * sin(waterTime * 0.52 + swimPhase);
+                  float wave = beat - abs(p.x) * 0.91 - p.z * 0.55 + sign(p.x) * 0.085;
+                  float tail = clamp(-p.z - 0.9, 0.0, 1.8);
+                  return wing * wing * (0.49 * sin(wave) + 0.07 * sin(wave * 2.0))
+                    + 0.061 * tail * sin(beat * 0.61 - p.z * 1.17);
+                }
+              `)
+              .replace("#include <beginnormal_vertex>", `
+                #include <beginnormal_vertex>
+                float bend = mantaBend(position);
+                float slopeX = (mantaBend(position + vec3(0.025, 0.0, 0.0)) - bend) * 40.0;
+                float slopeZ = (mantaBend(position + vec3(0.0, 0.0, 0.025)) - bend) * 40.0;
+                objectNormal = normalize(objectNormal - vec3(slopeX, 0.0, slopeZ) * objectNormal.y);
+              `)
+              .replace("#include <begin_vertex>", "#include <begin_vertex>\ntransformed.y += bend;");
+          };
+          const manta = new THREE.Group();
+          manta.name = name;
+          manta.scale.setScalar(size);
+          manta.add(new THREE.Mesh(wingGeometry, material), new THREE.Mesh(mantaTrim, material));
+          wildlife.add(manta);
+          return manta;
+        }
+
+        function buildTurtle() {
+          const batch = new MeshBuilder();
+          const shell = color(0x3f5140);
+          const scute = color(0x867248);
+          const skin = color(0x829270);
+          const jaw = color(0x5d784f);
+          const dark = color(0x243b33);
+          const carapace = new THREE.SphereGeometry(1, 20, 10, 0, TAU, 0, Math.PI * 0.54);
+          batch.shape(carapace, vec(0, 0.015, 0), vec(0.574, 0.323, 0.824), shell);
+          batch.shape(smallSphere, vec(0, -0.054, 0.013), vec(0.569, 0.112, 0.808), color(0xa8a176));
+
+          const cells = [[0, -0.72], [0, -0.38], [0, 0], [0, 0.38], [0, 0.72]];
+          for (const side of [-1, 1]) {
+            for (const z of [-0.65, -0.22, 0.22, 0.62]) cells.push([side * 0.51, z]);
+            for (const z of [-0.48, -0.15, 0.17, 0.48]) cells.push([side * 0.91, z]);
+          }
+          const outline = Array.from({ length: 32 }, (_, i) => vec(
+            Math.cos(i / 32 * TAU) * 0.986, 0, Math.sin(i / 32 * TAU) * 0.986));
+          const dome = (point) => vec(point.x * 0.583,
+            0.025 + 0.358 * Math.sqrt(Math.max(0, 1 - point.x * point.x - point.z * point.z)),
+            point.z * 0.838);
+
+          // Clip the shell plates to the shell outline, then project them onto its dome.
+          for (const [x, z] of cells) {
+            let polygon = outline;
+            for (const [otherX, otherZ] of cells) {
+              if (otherX === x && otherZ === z) continue;
+              const dx = otherX - x;
+              const dz = otherZ - z;
+              const midX = (x + otherX) * 0.5;
+              const midZ = (z + otherZ) * 0.5;
+              const clipped = [];
+              for (let i = 0; i < polygon.length; i++) {
+                const a = polygon[i];
+                const b = polygon[(i + 1) % polygon.length];
+                const u = (a.x - midX) * dx + (a.z - midZ) * dz;
+                const v = (b.x - midX) * dx + (b.z - midZ) * dz;
+                if (u <= 0) clipped.push(a);
+                if ((u <= 0) !== (v <= 0)) clipped.push(a.clone().lerp(b, u / (u - v)));
+              }
+              polygon = clipped;
+            }
+            const center = polygon.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(polygon.length);
+            const rim = polygon.map((p) => center.clone().lerp(p, 0.937));
+            const midway = rim.map((p) => center.clone().lerp(p, 0.49));
+            const plate = shade(scute, lerp(0.70, 1.13, driftRandom())).lerp(shell, Math.abs(x) * 0.38);
+            for (let i = 0; i < rim.length; i++) {
+              const next = (i + 1) % rim.length;
+              batch.triangle(dome(center), dome(midway[next]), dome(midway[i]), shade(plate, 1.10), plate, plate);
+              batch.quad(dome(midway[i]), dome(midway[next]), dome(rim[next]), dome(rim[i]), plate);
+            }
+          }
+
+          batch.shape(smallSphere, vec(0, -0.041, 0.661), vec(0.143, 0.115, 0.236), jaw);
+          batch.shape(smallSphere, vec(0, -0.011, 0.862), vec(0.174, 0.139, 0.23), skin,
+            new THREE.Euler(0.16, 0, 0));
+          batch.shape(smallSphere, vec(0, -0.041, 1.004), vec(0.119, 0.080, 0.111), jaw);
+          for (const side of [-1, 1]) {
+            batch.shape(facet, vec(side * 0.131, 0.035, 0.941), vec(0.042, 0.037, 0.043), color(0xaa9a65));
+            batch.shape(facet, vec(side * 0.157, 0.037, 0.951), vec(0.024, 0.026, 0.030), dark);
+            for (const [y, z, size] of [[0.008, 0.784, 0.023], [0.056, 0.820, 0.021],
+              [0.074, 0.864, 0.028], [0.021, 0.911, 0.020], [-0.022, 1.032, 0.014]]) {
+              const x = 0.154 * Math.sqrt(Math.max(0.13,
+                1 - ((y + 0.011) / 0.144) ** 2 - ((z - 0.863) / 0.239) ** 2));
+              batch.shape(facet, vec(side * x, y, z), vec(0.016, size * 0.72, size), jaw);
+            }
+          }
+          batch.tube([vec(0, -0.09, -0.71), vec(0.015, -0.106, -0.858), vec(0.053, -0.109, -1.02)],
+            0.051, 0.009, 6, skin);
+
+          const turtle = new THREE.Group();
+          turtle.name = "Sea turtle";
+          turtle.add(new THREE.Mesh(batch.geometry(), scenery));
+          const swimmerSkin = scenery.clone();
+          const strokePhase = { value: 0 };
+          const strokeEffort = { value: 1 };
+          swimmerSkin.onBeforeCompile = (shader) => {
+            shader.uniforms.strokePhase = strokePhase;
+            shader.uniforms.strokeEffort = strokeEffort;
+            shader.vertexShader = shader.vertexShader
+              .replace("#include <common>", `
+                #include <common>
+                uniform float strokePhase;
+                uniform float strokeEffort;
+                float flipperBend(vec3 p) {
+                  float reach = smoothstep(0.16, 0.98, abs(p.x));
+                  float wave = strokePhase - reach * 1.44 + sign(p.x) * 0.12;
+                  return reach * (strokeEffort * 0.19 * sin(wave) - 0.047);
+                }
+              `)
+              .replace("#include <beginnormal_vertex>", `
+                #include <beginnormal_vertex>
+                float bend = flipperBend(position);
+                float slope = (flipperBend(position + vec3(0.02, 0.0, 0.0)) - bend) * 50.0;
+                objectNormal.x -= objectNormal.y * slope;
+              `)
+              .replace("#include <begin_vertex>", "#include <begin_vertex>\ntransformed.y += bend;");
+          };
+          const flippers = [];
+          for (const side of [-1, 1]) {
+            const fin = new MeshBuilder();
+            const stations = [[0, 0.14, -0.11, 0.00, 0.052], [0.16, 0.17, -0.15, 0.001, 0.065],
+              [0.37, 0.14, -0.22, -0.023, 0.048], [0.61, 0.059, -0.33, -0.054, 0.026],
+              [0.81, -0.14, -0.392, -0.086, 0.019], [0.98, -0.339, -0.356, -0.100, 0.006]];
+            const rows = stations.map(([x, front, rear, y, thickness]) => {
+              const center = lerp(front, rear, 0.47);
+              return [vec(side * x, y, front), vec(side * x, y + thickness, center),
+                vec(side * x, y, rear), vec(side * x, y - thickness * 0.74, center)];
+            });
+            for (let i = 1; i < rows.length; i++) {
+              for (let j = 0; j < 4; j++) {
+                const next = (j + 1) % 4;
+                const tint = shade(skin, (j < 2 ? 0.91 : 1.09) + 0.10 * Math.sin(i * 4.7));
+                fin.quad(rows[i - 1][j], rows[i][j], rows[i][next], rows[i - 1][next], tint);
+              }
+            }
+            const geometry = fin.geometry();
+            const front = new THREE.Mesh(geometry, swimmerSkin);
+            front.position.set(side * 0.423, -0.054, 0.396);
+            const rear = new THREE.Mesh(geometry, scenery);
+            rear.position.set(side * 0.33, -0.071, -0.61);
+            rear.scale.set(0.54, 0.74, 0.70);
+            turtle.add(front, rear);
+            flippers.push({ side, front, rear });
+          }
+          turtle.scale.setScalar(1.28);
+          wildlife.add(turtle);
+          return {
+            turtle,
+            stroke(time) {
+              const cycle = time * 2.08 + 0.25 * Math.sin(time * 0.47);
+              const driving = Math.sin(time * 0.57 + 1.0) + 0.34 * Math.sin(time * 0.171);
+              const effort = 0.22 + 0.78 * smoothstep(driving, -0.49, 0.71);
+              strokePhase.value = cycle;
+              strokeEffort.value = effort;
+              for (const { side, front, rear } of flippers) {
+                const phase = cycle + side * 0.12;
+                const lift = Math.sin(phase) + 0.15 * Math.sin(phase * 2 + 0.92);
+                front.rotation.z = side * (effort * lift * 0.52 - 0.085);
+                front.rotation.y = side * (0.26 + 0.24 * Math.cos(phase) * effort);
+                rear.rotation.y = side * (0.62 + 0.12 * Math.sin(cycle - 1.13));
+                rear.rotation.z = side * (0.09 * Math.sin(phase - 1.4) - 0.046);
+              }
+            }
+          };
+        }
+
+        function cruiser(body, points, pace, phase) {
+          const goals = points.map(([x, y, z]) => vec(x, y, z));
+          const animal = swimmer(goals[0], Math.atan2(goals[1].x - goals[0].x, goals[1].z - goals[0].z));
+          animal.speed = pace;
+          return { body, goals, animal, pace, phase, goal: 1, previousGoal: 0 };
+        }
+
+        function swimCruiser(cruise, time, dt) {
+          const { body, goals, animal, pace, phase } = cruise;
+          const p = animal.position;
+          let target = goals[cruise.goal];
+          if (Math.hypot(target.x - p.x, target.z - p.z) < 2.45) {
+            let best = -Infinity;
+            for (let i = 0; i < goals.length; i++) {
+              if (i === cruise.goal || i === cruise.previousGoal) continue;
+              const x = goals[i].x - p.x;
+              const z = goals[i].z - p.z;
+              const distance = Math.hypot(x, z);
+              const forward = (x * Math.sin(animal.yaw) + z * Math.cos(animal.yaw)) / distance;
+              const score = forward * 0.91 - distance * 0.027 + driftRandom() * 0.86;
+              if (distance <= 4.1 || score <= best) continue;
+              best = score;
+              target = goals[i];
+            }
+            if (best > -Infinity) {
+              cruise.previousGoal = cruise.goal;
+              cruise.goal = goals.indexOf(target);
+            }
+          }
+          const heading = Math.atan2(target.x - p.x, target.z - p.z) + 0.13 * Math.sin(time * 0.34 + phase);
+          const altitude = Math.max(ledgeHeight(p.x, p.z) + 1.05,
+            target.y + 0.21 * Math.sin(time * 0.53 + phase));
+          steer(animal, heading, altitude, pace * (0.96 + 0.13 * Math.sin(time * 0.21 + phase)), 0.93, dt);
+          body.position.copy(p);
+          body.rotation.set(animal.pitch + 0.046 * Math.sin(time * 1.52 + phase),
+            animal.yaw, animal.bank, "YXZ");
+        }
+
+        const turtle = buildTurtle();
+        const cruisers = [
+          cruiser(buildManta("Manta ray 1", 0.43, 1.05), [
+            [-8.8, -5.43, -3.8], [3.9, -5.74, 1.2], [14.4, -5.32, -2.93],
+            [5.9, -5.29, -11.0], [-6.0, -5.61, -10], [-13.5, -5.25, -3.2],
+            [-8.6, -6.32, 9.4], [3.1, -5.47, 11.1]
+          ], 1.28, 0.43),
+          cruiser(buildManta("Manta ray 2", 3.09, 0.92), [
+            [15.3, -7.04, 3.8], [15.1, -6.72, -3.3], [18.4, -5.55, -9.2],
+            [23.9, -5.91, 4.1], [19.2, -6.75, 13.5], [8.4, -7.04, 14.1],
+            [4.1, -7.50, 7.2], [8.8, -6.75, 0.1]
+          ], 1.15, 3.09),
+          cruiser(turtle.turtle, [
+            [-9.7, -8.39, 2.93], [-3.14, -8.47, 4.0], [7.4, -8.92, 6.21],
+            [15.4, -8.21, 3.6], [13.7, -7.57, -3.21], [4.47, -8.35, -4.31],
+            [-3.45, -8.59, -3.78], [-13.4, -8.00, 0.65], [-6.3, -9.13, 9.2]
+          ], 0.88, 1.27)
+        ];
+
+        return (time) => {
+          const dt = time - lastTime;
+          lastTime = time;
+          for (const school of schools) swimSchool(school, time, dt);
+          silverFish.instanceMatrix.needsUpdate = true;
+          for (let i = 0; i < coralSwimmers.length; i++) swimCoralFish(coralSwimmers[i], i, time, dt);
+          reefFish.instanceMatrix.needsUpdate = true;
+          for (const cruise of cruisers) swimCruiser(cruise, time, dt);
+          turtle.stroke(time);
+        };
+      }
+
       buildSeabed();
       buildWaterSurface();
       buildShafts();
@@ -1536,6 +2124,7 @@
       buildWhale();
       const ship = buildWreck();
       const animation = [buildFish(), buildRay(), buildShark(), buildJellies(), buildOctopus(ship), buildReefLife()];
+      animation.push(buildAddedWildlife());
 
       const spawn = vec(-22, -9, 9);
       const initialLook = vec(-2.1, -9.63, -3.9);
