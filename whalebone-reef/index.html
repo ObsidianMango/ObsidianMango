@@ -720,56 +720,54 @@
         const distanceHaze=new THREE.Mesh(backdrop,waterColumn);
         distanceHaze.name="Open water";distanceHaze.frustumCulled=false;distanceHaze.renderOrder=-500;
         scene.add(distanceHaze);
-        const geometry = new THREE.PlaneGeometry(184, 184);
-        geometry.rotateX(-Math.PI / 2);
+        const geometry = new THREE.PlaneGeometry(184,184,104,104);
+        geometry.rotateX(-Math.PI/2);
         const material = new THREE.ShaderMaterial({
-          side: THREE.DoubleSide,
-          uniforms: {
-            waterTime,
-            sunPosition: { value: sunOrigin },
-            deep: { value: color(0x1b5573) },
-            surface: { value: color(0x4ca5af) },
-            bright: { value: color(0xb8efda) }
-          },
+          side: THREE.DoubleSide, uniforms: {waterTime},
           vertexShader: `
-            varying vec3 vWorld;
-            void main() {
-              vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
-              gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
-            }
-          `,
-          fragmentShader: `
-            varying vec3 vWorld;
             uniform float waterTime;
-            uniform vec3 sunPosition;
-            uniform vec3 deep;
-            uniform vec3 surface;
-            uniform vec3 bright;
-            void main() {
-              vec2 p = vWorld.xz;
-              vec3 eye = cameraPosition - vWorld;
-              float heightView = abs(normalize(eye).y);
-              float wave = sin(p.x * 1.34 + p.y * 0.96 + waterTime * 0.75
-                + sin(p.y * 1.09 - waterTime * 0.48));
-              float crossWave = sin(p.y * 2.29 - p.x * 0.77 - waterTime * 0.69);
-              vec2 slope = vec2(.16*cos(p.x*.72+p.y*.44+waterTime*.51)+.065*crossWave,
-                .12*cos(p.y*.96-p.x*.53-waterTime*.48)+.056*wave);
-              vec3 waterNormal = normalize(vec3(slope.x,-1.0,slope.y));
-              vec3 through = refract(-normalize(eye), waterNormal, 1.32);
-              float window = smoothstep(.59,.83,heightView+dot(slope,normalize(eye).xz));
-              float glint = pow(max(0.,dot(through,normalize(vec3(-.32,.89,-.29)))),24.);
-              float streak = pow(1.0 - abs(wave), 7.0) * (0.5 + 0.5 * crossWave);
-              float distanceFromSun = length((p - sunPosition.xz) * vec2(0.118, 0.144));
-              float flare = exp(-distanceFromSun * distanceFromSun);
-              float variation = 0.67 + 0.15 * wave + 0.09 * crossWave;
-              vec3 col = mix(deep, surface, variation * smoothstep(0.12, 0.88, heightView));
-              col = mix(col, bright, clamp((.30*flare+.085*streak)*heightView
-                + window*(.15+.095*variation)+.32*glint,0.,.86));
-              col = mix(col, deep, smoothstep(19.0, 74.0, length(eye)));
-              gl_FragColor = vec4(col, 1.0);
+            varying vec3 oceanPoint;
+            void main(){
+              vec3 p=position;
+              p.y+=.16*sin(dot(p.xz,vec2(.34,.48))-waterTime*.90)
+                +.105*sin(dot(p.xz,vec2(.73,-.28))-waterTime*1.16)
+                +.055*sin(dot(p.xz,vec2(-.51,1.04))+waterTime*1.35);
+              oceanPoint=p;
+              gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);
+            }`,
+          fragmentShader: `
+            varying vec3 oceanPoint;
+            uniform float waterTime;
+            void main(){
+              vec2 p=oceanPoint.xz;
+              vec3 ray=normalize(oceanPoint-cameraPosition);
+              float t=waterTime;
+              vec2 slope=.16*vec2(.34,.48)*cos(dot(p,vec2(.34,.48))-t*.90)
+                +.105*vec2(.73,-.28)*cos(dot(p,vec2(.73,-.28))-t*1.16)
+                +.055*vec2(-.51,1.04)*cos(dot(p,vec2(-.51,1.04))+t*1.35);
+              vec2 q=p+vec2(.39*sin(p.y*.87+t*.46),.28*sin(p.x*.63-t*.38));
+              float pixel=max(length(dFdx(q)),length(dFdy(q)));
+              slope+=vec2(.066,.082)*cos(dot(q,vec2(2.4,3.1))-t*2.4);
+              slope+=(1.-smoothstep(.035,.24,pixel))*(vec2(.078,-.044)*cos(dot(q,vec2(6.6,-3.7))-t*3.31)
+                +vec2(.022,.061)*cos(dot(q,vec2(4.3,11.8))+t*4.41));
+              vec3 n=normalize(vec3(slope.x,-1.,slope.y));
+              float incidence=clamp(-dot(ray,n),0.,1.);
+              vec3 skyRay=refract(ray,n,1.333);
+              float transmit=smoothstep(.654,.690,incidence);
+              vec3 sunDir=normalize(vec3(-.37,.86,-.34));
+              float light=max(0.,dot(skyRay,sunDir));
+              vec3 sky=mix(vec3(.37,.64,.66),vec3(.16,.49,.68),clamp(skyRay.y,0.,1.))
+                +vec3(.58,.64,.49)*pow(light,21.)+vec3(2.6,2.0,1.1)*pow(light,320.);
+              vec3 reflected=reflect(ray,n);
+              float chop=.5+.5*sin(q.x*1.2+q.y*.7+2.5*sin(q.y*.59-t*.34));
+              vec3 mirror=mix(vec3(.012,.089,.133),vec3(.065,.225,.24),
+                clamp(-reflected.y*.63+chop*.20,0.,1.));
+              vec3 radiance=mix(mirror,sky,transmit*(1.-.04*pow(1.-incidence,3.)));
+              vec3 scatter=vec3(.011,.091,.172);
+              vec3 transmission=exp(-length(oceanPoint-cameraPosition)*vec3(.069,.037,.031));
+              gl_FragColor=vec4(mix(scatter,radiance,transmission),1.);
               #include <colorspace_fragment>
-            }
-          `
+            }`
         });
         scene.add(new THREE.Mesh(geometry, material));
       }
@@ -1886,18 +1884,18 @@
 
       function buildShark() {
         const batch = new MeshBuilder();
-        const upper = color(0x829084);
-        const lower = color(0xe4dfc6);
-        const fin = color(0x7a8170);
-        fishBody(batch, [[-1.67,.012,.023,.03],[-1.38,.064,.085,.025],[-1.02,.117,.132,.005],
+        const upper = color(0x808882);
+        const lower = color(0xd7d7c8);
+        const fin = color(0x808984);
+        fishBody(batch, [[-1.75,.009,.018,.088],[-1.62,.040,.060,.053],[-1.38,.064,.078,.025],[-1.02,.117,.132,.005],
           [-.60,.192,.205,0],[-.16,.278,.273,.015],[.31,.313,.277,.024],[.64,.302,.232,.014],
-          [.96,.247,.172,-.006],[1.22,.198,.115,-.028],[1.42,.104,.062,-.045],[1.49,.004,.009,-.051]],
+          [.96,.247,.172,-.006],[1.14,.217,.127,-.020],[1.31,.174,.083,-.035],[1.43,.101,.045,-.040],[1.49,.034,.022,-.040],[1.50,.002,.002,-.04]],
           24, upper, lower);
         foil(batch, [[0,.19,.37,-.49,.085],[0,.31,.25,-.32,.065],[0,.49,.09,-.18,.044],
           [0,.66,-.075,-.15,.019],[0,.69,-.135,-.144,.003]],unitX,fin);
         foil(batch, [[0,.09,-.96,-1.34,.041],[0,.24,-1.10,-1.25,.026],[0,.31,-1.21,-1.23,.004]],unitX,fin);
         foil(batch, [[0,.005,-1.38,-1.76,.061],[0,.19,-1.56,-1.82,.043],[0,.41,-1.76,-1.96,.025],
-          [0,.54,-1.91,-2.01,.012],[0,.61,-2.04,-2.055,.003]],unitX,fin);
+          [0,.48,-1.88,-1.94,.023],[0,.54,-1.92,-1.99,.012],[0,.60,-2.06,-2.078,.003]],unitX,fin);
         foil(batch, [[0,0,-1.41,-1.72,.049],[0,-.17,-1.56,-1.79,.028],[0,-.31,-1.78,-1.82,.009],
           [0,-.335,-1.82,-1.83,.003]],unitX,fin);
         for (const side of [-1,1]) {
@@ -1906,18 +1904,10 @@
             [side*.89,-.17,-.38,-.415,.004]],unitY,fin);
           foil(batch, [[side*.14,-.089,-.52,-.81,.034],[side*.32,-.14,-.66,-.88,.022],
             [side*.40,-.15,-.85,-.88,.004]],unitY,fin);
-          batch.shape(smallSphere,vec(side*.223,.043,1.02),vec(.045,.045,.058),color(0xc4ad72));
-          batch.shape(smallSphere,vec(side*.252,.045,1.025),vec(.019,.032,.038),color(0x14252a));
-          batch.shape(facet,vec(side*.241,.061,1.057),vec(.008,.009,.010),lower);
-          for(let i=0;i<5;i++){
-            const z=.41+i*.069, x=.304-i*.0034;
-            batch.tube([vec(side*(x-.014),.11,z),vec(side*(x+.005),.017,z-.027),
-              vec(side*(x-.030),-.086,z-.008)],.008,.0035,5,color(0x51584c));
-          }
-          batch.tube([vec(side*.222,-.086,1.001),vec(side*.171,-.115,1.163),
-            vec(side*.095,-.099,1.309),vec(side*.011,-.092,1.345)],.012,.005,6,color(0x55574d));
+          batch.shape(smallSphere,vec(side*.229,.025,1.015),vec(.018,.023,.035),color(0x797561));
+          batch.shape(smallSphere,vec(side*.240,.026,1.018),vec(.011,.017,.026),color(0x182526));
         }
-        const material = new THREE.MeshPhongMaterial({vertexColors:true, side:THREE.DoubleSide, shininess:18,specular:0x425252});
+        const material = new THREE.MeshPhongMaterial({vertexColors:true, side:THREE.DoubleSide, shininess:29,specular:0x4a5557});
         material.onBeforeCompile = (shader) => {
           shader.uniforms.waterTime = waterTime;
           shader.vertexShader = shader.vertexShader
@@ -1925,16 +1915,28 @@
             .replace("#include <begin_vertex>", `
               #include <begin_vertex>
               float tail = clamp((0.8 - position.z) * 0.38, 0.0, 1.0);
-              transformed.x += tail * tail * 0.32 * sin(waterTime * 4.7 + position.z * 2.1);
+              transformed.x += tail * tail * (.37+.095*sin(waterTime*.74)) * sin(waterTime*3.9+.42*sin(waterTime*.87)+position.z*1.72);
             `);
         };
         surfaceDetail(material, `
+          // Mouth, nares and gill pigmentation follow the skin through the whole stroke.
           float height = vSkin.y;
+          float z=vSkin.z;
+          float jawLine=-.089-.047*cos((z-1.16)*7.);
+          float mouth=(1.-smoothstep(.003,.010,abs(height-jawLine)))
+            *smoothstep(.96,1.06,z)*(1.-smoothstep(1.32,1.40,z))*smoothstep(.035,.12,abs(vSkin.x));
+          float gills=0.;
+          for(int i=0;i<5;i++){
+            float slit=.45+float(i)*.063+.56*height*height+.098*height;
+            gills=max(gills,(1.-smoothstep(.002,.011,abs(z-slit)))*(1.-smoothstep(.045,.124,abs(height-.004))));
+          }
+          float nare=exp(-pow(abs(z-1.318)*68.,2.)-pow(abs(height+.069)*140.,2.));
+          diffuseColor.rgb*=1.-.64*mouth-.43*gills-.52*nare;
           float saddle = cos(vSkin.z * 12.5 + 1.7*sin(vSkin.z*4.2) + 0.8*cos(vSkin.x*11.0));
           float dorsal = smoothstep(-0.045,0.11,height + 0.042*sin(vSkin.z*17.3));
           float mask = 1.0 - smoothstep(0.91,1.31,vSkin.z);
           float spots = stipple(vec2(vSkin.z*9.0 + height*2.3, height*14.0 + abs(vSkin.x)*5.0));
-          diffuseColor.rgb *= 1.0 - mask * dorsal * (0.49*smoothstep(0.02,0.75,saddle) + 0.28*spots);
+          diffuseColor.rgb *= 1.0 - mask * dorsal * (0.54*smoothstep(-0.09,0.77,saddle+.29*sin(vSkin.x*24.+height*17.+z*3.)) + 0.39*spots);
         `);
         const shark = new THREE.Mesh(batch.geometry(), material);
         shark.name = "Leopard shark";
@@ -2325,7 +2327,12 @@
             + 0.12*smoothstep(.52,1.0,sin(vSkin.z*77.0));
         `);
         lobster.add(new THREE.Mesh(body.geometry(), carapace));
-        lobster.position.set(9.53, seabed(9.53, -1.22) + 0.02, -1.22);
+        lobster.name = "Spiny lobster";
+        // Keep the whole swept antenna disc outside the rib cage, on the clearing side.
+        const x = 9.53;
+        let z = -1.22;
+        while (boneClearance(x,z,-100,1.64,0,0) > -100) z += .20;
+        lobster.position.set(x,seabed(x,z)+.02,z);
         lobster.rotation.y = 1.02;
         const feelers = [];
         for (const side of [-1, 1]) {
