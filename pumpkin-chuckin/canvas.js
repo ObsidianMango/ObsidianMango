@@ -1,4 +1,5 @@
 import { THREE, v3, lerp, clamp, random, groundHeight, TAU } from './field.js';
+import { skinPoint } from './pumpkin.js?v=produce-1';
 
 const palette = ['#353320','#5e4229','#784625','#96502b','#a55d30','#b87641','#9d6838'];
 const sine = Math.sin, cosine = Math.cos;
@@ -48,6 +49,70 @@ function drawPumpkin(ctx,x,y,r,spin){
   ctx.beginPath();ctx.moveTo(0,-r*.68);ctx.quadraticCurveTo(-r*.06,-r*.91,r*.15,-r*1.1);ctx.stroke();
   ctx.strokeStyle='#9a8b51';ctx.lineWidth=r*.055;
   ctx.beginPath();ctx.moveTo(-r*.03,-r*.76);ctx.quadraticCurveTo(-r*.03,-r*.97,r*.13,-r*1.08);ctx.stroke();
+  ctx.restore();
+}
+
+function drawProduce(ctx,point,fruit){
+  const produce=fruit.produce;
+  if(produce.id==='pumpkin'){
+    drawPumpkin(ctx,point.x,point.y,point.scale*.665,fruit.root.rotation.x);
+    return;
+  }
+  const [sx,sy]=produce.scale, zoom=point.scale;
+  const width=zoom*.71*sx, height=zoom*.55*sy;
+  ctx.save();ctx.translate(point.x,point.y);ctx.rotate(fruit.root.rotation.x*.18);
+  ctx.beginPath();
+  for(let i=0;i<=72;i++){
+    const side=i>36?Math.PI:0;
+    const t=(i>36?72-i:i)/36*Math.PI;
+    const p=skinPoint(t,side,0,produce);
+    const x=p.x*zoom*sx,y=-p.y*zoom*sy;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  const gradient=ctx.createRadialGradient(-width*.34,-height*.4,width*.02,0,0,Math.max(width,height)*1.22);
+  gradient.addColorStop(0,'#fff4d1');gradient.addColorStop(.24,produce.skin);
+  gradient.addColorStop(.66,produce.skin);gradient.addColorStop(1,produce.accent);
+  ctx.fillStyle=gradient;ctx.fill();
+  ctx.save();ctx.clip();
+  const pattern=produce.body.pattern;
+  if(['bands','ridges','fiber','veins','rings','seam','blush'].includes(pattern)){
+    const count=pattern==='bands'?8:pattern==='seam'?1:pattern==='blush'?2:11;
+    for(let i=0;i<count;i++){
+      const x=(i/(count+1)-.5)*width*2.11;
+      ctx.globalAlpha=pattern==='bands'?.69:pattern==='veins'?.60:.35;
+      ctx.strokeStyle=pattern==='veins'?produce.flesh:produce.accent;
+      ctx.lineWidth=Math.max(.8,width*(pattern==='bands'?.13:.068));
+      ctx.beginPath();ctx.moveTo(x*.37,-height);
+      ctx.bezierCurveTo(x*1.27,height*-.47,x*.83,height*.4,x*.41,height);ctx.stroke();
+    }
+  }else if(pattern){
+    for(let i=0;i<88;i++){
+      const x=(i%11/10-.5)*width*1.92+Math.sin(i*3)*width*.063;
+      const y=(Math.floor(i/11)/7-.5)*height*1.94+Math.sin(i*1.1)*height*.064;
+      const size=Math.max(.33,width*(pattern==='cluster'||pattern==='kernels'?.11:pattern==='spines'||pattern==='diamond'?.064:.019));
+      ctx.fillStyle=pattern==='pips'?'#efcc87':i%3?produce.accent:produce.flesh;
+      ctx.globalAlpha=i%3?.55:.66;
+      ctx.beginPath();ctx.ellipse(x,y,size,size*(pattern==='pips'?1.45:.84),.3,0,TAU);ctx.fill();
+    }
+  }
+  ctx.restore();
+  const accent=produce.body.accent;
+  if(accent==='stem'||accent==='tip'||accent==='stalk'){
+    const y=accent==='stalk'?height*.78:-height*.90;
+    ctx.lineCap='round';ctx.strokeStyle=accent==='stalk'?'#789551':'#70663d';ctx.lineWidth=Math.max(1,width*.13);
+    ctx.beginPath();ctx.moveTo(0,y);ctx.quadraticCurveTo(width*.04,y+(accent==='stalk'?1:-1)*height*.15,width*.16,y+(accent==='stalk'?1:-1)*height*.28);ctx.stroke();
+  }
+  if(['crown','sprigs','leaf','husk'].includes(accent)){
+    const stemY=accent==='husk'?height*.7:-height*.79;
+    const leafHeight=height*(accent==='crown'?.95:accent==='sprigs'?.71:accent==='husk'?.98:.27);
+    for(let i=0;i<7;i++){
+      const tilt=(i-3)*.25;
+      ctx.save();ctx.translate((i-3)*width*.12,stemY);ctx.rotate(tilt);
+      ctx.fillStyle=i%2?'#698a4a':'#567b44';
+      ctx.beginPath();ctx.ellipse(0,-leafHeight*.32,width*.10,leafHeight*.54,0,0,TAU);ctx.fill();ctx.restore();
+    }
+  }
   ctx.restore();
 }
 
@@ -216,7 +281,7 @@ export function canvasRenderer(view) {
         ctx.moveTo(-size,-size*.42);ctx.quadraticCurveTo(size*.09,size*.92,size,-size*.15);
         ctx.lineTo(size*.55,-size*.54);ctx.quadraticCurveTo(-size*.16,-size*.22,-size*.73,-size*.64);ctx.closePath();
         const light=ctx.createLinearGradient(0,-size*.7,0,size*.62);
-        light.addColorStop(0,'#ffc078');light.addColorStop(.52,'#da742d');light.addColorStop(1,'#9b411a');
+        light.addColorStop(0,fx.produce.flesh);light.addColorStop(.52,fx.produce.skin);light.addColorStop(1,fx.produce.accent);
         ctx.fillStyle=light;
       }else{
         ctx.ellipse(0,0,size*(kind==='seed'?1.48:1.13),size*(kind==='seed'?.50:.63),0,0,TAU);ctx.fillStyle=color;
@@ -238,7 +303,7 @@ export function canvasRenderer(view) {
       if(rig)launcher(camera,rig);
       if(fruit.root.visible){
         const p=project(fruit.root.position,camera);
-        if(p&&p.scale>0)drawPumpkin(ctx,p.x,p.y,p.scale*.665,fruit.root.rotation.x);
+        if(p&&p.scale>0)drawProduce(ctx,p,fruit);
       }
       if(path.visible){
         ctx.fillStyle='#ffdeaa';

@@ -1,4 +1,5 @@
 import { THREE, v3, clamp, lerp, random, TAU, mesh, surface, groundHeight } from './field.js';
+import { defaultProduce } from './produce.js';
 
 const HALF = Math.PI / 2;
 const segmentRows = 3;
@@ -6,7 +7,46 @@ const segmentColumns = 8;
 const rindRadius = .665;
 export const pumpkinRadius = .65;
 
-function skinPoint(theta, phi, inset = 0) {
+export function skinPoint(theta, phi, inset = 0, produce = defaultProduce) {
+  if(produce.shape!=='pumpkin'){
+    const u=Math.cos(theta), s=Math.sin(theta);
+    let r=s,y=u,bend=0;
+    const wave=(frequency,phase=0)=>Math.cos(phi*frequency+phase);
+    switch(produce.shape){
+      case 'apple': r*=1+.12*u; y*=1-.18*Math.abs(u)**9; r*=1+.054*wave(5)*u*u;break;
+      case 'pear': r*=.95-.41*u; y*=1+.08*u; break;
+      case 'peach': r*=1+.09*u; y*=1-.09*Math.abs(u)**8; r*=1-.087*Math.max(0,wave(1))**18; break;
+      case 'plum': r*=.93-.15*u; r*=1-.115*Math.max(0,wave(1))**20; break;
+      case 'cherry': r*=.96+.19*u; y*=1-.18*Math.max(0,u)**7; break;
+      case 'citrus': r*=1-.06*u*u; y*=1+.10*Math.abs(u)**10; break;
+      case 'coconut': r*=.94-.16*u+.045*wave(3); bend=.046*u; break;
+      case 'banana': r*=.55*(1-.20*u)*(1+.08*wave(5)); bend=.72*u*u-.30; y*=1.04; break;
+      case 'strawberry': r*=.90+.47*u; y*=1+.10*Math.max(0,-u); break;
+      case 'grape': r*=.86+.27*u; r*=1+.21*wave(6,theta*6)*Math.sin(theta*9)**2; break;
+      case 'berry': r*=1+.107*wave(9,theta*3)+.115*Math.cos(theta*21)*wave(10,theta*5); break;
+      case 'pineapple': r=s**.54*(.91+.075*Math.cos(theta*14)*wave(10,theta*3)); y*=.97; break;
+      case 'spiny': r*=.95-.08*u+.17*Math.max(0,wave(13,theta*8)*Math.cos(theta*30))**2; break;
+      case 'star': r*=.73+.31*wave(5); r*=1+.06*u; break;
+      case 'root': r*=.80+.65*u; y*=1+.14*Math.max(0,-u); bend=.11*u*u; break;
+      case 'tuber': r*=1+.08*wave(3,theta*4)+.07*wave(5,theta*5); bend=.10*Math.sin(theta*4); break;
+      case 'onion': r*=1-.30*u; y*=1+.17*Math.max(0,u)**3; break;
+      case 'garlic': r*=.88-.28*u+.12*wave(7); y*=1+.23*Math.max(0,u)**3; break;
+      case 'pepper': r*=.88+.24*u+.115*wave(4); y*=1-.11*Math.abs(u)**9; break;
+      case 'chili': r*=.53+.39*u; bend=.62*Math.max(0,-u)**1.65-.19; y*=1.08; break;
+      case 'eggplant': r*=.94-.31*u; bend=.18*u*u-.03; break;
+      case 'gourd': r*=.82-.15*u+.24*Math.cos((u+.47)*5); break;
+      case 'cuke': r=s**.64*(.80+.055*Math.sin(theta*13)+.037*wave(6)); break;
+      case 'leafy': r*=1+.10*wave(8,theta*7)+.065*Math.sin(theta*33)*wave(11); break;
+      case 'greens': r*=.80+.35*u+.17*wave(7,theta*9); y*=1.12; break;
+      case 'broccoli': r*=1.06+.12*u+.12*wave(8,theta*12)*Math.sin(theta*15); y=.86*u+.15; break;
+      case 'corn': r=s**.61*(.71+.075*Math.cos(theta*30)*wave(14)); break;
+      case 'stalk': r=s**.41*(.58-.16*u+.05*wave(6)); y*=1.12;break;
+      case 'pod': r*=.61+.10*Math.cos(theta*16); bend=.43*u*u-.14; break;
+      case 'scaly': r*=1+.10*wave(9,theta*7)*Math.cos(theta*21)+.10*u; break;
+    }
+    const width=(rindRadius-inset)*r;
+    return v3(Math.cos(phi)*width+bend*.48,y*(.525-inset*.70),Math.sin(phi)*width);
+  }
   const sinus = Math.sin(theta);
   const rib = Math.cos(phi*10 + Math.sin(theta*3.1)*.33);
   const grooves = Math.pow((1-rib)*.5,4.3);
@@ -16,20 +56,38 @@ function skinPoint(theta, phi, inset = 0) {
   return v3(Math.cos(phi)*r,y + .027*Math.sin(phi*3+.71)*sinus,Math.sin(phi)*r);
 }
 
-function skinColor(theta,phi) {
+function skinColor(theta,phi,produce,colors) {
+  if(produce.id!==defaultProduce.id){
+    const texture=Math.sin(theta*16+phi*4)*Math.sin(phi*11-theta*9);
+    const pattern=produce.body.pattern;
+    const wave=(n,t,b=0)=>Math.cos(phi*n+theta*t+b);
+    let tint=.14+.11*texture;
+    if(pattern==='blush'||pattern==='seam')tint=clamp(.35+.33*wave(2,2)+.21*texture,0,.86);
+    if(pattern==='bands')tint=clamp(.50+.66*wave(9,0,Math.sin(theta*11)*.63)+.15*texture,0,1);
+    if(pattern==='ridges'||pattern==='fiber'||pattern==='pumpkin')tint=.30+.29*wave(pattern==='pumpkin'?10:7,1)+.16*texture;
+    if(pattern==='freckle'||pattern==='eyes')tint=.09+.75*Math.max(0,wave(24,21)*Math.cos(theta*63))**5;
+    if(pattern==='pips')tint=.05+.82*Math.max(0,wave(23,13)*Math.cos(theta*39))**10;
+    if(pattern==='net'||pattern==='veins'||pattern==='diamond'||pattern==='kernels'){
+      const cell=wave(pattern==='net'?22:14,14)*wave(pattern==='veins'?13:19,-20);
+      tint=.18+.50*Math.abs(cell)**3;
+    }
+    if(pattern==='cluster'||pattern==='spines')tint=.25+.25*wave(11,7)*Math.cos(theta*32);
+    if(pattern==='rings'||pattern==='pods')tint=.24+.23*Math.cos(theta*49);
+    return colors.skin.clone().lerp(colors.accent,clamp(tint,0,1)).multiplyScalar(.86+.19*Math.sin(theta)+texture*.065);
+  }
   const ribs = Math.pow(.5-.5*Math.cos(phi*10+Math.sin(theta*3.1)*.33),6);
   const shoulder = Math.pow(Math.abs(Math.cos(theta)),8);
   const mottles = Math.sin(phi*9+theta*8)*Math.sin(theta*13-phi*5);
   return new THREE.Color().setRGB(.97-ribs*.105-shoulder*.21+mottles*.022,.92-ribs*.16-shoulder*.27+mottles*.043,.83-ribs*.18-shoulder*.32+mottles*.043);
 }
 
-function skinGeometry(rows,columns) {
+function skinGeometry(rows,columns,produce,colorsByRole) {
   const positions=[],colors=[],uv=[],indices=[];
   for(let y=0;y<=rows;y++){
     for(let x=0;x<=columns;x++){
       const theta = lerp(.001,Math.PI-.001,y/rows), phi=x/columns*TAU;
-      positions.push(...skinPoint(theta,phi));
-      const c=skinColor(theta,phi);colors.push(c.r,c.g,c.b);
+      positions.push(...skinPoint(theta,phi,0,produce));
+      const c=skinColor(theta,phi,produce,colorsByRole);colors.push(c.r,c.g,c.b);
       uv.push(x/columns,1-y/rows);
       if(y===0||x===0)continue;
       const d=y*(columns+1)+x,cIndex=d-1,b=d-columns-1,a=b-1;
@@ -56,13 +114,13 @@ function curvedStem() {
   return geo;
 }
 
-function fractureGeometry(row,column) {
+function fractureGeometry(row,column,produce,colorsByRole) {
   const edgeCount=8;
   const positions=[],colors=[],uv=[],indices=[];
   const geo=new THREE.BufferGeometry();
   const groupStart = material => ({start:indices.length,material});
   const finish = group => geo.addGroup(group.start,indices.length-group.start,group.material);
-  const pivot=skinPoint((row+.5)/segmentRows*Math.PI,(column+.5)/segmentColumns*TAU,.041);
+  const pivot=skinPoint((row+.5)/segmentRows*Math.PI,(column+.5)/segmentColumns*TAU,.041,produce);
   function angles(u,v){
     const p=(column+u)*TAU/segmentColumns;
     const t=(row+v)*Math.PI/segmentRows;
@@ -74,9 +132,9 @@ function fractureGeometry(row,column) {
   function append(u,v,depth,outer) {
     const [t,p]=angles(u,v);
     const uneven = depth ? .022*(.5+.5*Math.sin(t*41+p*23))*Math.sin(t) : 0;
-    const local=skinPoint(t,p,depth+uneven).sub(pivot);
+    const local=skinPoint(t,p,depth+uneven,produce).sub(pivot);
     positions.push(...local);uv.push(p/TAU,1-t/Math.PI);
-    const tint=outer ? skinColor(t,p) : new THREE.Color().setRGB(.92,.78+.16*Math.sin(t*34+p*48)**2,.62+.31*Math.sin(t*15-p*19)**2);
+    const tint=outer ? skinColor(t,p,produce,colorsByRole) : new THREE.Color().setRGB(.92,.81+.15*Math.sin(t*34+p*48)**2,.76+.22*Math.sin(t*15-p*19)**2);
     colors.push(tint.r,tint.g,tint.b);
     return positions.length/3-1;
   }
@@ -116,41 +174,98 @@ export function makePumpkin(scene, skinMap) {
   const stem = surface('#777341',{ ...skinMap, bumpScale:.045, vertexColors:false });
   stem.map = null;
   const root = new THREE.Group();
-  const skin = skinGeometry(57,100);
-  mesh(root,skin,outer);
   const stemGeo=curvedStem();
-  mesh(root,stemGeo,stem,0,.54,0);
+  const stemMesh=mesh(root,stemGeo,stem,0,.54,0);
+  const leafGeometry=new THREE.SphereGeometry(1,14,8);
+  const leaves=Array.from({length:9},()=>mesh(root,leafGeometry,stem));
   scene.add(root);
-  const fractures=[];
-  for(let row=0;row<segmentRows;row++)for(let column=0;column<segmentColumns;column++){
-    fractures.push(fractureGeometry(row,column));
+  const models=new Map();
+  function getModel(produce){
+    const cached=models.get(produce.id);
+    if(cached){
+      models.delete(produce.id);
+      models.set(produce.id,cached);
+      return cached;
+    }
+    const colors={skin:new THREE.Color(produce.skin),accent:new THREE.Color(produce.accent)};
+    const detail=produce.id===defaultProduce.id || ['spiny','pineapple','berry','corn','leafy'].includes(produce.shape);
+    const skin=skinGeometry(detail?55:40,detail?100:72,produce,colors);
+    const fractures=[];
+    for(let row=0;row<segmentRows;row++)for(let column=0;column<segmentColumns;column++){
+      fractures.push(fractureGeometry(row,column,produce,colors));
+    }
+    const model={skin,fractures};
+    models.set(produce.id,model);
+    return model;
   }
-  return {root,outer,inner,flesh,stem,stemGeo,fractures};
+  const skinMesh=mesh(root,getModel(defaultProduce).skin,outer);
+  const fruit={root,outer,inner,flesh,stem,stemGeo,select(produce){
+    const original=produce.id===defaultProduce.id;
+    const model=getModel(produce);
+    fruit.produce=produce;
+    fruit.fractures=model.fractures;
+    root.scale.set(...produce.scale);
+    skinMesh.geometry=model.skin;
+    outer.map=original?skinMap.map:skinMap.bumpMap;
+    inner.color.set(original?'#f89e48':produce.flesh);
+    flesh.color.set(original?'#ffd17e':produce.flesh).lerp(new THREE.Color('#fff1ce'),original?0:.28);
+    const accent=produce.body.accent;
+    stem.color.set(accent==='leaf'||accent==='crown'||accent==='husk'||accent==='sprigs'||accent==='stalk'?'#628148':'#777341');
+    stemMesh.visible=accent==='stem'||accent==='tip'||accent==='stalk';
+    stemMesh.position.set(accent==='tip'&&produce.shape==='banana'?.20:0,accent==='stalk'?-.39:original?.54:.50,0);
+    stemMesh.rotation.set(0,0,accent==='stalk'?Math.PI:0);
+    stemMesh.scale.setScalar(accent==='stalk'?1.65:original?1:accent==='tip'?.54:.69);
+    fruit.stemMesh=stemMesh;
+    const count=accent==='crown'?9:accent==='sprigs'?7:accent==='leaf'?5:accent==='husk'?4:0;
+    leaves.forEach((leaf,i)=>{
+      leaf.visible=i<count;
+      if(i>=count)return;
+      const angle=i*TAU/count;
+      const length=accent==='crown'?.45+i%3*.11:accent==='sprigs'?.31+i%3*.10:accent==='husk'?.48:.17;
+      const spread=accent==='leaf'?.18:accent==='husk'?.26:.13;
+      leaf.position.set(Math.cos(angle)*spread,accent==='husk'?-.20:.51+length*.36,Math.sin(angle)*spread);
+      leaf.scale.set(accent==='husk'?.20:.080,length,accent==='husk'?.042:.032);
+      leaf.rotation.set(Math.sin(angle)*.4,angle,Math.cos(angle)*(accent==='leaf'?1.22:.42));
+    });
+    if(models.size>5){
+      const oldest=[...models.keys()].find(id=>id!==defaultProduce.id&&id!==produce.id);
+      const expired=models.get(oldest);
+      expired.skin.dispose();
+      for(const part of expired.fractures)part.geo.dispose();
+      models.delete(oldest);
+    }
+  }};
+  fruit.select(defaultProduce);
+  return fruit;
 }
 
-function smearMap(seed) {
+function smearMap(seed,produce) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 512;
   const ctx = canvas.getContext('2d');
   const rng = random(seed);
+  const colorful=produce.id!==defaultProduce.id;
+  const pulps=colorful?[produce.skin+'c9',produce.flesh+'d5',produce.accent+'d6',produce.flesh+'ce',produce.skin+'ae',produce.flesh+'ec']:['#bc561fc9','#ec7934d5','#db6d28d6','#ed9b44ce','#a94317ae','#fbab55ec'];
+  const drops=colorful?[produce.flesh+'ef',produce.accent+'d5',produce.skin+'c5',produce.flesh+'e4']:['#fa9337ef','#f5ae55d5','#e47a27c5','#ffd078e4'];
+  const streaks=colorful?[produce.flesh+'b9',produce.accent+'be']:['#ffda8ab9','#a83d18be'];
   for(let i=0;i<95;i++){
     const angle=rng()*TAU,burst=Math.pow(rng(),1.8);
     const x=256+Math.cos(angle)*burst*170,y=256+Math.sin(angle)*burst*168;
     const r=2+rng()*(51-29*burst);
-    ctx.fillStyle=['#bc561fc9','#ec7934d5','#db6d28d6','#ed9b44ce','#a94317ae','#fbab55ec'][i%6];
+    ctx.fillStyle=pulps[i%pulps.length];
     ctx.beginPath();ctx.ellipse(x,y,r,r*(.32+rng()*.64),angle,0,TAU);ctx.fill();
   }
   for(let i=0;i<165;i++){
     const angle=rng()*TAU,r=29+Math.pow(rng(),.8)*205;
     const x=256+Math.cos(angle)*r,y=256+Math.sin(angle)*r;
-    ctx.fillStyle=['#fa9337ef','#f5ae55d5','#e47a27c5','#ffd078e4'][i%4];
+    ctx.fillStyle=drops[i%drops.length];
     const w=(1.3+rng()*5.3)*(1.14-r/275);
     ctx.beginPath();ctx.ellipse(x,y,w*(1.5+rng()*6.3),w,angle,0,TAU);ctx.fill();
   }
   for(let i=0;i<64;i++){
     const a=rng()*TAU,r=18+rng()*101,w=2+rng()*5;
     const x=256+Math.cos(a)*r,y=256+Math.sin(a)*r;
-    ctx.strokeStyle=i%3===0?'#ffda8ab9':'#a83d18be';
+    ctx.strokeStyle=streaks[i%3===0?0:1];
     ctx.lineWidth=1+rng()*2;
     ctx.beginPath();ctx.moveTo(x,y);ctx.quadraticCurveTo(x+w,y-w,x+w*2.4,y+w*2);ctx.stroke();
   }
@@ -158,9 +273,9 @@ function smearMap(seed) {
   return tex;
 }
 
-function addSmear(scene,target,hit,power,seed) {
-  const tex=smearMap(seed+311);
-  const width=clamp(.65+power*.081,1.5,3.85);
+function addSmear(scene,target,hit,power,seed,produce) {
+  const tex=smearMap(seed+311,produce);
+  const width=clamp((.65+power*.081)*lerp(.56,1,Math.min(produce.style.pulp,1)),.80,3.85);
   const g=new THREE.PlaneGeometry(width,width);
   if(hit.onBoard){
     // Clip the decal to the circular face while leaving its clear outer edges intact.
@@ -189,19 +304,23 @@ export function clearSmear(mark) {
   mark.geometry.dispose();mark.material.map.dispose();mark.material.dispose();
 }
 
-function particleBanks(mobile) {
+function particleBanks(mobile,produce) {
   const detail=mobile ? 0 : 1;
   const sweet=new THREE.MeshPhysicalMaterial({color:'#ffffff',roughness:.32,clearcoat:.72,clearcoatRoughness:.18});
   const seed=surface('#ffffff',{roughness:.43});
   const rind=surface('#ffffff',{roughness:.59});
+  const {skin,flesh,accent,style}=produce;
+  const original=produce.id===defaultProduce.id;
+  const seedColors=['#e9d5a7','#ffe7b5','#eee2c4','#d4af73'];
+  if(['watermelon','papaya','dragon-fruit','passion-fruit'].includes(produce.id))seedColors.splice(0,4,'#302425','#362929','#55413a','#443934');
   return [
-    {geo:new THREE.IcosahedronGeometry(1,detail),mat:sweet,count:mobile?137:222,colors:['#e77924','#ffac53','#f68b33','#ffb753','#ef6b1b'],min:.013,max:.086,drag:1.2,stretch:.9},
-    {geo:new THREE.SphereGeometry(1,9,5),mat:seed,count:mobile?36:59,colors:['#e9d5a7','#ffe7b5','#eee2c4','#d4af73'],min:.044,max:.063,drag:.39,seed:true},
-    {geo:new THREE.IcosahedronGeometry(1,0),mat:rind,count:mobile?30:53,colors:['#ec8534','#c65517','#ffa153','#ebb05c'],min:.043,max:.176,drag:.64,chip:true}
+    {geo:new THREE.IcosahedronGeometry(1,detail),mat:sweet,count:Math.round((mobile?137:222)*style.pulp),colors:original?['#e77924','#ffac53','#f68b33','#ffb753','#ef6b1b']:[skin,flesh,flesh,accent],min:.013,max:.086,drag:1.2,stretch:.9},
+    {geo:new THREE.SphereGeometry(1,9,5),mat:seed,count:Math.round((mobile?36:59)*style.seeds),colors:seedColors,min:.044,max:.063,drag:.39,seed:true},
+    {geo:new THREE.IcosahedronGeometry(1,0),mat:rind,count:Math.round((mobile?30:53)*style.chips),colors:original?['#ec8534','#c65517','#ffa153','#ebb05c']:[skin,accent,flesh],min:.043,max:.176,drag:.64,chip:true}
   ].map(pack=>({...pack, colors:pack.colors.map(c=>new THREE.Color(c))}));
 }
 
-function makePlume(scene, hit, rng, mobile) {
+function makePlume(scene, hit, rng, mobile, produce) {
   const canvas = document.createElement('canvas');
   canvas.width=canvas.height=96;
   const ctx=canvas.getContext('2d');
@@ -210,8 +329,9 @@ function makePlume(scene, hit, rng, mobile) {
   ctx.fillStyle=glow;ctx.fillRect(0,0,96,96);
   const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
   const sprites=[];
-  for(let i=0;i<(mobile?12:19);i++){
-    const mat=new THREE.SpriteMaterial({ map:tex,transparent:true,depthWrite:false,color:hit.onBoard?0xffaa66:0xbe9f6e });
+  const tint=produce.id===defaultProduce.id?0xffaa66:produce.flesh;
+  for(let i=0;i<Math.round((mobile?12:19)*produce.style.dust);i++){
+    const mat=new THREE.SpriteMaterial({ map:tex,transparent:true,depthWrite:false,color:hit.onBoard?tint:0xbe9f6e });
     const item=new THREE.Sprite(mat);
     item.position.copy(hit.contact);item.scale.setScalar(.18+rng()*.24);mat.opacity=0;
     scene.add(item);
@@ -222,6 +342,7 @@ function makePlume(scene, hit, rng, mobile) {
 
 export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly) {
   const rng=random(seed);
+  const produce=pumpkin.produce, style=produce.style, size=pumpkin.root.scale;
   const speed=hit.velocity.length();
   const energy=clamp(speed/22,.66,1.45);
   const normal=hit.onBoard ? v3(0,0,1):v3(0,1,0);
@@ -233,24 +354,28 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
   scene.add(debris);
   for(const [index,part] of pumpkin.fractures.entries()){
     const piece=mesh(debris,part.geo,[pumpkin.outer,pumpkin.inner,pumpkin.flesh],0,0,0,!mobile);
-    const offset=part.pivot.clone().applyQuaternion(rotation);
+    piece.scale.copy(size);
+    const offset=part.pivot.clone().multiply(size).applyQuaternion(rotation);
     piece.position.copy(hit.center).add(offset);
     if(hit.onBoard)piece.position.z=Math.max(piece.position.z,hit.contact.z+.18);
     piece.quaternion.copy(rotation);
-    const velocity=offset.clone().normalize().multiplyScalar((3.9+rng()*6.7)*energy)
+    const velocity=offset.clone().normalize().multiplyScalar((3.9+rng()*6.7)*energy*style.spread)
       .addScaledVector(normal,(2+rng()*4.1)*energy)
       .addScaledVector(tangent,.29+rng()*.10);
     velocity.y+=.7+rng()*2.2;
     rigid.push({piece,vel:velocity,spin:v3((rng()-.5)*10,(rng()-.5)*13,(rng()-.5)*12),radius:.12+index%3*.036});
   }
-  const stem=mesh(debris,pumpkin.stemGeo,pumpkin.stem,0,0,0,false);
-  stem.position.copy(v3(0,.54,0).applyQuaternion(rotation)).add(hit.center);
-  stem.quaternion.copy(rotation);
-  rigid.push({piece:stem,vel:normal.clone().multiplyScalar(6.1).addScaledVector(tangent,.37).add(v3(1.1,5.8,.1)),spin:v3(-8,10,4),radius:.115});
+  if(pumpkin.stemMesh.visible){
+    const stem=mesh(debris,pumpkin.stemGeo,pumpkin.stem,0,0,0,false);
+    stem.position.copy(pumpkin.stemMesh.position).multiply(size).applyQuaternion(rotation).add(hit.center);
+    stem.scale.copy(pumpkin.stemMesh.scale).multiply(size);
+    stem.quaternion.copy(rotation).multiply(pumpkin.stemMesh.quaternion);
+    rigid.push({piece:stem,vel:normal.clone().multiplyScalar(6.1).addScaledVector(tangent,.37).add(v3(1.1,5.8,.1)),spin:v3(-8,10,4),radius:.115});
+  }
 
   const strands = [];
   const strandGeo = new THREE.SphereGeometry(1,10,6);
-  for(let i=0;i<(mobile?11:19);i++){
+  for(let i=0;i<Math.round((mobile?11:19)*style.pulp);i++){
     const part=mesh(debris,strandGeo,pumpkin.flesh,0,0,0,false);
     const vel=v3((rng()-.5)*11,rng()*7,(rng()-.5)*8).multiplyScalar(energy).addScaledVector(normal,2+rng()*2.9).addScaledVector(tangent,.38);
     part.position.copy(splashOrigin);
@@ -258,14 +383,14 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
   }
 
   const dummy=new THREE.Object3D();
-  const banks=particleBanks(mobile||canvasOnly).map(bank=>{
+  const banks=particleBanks(mobile||canvasOnly,produce).map(bank=>{
     const batch=new THREE.InstancedMesh(bank.geo,bank.mat,bank.count);
     batch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     batch.frustumCulled=false;
     const particles=Array.from({length:bank.count},(_,i)=>{
       const direction=v3(rng()-.5,rng()-.36,rng()-.5).normalize();
       if(hit.onBoard) direction.z=Math.abs(direction.z)*.65;
-      const spread=(3+Math.pow(rng(),2.0)*14)*energy;
+      const spread=(3+Math.pow(rng(),2.0)*14)*energy*style.spread;
       const vel=direction.multiplyScalar(spread).addScaledVector(tangent,.33+rng()*.36).addScaledVector(normal,(bank.seed?2.5:1.3)+rng()*6*energy);
       const position=splashOrigin.clone().add(v3((rng()-.5)*.43,(rng()-.5)*.35,(rng()-.5)*.29));
       const size=lerp(bank.min,bank.max,Math.pow(rng(),1.6));
@@ -275,8 +400,8 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
     debris.add(batch);
     return {...bank,batch,particles};
   });
-  const mist=makePlume(debris,hit,rng,mobile);
-  const mark=addSmear(scene,target,hit,speed,seed);
+  const mist=makePlume(debris,hit,rng,mobile,produce);
+  const mark=addSmear(scene,target,hit,speed,seed,produce);
   mark.visible=false;
   let age=0;
   const up=v3(0,1,0), scratch=v3(), zero=v3(0,0,0);
@@ -302,7 +427,7 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
   return {
     mark,
     textures: [mark.material.map,mist.tex],
-    preview: { rigid,banks,sprites:mist.sprites },
+    preview: { rigid,banks,sprites:mist.sprites,produce },
     setVisible(visible){
       debris.visible=visible;
       mark.visible=visible;
@@ -311,7 +436,7 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
       age+=dt;
       for(const obj of rigid){
         const {piece,vel,spin,radius}=obj;
-        const onSurface=advance(piece.position,vel,dt,radius,.39,.26);
+        const onSurface=advance(piece.position,vel,dt,radius,style.drag,style.bounce);
         if(onSurface)spin.multiplyScalar(.77);
         piece.rotateX(spin.x*dt);piece.rotateY(spin.y*dt);piece.rotateZ(spin.z*dt);
       }

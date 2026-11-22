@@ -1,12 +1,15 @@
 import { THREE, v3, clamp, lerp, random, buildField, groundHeight, buildLauncher, buildTarget } from './field.js';
-import { canvasRenderer } from './canvas.js';
-import { makePumpkin, pumpkinRadius, prepareImpact, clearSmear } from './pumpkin.js?v=impact-2';
+import { canvasRenderer } from './canvas.js?v=produce-1';
+import { makePumpkin, pumpkinRadius, prepareImpact, clearSmear } from './pumpkin.js?v=produce-1';
+import { defaultProduce, findProduce, bindProducePicker } from './produce.js';
 
 const $ = id => document.getElementById(id);
 const ui = Object.fromEntries([
   'viewport','score','best','sound','help','instructions','round-number','round-name','distance','attempts',
   'aim-pin','pin-distance','film','film-label','feedback','feedback-type','feedback-title','feedback-detail',
-  'loading','announcer','aim','angle','power','aim-value','angle-value','power-value','fire','replay'
+  'loading','announcer','aim','angle','power','aim-value','angle-value','power-value','fire','replay',
+  'produce-open','produce-current-icon','produce-current-name','produce-picker','produce-search','produce-categories',
+  'produce-random','produce-results','produce-options'
 ].map(id => [id,$(id)]));
 const rounds = [
   { name:'The Warm-Up', distance:23, x:.38, travel:0, rate:0 },
@@ -15,6 +18,7 @@ const rounds = [
 ];
 const rangeControls = [ui.aim,ui.angle,ui.power];
 const bestKey = 'pumpkin-chuckin-best-v1';
+const produceKey = 'pumpkin-chuckin-produce-v1';
 const mobile = matchMedia('(pointer: coarse)').matches;
 const lessMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const gravity = 9.81;
@@ -54,15 +58,31 @@ async function setup() {
 
   let roundIndex=0, tries=0, roundScores=[0,0,0], best=0, phase='aim', volley=0;
   let animation=0, elapsed=0, rangeTime=0, flightTime=0, debt=0, effect=null, shot=null, lastShot=null, playback=false;
-  let bestChanged=false;
+  let bestChanged=false, selectedProduce=defaultProduce;
   const position=v3(), rotation=new THREE.Quaternion(), spin=new THREE.Euler();
   let portrait=false, aimDirty=true, time=0, nextPreview=0;
   const marks=[];
-  try { best=Number(localStorage.getItem(bestKey))||0; } catch {}
+  try {
+    best=Number(localStorage.getItem(bestKey))||0;
+    selectedProduce=findProduce(localStorage.getItem(produceKey))||defaultProduce;
+  } catch {}
+  activateProduce(selectedProduce);
 
   const current=()=>rounds[roundIndex];
   const total=()=>roundScores.reduce((sum,n)=>sum+n,0);
   const impactDuration=()=>playback?replayImpactDuration:liveImpactDuration;
+  function activateProduce(entry){
+    if(fruit.produce!==entry)fruit.select(entry);
+  }
+  function chooseProduce(entry){
+    selectedProduce=entry;
+    activateProduce(entry);
+    if(phase==='aim')seatPumpkin();
+    aimDirty=true;
+    try{localStorage.setItem(produceKey,entry.id);}catch{}
+    repaint();
+    announce(`${entry.name} selected.`);
+  }
   const targetX=(seconds,round=current())=>round.x+Math.sin(seconds*round.rate)*round.travel;
   function rackTarget(seconds){
     target.stand.position.set(targetX(seconds),groundHeight(targetX(seconds),-current().distance),-current().distance);
@@ -71,7 +91,7 @@ async function setup() {
     ui.aim.value=THREE.MathUtils.radToDeg(Math.atan2(current().x,current().distance)).toFixed(2);
     ui.angle.value=26;
     const launch=newShot(0,0);
-    const depth=current().distance + launch.origin.z - .126 - pumpkinRadius*.89;
+    const depth=current().distance + launch.origin.z - .126 - launch.radius*.89;
     const distance=depth/Math.cos(launch.aim);
     const height=groundHeight(current().x,-current().distance)+target.center-launch.origin.y;
     const theta=THREE.MathUtils.degToRad(+ui.angle.value);
@@ -97,7 +117,7 @@ async function setup() {
     if(phase==='aim')seatPumpkin();
   }
   function seatPumpkin(){
-    const anchor=v3(0,.46,-.92);
+    const anchor=v3(0,.46+(fruit.produce.scale[1]-1)*.39,-.92);
     launcher.arm.updateWorldMatrix(true,false);
     fruit.root.position.copy(launcher.arm.localToWorld(anchor));
     fruit.root.rotation.set(.07,launcher.stand.rotation.y+.21,.13);
@@ -113,12 +133,13 @@ async function setup() {
     const active=phase==='windup'||phase==='flight'||phase==='impact';
     rangeControls.forEach(control=>control.disabled=phase!=='aim');
     const fireText=phase==='roundEnd' ? (roundIndex===rounds.length-1?'Play again':'Next round')
-      : active ? (playback?'Replaying…':phase==='impact'?'Impact!':'In flight…') : 'Chuck pumpkin';
+      : active ? (playback?'Replaying…':phase==='impact'?'Impact!':'In flight…') : `Chuck ${selectedProduce.name.toLowerCase()}`;
     ui.fire.querySelector('span').textContent=fireText;
     ui.fire.disabled=active;
     ui.replay.disabled=active||!lastShot;
+    ui['produce-open'].disabled=active;
     ui.film.hidden=phase!=='impact'&&!playback;
-    ui['film-label'].textContent=playback?'SLOW-MOTION REPLAY':'IMPACT CAM';
+    ui['film-label'].textContent=playback?`Slow-motion replay · ${shot.produce.name}`:'IMPACT CAM';
   }
   function announce(message){ui.announcer.textContent=message;}
   function clearEffect(){
@@ -154,10 +175,13 @@ async function setup() {
   function newShot(seed,start){
     const heading=THREE.MathUtils.degToRad(+ui.aim.value);
     const angle=THREE.MathUtils.degToRad(+ui.angle.value), speed=7+.20*+ui.power.value;
+    const produce=selectedProduce;
+    const [width,height,depth]=produce.scale;
+    const crossSection=Math.max(width,depth);
     return {
-      origin:v3(Math.sin(heading)*.48,2.03,-Math.cos(heading)*.48),
+      origin:v3(Math.sin(heading)*.48,2.03+(height-1)*.35,-Math.cos(heading)*.48),
       initial:v3(Math.sin(heading)*Math.cos(angle)*speed,Math.sin(angle)*speed,-Math.cos(heading)*Math.cos(angle)*speed),
-      aim:heading,seed,start
+      aim:heading,seed,start,produce,radius:pumpkinRadius*crossSection,groundClearance:.47*(height*.58+crossSection*.42)
     };
   }
   function placeAt(throwData,t,out){
@@ -174,23 +198,23 @@ async function setup() {
   }
   function collision(a,b,seconds,round,throwData){
     const boardZ=-round.distance+.126;
-    const front=boardZ+pumpkinRadius*.89;
+    const front=boardZ+throwData.radius*.89;
     if(a.z>=front&&b.z<front){
       const fraction=(a.z-front)/(a.z-b.z);
       const center=a.clone().lerp(b,fraction);
       const x=targetX(throwData.start+seconds-(1-fraction)*stepSize,round);
       const y=groundHeight(x,-round.distance)+target.center;
       const radial=Math.hypot(center.x-x,center.y-y);
-      if(radial<target.radius+.34){
+      if(radial<target.radius+throwData.radius*.52){
         const reach=clamp((target.radius-.02)/Math.max(radial,.001),0,1);
         const contact=v3(x+(center.x-x)*reach,y+(center.y-y)*reach,boardZ);
         return {center,contact,onBoard:true,radial,fraction,boardX:x,boardY:y};
       }
     }
     const floor=groundHeight(b.x,b.z);
-    if(b.y<=floor+.47){
+    if(b.y<=floor+throwData.groundClearance){
       const priorHeight=a.y-groundHeight(a.x,a.z);
-      const fraction=clamp((priorHeight-.47)/Math.max(.001,priorHeight-b.y+floor),0,1);
+      const fraction=clamp((priorHeight-throwData.groundClearance)/Math.max(.001,priorHeight-b.y+floor),0,1);
       const center=a.clone().lerp(b,fraction);
       const contact=v3(center.x,groundHeight(center.x,center.z)+.023,center.z);
       return {center,contact,onBoard:false,radial:Infinity,fraction};
@@ -212,13 +236,14 @@ async function setup() {
   }
   function stageImpact(throwData){
     const hit=throwData.hit;
+    activateProduce(throwData.produce);
     rotation.setFromEuler(spinAt(throwData,hit.time));
     const prepared=prepareImpact(scene,target,hit,rotation,fruit,throwData.seed,mobile,Boolean(fallback));
     if(renderer)for(const texture of prepared.textures)renderer.initTexture(texture);
     return prepared;
   }
   function begin(){
-    if(ui.fire.disabled)return;
+    if(ui.fire.disabled||ui['produce-picker'].open)return;
     if(phase==='roundEnd'){nextRound();return;}
     if(phase!=='aim'||ui.instructions.open)return;
     clearEffect();
@@ -295,7 +320,7 @@ async function setup() {
       const result=shot.result;
       announce(`${result.title}. ${result.points} points. ${attemptsPerRound-tries} throws remaining.`);
     }
-    sounds.crack(shot.seed,hit.velocity.length(),hit.onBoard,playback);
+    sounds.crack(shot.seed,hit.velocity.length(),hit.onBoard,playback,shot.produce.style);
     repaint();
   }
   function showResult(){
@@ -321,6 +346,7 @@ async function setup() {
     clearEffect();
     if(wasReplay)for(const record of marks)if(record.seed===shot.seed)record.mark.visible=true;
     playback=false;
+    activateProduce(selectedProduce);
     if(tries>=attemptsPerRound){
       phase='roundEnd';
       repaint();
@@ -374,14 +400,9 @@ async function setup() {
     if(aimDirty||time>nextPreview){
       const preview=newShot(0,rangeTime+.31);
       let count=0;
-      for(let t=.075;t<3.85&&count<60;t+=.067){
+      const contactTime=traceShot(preview).time;
+      for(let t=.075;t<contactTime&&count<60;t+=.067){
         placeAt(preview,t,pathPoint);
-        if(pathPoint.y<groundHeight(pathPoint.x,pathPoint.z)+.20)break;
-        const zFront=-current().distance+.61;
-        if(pathPoint.z<zFront){
-          const x=targetX(preview.start+t), y=groundHeight(x,-current().distance)+target.center;
-          if(count&&Math.hypot(pathPoint.x-x,pathPoint.y-y)<target.radius)break;
-        }
         transform.position.copy(pathPoint);
         transform.scale.setScalar(.037+Math.min(t,2)*.018);
         transform.updateMatrix();
@@ -446,6 +467,7 @@ async function setup() {
 
   ui.fire.addEventListener('click',begin);
   ui.replay.addEventListener('click',replay);
+  bindProducePicker(ui,selectedProduce,chooseProduce);
   ui.help.addEventListener('click',()=>ui.instructions.showModal());
   ui.sound.addEventListener('click',()=>{
     const muted=ui.sound.getAttribute('aria-pressed')!=='true';
@@ -456,7 +478,7 @@ async function setup() {
   });
   rangeControls.forEach(slider=>slider.addEventListener('input',updateControlText));
   window.addEventListener('keydown',e=>{
-    if(e.ctrlKey||e.metaKey||e.altKey||ui.instructions.open)return;
+    if(e.ctrlKey||e.metaKey||e.altKey||ui.instructions.open||ui['produce-picker'].open)return;
     if(e.code==='Space'){
       if(e.target.closest?.('button')||e.target instanceof HTMLInputElement)return;
       e.preventDefault();
@@ -492,6 +514,7 @@ async function setup() {
   frameCamera(0,true);drawGuide();
   if(renderer){
     ui.fire.disabled=true;
+    ui['produce-open'].disabled=true;
     const warmupShot=newShot(0,0);
     warmupShot.hit=traceShot(warmupShot);
     const warmup=stageImpact(warmupShot);
@@ -572,12 +595,12 @@ function createSound(){
       noise(seed,.006,.24,3000,420,.52);
       noise(seed+1,.061,.36,960,190,.19,'bandpass');
     },
-    crack(seed,speed,board,replay){
+    crack(seed,speed,board,replay,style){
       if(!ctx||muted)return;
       const amp=clamp(speed/22,.6,1.24);
       thump(0,.23,board?120:78,39,.65*amp);
-      noise(seed,0,.075,board?5720:2660,610,.94*amp);
-      noise(seed+1,.026,.34,1120,replay?170:269,.53*amp,'bandpass');
+      noise(seed,0,.075,(board?5720:2660)*(.79+.81*style.bounce),610,.94*amp);
+      noise(seed+1,.026,.34,1120,replay?170:269,.53*amp*(.58+.42*style.pulp),'bandpass');
       const rng=random(seed+7);
       for(let i=0;i<9;i++){
         const frequency=620+rng()*4500;
