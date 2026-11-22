@@ -1,0 +1,1545 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101318">
+<meta name="description" content="Watch four AI-controlled robots fight across five hazardous arenas in a Three.js tournament.">
+<title>Scrapyard Circuit · Robot Combat</title>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAA0UlEQVR42u2Zyw2AMAxDqcUAIC7MwwAMywCsxAocuCCo+DQJNZBckdpX2wophKppC6ZCQVYO9Dqg8uDZNPbPQNTd4JY5kD1QlkSbKLTZILNlQpqvh3qRRxg+8JilCaRF89EMreWRdy/wmLVUiM7UFw96iya65n6FhzJ03UrwmCUCkpulCWRHY56hhC4AkugkApmadX4NurXHhjW5ZUPlZGk0Ub1/cOtgGdBY3vbqjQBU8mgCaV0sQUXDODGCSp7ICJvrG8OfOrUDGVfwfx0OJKwZNCJDTXNnB4IAAAAASUVORK5CYII=">
+<style>
+:root {
+  color-scheme: dark;
+  --ink: #101318;
+  --panel: #171c22;
+  --line: #2c343d;
+  --text: #f8f4e9;
+  --dim: #a3afbc;
+  --gold: #ffd166;
+  --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+body { background: var(--ink); color: var(--text); margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+button:disabled { cursor: default; opacity: .5; }
+button, .arena { -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+.shell { max-width: 1760px; min-height: 100svh; margin: auto; padding: 0 clamp(12px, 2.8vw, 44px); }
+.topbar { min-height: 75px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark { width: 38px; height: 38px; display: grid; place-items: center; background: var(--gold); color: var(--ink); font-weight: 950; font-size: 25px; transform: skew(-8deg); margin-left: 3px; }
+h1 { margin: 0; font-size: clamp(1.12rem, 2.5vw, 1.62rem); font-weight: 950; text-transform: uppercase; letter-spacing: -.055em; line-height: .98; }
+.brand small { display: block; margin-top: 6px; color: var(--dim); font: 600 .66rem var(--mono); letter-spacing: .15em; text-transform: uppercase; }
+.stages { display: flex; gap: 4px; align-items: center; }
+.stage-chip { width: clamp(27px, 3.1vw, 44px); height: 30px; display: grid; place-items: center; color: var(--dim); border: 1px solid var(--line); font: 700 .74rem var(--mono); }
+.stage-chip.current { color: var(--ink); background: var(--gold); border-color: var(--gold); }
+.stage-chip.done { color: var(--gold); border-color: #7d6837; }
+.arena { position: relative; isolation: isolate; height: clamp(380px, calc(100svh - 245px), 860px); overflow: hidden; background: #101c23; border: 1px solid #39424c; touch-action: none; }
+.arena::before, .arena::after { content: ""; position: absolute; z-index: 3; width: 21px; height: 21px; border: 2px solid var(--gold); pointer-events: none; }
+.arena::before { top: 0; left: 0; border-bottom: 0; border-right: 0; }
+.arena::after { bottom: 0; right: 0; border-top: 0; border-left: 0; }
+.frame-stripe { position: absolute; bottom: 0; left: 0; height: 3px; width: 110px; background: repeating-linear-gradient(-55deg, var(--gold) 0 7px, transparent 7px 14px); opacity: .8; pointer-events: none; }
+#viewport, #viewport canvas, #markers { position: absolute; inset: 0; width: 100%; height: 100%; }
+#viewport canvas { display: block; }
+#markers { pointer-events: none; overflow: hidden; }
+.shade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(#0c111acc, transparent 23%, transparent 75%, #0a0f17e0); }
+.arena-top { position: absolute; inset: 17px 18px auto; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; gap: 8px; pointer-events: none; }
+.kicker { color: var(--gold); font: 750 .69rem var(--mono); text-transform: uppercase; letter-spacing: .11em; }
+.arena-name { margin: 5px 0 2px; font-weight: 950; line-height: .98; text-transform: uppercase; font-size: clamp(1.35rem, 4vw, 2.7rem); letter-spacing: -.055em; }
+.rule { margin: 7px 0 0; font-size: .83rem; color: #c6cfdb; line-height: 1.3; }
+.clock { min-width: 104px; text-align: center; background: #0b1018d9; border: 1px solid #63707c73; padding: 6px 14px 8px; }
+#timer { display: block; font: 800 clamp(1.35rem, 3vw, 2rem) / 1.12 var(--mono); font-variant-numeric: tabular-nums; }
+#phase { display: block; margin-top: 3px; color: var(--dim); font: 700 .61rem var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+.clock.hot, .clock.hot #phase { color: #ff966d; }
+.signal { justify-self: end; display: inline-flex; align-items: center; gap: 7px; padding: 7px 8px; background: #0b1018bc; color: #dbe3eb; border: 1px solid #63707c55; font: 750 .65rem var(--mono); letter-spacing: .08em; white-space: nowrap; }
+.signal i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #8bedc6; box-shadow: 0 0 10px #8bedc688; }
+.signal.paused i { background: var(--gold); box-shadow: none; }
+.field-bottom { position: absolute; bottom: 15px; left: 17px; right: 17px; display: flex; justify-content: space-between; align-items: end; gap: 10px; pointer-events: none; }
+#feed { display: grid; gap: 4px; font: 650 .73rem var(--mono); }
+.feed-line { width: fit-content; background: #0b1018d9; border-left: 2px solid #75899f; padding: 5px 8px; }
+.feed-line.lead { border-color: var(--gold); }
+.camera-tip { color: #c2cfdf; font: 650 .67rem var(--mono); text-align: right; }
+.marker { position: absolute; left: 0; top: 0; display: grid; gap: 3px; justify-items: center; text-align: center; will-change: transform; }
+.marker-name { color: var(--bot); font: 800 .65rem var(--mono); white-space: nowrap; background: #0a1018e8; padding: 3px 5px; border-left: 2px solid var(--bot); }
+.marker-track { height: 2px; width: 34px; background: #10151b; }
+.marker-track b { display: block; height: 100%; background: var(--bot); }
+.overlay { position: absolute; left: 50%; top: 55%; transform: translate(-50%, -50%); width: min(430px, calc(100% - 32px)); padding: clamp(14px, 3vw, 25px); background: #0e151ef5; border: 1px solid #778594; border-top: 3px solid var(--gold); text-align: center; box-shadow: 0 14px 50px #0008; }
+.overlay h2 { margin: 7px 0; font-size: clamp(1.3rem, 4.5vw, 2rem); letter-spacing: -.055em; line-height: 1; text-transform: uppercase; }
+.overlay p { margin: 8px 0 14px; color: #c0ccd9; font-size: .86rem; }
+.overlay-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 7px; min-height: 61px; padding: 9px 0; }
+.control { padding: 8px 12px; min-height: 40px; background: var(--panel); border: 1px solid #424b56; font: 750 .76rem var(--mono); white-space: nowrap; }
+.control:hover:not(:disabled) { background: #28313b; border-color: #8593a1; }
+.control.primary { color: #151813; background: var(--gold); border-color: var(--gold); }
+.control.primary:hover:not(:disabled) { background: #ffe099; border-color: #ffe099; }
+.control[aria-pressed="true"] { color: var(--gold); border-color: #8f763b; }
+.control-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.roster { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; padding-bottom: 14px; }
+.bot { position: relative; min-width: 0; padding: 10px 11px 9px; border: 1px solid var(--line); border-top: 2px solid var(--bot); background: var(--panel); }
+.bot.out { opacity: .58; }
+.bot.featured { box-shadow: inset 0 0 0 1px var(--bot); }
+.bot-main { display: flex; align-items: center; gap: 8px; }
+.bot-symbol { flex: 0 0 29px; height: 29px; display: grid; place-items: center; color: var(--bot); background: #0d1218; border: 1px solid #39434c; font: 800 1.1rem var(--mono); }
+.bot-id { min-width: 0; }
+.bot-name { display: block; font-weight: 900; font-size: clamp(.77rem, 1.4vw, 1.03rem); line-height: 1.05; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bot-style { display: block; margin-top: 3px; font: 650 .66rem var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wins { margin-left: auto; flex-shrink: 0; color: var(--bot); font: 800 .67rem var(--mono); }
+.hp-track { margin-top: 7px; background: #080b10; height: 4px; }
+.hp-track b { display: block; height: 100%; background: var(--bot); }
+.bot-status { display: flex; justify-content: space-between; gap: 4px; margin-top: 5px; color: var(--dim); font: 650 .63rem var(--mono); }
+@media (max-width: 680px) {
+  .topbar { min-height: 61px; gap: 7px; }
+  .brand { gap: 8px; }
+  .brand-mark { width: 29px; height: 30px; font-size: 20px; }
+  .brand small { font-size: .55rem; letter-spacing: .09em; margin-top: 4px; }
+  .stages { gap: 2px; }
+  .stage-chip { width: clamp(19px, 5.8vw, 29px); height: 25px; font-size: .61rem; }
+  .arena { height: clamp(350px, calc(100svh - 300px), 650px); }
+  .arena-top { inset: 12px 11px auto; grid-template-columns: minmax(0, 1fr) auto; }
+  .arena-name { font-size: clamp(1.35rem, 5.5vw, 2rem); }
+  .clock { min-width: 70px; padding: 5px 8px 6px; }
+  .signal { display: none; }
+  .field-bottom { bottom: 12px; left: 11px; right: 10px; }
+  .camera-tip { display: none; }
+  .control { min-height: 42px; padding: 7px 9px; font-size: .69rem; }
+  .controls { justify-content: start; gap: 6px; }
+  .roster { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+  .bot { padding: 6px 8px; }
+  .bot-style { font-size: .62rem; }
+  .bot-status { margin-top: 3px; }
+  .bot-symbol { flex-basis: 23px; height: 23px; font-size: .92rem; }
+}
+@media (max-width: 380px) { .brand small { display: none; } .shell { padding: 0 8px; } }
+</style>
+</head>
+<body>
+<main class="shell">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">ϟ</span><div><h1>Scrapyard Circuit</h1><small>AI robot combat</small></div></div>
+    <nav class="stages" id="stages" aria-label="Tournament rounds"></nav>
+  </header>
+  <section class="arena" id="arena" aria-label="3D battle arena. Drag to orbit the camera.">
+    <div id="viewport"></div>
+    <div class="shade"></div>
+    <div id="markers" aria-hidden="true"></div>
+    <div class="arena-top">
+      <div><div class="kicker" id="round">Round 01 / 05</div><h2 class="arena-name" id="arena-name">Iron Foundry</h2><p class="rule" id="rule">Furnace vents flare on a cycle.</p></div>
+      <div class="clock"><strong id="timer">0:42</strong><span id="phase">Standby</span></div>
+      <div class="signal paused" id="signal"><i></i><span>STANDBY</span></div>
+    </div>
+    <div class="field-bottom"><div id="feed" aria-live="polite"></div><div class="camera-tip">DRAG TO ORBIT · SCROLL TO ZOOM</div></div>
+    <div class="overlay" id="overlay" hidden aria-live="polite">
+      <div class="kicker" id="overlay-kicker"></div><h2 id="overlay-title"></h2><p id="overlay-text"></p>
+      <div class="overlay-buttons"><button class="control primary" type="button" id="continue">Next round</button><button class="control" type="button" id="hold">Hold</button></div>
+    </div>
+    <div class="frame-stripe"></div>
+  </section>
+  <div class="controls" aria-label="Spectator controls">
+    <div class="control-group"><button class="control primary" type="button" id="play" disabled>Start tournament</button><button class="control" type="button" id="speed">Speed 1×</button><button class="control" type="button" id="camera">Camera Wide</button></div>
+    <div class="control-group"><button class="control" type="button" id="audio" aria-pressed="false">Sound off</button><button class="control" type="button" id="restart" disabled>Restart</button></div>
+  </div>
+  <section class="roster" aria-label="Robot health and tournament standings" id="roster"></section>
+</main>
+<script type="module">
+let THREE;
+try {
+  THREE = await import('https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js');
+} catch {
+  try {
+    THREE = await import('https://unpkg.com/three@0.160.1/build/three.module.js');
+  } catch {
+    showLoadError('The 3D engine could not load. Reload to try again.');
+  }
+}
+function showLoadError(message) {
+  document.getElementById('overlay').hidden = false;
+  document.getElementById('overlay-title').textContent = 'Arena unavailable';
+  document.getElementById('overlay-text').textContent = message;
+  document.querySelector('.overlay-buttons').hidden = true;
+  document.getElementById('play').disabled = true;
+  document.getElementById('restart').disabled = true;
+}
+if (THREE) {
+  try { boot(THREE); }
+  catch (error) {
+    console.error(error);
+    showLoadError('The arena could not start. Reload the page to try again.');
+  }
+}
+
+function makeRenderer(T) {
+  const canvas = document.createElement('canvas');
+  const options = { antialias: true, alpha: false, powerPreference: 'high-performance' };
+  const context = canvas.getContext('webgl2', options) || canvas.getContext('webgl', options);
+  if (context) return new T.WebGLRenderer({ ...options, canvas, context });
+
+  // Draw the same scene from the same camera on browsers that disable WebGL.
+  const fallback = document.createElement('canvas');
+  fallback.dataset.renderer = 'canvas';
+  const ctx = fallback.getContext('2d', { alpha: false });
+  if (!ctx) throw new Error('Canvas unavailable');
+  const view = new T.Matrix4();
+  const matrix = new T.Matrix4();
+  const world = new T.Matrix4();
+  const instance = new T.Matrix4();
+  const point = new T.Vector3();
+  const tint = new T.Color();
+  let ratio = 1;
+  let width = 1;
+  let height = 1;
+  let faces = [];
+  const geometryFaces = new WeakMap();
+  const cube = [
+    [[-.5,-.5,.5],[.5,-.5,.5],[.5,.5,.5],[-.5,.5,.5]],
+    [[.5,-.5,-.5],[-.5,-.5,-.5],[-.5,.5,-.5],[.5,.5,-.5]],
+    [[.5,-.5,.5],[.5,-.5,-.5],[.5,.5,-.5],[.5,.5,.5]],
+    [[-.5,-.5,-.5],[-.5,-.5,.5],[-.5,.5,.5],[-.5,.5,-.5]],
+    [[-.5,.5,.5],[.5,.5,.5],[.5,.5,-.5],[-.5,.5,-.5]],
+    [[-.5,-.5,-.5],[.5,-.5,-.5],[.5,-.5,.5],[-.5,-.5,.5]]
+  ];
+  const cylinder = [];
+  const cap = [];
+  for (let i = 0; i < 10; i++) {
+    const angle = i * Math.PI / 5;
+    cap.push([Math.sin(angle), .5, Math.cos(angle)]);
+  }
+  for (let i = 0; i < cap.length; i++) {
+    const a = cap[i];
+    const b = cap[(i + 1) % cap.length];
+    cylinder.push([[a[0],-.5,a[2]], [b[0],-.5,b[2]], b, a]);
+  }
+  cylinder.push(cap);
+
+  function geometryPolygons(geo) {
+    if (geo.type === 'BoxGeometry') return cube;
+    if (geo.type === 'CylinderGeometry') return cylinder;
+    if (geometryFaces.has(geo)) return geometryFaces.get(geo);
+    const polygons = [];
+    if (geo.type === 'PlaneGeometry') {
+      const { width: w, height: h } = geo.parameters;
+      const dx = w / 12;
+      const dy = h / 8;
+      for (let row = 0; row < 8; row++) for (let col = 0; col < 12; col++) {
+        const x = -w / 2 + col * dx;
+        const y = -h / 2 + row * dy;
+        polygons.push([[x,y,0],[x+dx,y,0],[x+dx,y+dy,0],[x,y+dy,0]]);
+      }
+    } else if (geo.type === 'CircleGeometry' || geo.type === 'RingGeometry') {
+      const { radius, outerRadius, innerRadius } = geo.parameters;
+      const outer = outerRadius ?? radius;
+      const inner = innerRadius ?? 0;
+      for (let i = 0; i < 18; i++) {
+        const a = i * Math.PI / 9;
+        const b = (i + 1) * Math.PI / 9;
+        const radial = (r, angle) => [r * Math.cos(angle), r * Math.sin(angle), 0];
+        const slice = [radial(outer, a), radial(outer, b), radial(inner, b)];
+        if (inner) slice.push(radial(inner, a));
+        polygons.push(slice);
+      }
+
+    } else {
+      const positions = geo.getAttribute('position');
+      const index = geo.index;
+      const count = index?.count ?? positions.count;
+      for (let i = 0; i < count; i += 3) {
+        const face = [];
+        for (let j = 0; j < 3; j++) {
+          const p = index ? index.getX(i + j) : i + j;
+          face.push([positions.getX(p), positions.getY(p), positions.getZ(p)]);
+        }
+        polygons.push(face);
+      }
+    }
+    geometryFaces.set(geo, polygons);
+    return polygons;
+  }
+  function collect(obj, transform, color) {
+    const objectScale = transform.elements;
+    if (Math.max(Math.abs(objectScale[0]), Math.abs(objectScale[10])) > 55) return;
+    matrix.multiplyMatrices(view, transform);
+    const material = obj.material;
+    const w = width * .5;
+    const h = height * .5;
+    let polygonIndex = 0;
+    for (const polygon of geometryPolygons(obj.geometry)) {
+      const vertices = [];
+      let depth = 0;
+      for (const vertex of polygon) {
+        point.set(...vertex).applyMatrix4(matrix);
+        if (!Number.isFinite(point.x) || point.z < -1 || point.z > 1) break;
+        vertices.push([(point.x + 1) * w, (1 - point.y) * h]);
+        depth += point.z;
+      }
+      if (vertices.length !== polygon.length) { polygonIndex++; continue; }
+      const [a, b, c] = vertices;
+      const facing = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+      if (facing >= -.08) { polygonIndex++; continue; }
+      const onFloor = obj.geometry.type === 'PlaneGeometry';
+      const lighting = material.isMeshBasicMaterial ? 1 : onFloor ? .59 + (polygonIndex % 7) * .012 :
+        obj.geometry.type === 'BoxGeometry' ? [.69, .58, .64, .81, 1.03, .50][polygonIndex] : .67 + (polygonIndex % 5) * .075;
+      tint.copy(color).multiplyScalar(lighting);
+      if (material.emissive) {
+        tint.r += material.emissive.r * .51;
+        tint.g += material.emissive.g * .51;
+        tint.b += material.emissive.b * .51;
+      }
+      const layer = obj.userData.foundation ? 0 : onFloor ? 1 : 2;
+      faces.push({ vertices, layer, depth: depth / vertices.length, color: tint.getStyle(), alpha: material.opacity, onFloor });
+      polygonIndex++;
+    }
+  }
+  return {
+    domElement: fallback,
+    capabilities: { getMaxAnisotropy: () => 1 },
+    shadowMap: {},
+    setPixelRatio(value) { ratio = value; },
+    setSize(w, h) {
+      width = w;
+      height = h;
+      fallback.width = Math.round(w * ratio);
+      fallback.height = Math.round(h * ratio);
+    },
+    render(scene, camera) {
+      scene.updateMatrixWorld();
+      view.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      faces = [];
+      scene.traverseVisible(obj => {
+        if (!obj.isMesh) return;
+        if (obj.isInstancedMesh) {
+          for (let i = 0; i < obj.count; i++) {
+            obj.getMatrixAt(i, instance);
+            if (obj.instanceColor) obj.getColorAt(i, tint);
+            const color = obj.instanceColor ? tint.clone() : obj.material.color;
+            collect(obj, world.multiplyMatrices(obj.matrixWorld, instance), color);
+          }
+        } else {
+          const floorColor = obj.material.map?.userData?.floorColor;
+          collect(obj, obj.matrixWorld, floorColor || obj.material.color);
+        }
+      });
+      faces.sort((a, b) => a.layer - b.layer || b.depth - a.depth);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = scene.background.getStyle();
+      ctx.fillRect(0, 0, width, height);
+      ctx.lineWidth = .65;
+      ctx.lineJoin = 'round';
+      for (const face of faces) {
+        ctx.beginPath();
+        ctx.moveTo(...face.vertices[0]);
+        for (let i = 1; i < face.vertices.length; i++) ctx.lineTo(...face.vertices[i]);
+        ctx.closePath();
+        ctx.globalAlpha = face.alpha;
+        ctx.fillStyle = face.color;
+        ctx.fill();
+        if (face.alpha === 1) {
+          ctx.strokeStyle = face.onFloor ? '#1d252d' : face.color;
+          ctx.stroke();
+        }
+      }
+    }
+  };
+}
+
+function boot(T) {
+  const ui = Object.fromEntries([
+    'arena', 'viewport', 'markers', 'round', 'arena-name', 'rule', 'timer', 'phase', 'signal',
+    'feed', 'overlay', 'overlay-kicker', 'overlay-title', 'overlay-text', 'continue', 'hold',
+    'play', 'speed', 'camera', 'audio', 'restart', 'stages', 'roster'
+  ].map(id => [id, document.getElementById(id)]));
+
+  const WIDTH = 15;
+  const DEPTH = 10;
+  const ROUND_TIME = 42;
+  const OVERTIME = 13;
+  const STEP = 1 / 60;
+  const TAU = Math.PI * 2;
+  const clamp = T.MathUtils.clamp;
+  const lerp = T.MathUtils.lerp;
+  const damp = T.MathUtils.damp;
+  const sign = Math.sign;
+  const roundLabel = value => String(value).padStart(2, '0');
+
+  const fighters = [
+    { name: 'BRICKHOUSE', color: '#ffc45e', symbol: '▰', role: 'Heavy cannon', kind: 'cannon', hp: 142, speed: 3.85, range: 10.6, preferred: 5.6, damage: 22, reload: 1.37, radius: .97 },
+    { name: 'RIPSAW', color: '#ff6669', symbol: '✳', role: 'Melee rush', kind: 'saw', hp: 133, speed: 5.84, range: 2.42, preferred: .9, damage: 20.5, reload: .49, radius: .85 },
+    { name: 'VOLT', color: '#58e9db', symbol: 'ϟ', role: 'Mobile skirmisher', kind: 'rail', hp: 116, speed: 5.25, range: 12, preferred: 6.6, damage: 16.5, reload: .71, radius: .78 },
+    { name: 'NEEDLE', color: '#b7a2ff', symbol: '◆', role: 'Long-range railgun', kind: 'sniper', hp: 105, speed: 4.73, range: 19, preferred: 10.1, damage: 26, reload: 1.06, radius: .82 }
+  ];
+  const levels = [
+    { name: 'Iron Foundry', rule: 'Furnace vents flare on a cycle.', type: 'fire', floor: '#33393d', seam: '#20272a', ink: '#a97327', fog: '#231915', light: '#ffb272', accent: '#ffa44c', blocks: [[-6.8,-2.7,2.7,3.4], [6.8,2.7,2.7,3.4]], traps: [[-4,5,2.45], [0,0,2.6], [4,-5,2.45]], grip: 8.5 },
+    { name: 'Freight Terminal', rule: 'Shipping containers block fire. Repair cells drop between lanes.', type: 'cargo', floor: '#273a42', seam: '#172830', ink: '#4393a5', fog: '#0d222d', light: '#8be4ff', accent: '#58d8ee', blocks: [[-6,-3.6,5.8,2.2], [4.5,-4.7,2.6,3.2], [-3.5,3.6,2.4,3.7], [6.5,3.8,5.1,2.2], [0,0,2.3,1.8]], grip: 9.4 },
+    { name: 'Cryo Deck', rule: 'Low traction makes fast turns slide.', type: 'ice', floor: '#416473', seam: '#2b4a62', ink: '#89c7de', fog: '#192c41', light: '#b9efff', accent: '#87ddff', blocks: [[-5,0,3.2,2], [5,0,3.2,2]], grip: 2.1 },
+    { name: 'Relay Station', rule: 'A rotating laser cuts across the floor.', type: 'laser', floor: '#353049', seam: '#282438', ink: '#76609f', fog: '#261c36', light: '#d7b8ff', accent: '#e18aff', blocks: [[-7,-4.7,2.1,2.1], [7,4.7,2.1,2.1], [7,-4.7,2.1,2.1], [-7,4.7,2.1,2.1]], grip: 8.5 },
+    { name: 'The Squeeze', rule: 'The energized boundary closes in as the fight goes on.', type: 'squeeze', floor: '#413735', seam: '#2b2626', ink: '#b57355', fog: '#29191b', light: '#ffc3a3', accent: '#ff6f58', blocks: [[-8.3,0,2,2.3], [8.3,0,2,2.3], [0,-5.8,2.5,1.4], [0,5.8,2.5,1.4]], grip: 8.5 }
+  ];
+
+  const renderer = makeRenderer(T);
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.65));
+  renderer.toneMapping = T.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.27;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
+  ui.viewport.append(renderer.domElement);
+  const scene = new T.Scene();
+  const camera = new T.PerspectiveCamera(42, 1, .1, 180);
+  const arena = new T.Group();
+  const robots = new T.Group();
+  const effects = new T.Group();
+  scene.add(arena, robots, effects);
+  scene.add(new T.HemisphereLight(0xc5ddff, 0x78636b, 2.35));
+  const key = new T.DirectionalLight(0xffead6, 3);
+  key.position.set(-13, 24, 10);
+  key.castShadow = true;
+  Object.assign(key.shadow.camera, { left: -23, right: 23, top: 21, bottom: -21, far: 72 });
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.bias = -.00028;
+  key.shadow.normalBias = .035;
+  scene.add(key);
+  const fill = new T.DirectionalLight(0x85c4ff, 1.45);
+  fill.position.set(13, 8, -13);
+  scene.add(fill);
+
+  const boxGeo = new T.BoxGeometry(1, 1, 1);
+  const cylinderGeo = new T.CylinderGeometry(1, 1, 1, 18);
+  const coreGeo = new T.IcosahedronGeometry(1, 0);
+  const particleGeo = new T.BoxGeometry(1, 1, 1);
+  const sharedGeos = new Set([boxGeo, cylinderGeo, coreGeo, particleGeo]);
+  const mat = (color, roughness = .54, metalness = .32) => new T.MeshStandardMaterial({ color, roughness, metalness });
+  const glow = (color, opacity = 1) => new T.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: opacity === 1 });
+  const shared = {
+    steel: mat('#627182'), edge: mat('#9baabb'), chassis: mat('#222934', .62, .5),
+    rubber: mat('#14181e', .97, .03), bone: mat('#c3cbd2', .43, .48), tread: mat('#303948', .82, .28),
+    cell: glow('#75ffb7'), shadow: new T.MeshBasicMaterial({ color: 0x030810, transparent: true, opacity: .38, depthWrite: false })
+  };
+  const sharedMats = new Set(Object.values(shared));
+  const projected = new T.Vector3();
+  const forward = new T.Vector3(0, 0, 1);
+  const beamVector = new T.Vector3();
+  function mesh(parent, geo, material, x, y, z, sx = 1, sy = 1, sz = 1, shadows = false) {
+    const m = new T.Mesh(geo, material);
+    m.position.set(x, y, z);
+    m.scale.set(sx, sy, sz);
+    m.castShadow = shadows;
+    m.receiveShadow = shadows;
+    parent.add(m);
+    return m;
+  }
+  const box = (parent, material, x, y, z, sx, sy, sz, shadows = false) =>
+    mesh(parent, boxGeo, material, x, y, z, sx, sy, sz, shadows);
+  const cyl = (parent, material, x, y, z, radius, height, shadows = false) =>
+    mesh(parent, cylinderGeo, material, x, y, z, radius, height, radius, shadows);
+  function clearGroup(group) {
+    const materials = new Set();
+    const geometries = new Set();
+    group.traverse(obj => {
+      if (!obj.isMesh) return;
+      if (obj.isInstancedMesh) obj.dispose();
+      if (!sharedMats.has(obj.material)) materials.add(obj.material);
+      if (!sharedGeos.has(obj.geometry)) geometries.add(obj.geometry);
+    });
+    group.clear();
+    for (const material of materials) { material.map?.dispose(); material.dispose(); }
+    for (const geometry of geometries) geometry.dispose();
+  }
+
+  let round = 0;
+  let level;
+  let fightersLive = [];
+  let traps = [];
+  let beam;
+  let boundary = [];
+  let boundaryScale = 1;
+  let entries = [];
+  let pickups = [];
+  let particles = [];
+  let traces = [];
+  let elapsed = 0;
+  let visualTime = 0;
+  let lastFrame = performance.now();
+  let accumulator = 0;
+  let nextPickup = 8;
+  let status = 'ready';
+  let held = false;
+  let advanceAt = 0;
+  const rates = [1, 2, 4];
+  let speedIndex = 0;
+  let cameraMode = 0;
+  let aimYaw = .10;
+  let aimPitch = .76;
+  let aimZoom = 1;
+  let drag;
+  let viewportWidth = 1;
+  let viewportHeight = 1;
+  const cameraTarget = new T.Vector3();
+  let muted = true;
+  let audioContext;
+  let lastSound = -1;
+  let wins = [0, 0, 0, 0];
+  let tournamentDamage = [0, 0, 0, 0];
+
+  const stages = levels.map((item, index) => {
+    const node = document.createElement('span');
+    node.className = 'stage-chip';
+    node.textContent = roundLabel(index + 1);
+    node.title = item.name;
+    ui.stages.append(node);
+    return node;
+  });
+  const cards = fighters.map(spec => {
+    const card = document.createElement('article');
+    card.className = 'bot';
+    card.style.setProperty('--bot', spec.color);
+    card.innerHTML = '<div class="bot-main"><span class="bot-symbol" aria-hidden="true"></span><span class="bot-id"><strong class="bot-name"></strong><span class="bot-style"></span></span><span class="wins"></span></div><div class="hp-track" aria-hidden="true"><b></b></div><div class="bot-status"><span></span><span></span></div>';
+    card.querySelector('.bot-symbol').textContent = spec.symbol;
+    card.querySelector('.bot-name').textContent = spec.name;
+    card.querySelector('.bot-style').textContent = spec.role;
+    ui.roster.append(card);
+    const label = document.createElement('div');
+    label.className = 'marker';
+    label.style.setProperty('--bot', spec.color);
+    label.innerHTML = '<div class="marker-name"></div><div class="marker-track"><b></b></div>';
+    label.firstChild.textContent = spec.name;
+    ui.markers.append(label);
+    const [stateText, healthText] = card.querySelector('.bot-status').children;
+    return { card, label, stateText, healthText, winText: card.querySelector('.wins'), hpBar: card.querySelector('b'), markerBar: label.querySelector('b') };
+  });
+
+  function floorTexture(current) {
+    const c = document.createElement('canvas');
+    c.width = 1536;
+    c.height = 1024;
+    const ctx = c.getContext('2d');
+    let seed = 286;
+    const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    ctx.fillStyle = current.floor;
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.strokeStyle = current.seam;
+    ctx.lineWidth = 3;
+    for (let y = 0; y <= c.height; y += 128) {
+      for (let x = 0; x <= c.width; x += 128) {
+        ctx.fillStyle = random() < .5 ? '#07101a1f' : '#c3dbed08';
+        ctx.fillRect(x, y, 128, 128);
+        ctx.strokeRect(x, y, 128, 128);
+        ctx.fillStyle = '#b0bdc044';
+        for (const ax of [8, 120]) for (const ay of [8, 120]) ctx.fillRect(x + ax, y + ay, 3, 3);
+      }
+    }
+    for (let i = 0; i < 3700; i++) {
+      ctx.fillStyle = i % 3 === 0 ? '#f1f7ff18' : '#0b101233';
+      ctx.fillRect(random() * c.width, random() * c.height, 1 + random() * 13, 1 + random() * 2);
+    }
+    ctx.strokeStyle = current.ink;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(34, 34, 1468, 956);
+    ctx.lineWidth = 1.6;
+    ctx.strokeRect(48, 48, 1440, 928);
+    ctx.beginPath();
+    ctx.arc(768, 512, 139, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([24, 16]);
+    ctx.beginPath();
+    ctx.moveTo(65, 512);
+    ctx.lineTo(1471, 512);
+    ctx.moveTo(768, 59);
+    ctx.lineTo(768, 965);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = current.ink;
+    ctx.font = '900 76px monospace';
+    ctx.fillText(roundLabel(round + 1), 67, 137);
+    ctx.textAlign = 'right';
+    ctx.fillText(roundLabel(round + 1), 1469, 939);
+    const texture = new T.CanvasTexture(c);
+    texture.colorSpace = T.SRGBColorSpace;
+    texture.userData.floorColor = new T.Color(current.floor);
+    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    return texture;
+  }
+
+  function buildArena() {
+    clearGroup(arena);
+    traps = [];
+    beam = undefined;
+    boundary = [];
+    boundaryScale = 1;
+    scene.background = new T.Color(level.fog);
+    scene.fog = new T.FogExp2(level.fog, .017);
+    key.color.set(level.light);
+    const floorMat = new T.MeshStandardMaterial({ map: floorTexture(level), roughness: level.type === 'ice' ? .27 : .83, metalness: .17 });
+    const floor = mesh(arena, new T.PlaneGeometry(WIDTH * 2, DEPTH * 2), floorMat, 0, .014, 0);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    const foundation = mat('#19212b', .77);
+    const walls = mat('#323b46', .59);
+    const panels = mat('#49515b', .57);
+    const accent = glow(level.accent);
+    const markings = mat(level.ink, .78);
+    box(arena, foundation, 0, -.43, 0, 31.4, .86, 21.4, true).userData.foundation = true;
+    box(arena, foundation, 0, -.95, 0, 170, .1, 170);
+    for (const side of [-1, 1]) {
+      box(arena, walls, 0, .34, side * 10.21, 31, .68, .4, true);
+      box(arena, walls, side * 15.19, .34, 0, .4, .68, 20.3, true);
+      box(arena, panels, 0, .73, side * 10.21, 31, .13, .53);
+      box(arena, panels, side * 15.19, .73, 0, .53, .13, 20.4);
+      box(arena, markings, 0, -.34, side * 10.72, 31.2, .19, .057);
+      box(arena, markings, side * 15.72, -.34, 0, .057, .19, 21.1);
+      for (let i = -14; i <= 14; i += 2) {
+        box(arena, panels, i, .39, side * 10.48, .16, .83, .19);
+        if (i % 4 === 0) {
+          box(arena, accent, i, .83, side * 10.2, .59, .074, .14);
+          box(arena, accent, i, -.31, side * 10.765, .73, .064, .05);
+        }
+      }
+      for (let i = -8; i <= 8; i += 2) {
+        box(arena, panels, side * 15.53, .39, i, .16, .83, .19);
+        if (i % 4 === 0) box(arena, accent, side * 15.2, .83, i, .13, .074, .59);
+      }
+      for (const x of [-15.13, 15.13]) {
+        box(arena, walls, x, .55, side * 10.2, .85, 1.1, .85, true);
+        box(arena, accent, x, 1.13, side * 10.2, .51, .07, .51);
+      }
+    }
+    buildScenery(walls, panels, markings, accent);
+    for (const [index, [x, z, w, d]] of level.blocks.entries()) {
+      const h = level.type === 'cargo' ? 2.05 : level.type === 'ice' ? .93 : 1.45;
+      const body = level.type === 'cargo' && index % 2 === 0 ? markings : walls;
+      box(arena, foundation, x, .11, z, w + .22, .22, d + .18, true);
+      box(arena, body, x, h / 2 + .14, z, w, h, d, true);
+      box(arena, panels, x, h + .16, z, w + .09, .12, d + .09);
+      for (const edge of [-1, 1]) {
+        box(arena, accent, x, h + .23, z + edge * (d / 2 - .12), w * .68, .035, .085);
+        box(arena, panels, x + edge * (w / 2 - .11), h / 2 + .16, z, .18, h + .12, d + .17);
+        for (let i = -w / 2 + .38; i < w / 2 - .18; i += .41) {
+          box(arena, foundation, x + i, h * .55, z + edge * (d / 2 + .012), .068, h * .73, .048);
+        }
+      }
+    }
+    batchArenaMeshes();
+    for (const [x, z, radius] of level.traps || []) {
+      const m = glow(level.accent, .13);
+      const ring = mesh(arena, new T.RingGeometry(radius - .11, radius, 40), m, x, .045, z);
+      ring.rotation.x = -Math.PI / 2;
+      const heat = glow('#ff6a25', .1);
+      const disk = mesh(arena, new T.CircleGeometry(radius, 40), heat, x, .036, z);
+      disk.rotation.x = -Math.PI / 2;
+      cyl(arena, walls, x, .055, z, radius * .61, .07);
+      for (let i = -4; i <= 4; i++) box(arena, foundation, x + i * .24, .103, z, .10, .027, Math.sqrt(1 - (i / 5) ** 2) * radius);
+      const flares = Array.from({ length: 7 }, (_, index) => {
+        const flare = mesh(arena, coreGeo, glow(index % 2 ? '#ff5d28' : '#ffcd69', .75), x, .3, z, .16, .8, .16);
+        flare.visible = false;
+        return flare;
+      });
+      traps.push({ x, z, radius, m, heat, flares });
+    }
+    if (level.type === 'laser') {
+      cyl(arena, foundation, 0, .19, 0, .73, .38, true);
+      cyl(arena, panels, 0, .49, 0, .49, .28, true);
+      cyl(arena, accent, 0, .65, 0, .37, .064);
+      const bright = box(arena, accent, 0, .37, 0, 1, .072, .09);
+      const under = box(arena, glow(level.accent, .25), 0, .077, 0, 1, .026, .69);
+      beam = { bright, under, angle: 0, length: 0 };
+    }
+    if (level.type === 'squeeze') {
+      const warning = glow(level.accent, .30);
+      for (let i = 0; i < 4; i++) {
+        const rail = box(arena, accent, 0, .1, 0, 1, .06, .10);
+        const surface = box(arena, warning, 0, .29, 0, 1, .49, .044);
+        boundary.push({ rail, surface });
+      }
+    }
+    updateHazards(0);
+  }
+
+  function buildScenery(walls, panels, markings, accent) {
+    const dark = mat('#202631', .81);
+    const lit = mat(level.seam, .64);
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 9; i++) {
+        const x = (i - 4) * 4.5;
+        const z = side * (13.4 + (i % 3) * 1.7);
+        const h = 1.2 + (i % 4) * .76;
+        if (level.type === 'ice') {
+          const chunk = mesh(arena, coreGeo, lit, x, h * .3, z, 2.6, h * 1.18, 2.3, true);
+          chunk.rotation.set(i * .37, i * 1.32, .21);
+          continue;
+        }
+        if (level.type === 'fire' && i % 2 === 0) {
+          cyl(arena, dark, x, h * .54, z, 1.24, h * 1.23, true);
+          cyl(arena, walls, x, h * 1.16, z, 1.29, .26);
+          cyl(arena, markings, x, h * 1.31, z, 1.02, .075);
+          cyl(arena, panels, x, h * .78, z, 1.27, .13);
+          continue;
+        }
+        box(arena, dark, x, h / 2, z, 3.65, h, 2.6, true);
+        box(arena, lit, x, h + .08, z, 3.65, .18, 2.65);
+        for (let k = -1; k <= 1; k++) box(arena, i % 3 === 1 ? accent : walls, x + k * .92, h * .72, z - side * 1.314, .61, .10, .044);
+        if (level.type === 'laser' && i % 2 === 1) {
+          box(arena, walls, x, h + 1.25, z, .18, 2.5, .18);
+          box(arena, accent, x, h + 2.52, z, .21, .15, .21);
+        }
+      }
+      for (let i = -2; i <= 2; i++) {
+        const x = side * (18 + Math.abs(i) * 1.2);
+        const z = i * 5.6;
+        box(arena, dark, x, .63 + (i * i) * .17, z, 2.55, 1.1 + (i * i) * .38, 3.3, true);
+        box(arena, panels, x, 1.21 + (i * i) * .36, z, 2.58, .07, 3.34);
+      }
+    }
+  }
+
+  function batchArenaMeshes() {
+    const groups = new Map();
+    for (const obj of arena.children) {
+      if (!obj.isMesh || !sharedGeos.has(obj.geometry) || obj.userData.foundation) continue;
+      const id = [obj.geometry.id, obj.material.id, obj.castShadow, obj.receiveShadow].join('/');
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id).push(obj);
+    }
+    for (const group of groups.values()) {
+      if (group.length < 3) continue;
+      const first = group[0];
+      const batch = new T.InstancedMesh(first.geometry, first.material, group.length);
+      batch.castShadow = first.castShadow;
+      batch.receiveShadow = first.receiveShadow;
+      group.forEach((obj, index) => {
+        obj.updateMatrix();
+        batch.setMatrixAt(index, obj.matrix);
+      });
+      arena.remove(...group);
+      arena.add(batch);
+    }
+  }
+
+  function model(spec) {
+    const root = new T.Group();
+    const body = new T.Group();
+    root.add(body);
+    robots.add(root);
+    const paint = mat(spec.color, .40, .37);
+    const armor = mat(new T.Color(spec.color).multiplyScalar(.47), .57, .45);
+    const stripe = glow(spec.color);
+    const wheels = [];
+    const mounts = new T.Group();
+    const melee = spec.kind === 'saw';
+    const heavy = spec.kind === 'cannon';
+    const sniper = spec.kind === 'sniper';
+    const w = heavy ? 1.48 : melee ? 1.27 : 1.12;
+    const d = sniper ? 1.63 : heavy ? 1.76 : 1.45;
+    const wheelRadius = heavy ? .36 : .30;
+    const shadow = mesh(root, new T.CircleGeometry(1, 24), shared.shadow, 0, .026, 0, spec.radius * 1.38, spec.radius, 1);
+    shadow.rotation.x = -Math.PI / 2;
+    const ring = mesh(root, new T.RingGeometry(spec.radius * 1.18, spec.radius * 1.22, 32), glow(spec.color, .53), 0, .032, 0);
+    ring.rotation.x = -Math.PI / 2;
+    box(body, shared.chassis, 0, .43, 0, w, .47, d, true);
+    box(body, armor, 0, .695, -.035, w * .93, .17, d * .89, true);
+    box(body, paint, 0, .79, -.10, w * .68, .12, d * .70, true);
+    box(body, shared.steel, 0, .35, d / 2 + .03, w * .87, .18, .11);
+    box(body, stripe, 0, .53, d / 2 + .04, w * .58, .061, .038);
+    box(body, armor, 0, .38, -d / 2 - .06, w * .85, .28, .16);
+    for (const side of [-1, 1]) {
+      const trackX = side * (w / 2 + .13);
+      if (heavy || melee) {
+        box(body, shared.rubber, trackX, wheelRadius, 0, .31, wheelRadius * 1.55, d + .16);
+        box(body, armor, trackX, .63, -.025, .34, .12, d + .04, true);
+        for (let z = -.60; z <= .65; z += .24) box(body, shared.tread, trackX, .15, z, .334, .08, .11);
+      }
+      for (const z of heavy ? [-.60, 0, .60] : [-d * .33, d * .33]) {
+        const wheel = new T.Group();
+        wheel.position.set(trackX, wheelRadius + .04, z);
+        body.add(wheel);
+        cyl(wheel, shared.rubber, 0, 0, 0, wheelRadius, .30, true).rotation.z = Math.PI / 2;
+        cyl(wheel, armor, side * .162, 0, 0, wheelRadius * .72, .05).rotation.z = Math.PI / 2;
+        cyl(wheel, shared.steel, side * .192, 0, 0, wheelRadius * .32, .033).rotation.z = Math.PI / 2;
+        box(wheel, shared.edge, side * .21, .09, 0, .028, .10, .055);
+        wheels.push(wheel);
+      }
+      box(body, paint, side * (w * .41), .52, .13, .13, .15, d * .84);
+      box(body, stripe, side * (w * .49), .59, -d * .29, .032, .09, .22);
+      box(body, shared.edge, side * w * .35, .83, -d * .24, .08, .04, .09);
+    }
+    body.add(mounts);
+    let spinner;
+    if (melee) {
+      box(mounts, armor, 0, .84, .10, .73, .32, .60, true);
+      const drive = box(mounts, shared.steel, 0, .64, .77, .35, .33, .94, true);
+      drive.rotation.x = .13;
+      for (const side of [-1, 1]) {
+        const wedge = box(mounts, paint, side * .51, .34, .84, .27, .28, .78, true);
+        wedge.rotation.x = .32;
+      }
+      spinner = new T.Group();
+      spinner.position.set(0, .69, 1.16);
+      mounts.add(spinner);
+      cyl(spinner, shared.steel, 0, 0, 0, .55, .101, true);
+      cyl(spinner, armor, 0, .055, 0, .40, .03);
+      cyl(spinner, stripe, 0, .083, 0, .16, .048);
+      for (let i = 0; i < 12; i++) {
+        const tooth = new T.Group();
+        tooth.rotation.y = i * TAU / 12;
+        spinner.add(tooth);
+        box(tooth, shared.bone, 0, 0, .525, .14, .12, .163).rotation.y = .30;
+      }
+    } else {
+      cyl(mounts, shared.chassis, 0, .827, -.11, heavy ? .56 : .43, .18, true);
+      box(mounts, armor, 0, 1.01, -.13, heavy ? .82 : .62, .34, .68, true);
+      box(mounts, paint, 0, 1.20, -.22, heavy ? .78 : .52, .11, .46, true);
+      if (heavy) {
+        const barrel = cyl(mounts, shared.steel, 0, 1.03, .52, .126, 1.21, true);
+        barrel.rotation.x = Math.PI / 2;
+        cyl(mounts, armor, 0, 1.03, .84, .171, .20).rotation.x = Math.PI / 2;
+        cyl(mounts, shared.chassis, 0, 1.03, 1.15, .192, .24, true).rotation.x = Math.PI / 2;
+        cyl(mounts, stripe, 0, 1.03, 1.275, .093, .012).rotation.x = Math.PI / 2;
+      } else {
+        for (const s of [-1, 1]) {
+          const x = s * (sniper ? .17 : .27);
+          const length = sniper ? 1.45 : .82;
+          box(mounts, shared.chassis, x, 1.03, .34, .135, .17, length, true);
+          box(mounts, paint, x, 1.132, .34, .095, .062, length * .96);
+          box(mounts, stripe, x, 1.164, .42, .034, .017, length * .66);
+          box(mounts, shared.steel, x, 1.0, .36 + length / 2, .169, .18, .06);
+        }
+      }
+      const antenna = cyl(body, shared.steel, w * .30, 1.035, -.59, .023, .46);
+      antenna.rotation.z = -.15;
+      mesh(body, coreGeo, stripe, w * .33, 1.27, -.59, .068, .068, .068);
+    }
+    const lamp = box(body, stripe, 0, .745, .67, .31, .06, .045);
+    return { root, body, wheels, mounts, spinner, paint, armor, stripe, lamp, ring };
+  }
+
+  function addFighter(spec, index) {
+    const spots = [[-11.5, -7], [11.5, 7], [-11.5, 7], [11.5, -7]];
+    const [x, z] = spots[(index + round) % spots.length];
+    const parts = model(spec);
+    const angle = Math.atan2(-x, -z);
+    parts.root.position.set(x, 0, z);
+    parts.body.rotation.y = angle;
+    return {
+      spec, index, x, z, angle, parts, vx: 0, vz: 0, hp: spec.hp, damage: 0,
+      reload: .36 + Math.random() * .6, reconsider: 0, target: null, turn: Math.random() < .5 ? -1 : 1,
+      phase: Math.random() * TAU, flash: 0, recoil: 0, alive: true, state: 'Standby',
+      burn: 0
+    };
+  }
+
+  function updateHazards(time) {
+    traps.forEach((trap, index) => {
+      const cycle = ((time + index * 1.72 + 1.2) % 7.1) / 7.1;
+      trap.active = cycle >= .77;
+      trap.warn = cycle >= .58;
+      trap.m.opacity = trap.active ? .99 : trap.warn ? .55 + Math.sin(time * 22) * .27 : .30;
+      trap.heat.opacity = trap.active ? .32 + Math.sin(time * 13) * .05 : trap.warn ? .15 : .058;
+      trap.flares.forEach((flare, i) => {
+        flare.visible = trap.active;
+        if (!trap.active) return;
+        const angle = time * .6 + i * TAU / trap.flares.length;
+        const h = .25 + (Math.sin(time * 19 + i * 5) * .5 + .5) * .79;
+        flare.position.set(trap.x + Math.cos(angle) * 1.04, h * .59, trap.z + Math.sin(angle) * .77);
+        flare.scale.set(.12 + h * .05, h, .15 + h * .038);
+        flare.rotation.z = Math.sin(time * 12 + i) * .27;
+      });
+    });
+    if (beam) {
+      const angle = time * (.60 + Math.min(time, 40) * .006) / (1 + time * .003) + .24;
+      const dx = Math.cos(angle);
+      const dz = Math.sin(angle);
+      const length = Math.min(WIDTH / Math.max(.001, Math.abs(dx)), DEPTH / Math.max(.001, Math.abs(dz)));
+      for (const obj of [beam.bright, beam.under]) {
+        obj.rotation.y = -angle;
+        obj.position.x = dx * length / 2;
+        obj.position.z = dz * length / 2;
+        obj.scale.x = length;
+      }
+      beam.angle = angle;
+      beam.length = length;
+    }
+    if (boundary.length) {
+      boundaryScale = Math.max(.29, 1 - Math.max(0, time - 2) / 42);
+      const x = WIDTH * boundaryScale;
+      const z = DEPTH * boundaryScale;
+      for (const [i, edge] of boundary.entries()) {
+        for (const part of [edge.rail, edge.surface]) {
+          const horizontal = i < 2;
+          const side = i % 2 ? 1 : -1;
+          part.scale.x = horizontal ? x * 2 : z * 2;
+          part.rotation.y = horizontal ? 0 : Math.PI / 2;
+          part.position.x = horizontal ? 0 : x * side;
+          part.position.z = horizontal ? z * side : 0;
+        }
+      }
+    }
+  }
+
+  function inBlock(x, z, margin = 0) {
+    return level.blocks.some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + margin && Math.abs(z - bz) < d / 2 + margin);
+  }
+  function blocked(x, z, tx, tz, margin = 0) {
+    const dx = tx - x;
+    const dz = tz - z;
+    return level.blocks.some(([bx, bz, w, d]) => {
+      const limitX = w / 2 + margin;
+      const limitZ = d / 2 + margin;
+      if (Math.abs(dx) < .0001 && Math.abs(x - bx) > limitX) return false;
+      if (Math.abs(dz) < .0001 && Math.abs(z - bz) > limitZ) return false;
+      const x1 = Math.abs(dx) < .0001 ? -Infinity : (bx - limitX - x) / dx;
+      const x2 = Math.abs(dx) < .0001 ? Infinity : (bx + limitX - x) / dx;
+      const z1 = Math.abs(dz) < .0001 ? -Infinity : (bz - limitZ - z) / dz;
+      const z2 = Math.abs(dz) < .0001 ? Infinity : (bz + limitZ - z) / dz;
+      return Math.max(0, Math.min(x1, x2), Math.min(z1, z2)) <= Math.min(1, Math.max(x1, x2), Math.max(z1, z2));
+    });
+  }
+  function turnDelta(from, to) {
+    return Math.atan2(Math.sin(to - from), Math.cos(to - from));
+  }
+  function selectTarget(bot) {
+    let best = null;
+    let bestScore = Infinity;
+    for (const foe of fightersLive) {
+      if (!foe.alive || foe === bot) continue;
+      const distance = Math.hypot(foe.x - bot.x, foe.z - bot.z);
+      const visibility = blocked(bot.x, bot.z, foe.x, foe.z) ? 3.5 : 0;
+      const score = distance + visibility + foe.hp / foe.spec.hp * 2.7 + (foe === bot.target ? -2.4 : 0) + Math.random() * 2;
+      if (score < bestScore) { best = foe; bestScore = score; }
+    }
+    return best;
+  }
+  function chooseHeading(bot, ax, az) {
+    const distance = Math.hypot(ax, az);
+    if (distance < .10) return [0, 0];
+    const dir = Math.atan2(ax, az);
+    const padding = bot.spec.radius + .12;
+    for (const offset of [0, .48, -.48, .87, -.87, 1.35, -1.35, 2, -2]) {
+      const angle = dir + offset * bot.turn;
+      const x = Math.sin(angle);
+      const z = Math.cos(angle);
+      const step = level.type === 'ice' ? 1.88 : 1.25;
+      if (Math.abs(bot.x + x * step) > WIDTH - padding || Math.abs(bot.z + z * step) > DEPTH - padding) continue;
+      if (blocked(bot.x, bot.z, bot.x + x * step, bot.z + z * step, bot.spec.radius * .78)) continue;
+      return [x, z];
+    }
+    return [ax / distance * .35, az / distance * .35];
+  }
+  function updateFighter(bot, dt) {
+    const spec = bot.spec;
+    bot.reload -= dt;
+    bot.reconsider -= dt;
+    if (bot.reconsider <= 0 || !bot.target?.alive) {
+      bot.target = selectTarget(bot);
+      bot.reconsider = .35 + Math.random() * .55;
+    }
+    const target = bot.target;
+    if (!target) return;
+    const dx = target.x - bot.x;
+    const dz = target.z - bot.z;
+    const distance = Math.max(.01, Math.hypot(dx, dz));
+    const aim = Math.atan2(dx, dz);
+    const visible = !blocked(bot.x, bot.z, target.x, target.z);
+    const melee = spec.kind === 'saw';
+    const charge = visible ? clamp((distance - spec.preferred) / 3.1, -1, 1) : 1;
+    const strafe = melee ? .14 : (visible ? .70 : .26) + Math.sin(elapsed * 2.3 + bot.phase) * .24;
+    let ax = dx / distance * charge + dz / distance * bot.turn * strafe;
+    let az = dz / distance * charge - dx / distance * bot.turn * strafe;
+    let movingForRepair = false;
+    if (bot.hp < spec.hp * .68 && elapsed < ROUND_TIME) {
+      let closest = 7.5;
+      for (const cell of pickups) {
+        const reach = Math.hypot(cell.x - bot.x, cell.z - bot.z);
+        if (reach >= closest || blocked(bot.x, bot.z, cell.x, cell.z, .2)) continue;
+        closest = reach;
+        movingForRepair = true;
+        ax = (cell.x - bot.x) / Math.max(.1, reach) * 1.6;
+        az = (cell.z - bot.z) / Math.max(.1, reach) * 1.6;
+      }
+    }
+    const edgeX = WIDTH * boundaryScale - spec.radius - 1.00;
+    const edgeZ = DEPTH * boundaryScale - spec.radius - 1.00;
+    ax -= sign(bot.x) * Math.max(0, Math.abs(bot.x) - edgeX) * 1.11;
+    az -= sign(bot.z) * Math.max(0, Math.abs(bot.z) - edgeZ) * 1.11;
+    for (const trap of traps) {
+      if (!trap.warn) continue;
+      const ox = bot.x - trap.x;
+      const oz = bot.z - trap.z;
+      const d = Math.max(.1, Math.hypot(ox, oz));
+      const force = Math.max(0, trap.radius + 1.4 - d) * (trap.active ? 1.17 : .61);
+      ax += ox / d * force;
+      az += oz / d * force;
+    }
+    if (beam && bot.burn <= 0) {
+      const bx = Math.cos(beam.angle);
+      const bz = Math.sin(beam.angle);
+      const ahead = bot.x * bx + bot.z * bz;
+      const offset = bot.z * bx - bot.x * bz;
+      if (ahead > .5 && ahead < beam.length && Math.abs(offset) < 1.33) {
+        ax -= bz * (sign(offset) || 1) * .62;
+        az += bx * (sign(offset) || 1) * .62;
+      }
+    }
+    const [vx, vz] = chooseHeading(bot, ax, az);
+    const speed = spec.speed * (elapsed >= ROUND_TIME ? 1.12 : 1);
+    const effort = melee && distance < 2.7 ? .88 : 1;
+    bot.vx = damp(bot.vx, vx * speed * effort, level.grip, dt);
+    bot.vz = damp(bot.vz, vz * speed * effort, level.grip, dt);
+    moveFighter(bot, bot.vx * dt, bot.vz * dt);
+    const heading = melee || visible ? aim : Math.atan2(bot.vx, bot.vz);
+    bot.angle += clamp(turnDelta(bot.angle, heading), -dt * 6, dt * 6);
+    if (bot.recoil > .51) bot.state = melee ? 'Striking' : 'Firing';
+    else if (movingForRepair) bot.state = 'Seeking repair';
+    else if (!visible) bot.state = 'Flanking';
+    else bot.state = distance < spec.range ? 'Engaging' : 'Closing in';
+    if (bot.reload > 0 || !visible || distance > spec.range || Math.abs(turnDelta(bot.angle, aim)) > (melee ? .80 : .38)) return;
+    if (blocked(bot.x, bot.z, target.x, target.z)) return;
+    bot.reload = spec.reload * (.83 + Math.random() * .37);
+    bot.recoil = 1;
+    bot.state = melee ? 'Striking' : 'Firing';
+    const damage = spec.damage * .59 * (.87 + Math.random() * .24) * (elapsed >= ROUND_TIME ? 1.39 : 1);
+    const strike = spec.kind === 'cannon' ? 3.6 : melee ? 2.0 : 1.3;
+    target.vx += dx / distance * strike;
+    target.vz += dz / distance * strike;
+    if (!melee) {
+      const nose = spec.kind === 'rail' ? .87 : 1.22;
+      trace(bot.x + Math.sin(bot.angle) * nose, 1.04, bot.z + Math.cos(bot.angle) * nose, target.x, .60, target.z, spec.color, spec.kind);
+      spark(bot.x + Math.sin(bot.angle) * nose, 1.04, bot.z + Math.cos(bot.angle) * nose, spec.color, 4, 3.6);
+    }
+    sound(spec.kind);
+    hit(target, damage, bot);
+  }
+
+  function moveFighter(bot, x, z) {
+    const margin = bot.spec.radius * .84;
+    const nx = clamp(bot.x + x, -WIDTH + margin, WIDTH - margin);
+    const nz = clamp(bot.z + z, -DEPTH + margin, DEPTH - margin);
+    if (inBlock(nx, bot.z, margin) || nx !== bot.x + x) bot.vx *= -.24;
+    if (!inBlock(nx, bot.z, margin)) bot.x = nx;
+    if (inBlock(bot.x, nz, margin) || nz !== bot.z + z) bot.vz *= -.24;
+    if (!inBlock(bot.x, nz, margin)) bot.z = nz;
+  }
+  function separateFighters() {
+    for (const [i, first] of fightersLive.entries()) {
+      if (!first.alive) continue;
+      for (let j = i + 1; j < fightersLive.length; j++) {
+        const second = fightersLive[j];
+        if (!second.alive) continue;
+        const dx = second.x - first.x;
+        const dz = second.z - first.z;
+        const distance = Math.max(.001, Math.hypot(dx, dz));
+        const limit = (first.spec.radius + second.spec.radius) * .96;
+        if (distance >= limit) continue;
+        const push = (limit - distance) * .5;
+        moveFighter(first, -dx / distance * push, -dz / distance * push);
+        moveFighter(second, dx / distance * push, dz / distance * push);
+      }
+    }
+  }
+
+  function checkHazards(bot, dt) {
+    bot.burn -= dt;
+    if (bot.burn > 0) return;
+    const fire = traps.some(t => t.active && Math.hypot(bot.x - t.x, bot.z - t.z) < t.radius);
+    const enclosed = Math.abs(bot.x) > WIDTH * boundaryScale || Math.abs(bot.z) > DEPTH * boundaryScale;
+    let laser = false;
+    if (beam) {
+      const bx = Math.cos(beam.angle);
+      const bz = Math.sin(beam.angle);
+      const ahead = bot.x * bx + bot.z * bz;
+      laser = ahead >= 0 && ahead <= beam.length && Math.abs(bot.z * bx - bot.x * bz) < .75;
+    }
+    if (!(fire || enclosed || laser)) return;
+    bot.burn = .43;
+    hit(bot, fire ? 10 : enclosed ? 13 : 11);
+  }
+
+  function hit(bot, damage, attacker) {
+    if (!bot.alive) return;
+    const removed = Math.min(bot.hp, damage);
+    bot.hp -= removed;
+    bot.flash = 1;
+    if (attacker) attacker.damage += removed;
+    spark(bot.x, .83, bot.z, attacker?.spec.color || level.accent, 7, 5);
+    if (bot.hp > 0) return;
+    bot.alive = false;
+    bot.state = 'Knocked out';
+    bot.parts.stripe.color.set('#382d2a');
+    bot.parts.ring.visible = false;
+    bot.parts.paint.color.multiplyScalar(.44);
+    bot.parts.armor.color.multiplyScalar(.61);
+    spark(bot.x, .76, bot.z, '#ff9a55', 23, 8.8, true);
+    log(attacker ? attacker.spec.name + ' knocked out ' + bot.spec.name : bot.spec.name + ' lost to the arena');
+    sound('ko');
+  }
+
+  const cellLocations = [[0,-5.8], [0,5.8], [-7.5,0], [7.5,0], [-4.4,-4.8], [4.4,4.8], [-2.4,2.9], [2.4,-2.9]];
+  function dropCell() {
+    const options = cellLocations.filter(([x, z]) => !inBlock(x, z, .75) &&
+      Math.abs(x) < WIDTH * boundaryScale - 1 && Math.abs(z) < DEPTH * boundaryScale - 1 &&
+      pickups.every(c => Math.hypot(c.x - x, c.z - z) > 2) &&
+      traps.every(t => Math.hypot(t.x - x, t.z - z) > t.radius + .2));
+    if (!options.length) return;
+    const [x, z] = options[Math.floor(Math.random() * options.length)];
+    const ring = mesh(effects, new T.RingGeometry(.45, .60, 26), shared.cell, x, .045, z);
+    ring.rotation.x = -Math.PI / 2;
+    const cell = mesh(effects, coreGeo, shared.cell, x, .61, z, .26, .34, .26);
+    pickups.push({ x, z, ring, cell });
+    if (pickups.length === 1) log('Repair cell deployed');
+  }
+  function checkPickups() {
+    for (let i = pickups.length - 1; i >= 0; i--) {
+      const cell = pickups[i];
+      const bot = fightersLive.find(unit => unit.alive && unit.hp < unit.spec.hp - 8 &&
+        Math.hypot(unit.x - cell.x, unit.z - cell.z) < 1.10);
+      if (!bot) continue;
+      const repaired = Math.min(bot.spec.hp - bot.hp, 27);
+      bot.hp += repaired;
+      effects.remove(cell.ring, cell.cell);
+      cell.ring.geometry.dispose();
+      pickups.splice(i, 1);
+      spark(cell.x, .5, cell.z, '#6fffa4', 10, 4.6);
+      log(bot.spec.name + ' repaired +' + Math.round(repaired));
+      sound('repair');
+    }
+  }
+
+  const sparks = new T.InstancedMesh(particleGeo, new T.MeshBasicMaterial({ color: '#ffffff' }), 190);
+  sparks.instanceMatrix.setUsage(T.DynamicDrawUsage);
+  sparks.count = 0;
+  sparks.frustumCulled = false;
+  scene.add(sparks);
+  const particleModel = new T.Object3D();
+  const particleColor = new T.Color();
+
+  function spark(x, y, z, color, count, force, debris = false) {
+    const c = new T.Color(color);
+    for (let i = 0; i < count; i++) {
+      if (particles.length >= 190) particles.shift();
+      const angle = Math.random() * TAU;
+      const strength = (.35 + Math.random() * .65) * force;
+      particles.push({
+        x, y, z, vx: Math.sin(angle) * strength, vy: (.30 + Math.random()) * force,
+        vz: Math.cos(angle) * strength, age: 0, life: debris ? .7 + Math.random() * .9 : .19 + Math.random() * .31,
+        size: debris ? .09 + Math.random() * .16 : .043 + Math.random() * .048,
+        angle, color: c
+      });
+    }
+  }
+  function trace(x, y, z, tx, ty, tz, color, kind) {
+    const firing = kind === 'cannon' ? .092 : kind === 'sniper' ? .052 : .038;
+    const line = box(effects, glow(color, .93), (x + tx) / 2, (y + ty) / 2, (z + tz) / 2, firing, firing, 1);
+    beamVector.set(tx - x, ty - y, tz - z);
+    line.scale.z = beamVector.length();
+    line.quaternion.setFromUnitVectors(forward, beamVector.normalize());
+    const life = kind === 'cannon' ? .17 : .12;
+    traces.push({ line, age: 0, life });
+  }
+  function updateEffects(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.age += dt;
+      if (p.age >= p.life) { particles.splice(i, 1); continue; }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.z += p.vz * dt;
+      p.vy -= 14 * dt;
+      if (p.y < .065) {
+        p.y = .065;
+        p.vy *= -.31;
+        p.vx *= .71;
+        p.vz *= .71;
+      }
+    }
+    for (let i = traces.length - 1; i >= 0; i--) {
+      const shot = traces[i];
+      shot.age += dt;
+      if (shot.age >= shot.life) {
+        effects.remove(shot.line);
+        shot.line.material.dispose();
+        traces.splice(i, 1);
+      } else shot.line.material.opacity = .94 * (1 - shot.age / shot.life);
+    }
+    sparks.count = particles.length;
+    particles.forEach((p, index) => {
+      const fade = 1 - p.age / p.life;
+      const s = p.size * (.35 + fade * .65);
+      particleModel.position.set(p.x, p.y, p.z);
+      particleModel.rotation.set(p.age * 14, p.angle, p.age * 11);
+      particleModel.scale.set(s, s, s * (1 + fade * 2.2));
+      particleModel.updateMatrix();
+      sparks.setMatrixAt(index, particleModel.matrix);
+      particleColor.copy(p.color).multiplyScalar(.33 + fade * .67);
+      sparks.setColorAt(index, particleColor);
+    });
+    sparks.instanceMatrix.needsUpdate = true;
+    if (sparks.instanceColor) sparks.instanceColor.needsUpdate = true;
+  }
+
+  let noiseBuffer;
+  function sound(kind) {
+    if (muted || !audioContext || audioContext.state !== 'running') return;
+    const now = audioContext.currentTime;
+    if (now - lastSound < .031 && kind !== 'ko') return;
+    lastSound = now;
+    const profile = {
+      cannon: [118, 40, .20, 'triangle', .14], saw: [179, 68, .09, 'sawtooth', .064],
+      rail: [520, 180, .12, 'triangle', .075], sniper: [680, 225, .16, 'square', .054],
+      ko: [87, 32, .41, 'triangle', .28], repair: [336, 750, .16, 'sine', .095]
+    }[kind];
+    const [start, end, duration, type, volume] = profile;
+    const gain = audioContext.createGain();
+    gain.gain.setValueAtTime(.001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + .009);
+    gain.gain.exponentialRampToValueAtTime(.001, now + duration);
+    gain.connect(audioContext.destination);
+    const tone = audioContext.createOscillator();
+    tone.type = type;
+    tone.frequency.setValueAtTime(start, now);
+    tone.frequency.exponentialRampToValueAtTime(end, now + duration);
+    tone.connect(gain);
+    tone.start(now);
+    tone.stop(now + duration);
+    if (kind !== 'ko' && kind !== 'cannon' && kind !== 'saw') return;
+    if (!noiseBuffer) {
+      noiseBuffer = audioContext.createBuffer(1, Math.floor(audioContext.sampleRate * .5), audioContext.sampleRate);
+      const channel = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < channel.length; i++) channel[i] = (Math.random() * 2 - 1) * .56;
+    }
+    const noise = audioContext.createBufferSource();
+    const filter = audioContext.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = kind === 'saw' ? 2200 : 960;
+    noise.buffer = noiseBuffer;
+    noise.connect(filter);
+    filter.connect(gain);
+    noise.start(now);
+    noise.stop(now + duration);
+  }
+
+  function log(text) {
+    entries.unshift(text);
+    entries.length = Math.min(entries.length, 2);
+    ui.feed.replaceChildren(...entries.map((entry, i) => {
+      const row = document.createElement('div');
+      row.className = 'feed-line' + (i === 0 ? ' lead' : '');
+      row.textContent = entry;
+      return row;
+    }));
+  }
+
+  function resetRound() {
+    level = levels[round];
+    elapsed = 0;
+    accumulator = 0;
+    nextPickup = level.type === 'cargo' ? 4.8 : 8;
+    status = 'ready';
+    pickups = [];
+    particles = [];
+    traces = [];
+    sparks.count = 0;
+    held = false;
+    entries = [];
+    clearGroup(effects);
+    clearGroup(robots);
+    buildArena();
+    fightersLive = fighters.map(addFighter);
+    ui['arena-name'].textContent = level.name;
+    ui.rule.textContent = level.rule;
+    ui.round.textContent = 'Round ' + roundLabel(round + 1) + ' / ' + roundLabel(levels.length);
+    stages.forEach((node, index) => {
+      node.classList.toggle('current', index === round);
+      node.classList.toggle('done', index < round);
+      if (index === round) node.setAttribute('aria-current', 'step');
+      else node.removeAttribute('aria-current');
+    });
+    ui.overlay.hidden = true;
+    log('Four fighters ready');
+    syncControls();
+    refreshHud();
+  }
+
+  function startRound() {
+    status = 'live';
+    for (const bot of fightersLive) bot.state = 'Searching';
+    log('Round ' + roundLabel(round + 1) + ' started');
+    syncControls();
+  }
+  function restartTournament(start = true) {
+    round = 0;
+    wins.fill(0);
+    tournamentDamage.fill(0);
+    resetRound();
+    if (start) startRound();
+  }
+  function nextRound() {
+    if (status === 'finished') {
+      restartTournament();
+      return;
+    }
+    if (status !== 'between') return;
+    round += 1;
+    resetRound();
+    startRound();
+  }
+  function finishRound() {
+    const byPerformance = (a, b) => Number(b.alive) - Number(a.alive) ||
+      b.hp / b.spec.hp - a.hp / a.spec.hp || b.damage - a.damage || a.index - b.index;
+    const winner = [...fightersLive].sort(byPerformance)[0];
+    const last = round === levels.length - 1;
+    wins[winner.index] += 1;
+    fightersLive.forEach(bot => { tournamentDamage[bot.index] += bot.damage; });
+    winner.state = 'Round winner';
+    log(winner.spec.name + ' won the round');
+    status = last ? 'finished' : 'between';
+    advanceAt = performance.now() + 5600;
+    ui.overlay.hidden = false;
+    ui['overlay-kicker'].textContent = last ? 'Tournament champion' : 'Round ' + roundLabel(round + 1) + ' result';
+    ui['overlay-title'].textContent = winner.spec.name + ' wins';
+    const winReason = fightersLive.filter(bot => bot.alive).length === 1 ? 'Last robot standing.' : 'Won the tiebreak.';
+    ui['overlay-text'].textContent = winReason + ' Next arena is ' + (levels[round + 1]?.name || '') + '.';
+    if (last) {
+      const standings = wins.map((_, index) => index).sort((a, b) => wins[b] - wins[a] || tournamentDamage[b] - tournamentDamage[a]);
+      const champ = standings[0];
+      const tied = wins[champ] === wins[standings[1]];
+      ui['overlay-title'].textContent = fighters[champ].name + ' wins';
+      ui['overlay-text'].textContent = wins[champ] + (wins[champ] === 1 ? ' round won' : ' rounds won') +
+        (tied ? ' · Total damage broke the tie' : ' · ' + Math.round(tournamentDamage[champ]) + ' total damage');
+      stages[round].classList.add('done');
+    }
+    ui.continue.textContent = last ? 'Rematch' : 'Next round';
+    ui.hold.hidden = last;
+    ui.hold.textContent = 'Hold';
+    ui.hold.setAttribute('aria-pressed', 'false');
+    syncControls();
+  }
+  function syncControls() {
+    ui.play.disabled = status === 'between';
+    ui.restart.disabled = status === 'ready' && round === 0;
+    ui.play.textContent = { ready: 'Start tournament', live: 'Pause', paused: 'Resume', between: 'Round ended', finished: 'Rematch' }[status];
+    ui.signal.classList.toggle('paused', status !== 'live');
+    ui.signal.lastElementChild.textContent = { ready: 'STANDBY', live: 'LIVE', paused: 'PAUSED', between: 'INTERMISSION', finished: 'FINAL' }[status];
+  }
+  function play() {
+    if (status === 'ready') startRound();
+    else if (status === 'finished') restartTournament();
+    else if (status === 'live' || status === 'paused') {
+      status = status === 'live' ? 'paused' : 'live';
+      accumulator = 0;
+      syncControls();
+    }
+  }
+  function simulate(dt) {
+    const wasOvertime = elapsed >= ROUND_TIME;
+    elapsed += dt;
+    if (!wasOvertime && elapsed >= ROUND_TIME) log('Overtime · weapon damage increased');
+    updateHazards(elapsed);
+    if (elapsed >= nextPickup && elapsed < ROUND_TIME) {
+      if (pickups.length < 2) dropCell();
+      nextPickup += level.type === 'cargo' ? 6.8 : 10.5;
+    }
+    // Shift processing order so a simultaneous shot never favors the first roster slot.
+    const start = Math.floor(elapsed / STEP) % fightersLive.length;
+    for (let i = 0; i < fightersLive.length; i++) {
+      const bot = fightersLive[(i + start) % fightersLive.length];
+      if (!bot.alive) continue;
+      updateFighter(bot, dt);
+      if (bot.alive) checkHazards(bot, dt);
+    }
+    separateFighters();
+    checkPickups();
+    if (fightersLive.filter(bot => bot.alive).length <= 1 || elapsed >= ROUND_TIME + OVERTIME) finishRound();
+  }
+  function refreshHud() {
+    const extra = elapsed >= ROUND_TIME;
+    const seconds = Math.max(0, Math.ceil((extra ? ROUND_TIME + OVERTIME : ROUND_TIME) - elapsed));
+    const value = Math.floor(seconds / 60) + ':' + roundLabel(seconds % 60);
+    if (ui.timer.textContent !== value) ui.timer.textContent = value;
+    const phase = status === 'live' ? extra ? 'Overtime' : 'In combat' : { ready: 'Standby', paused: 'Paused', between: 'Round over', finished: 'Complete' }[status];
+    if (ui.phase.textContent !== phase) ui.phase.textContent = phase;
+    ui.timer.parentElement.classList.toggle('hot', extra && status === 'live');
+    for (const bot of fightersLive) {
+      const card = cards[bot.index];
+      const remaining = clamp(bot.hp / bot.spec.hp, 0, 1);
+      const width = Math.round(remaining * 100) + '%';
+      const health = Math.ceil(bot.hp) + ' HP';
+      if (card.stateText.textContent !== bot.state) card.stateText.textContent = bot.state;
+      if (card.healthText.textContent !== health) card.healthText.textContent = health;
+      const score = wins[bot.index] + ' W';
+      if (card.winText.textContent !== score) card.winText.textContent = score;
+      if (card.hpBar.style.width !== width) {
+        card.hpBar.style.width = width;
+        card.markerBar.style.width = width;
+      }
+      card.card.classList.toggle('out', !bot.alive && bot.state !== 'Round winner');
+      card.card.classList.toggle('featured', bot.state === 'Round winner');
+    }
+    if (status === 'between' && !held) ui.hold.textContent = 'Hold · ' + Math.max(1, Math.ceil((advanceAt - performance.now()) / 1000)) + 's';
+  }
+
+  function resize() {
+    viewportWidth = Math.max(1, ui.viewport.clientWidth);
+    viewportHeight = Math.max(1, ui.viewport.clientHeight);
+    camera.aspect = viewportWidth / viewportHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(viewportWidth, viewportHeight, false);
+  }
+  function updateCamera(dt) {
+    const duel = cameraMode === 1;
+    const overhead = cameraMode === 2;
+    const live = fightersLive.filter(bot => bot.alive);
+    const focus = duel && live.length ? [...live].sort((a, b) => b.damage - a.damage)[0] : null;
+    const distance = (duel ? 18.2 * Math.max(1, .94 / camera.aspect) :
+      (overhead ? 33 : 31) * Math.max(1, 1.29 / camera.aspect)) * aimZoom;
+    const yaw = aimYaw + (cameraMode === 0 && !drag ? Math.sin(visualTime * .16) * .13 : 0);
+    const pitch = overhead ? 1.43 : aimPitch - (duel ? .18 : 0);
+    cameraTarget.x = damp(cameraTarget.x, focus ? focus.x * .70 : 0, 2.6, dt);
+    cameraTarget.z = damp(cameraTarget.z, focus ? focus.z * .70 : 0, 2.6, dt);
+    camera.position.x = damp(camera.position.x, cameraTarget.x + Math.sin(yaw) * Math.cos(pitch) * distance, 5.5, dt);
+    camera.position.y = damp(camera.position.y, Math.sin(pitch) * distance, 5.5, dt);
+    camera.position.z = damp(camera.position.z, cameraTarget.z + Math.cos(yaw) * Math.cos(pitch) * distance, 5.5, dt);
+    camera.lookAt(cameraTarget);
+    camera.updateMatrixWorld();
+  }
+  function updateModels(dt) {
+    for (const bot of fightersLive) {
+      const { root, body, wheels, mounts, spinner, paint, lamp } = bot.parts;
+      root.position.set(bot.x, 0, bot.z);
+      body.rotation.y = bot.angle;
+      body.rotation.x = damp(body.rotation.x, bot.alive ? -.075 * bot.recoil + Math.sin(visualTime * 11 + bot.phase) * .016 : .13, 9, dt);
+      body.rotation.z = damp(body.rotation.z, bot.alive ? Math.sin(visualTime * 4 + bot.phase) * Math.hypot(bot.vx, bot.vz) * .011 : -.09, 8, dt);
+      if (bot.alive) {
+        for (const wheel of wheels) wheel.rotation.x += dt * Math.hypot(bot.vx, bot.vz) * 3.5;
+        if (spinner) spinner.rotation.y += dt * (status === 'live' ? 24 + bot.recoil * 12 : 5);
+        else mounts.position.z = -.21 * bot.recoil;
+        lamp.scale.x = .31 * (1 + .67 * bot.recoil);
+      }
+      bot.flash = Math.max(0, bot.flash - dt * 5.7);
+      bot.recoil = Math.max(0, bot.recoil - dt * 6.3);
+      paint.emissive.setRGB(bot.flash * .71, bot.flash * .21, bot.flash * .067);
+    }
+    for (const [i, cell] of pickups.entries()) {
+      cell.cell.position.y = .62 + Math.sin(visualTime * 4.5 + i) * .18;
+      cell.cell.rotation.y = visualTime * 2 + i;
+    }
+  }
+  function positionMarkers() {
+    for (const bot of fightersLive) {
+      const label = cards[bot.index].label;
+      projected.set(bot.x, 1.78, bot.z).project(camera);
+      label.hidden = !bot.alive || projected.z < -1 || projected.z > 1 || Math.abs(projected.x) > .95 || Math.abs(projected.y) > .95;
+      if (!label.hidden) {
+        const x = Math.round((projected.x * .5 + .5) * viewportWidth);
+        const y = Math.round((.5 - projected.y * .5) * viewportHeight);
+        label.style.transform = 'translate(' + x + 'px,' + y + 'px) translate(-50%,-100%)';
+      }
+    }
+  }
+
+  ui.play.addEventListener('click', play);
+  ui.restart.addEventListener('click', () => restartTournament());
+  ui.continue.addEventListener('click', nextRound);
+  ui.hold.addEventListener('click', () => {
+    held = !held;
+    advanceAt = performance.now() + 5600;
+    ui.hold.textContent = held ? 'Resume auto' : 'Hold';
+    ui.hold.setAttribute('aria-pressed', String(held));
+  });
+  ui.speed.addEventListener('click', () => {
+    speedIndex = (speedIndex + 1) % rates.length;
+    ui.speed.textContent = 'Speed ' + rates[speedIndex] + '×';
+  });
+  ui.camera.addEventListener('click', () => {
+    cameraMode = (cameraMode + 1) % 3;
+    aimYaw = .10;
+    aimPitch = .76;
+    aimZoom = 1;
+    ui.camera.textContent = 'Camera ' + ['Wide', 'Follow', 'Overhead'][cameraMode];
+  });
+  ui.audio.addEventListener('click', async () => {
+    ui.audio.disabled = true;
+    try {
+      if (muted) {
+        const Context = window.AudioContext || window.webkitAudioContext;
+        if (!Context) throw new Error('Audio unavailable');
+        audioContext ||= new Context();
+        await audioContext.resume();
+      }
+      muted = !muted;
+      ui.audio.textContent = muted ? 'Sound off' : 'Sound on';
+      ui.audio.setAttribute('aria-pressed', String(!muted));
+      ui.audio.disabled = false;
+    } catch {
+      ui.audio.textContent = 'Sound unavailable';
+      ui.audio.disabled = true;
+    }
+  });
+  ui.arena.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.target.closest('button') || drag) return;
+    drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    ui.arena.setPointerCapture(event.pointerId);
+  });
+  ui.arena.addEventListener('pointermove', event => {
+    if (!drag || drag.id !== event.pointerId) return;
+    aimYaw += (drag.x - event.clientX) * .009;
+    aimPitch = clamp(aimPitch + (event.clientY - drag.y) * .005, .40, 1.31);
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    ui.arena.addEventListener(type, event => { if (drag?.id === event.pointerId) drag = undefined; });
+  }
+  ui.arena.addEventListener('wheel', event => {
+    if (event.ctrlKey) return;
+    if (innerWidth <= 680 && !event.shiftKey) return;
+    event.preventDefault();
+    aimZoom = clamp(aimZoom * Math.exp(event.deltaY * .001), .65, 1.65);
+  }, { passive: false });
+  document.addEventListener('keydown', event => {
+    if (event.code !== 'Space' || event.repeat || event.target.closest('button, input, textarea')) return;
+    event.preventDefault();
+    play();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && status === 'live') {
+      status = 'paused';
+      accumulator = 0;
+      syncControls();
+    }
+  });
+  renderer.domElement.addEventListener('webglcontextlost', event => {
+    event.preventDefault();
+    showLoadError('The graphics connection was lost. Reload the page to restart the arena.');
+    ui.play.disabled = true;
+    ui.restart.disabled = true;
+  });
+
+  resize();
+  new ResizeObserver(resize).observe(ui.viewport);
+  camera.position.set(1.5, 25, 27);
+  resetRound();
+  updateCamera(1);
+  renderer.render(scene, camera);
+  function tick(now) {
+    requestAnimationFrame(tick);
+    const dt = clamp((now - lastFrame) / 1000, 0, .054);
+    lastFrame = now;
+    const visualStep = status === 'paused' ? 0 : dt;
+    visualTime += visualStep;
+    if (status === 'live') {
+      accumulator += dt * rates[speedIndex];
+      while (accumulator >= STEP && status === 'live') {
+        simulate(STEP);
+        accumulator -= STEP;
+      }
+    }
+    if (status === 'between' && !held && now >= advanceAt) nextRound();
+    updateModels(visualStep);
+    updateEffects(visualStep * (status === 'live' ? rates[speedIndex] : 1));
+    updateCamera(dt);
+    refreshHud();
+    renderer.render(scene, camera);
+    positionMarkers();
+  }
+  requestAnimationFrame(tick);
+}
+</script>
+</body>
+</html>
