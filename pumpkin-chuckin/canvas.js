@@ -1,5 +1,5 @@
 import { THREE, v3, lerp, clamp, random, groundHeight, TAU } from './field.js';
-import { skinPoint } from './pumpkin.js?v=fruit-2';
+import { skinPoint } from './pumpkin.js?v=booth-1';
 import { produceSprite } from './produce-sprite.js';
 
 const palette = ['#353320','#5e4229','#784625','#96502b','#a55d30','#b87641','#9d6838'];
@@ -271,6 +271,103 @@ export function canvasRenderer(view) {
     ctx.strokeStyle='#513b2e';ctx.lineWidth=Math.max(1.4,p.scale*.07);ctx.stroke();
     ctx.restore();
   }
+  function boothArtwork(camera,booth){
+    const {x,y,z}=booth.frame.position;
+    poly([v3(x-4.2,y+.70,z),v3(x+4.2,y+.70,z)],camera,'#9f7855',.13);
+    for(const side of [-1,1]){
+      poly([v3(x+side*4.2,y,z),v3(x+side*4.2,y+3.62,z)],camera,'#91684a',.23);
+    }
+    for(let i=0;i<12;i++){
+      const left=x+(i-6)*.71;
+      poly([v3(left,y+3.43,z+1.04),v3(left+.712,y+3.43,z+1.04),
+        v3(left+.712,y+3.72,z-.11),v3(left,y+3.72,z-.11)],camera,i%2?'#d5bb88':'#a44d43');
+    }
+    poly([v3(x-4.2,y+3.43,z+1.04),v3(x+4.2,y+3.43,z+1.04)],camera,'#7f5541',.090);
+    const sign=project(v3(x,y+3.25,z+1.08),camera);
+    if(sign)ctx.drawImage(booth.label,sign.x-sign.scale*1.50,sign.y-sign.scale*.25,sign.scale*3,.50*sign.scale);
+  }
+  function drawVolunteer(camera,actor,marks){
+    actor.root.updateWorldMatrix(true,true);
+    const {root,body,head,colors,recoil,laugh,cheer}=actor;
+    const at=(group,x,y,z)=>project(group.localToWorld(v3(x,y,z)),camera);
+    const joint=(group,local)=>project(group.localToWorld(local.clone()),camera);
+    const hip=at(body,0,.064,0), chest=at(body,0,.405,0), face=at(head,0,0,.039);
+    if(!hip||!chest||!face||face.x<-100||face.x>width+100)return;
+    const tilt=Math.atan2(chest.x-hip.x,hip.y-chest.y);
+
+    function oval(point,w,h,color,angle=0,light='#ffe6b7'){
+      if(!point||point.scale*w<.40)return;
+      const a=w*point.scale,b=h*point.scale;
+      ctx.save();ctx.translate(point.x,point.y);ctx.rotate(angle);
+      const shade=ctx.createRadialGradient(-a*.39,-b*.58,0,0,0,Math.max(a,b)*1.19);
+      shade.addColorStop(0,light);shade.addColorStop(.32,color);shade.addColorStop(.77,color);shade.addColorStop(1,'#2f231d');
+      ctx.fillStyle=shade;ctx.beginPath();ctx.ellipse(0,0,a,b,0,0,TAU);ctx.fill();ctx.restore();
+    }
+    function stroke(from,to,thickness,color,shadow=true){
+      if(!from||!to)return;
+      const line=Math.max(.8,(from.scale+to.scale)*thickness*.5);
+      ctx.lineCap='round';
+      if(shadow){
+        ctx.lineWidth=line*1.13;ctx.strokeStyle='#362a23';
+        ctx.beginPath();ctx.moveTo(from.x,from.y);ctx.lineTo(to.x,to.y);ctx.stroke();
+      }
+      ctx.lineWidth=line;ctx.strokeStyle=color;
+      ctx.beginPath();ctx.moveTo(from.x,from.y);ctx.lineTo(to.x,to.y);ctx.stroke();
+    }
+    function stain(anchor){
+      for(const mark of marks){
+        if(mark.parent!==anchor||!mark.visible)continue;
+        const p=joint(anchor,mark.position);
+        if(!p)continue;
+        const spread=p.scale*mark.geometry.parameters.width;
+        ctx.save();ctx.globalAlpha=mark.material.opacity;
+        ctx.drawImage(mark.material.map.image,p.x-spread*.5,p.y-spread*.5,spread,spread);
+        ctx.restore();
+      }
+    }
+    const floor=at(root,0,.032,0);
+    if(floor){
+      ctx.fillStyle='#30261262';
+      ctx.beginPath();ctx.ellipse(floor.x,floor.y,floor.scale*.53,floor.scale*.123,0,0,TAU);ctx.fill();
+    }
+    for(const leg of actor.legs){
+      const start=joint(root,leg.hip),knee=joint(root,leg.knee),toe=joint(root,leg.ankle);
+      stroke(start,knee,.208,colors.overalls);stroke(knee,toe,.177,colors.overalls);
+      oval(joint(root,leg.shoe.position),.124,.087,colors.boots,-leg.side*.19,'#88634e');
+    }
+    const gestures=actor.arms.map(arm=>({arm,shoulder:joint(body,arm.shoulder),elbow:joint(body,arm.elbow),hand:joint(body,arm.hand)}));
+    for(const {shoulder,elbow} of gestures)stroke(shoulder,elbow,.201,colors.shirt);
+    oval(hip,.31,.17,colors.overalls,tilt,'#8b7f6f');
+    oval(chest,.37,.396,colors.shirt,tilt,colors.shirt);
+    oval(at(body,0,.27,.143),.263,.274,colors.overalls,tilt,colors.overalls);
+    for(const side of [-1,1]){
+      stroke(at(body,side*.192,.412,.261),at(body,side*.237,.714,.119),.074,colors.overalls,false);
+      oval(at(body,side*.195,.445,.255),.030,.029,'#e9bd7b',0,'#ffebbf');
+    }
+    stain(actor.patches.torso);
+    for(const side of [-1,1])oval(at(head,side*.199,0,.011),.055,.073,colors.skin,tilt,colors.skin);
+    oval(face,.211,.253,colors.skin,tilt,colors.skin);
+    oval(at(head,0,.150,-.025),.218,.098,colors.hair,tilt,colors.hair);
+    oval(at(head,0,.197,.013),.224,.122,colors.hat,tilt,colors.hat);
+    oval(at(head,0,.160,.172),.221,.028,colors.hat,tilt,colors.hat);
+    for(const eye of actor.eyes){
+      const white=at(eye,0,0,0);
+      oval(white,.049,.033*eye.scale.y,'#fff2db',tilt,'#fff2db');
+      oval(at(eye,.003,-.001,.026),.019,.022*eye.scale.y,'#372922',tilt,'#705950');
+      if(actor.name==='Kit'&&white&&white.scale*.05>.75){
+        ctx.lineWidth=Math.max(.6,white.scale*.011);ctx.strokeStyle='#cab481';
+        ctx.beginPath();ctx.ellipse(white.x,white.y,white.scale*.056,white.scale*.045,tilt,0,TAU);ctx.stroke();
+      }
+    }
+    oval(at(head,0,-.025,.223),.055,.045,colors.skin,tilt,colors.skin);
+    const mouth=at(head,0,-.106,.196);
+    oval(mouth,.068,.018*(1+recoil*5+laugh*2+cheer*1.5),'#633b33',tilt,'#815448');
+    if(mouth&&actor.smile.visible)oval(at(head,0,-.102,.212),.044,.009,'#fbe4c7',tilt,'#fff4d9');
+    stain(actor.patches.head);
+    for(const {elbow,hand} of gestures){
+      stroke(elbow,hand,.152,colors.skin);oval(hand,.104,.104,'#e5c78f',tilt,'#ffe9b6');
+    }
+  }
   function hitEffect(camera,fx){
     if(!fx)return;
     const sprites=fx.sprites.filter(({item})=>item.visible);
@@ -327,11 +424,14 @@ export function canvasRenderer(view) {
       width=w;height=h;canvas.width=w*scale;canvas.height=h*scale;
       ctx.setTransform(scale,0,0,scale,0,0);
     },
-    render(camera,rig,target,fruit,path,marks,effect){
+    render(camera,rig,target,fruit,path,marks,effect,booth){
       camera.updateMatrixWorld();
       focal=height/2/Math.tan(camera.fov*Math.PI/360);
       drawSky(camera);lane(camera);treesAndGrass(camera);barn(camera);
-      board(camera,target,marks);
+      if(booth){
+        boothArtwork(camera,booth);
+        for(let i=booth.actors.length-1;i>=0;i--)drawVolunteer(camera,booth.actors[i],marks);
+      }else board(camera,target,marks);
       if(rig)launcher(camera,rig);
       if(fruit.root.visible){
         const p=project(fruit.root.position,camera);

@@ -300,8 +300,22 @@ function smearMap(seed,produce) {
   return tex;
 }
 
-function addSmear(scene,target,hit,power,seed,produce) {
+function addSmear(scene,target,hit,power,seed,produce,patch) {
   const tex=smearMap(seed+311,produce);
+  if(patch){
+    const width=clamp((.37+power*.015)*lerp(.65,1,Math.min(produce.style.pulp,1)),.29,hit.region==='head'?.52:.75);
+    const decal=new THREE.PlaneGeometry(width,width);
+    const offsets=hit.region==='head'?.35:.54;
+    const ctx=tex.image.getContext('2d');
+    const side=tex.image.width;
+    ctx.globalCompositeOperation='destination-in';
+    ctx.beginPath();
+    ctx.ellipse(side*(.5-hit.patchX*offsets/width),side*(.5+hit.patchY*offsets/width),
+      side*(hit.region==='head'?.191:.346)/width,side*(hit.region==='head'?.221:.358)/width,0,0,TAU);
+    ctx.fill();tex.needsUpdate=true;
+    return mesh(patch,decal,surface('#ffffff',{map:tex,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,roughness:.92}),
+      hit.patchX*offsets,hit.patchY*offsets,.017+(seed>>>0)%256*.00013,false);
+  }
   const width=clamp((.65+power*.081)*lerp(.56,1,Math.min(produce.style.pulp,1)),.80,3.85);
   const g=new THREE.PlaneGeometry(width,width);
   if(hit.onBoard){
@@ -357,8 +371,9 @@ function makePlume(scene, hit, rng, mobile, produce) {
   const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
   const sprites=[];
   const tint=produce.id===defaultProduce.id?0xffaa66:produce.flesh;
+  const upright=hit.onBoard||hit.volunteer!==undefined;
   for(let i=0;i<Math.round((mobile?12:19)*produce.style.dust);i++){
-    const mat=new THREE.SpriteMaterial({ map:tex,transparent:true,depthWrite:false,color:hit.onBoard?tint:0xbe9f6e });
+    const mat=new THREE.SpriteMaterial({ map:tex,transparent:true,depthWrite:false,color:upright?tint:0xbe9f6e });
     const item=new THREE.Sprite(mat);
     item.position.copy(hit.contact);item.scale.setScalar(.18+rng()*.24);mat.opacity=0;
     scene.add(item);
@@ -367,12 +382,14 @@ function makePlume(scene, hit, rng, mobile, produce) {
   return {sprites,tex};
 }
 
-export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly) {
+export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly,patch=null) {
   const rng=random(seed);
   const produce=pumpkin.produce, style=produce.style, size=pumpkin.root.scale;
   const speed=hit.velocity.length();
-  const energy=clamp(speed/22,.66,1.45);
-  const normal=hit.onBoard ? v3(0,0,1):v3(0,1,0);
+  const energy=clamp(speed/22,.66,1.45)*(patch?.85:1);
+  const normal=hit.normal||(hit.onBoard?v3(0,0,1):v3(0,1,0));
+  const surfaceSound=hit.onBoard?'wood':patch?'cloth':'soil';
+  const upright=hit.onBoard||Boolean(patch);
   const tangent=hit.velocity.clone().addScaledVector(normal,-hit.velocity.dot(normal));
   const splashOrigin=hit.contact.clone().addScaledVector(normal,.178);
   const rigid=[];
@@ -386,21 +403,24 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
     piece.scale.copy(size);
     const offset=(clustered?part.position:part.pivot).clone().multiply(size).applyQuaternion(rotation);
     piece.position.copy(hit.center).add(offset);
-    if(hit.onBoard)piece.position.z=Math.max(piece.position.z,hit.contact.z+.18);
+    if(upright)piece.position.z=Math.max(piece.position.z,hit.contact.z+.10);
     piece.quaternion.copy(rotation);
     const velocity=offset.clone().normalize().multiplyScalar((3.9+rng()*6.7)*energy*style.spread)
       .addScaledVector(normal,(2+rng()*4.1)*energy)
       .addScaledVector(tangent,.29+rng()*.10);
     velocity.y+=.7+rng()*2.2;
     const radius=clustered?part.radius*Math.max(size.x,size.z):.12+index%3*.036;
-    rigid.push({piece,vel:velocity,spin:v3((rng()-.5)*10,(rng()-.5)*13,(rng()-.5)*12),radius,form:clustered?part.form:'rind',tint:part.color});
+    const form=clustered?part.form:'rind';
+    rigid.push({piece,vel:velocity,spin:v3((rng()-.5)*10,(rng()-.5)*13,(rng()-.5)*12),radius,form,tint:part.color,
+      audio:{type:form,size:radius,seed:(seed+index*247)>>>0,left:2}});
   }
   if(pumpkin.stemMesh.visible){
     const stem=mesh(debris,pumpkin.stemGeo,pumpkin.stem,0,0,0,false);
     stem.position.copy(pumpkin.stemMesh.position).multiply(size).applyQuaternion(rotation).add(hit.center);
     stem.scale.copy(pumpkin.stemMesh.scale).multiply(size);
     stem.quaternion.copy(rotation).multiply(pumpkin.stemMesh.quaternion);
-    rigid.push({piece:stem,vel:normal.clone().multiplyScalar(6.1).addScaledVector(tangent,.37).add(v3(1.1,5.8,.1)),spin:v3(-8,10,4),radius:.115});
+    rigid.push({piece:stem,vel:normal.clone().multiplyScalar(6.1).addScaledVector(tangent,.37).add(v3(1.1,5.8,.1)),spin:v3(-8,10,4),radius:.115,
+      audio:{type:'stalk',size:.115,seed:(seed+17)>>>0,left:1}});
   }
 
   const strands = [];
@@ -419,35 +439,49 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
     batch.frustumCulled=false;
     const particles=Array.from({length:bank.count},(_,i)=>{
       const direction=v3(rng()-.5,rng()-.36,rng()-.5).normalize();
-      if(hit.onBoard) direction.z=Math.abs(direction.z)*.65;
+      if(upright) direction.z=Math.abs(direction.z)*.65;
       const spread=(3+Math.pow(rng(),2.0)*14)*energy*style.spread;
       const vel=direction.multiplyScalar(spread).addScaledVector(tangent,.33+rng()*.36).addScaledVector(normal,(bank.seed?2.5:1.3)+rng()*6*energy);
       const position=splashOrigin.clone().add(v3((rng()-.5)*.43,(rng()-.5)*.35,(rng()-.5)*.29));
       const size=lerp(bank.min,bank.max,Math.pow(rng(),1.6));
       batch.setColorAt(i,bank.colors[i%bank.colors.length]);
-      return {position,vel,size,angle:rng()*TAU,spin:(rng()-.5)*20,flick:rng()*.55,bounces:0};
+      const type=bank.seed?'seed':bank.chip?'chip':'pulp';
+      const audio=i%(bank.seed?5:bank.chip?7:12)===0?{type,size,seed:(seed+193+i*277)>>>0,left:1}:null;
+      return {position,vel,size,angle:rng()*TAU,spin:(rng()-.5)*20,flick:rng()*.55,bounces:0,audio};
     });
     debris.add(batch);
     return {...bank,batch,particles};
   });
   const mist=makePlume(debris,hit,rng,mobile,produce);
-  const mark=addSmear(scene,target,hit,speed,seed,produce);
+  const mark=addSmear(scene,target,hit,speed,seed,produce,patch);
   mark.visible=false;
   let age=0;
   const up=v3(0,1,0), scratch=v3(), zero=v3(0,0,0);
+  const heard=[];
+  const soundprint={rindLength:rigid.reduce((sum,item)=>sum+item.radius,0)/4.5,
+    whole:clustered?rigid.length:0,pulp:banks[0].count};
 
-  function advance(pos,vel,dt,radius,drag,bounce){
+  function record(audio,material,speed,pos){
+    if(!audio||!audio.left||speed<.76||heard.length>=22)return;
+    audio.left--;
+    heard.push({type:audio.type,size:audio.size,seed:audio.seed+audio.left*607,material,speed,x:pos.x});
+  }
+
+  function advance(pos,vel,dt,radius,drag,bounce,audio){
     vel.multiplyScalar(Math.exp(-drag*dt));
     vel.y-=9.81*dt;
     pos.addScaledVector(vel,dt);
-    if(hit.onBoard && pos.z<hit.contact.z+radius && pos.z>hit.contact.z-.48 && vel.z<0 &&
-      Math.hypot(pos.x-hit.boardX,pos.y-hit.boardY)<target.radius){
+    if(upright && pos.z<hit.contact.z+radius && pos.z>hit.contact.z-.48 && vel.z<0 &&
+      (patch?Math.hypot(pos.x-hit.contact.x,pos.y-hit.contact.y)<.44:
+        Math.hypot(pos.x-hit.boardX,pos.y-hit.boardY)<target.radius)){
+      record(audio,surfaceSound,-vel.z,pos);
       pos.z=hit.contact.z+radius;
-      vel.z*=-.39;
+      vel.z*=patch?-.15:-.39;
       vel.multiplyScalar(.83);
     }
     const ground=groundHeight(pos.x,pos.z)+radius;
     if(pos.y>ground || vel.y>=0)return false;
+    record(audio,'soil',-vel.y,pos);
     pos.y=ground;vel.y=Math.abs(vel.y)*bounce;
     vel.x*=.69;vel.z*=.69;
     if(Math.abs(vel.y)<.27)vel.y=0;
@@ -456,6 +490,13 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
 
   return {
     mark,
+    soundprint,
+    takeSounds(){
+      if(!heard.length)return heard;
+      const impacts=heard.splice(0);
+      impacts.sort((a,b)=>b.speed*Math.sqrt(b.size)-a.speed*Math.sqrt(a.size));
+      return impacts;
+    },
     textures: [mark.material.map,mist.tex],
     preview: { rigid,banks,sprites:mist.sprites,produce },
     setVisible(visible){
@@ -465,8 +506,8 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
     update(dt){
       age+=dt;
       for(const obj of rigid){
-        const {piece,vel,spin,radius,form}=obj;
-        const onSurface=advance(piece.position,vel,dt,form==='leaf'?Math.min(radius,.11):radius,style.drag,style.bounce);
+        const {piece,vel,spin,radius,form,audio}=obj;
+        const onSurface=advance(piece.position,vel,dt,form==='leaf'?Math.min(radius,.11):radius,style.drag,style.bounce,audio);
         if(onSurface)spin.multiplyScalar(.77);
         piece.rotateX(spin.x*dt);piece.rotateY(spin.y*dt);piece.rotateZ(spin.z*dt);
       }
@@ -482,7 +523,7 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
       }
       for(const bank of banks){
         for(const p of bank.particles){
-          if(p.bounces<=3&&advance(p.position,p.vel,dt,p.size*.51,bank.drag,bank.seed?.38:.22))p.bounces++;
+          if(p.bounces<=3&&advance(p.position,p.vel,dt,p.size*.51,bank.drag,bank.seed?.38:.22,p.audio))p.bounces++;
           p.angle+=dt*p.spin;
         }
       }
@@ -493,7 +534,7 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
         item.position.addScaledVector(vel,dt*.62);
         vel.multiplyScalar(Math.exp(-2*dt));
         item.scale.addScalar(dt*1.51);
-        item.material.opacity=Math.sin(clamp(localAge/life,0,1)*Math.PI)*(hit.onBoard?.59:.80);
+        item.material.opacity=Math.sin(clamp(localAge/life,0,1)*Math.PI)*(upright?.59:.80);
       }
     },
     syncParticles(){

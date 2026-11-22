@@ -1,7 +1,9 @@
-import { THREE, v3, clamp, lerp, random, buildField, groundHeight, buildLauncher, buildTarget } from './field.js';
-import { canvasRenderer } from './canvas.js?v=fruit-2';
-import { makePumpkin, pumpkinRadius, prepareImpact, clearSmear } from './pumpkin.js?v=fruit-2';
+import { THREE, v3, clamp, lerp, buildField, groundHeight, buildLauncher, buildTarget } from './field.js';
+import { canvasRenderer } from './canvas.js?v=booth-1';
+import { makePumpkin, pumpkinRadius, prepareImpact, clearSmear } from './pumpkin.js?v=booth-1';
 import { defaultProduce, findProduce, bindProducePicker } from './produce.js';
+import { boothRounds, buildBooth, boothCollision } from './booth.js';
+import { createSound } from './sound.js';
 
 const $ = id => document.getElementById(id);
 const ui = Object.fromEntries([
@@ -9,15 +11,16 @@ const ui = Object.fromEntries([
   'aim-pin','pin-distance','film','film-label','feedback','feedback-type','feedback-title','feedback-detail',
   'loading','announcer','aim','angle','power','aim-value','angle-value','power-value','fire','replay',
   'produce-open','produce-current-icon','produce-current-name','produce-picker','produce-search','produce-categories',
-  'produce-random','produce-results','produce-options'
+  'produce-random','produce-results','produce-options','targets-mode','booth-mode'
 ].map(id => [id,$(id)]));
-const rounds = [
+const targetRounds = [
   { name:'The Warm-Up', distance:23, x:.38, travel:0, rate:0 },
   { name:'Moving Target', distance:32, x:-.75, travel:2.15, rate:.93 },
   { name:'The Long Shot', distance:45, x:1.1, travel:3.7, rate:1.09 }
 ];
 const rangeControls = [ui.aim,ui.angle,ui.power];
 const bestKey = 'pumpkin-chuckin-best-v1';
+const boothBestKey = 'pumpkin-chuckin-booth-best-v1';
 const produceKey = 'pumpkin-chuckin-produce-v1';
 const mobile = matchMedia('(pointer: coarse)').matches;
 const lessMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -48,6 +51,7 @@ async function setup() {
   const materials=buildField(scene,mobile,Boolean(fallback));
   const launcher=buildLauncher(scene,materials);
   const target=buildTarget(scene,materials,1.91);
+  const booth=buildBooth(scene,materials);
   const fruit=makePumpkin(scene,materials.skin);
   const path=new THREE.InstancedMesh(new THREE.SphereGeometry(1,8,6),
     new THREE.MeshBasicMaterial({color:'#ffdb9d',transparent:true,opacity:.83}),60);
@@ -56,21 +60,25 @@ async function setup() {
   scene.add(path);
   const sounds=createSound();
 
+  let course=new URLSearchParams(window.location.search).get('mode')==='booth'?'booth':'targets';
+  let rounds=course==='booth'?boothRounds:targetRounds;
   let roundIndex=0, tries=0, roundScores=[0,0,0], best=0, phase='aim', volley=0;
   let animation=0, elapsed=0, rangeTime=0, flightTime=0, debt=0, effect=null, shot=null, lastShot=null, playback=false;
   let bestChanged=false, selectedProduce=defaultProduce;
   const position=v3(), rotation=new THREE.Quaternion(), spin=new THREE.Euler();
   let portrait=false, aimDirty=true, time=0, nextPreview=0;
-  const marks=[];
+  let marks=[], impactAge=0;
+  const runs=new Map();
+  const scoreKey=()=>course==='booth'?boothBestKey:bestKey;
   try {
-    best=Number(localStorage.getItem(bestKey))||0;
+    best=Number(localStorage.getItem(scoreKey()))||0;
     selectedProduce=findProduce(localStorage.getItem(produceKey))||defaultProduce;
   } catch {}
   activateProduce(selectedProduce);
 
   const current=()=>rounds[roundIndex];
   const total=()=>roundScores.reduce((sum,n)=>sum+n,0);
-  const impactDuration=()=>playback?replayImpactDuration:liveImpactDuration;
+  const impactDuration=()=>playback?replayImpactDuration:course==='booth'?1.52:liveImpactDuration;
   function activateProduce(entry){
     if(fruit.produce!==entry)fruit.select(entry);
     fallback?.prepareFruit(fruit);
@@ -85,8 +93,52 @@ async function setup() {
     announce(`${entry.name} selected.`);
   }
   const targetX=(seconds,round=current())=>round.x+Math.sin(seconds*round.rate)*round.travel;
-  function rackTarget(seconds){
+  function rackTarget(seconds,hit=null,age=0){
+    if(course==='booth'){
+      booth.update(current(),seconds,hit,age);
+      if(hit?.volunteer!==undefined&&effect){
+        const damp=hit.reaction.cleanup==='wipe'?.63:.39;
+        effect.mark.material.opacity=1-damp*clamp((age-.45)/.52,0,1);
+      }
+      return;
+    }
     target.stand.position.set(targetX(seconds),groundHeight(targetX(seconds),-current().distance),-current().distance);
+  }
+  function showCourse(){
+    target.stand.visible=course==='targets';
+    booth.setVisible(course==='booth');
+  }
+  function switchCourse(name){
+    if(course===name||(phase!=='aim'&&phase!=='roundEnd'))return;
+    runs.set(course,{roundIndex,tries,roundScores,rangeTime,shot,lastShot,phase,marks,best,
+      controls:rangeControls.map(control=>control.value)});
+    for(const record of marks)record.mark.visible=false;
+    course=name;
+    rounds=course==='booth'?boothRounds:targetRounds;
+    const prior=runs.get(course);
+    roundIndex=prior?.roundIndex||0;
+    tries=prior?.tries||0;
+    roundScores=prior?.roundScores||[0,0,0];
+    rangeTime=prior?.rangeTime||0;
+    shot=prior?.shot||null;
+    lastShot=prior?.lastShot||null;
+    phase=prior?.phase||'aim';
+    marks=prior?.marks||[];
+    best=prior?.best||0;
+    if(!prior)try{best=Number(localStorage.getItem(scoreKey()))||0;}catch{}
+    for(const record of marks)record.mark.visible=true;
+    showCourse();
+    rackTarget(rangeTime);
+    if(prior){
+      rangeControls.forEach((control,i)=>control.value=prior.controls[i]);
+      updateControlText();
+    }else resetControls();
+    if(phase==='roundEnd'){
+      fruit.root.visible=false;
+      showResult();
+      repaint();
+    }else enterAim();
+    announce(course==='booth'?'Splat Booth selected.':'Bullseyes selected.');
   }
   function resetControls(){
     ui.aim.value=THREE.MathUtils.radToDeg(Math.atan2(current().x,current().distance)).toFixed(2);
@@ -94,7 +146,7 @@ async function setup() {
     const launch=newShot(0,0);
     const depth=current().distance + launch.origin.z - .126 - launch.radius*.89;
     const distance=depth/Math.cos(launch.aim);
-    const height=groundHeight(current().x,-current().distance)+target.center-launch.origin.y;
+    const height=groundHeight(current().x,-current().distance)+(course==='booth'?1.43:target.center)-launch.origin.y;
     const theta=THREE.MathUtils.degToRad(+ui.angle.value);
     const speed=Math.sqrt(gravity*distance**2/(2*Math.cos(theta)**2*(distance*Math.tan(theta)-height)));
     ui.power.value=clamp((speed-7)/.20,12,100);
@@ -139,6 +191,10 @@ async function setup() {
     ui.fire.disabled=active;
     ui.replay.disabled=active||!lastShot;
     ui['produce-open'].disabled=active;
+    for(const key of ['targets','booth']){
+      ui[key+'-mode'].disabled=active;
+      ui[key+'-mode'].setAttribute('aria-pressed',String(course===key));
+    }
     ui.film.hidden=phase!=='impact'&&!playback;
     ui['film-label'].textContent=playback?`Slow-motion replay · ${shot.produce.name}`:'IMPACT CAM';
   }
@@ -200,7 +256,10 @@ async function setup() {
   function collision(a,b,seconds,round,throwData){
     const boardZ=-round.distance+.126;
     const front=boardZ+throwData.radius*.89;
-    if(a.z>=front&&b.z<front){
+    if(course==='booth'){
+      const volunteerHit=boothCollision(a,b,throwData.radius,round,throwData.start+seconds,throwData.seed);
+      if(volunteerHit)return volunteerHit;
+    }else if(a.z>=front&&b.z<front){
       const fraction=(a.z-front)/(a.z-b.z);
       const center=a.clone().lerp(b,fraction);
       const x=targetX(throwData.start+seconds-(1-fraction)*stepSize,round);
@@ -230,6 +289,11 @@ async function setup() {
       if(hit){
         hit.time=t-(1-hit.fraction)*stepSize;
         hit.velocity=throwData.initial.clone().addScaledVector(down,gravity*hit.time);
+        if(hit.volunteer!==undefined){
+          const style=throwData.produce.style;
+          hit.reaction.cleanup=style.pulp>=.78?'wipe':style.name==='Leafy'?'brush':'shake';
+          hit.reaction.lean*=clamp((hit.velocity.length()/20)*(.82+style.bounce*.78),.64,1.24);
+        }
         return hit;
       }
       prior.copy(next);
@@ -239,7 +303,8 @@ async function setup() {
     const hit=throwData.hit;
     activateProduce(throwData.produce);
     rotation.setFromEuler(spinAt(throwData,hit.time));
-    const prepared=prepareImpact(scene,target,hit,rotation,fruit,throwData.seed,mobile,Boolean(fallback));
+    const patch=hit.volunteer===undefined?null:booth.decalAnchor(hit);
+    const prepared=prepareImpact(scene,target,hit,rotation,fruit,throwData.seed,mobile,Boolean(fallback),patch);
     if(renderer)for(const texture of prepared.textures)renderer.initTexture(texture);
     return prepared;
   }
@@ -282,7 +347,10 @@ async function setup() {
   }
   function applyScore(hit){
     let points=0,title='Miss';
-    if(hit.onBoard){
+    if(hit.volunteer!==undefined){
+      points=hit.quality>=.60?1000:hit.quality>=.35?750:500;
+      title=hit.region==='head'?'Cap splat':'Splat!';
+    }else if(hit.onBoard){
       const fraction=hit.radial/target.radius;
       if(fraction<=.145){title='Bullseye';points=1000;}
       else if(fraction<=.30){title='Inner ring';points=750;}
@@ -304,31 +372,37 @@ async function setup() {
     while(debt>=stepSize){
       debt-=stepSize;
       effect.update(stepSize);
+      impactAge+=stepSize;
     }
     effect.syncParticles();
+    const contacts=effect.takeSounds();
+    if(contacts.length)sounds.fragments(contacts,shot,playback);
   }
   function shatter(overrun){
     const hit=shot.hit;
-    phase='impact';elapsed=0;debt=0;
+    phase='impact';elapsed=0;debt=0;impactAge=0;
     fruit.root.visible=false;
+    sounds.impact(shot,effect.soundprint,playback);
     advanceDebris(Math.max(stepSize,playback?overrun*.158:overrun));
     effect.setVisible(true);
+    if(course==='booth')rackTarget(shot.start+hit.time,hit,impactAge);
     if(!playback){
       rangeTime=shot.start+hit.time;
       shot.result=applyScore(hit);
       lastShot=shot;
       marks.push({mark:effect.mark,seed:shot.seed});
       const result=shot.result;
-      announce(`${result.title}. ${result.points} points. ${attemptsPerRound-tries} throws remaining.`);
+      const name=hit.volunteerName?` ${hit.volunteerName} took the splash.`:'';
+      announce(`${result.title}${result.title.endsWith('!')?'':'.'}${name} ${result.points} points. ${attemptsPerRound-tries} throws remaining.`);
     }
-    sounds.crack(shot.seed,hit.velocity.length(),hit.onBoard,playback,shot.produce.style);
     repaint();
   }
   function showResult(){
     const result=shot.result;
     ui['feedback-type'].textContent=playback?'Replay':tries===attemptsPerRound?'Round complete':'Last throw';
     ui['feedback-title'].textContent=result.title;
-    ui['feedback-detail'].textContent=result.points ? `${result.points} points${result.improvement<result.points?' · Round best '+roundScores[roundIndex]:''}`
+    const who=shot.hit.volunteerName?`${shot.hit.volunteerName} · `:'';
+    ui['feedback-detail'].textContent=result.points ? `${who}${result.points} points${result.improvement<result.points?' · Round best '+roundScores[roundIndex]:''}`
       : `Landed ${Math.round(-shot.hit.contact.z)} m downrange`;
     if(tries===attemptsPerRound&&roundIndex===rounds.length-1&&!playback){
       ui['feedback-type'].textContent='Final score';
@@ -339,7 +413,7 @@ async function setup() {
   }
   function finishImpact(){
     if(bestChanged){
-      try{localStorage.setItem(bestKey,String(best));}catch{}
+      try{localStorage.setItem(scoreKey(),String(best));}catch{}
       bestChanged=false;
     }
     showResult();
@@ -388,12 +462,14 @@ async function setup() {
       case 'impact':
         elapsed+=dt;
         advanceDebris(dt*(playback?lerp(.158,.78,clamp((elapsed-1.46)/.59,0,1)):1));
+        if(course==='booth')rackTarget(shot.start+shot.hit.time,shot.hit,impactAge);
         if(elapsed>=impactDuration())finishImpact();
         break;
     }
   }
 
   const pathPoint=v3(), projected=v3();
+  let markedVolunteer=0;
   function drawGuide(){
     const aim=phase==='aim';
     path.visible=aim;ui['aim-pin'].hidden=!aim;
@@ -401,7 +477,9 @@ async function setup() {
     if(aimDirty||time>nextPreview){
       const preview=newShot(0,rangeTime+.31);
       let count=0;
-      const contactTime=traceShot(preview).time;
+      const predicted=traceShot(preview);
+      const contactTime=predicted.time;
+      markedVolunteer=predicted.volunteer??0;
       for(let t=.075;t<contactTime&&count<60;t+=.067){
         placeAt(preview,t,pathPoint);
         transform.position.copy(pathPoint);
@@ -415,25 +493,29 @@ async function setup() {
       aimDirty=false;
     }
     camera.updateMatrixWorld();
-    projected.copy(target.stand.position).add(v3(0,target.center+target.radius+.15,0)).project(camera);
+    const actor=course==='booth'?booth.actors[markedVolunteer]:null;
+    if(actor)projected.copy(actor.root.position).add(v3(0,actor.state.hip+1.31,0));
+    else projected.copy(target.stand.position).add(v3(0,target.center+target.radius+.15,0));
+    projected.project(camera);
     const onScreen=projected.z<1&&Math.abs(projected.x)<.95&&Math.abs(projected.y)<.89;
     ui['aim-pin'].hidden=!onScreen;
     if(onScreen){
       ui['aim-pin'].style.left=`${(projected.x*.5+.5)*100}%`;
       ui['aim-pin'].style.top=`${(.5-projected.y*.5)*100}%`;
-      ui['pin-distance'].textContent=`${current().distance} m`;
+      ui['pin-distance'].textContent=actor?`${actor.name} · ${Math.round(-actor.state.z)} m`:`${current().distance} m`;
     }
   }
   function frameCamera(dt,instant=false){
     let fov=portrait?57:47;
     let follow=4;
     if(phase==='aim'||phase==='windup'){
+      const aimX=course==='booth'?booth.actors[0].state.x:target.stand.position.x;
       if(portrait){
         cameraGoal.set(-3.08,3.36,6.2);
-        focusGoal.set(target.stand.position.x*.12,2.6,-12.5);
+        focusGoal.set(aimX*.12,2.6,-12.5);
       }else{
         cameraGoal.set(-5.65,3.5,7.19);
-        focusGoal.set(-.45+target.stand.position.x*.11,2.76,-13);
+        focusGoal.set(-.45+aimX*.11,2.76,-13);
       }
       if(!lessMotion)cameraGoal.y+=Math.sin(time*.9)*.042;
     } else if(phase==='flight'){
@@ -448,9 +530,11 @@ async function setup() {
       const view=phase==='roundEnd'?liveImpactDuration:elapsed;
       const sweep=lessMotion?0:clamp(view/impactDuration(),0,1);
       const angle=lerp(-.58,-.23,sweep);
-      const radius=(portrait?6.65:5.55)+sweep*1.25;
-      cameraGoal.copy(point).add(v3(Math.sin(angle)*radius,shot.hit.onBoard?1.10+sweep*.50:1.57+sweep*.40,Math.cos(angle)*radius));
-      focusGoal.copy(point).add(v3(0,shot.hit.onBoard?.16:.60,0));
+      const performer=shot.hit.volunteer!==undefined;
+      const radius=(performer?(portrait?4.76:3.72):(portrait?6.65:5.55))+sweep*(performer?.49:1.25);
+      const lift=performer?.78+sweep*.32:shot.hit.onBoard?1.10+sweep*.50:1.57+sweep*.40;
+      cameraGoal.copy(point).add(v3(Math.sin(angle)*radius,lift,Math.cos(angle)*radius));
+      focusGoal.copy(point).add(v3(0,performer?-.14:shot.hit.onBoard?.16:.60,0));
       if(!lessMotion&&view<.32){
         cameraGoal.y+=Math.sin(view*46)*.12*(1-view/.32);
         cameraGoal.x+=Math.sin(view*39)*.18*(1-view/.32);
@@ -468,6 +552,8 @@ async function setup() {
 
   ui.fire.addEventListener('click',begin);
   ui.replay.addEventListener('click',replay);
+  ui['targets-mode'].addEventListener('click',()=>switchCourse('targets'));
+  ui['booth-mode'].addEventListener('click',()=>switchCourse('booth'));
   bindProducePicker(ui,selectedProduce,chooseProduce);
   ui.help.addEventListener('click',()=>ui.instructions.showModal());
   ui.sound.addEventListener('click',()=>{
@@ -506,16 +592,19 @@ async function setup() {
     ui.loading.hidden=false;
   });
   launcher.arm.rotation.x=-.12;
+  showCourse();
   resize();rackTarget(0);resetControls();enterAim();
   function render(){
     if(renderer)renderer.render(scene,camera);
     else fallback.render(camera,phase==='aim'||phase==='windup'?launcher:null,target,fruit,path,
-      [...marks.map(record=>record.mark),...(playback&&effect?[effect.mark]:[])],phase==='impact'?effect:null);
+      [...marks.map(record=>record.mark),...(playback&&effect?[effect.mark]:[])],phase==='impact'?effect:null,course==='booth'?booth:null);
   }
   frameCamera(0,true);drawGuide();
   if(renderer){
     ui.fire.disabled=true;
     ui['produce-open'].disabled=true;
+    ui['targets-mode'].disabled=true;
+    ui['booth-mode'].disabled=true;
     const warmupShot=newShot(0,0);
     warmupShot.hit=traceShot(warmupShot);
     const warmup=stageImpact(warmupShot);
@@ -546,70 +635,6 @@ async function setup() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-}
-
-function createSound(){
-  let ctx,master,noiseBuffer,muted=false;
-  function unlock(){
-    if(muted)return;
-    const Audio=window.AudioContext||window.webkitAudioContext;
-    if(!Audio)return;
-    if(!ctx){
-      ctx=new Audio();
-      master=ctx.createGain();master.gain.value=.57;master.connect(ctx.destination);
-      noiseBuffer=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);
-      const samples=noiseBuffer.getChannelData(0), rng=random(3918);
-      for(let i=0;i<samples.length;i++)samples[i]=rng()*2-1;
-    }
-    if(ctx.state==='suspended')ctx.resume().catch(()=>{});
-  }
-  function noise(seed,delay,duration,startHz,endHz,amplitude,accent='lowpass'){
-    const t=ctx.currentTime+delay;
-    const source=ctx.createBufferSource();source.buffer=noiseBuffer;
-    const filter=ctx.createBiquadFilter();filter.type=accent;
-    filter.frequency.setValueAtTime(startHz,t);
-    filter.frequency.exponentialRampToValueAtTime(endHz,t+duration);
-    const gain=ctx.createGain();
-    gain.gain.setValueAtTime(.001,t);
-    gain.gain.linearRampToValueAtTime(amplitude,t+.006);
-    gain.gain.exponentialRampToValueAtTime(.001,t+duration);
-    source.connect(filter);filter.connect(gain);gain.connect(master);
-    source.start(t,random(seed)()*.58);source.stop(t+duration);
-  }
-  function thump(delay,duration,startHz,endHz,amplitude){
-    const t=ctx.currentTime+delay,osc=ctx.createOscillator(),gain=ctx.createGain();
-    osc.type='sine';
-    osc.frequency.setValueAtTime(startHz,t);
-    osc.frequency.exponentialRampToValueAtTime(endHz,t+duration);
-    gain.gain.setValueAtTime(amplitude,t);
-    gain.gain.exponentialRampToValueAtTime(.001,t+duration);
-    osc.connect(gain);gain.connect(master);
-    osc.start(t);osc.stop(t+duration);
-  }
-  return {
-    unlock,
-    mute(value){muted=value;if(master)master.gain.value=muted?0:.57;},
-    launch(){
-      if(!ctx||muted)return;
-      const seed=Date.now() | 0;
-      thump(0,.20,140,42,.37);
-      noise(seed,.006,.24,3000,420,.52);
-      noise(seed+1,.061,.36,960,190,.19,'bandpass');
-    },
-    crack(seed,speed,board,replay,style){
-      if(!ctx||muted)return;
-      const amp=clamp(speed/22,.6,1.24);
-      thump(0,.23,board?120:78,39,.65*amp);
-      noise(seed,0,.075,(board?5720:2660)*(.79+.81*style.bounce),610,.94*amp);
-      noise(seed+1,.026,.34,1120,replay?170:269,.53*amp*(.58+.42*style.pulp),'bandpass');
-      const rng=random(seed+7);
-      for(let i=0;i<9;i++){
-        const frequency=620+rng()*4500;
-        noise(seed+i+3,.042+i*(replay?.061:.04)+rng()*.031,.044+rng()*.05,frequency,frequency*.45,.105*amp,'bandpass');
-      }
-      noise(seed+9,.31,.31,1400,215,.19*amp);
-    }
-  };
 }
 
 setup().catch(error=>{
