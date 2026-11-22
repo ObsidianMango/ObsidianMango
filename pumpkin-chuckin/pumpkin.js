@@ -1,5 +1,7 @@
 import { THREE, v3, clamp, lerp, random, TAU, mesh, surface, groundHeight } from './field.js';
 import { defaultProduce } from './produce.js';
+import { fruitPoint, fruitTint, fruitProfile, fruitNeedsDetail, buildFruitDetails } from './fruit-models.js';
+import { vegetablePoint, vegetableTint, vegetableProfile, buildVegetableDetails } from './vegetable-models.js';
 
 const HALF = Math.PI / 2;
 const segmentRows = 3;
@@ -8,6 +10,8 @@ const rindRadius = .665;
 export const pumpkinRadius = .65;
 
 export function skinPoint(theta, phi, inset = 0, produce = defaultProduce) {
+  const modeled=produce.category==='fruit'?fruitPoint(produce,theta,phi,inset):vegetablePoint(produce,theta,phi,inset);
+  if(modeled)return modeled;
   if(produce.shape!=='pumpkin'){
     const u=Math.cos(theta), s=Math.sin(theta);
     let r=s,y=u,bend=0;
@@ -58,6 +62,8 @@ export function skinPoint(theta, phi, inset = 0, produce = defaultProduce) {
 
 function skinColor(theta,phi,produce,colors) {
   if(produce.id!==defaultProduce.id){
+    const modeled=produce.category==='fruit'?fruitTint(produce,theta,phi,colors):vegetableTint(produce,theta,phi,colors);
+    if(modeled)return modeled;
     const texture=Math.sin(theta*16+phi*4)*Math.sin(phi*11-theta*9);
     const pattern=produce.body.pattern;
     const wave=(n,t,b=0)=>Math.cos(phi*n+theta*t+b);
@@ -172,6 +178,7 @@ export function makePumpkin(scene, skinMap) {
   const inner = new THREE.MeshPhysicalMaterial({ color:'#f89e48', bumpMap:skinMap.bumpMap, bumpScale:.035, vertexColors:true, roughness:.29, clearcoat:.66, clearcoatRoughness:.17, side:THREE.DoubleSide });
   const flesh = new THREE.MeshPhysicalMaterial({ color:'#ffd17e', bumpMap:skinMap.bumpMap, bumpScale:.030, vertexColors:true, roughness:.46, clearcoat:.34, side:THREE.DoubleSide });
   const stem = surface('#777341',{ ...skinMap, bumpScale:.045, vertexColors:false });
+  const detailSurface=new THREE.MeshPhysicalMaterial({vertexColors:true,roughness:.44,clearcoat:.24,side:THREE.DoubleSide});
   stem.map = null;
   const root = new THREE.Group();
   const stemGeo=curvedStem();
@@ -188,35 +195,53 @@ export function makePumpkin(scene, skinMap) {
       return cached;
     }
     const colors={skin:new THREE.Color(produce.skin),accent:new THREE.Color(produce.accent)};
+    const pointAt=(theta,phi)=>skinPoint(theta,phi,0,produce);
+    const details=produce.category==='fruit'?buildFruitDetails(produce,pointAt):buildVegetableDetails(produce,pointAt);
+    const fine=fruitNeedsDetail(produce);
     const detail=produce.id===defaultProduce.id || ['spiny','pineapple','berry','corn','leafy'].includes(produce.shape);
-    const skin=skinGeometry(detail?55:40,detail?100:72,produce,colors);
+    const skin=details?.clustered?null:skinGeometry(fine?64:detail?55:40,fine?112:detail?100:72,produce,colors);
     const fractures=[];
-    for(let row=0;row<segmentRows;row++)for(let column=0;column<segmentColumns;column++){
+    if(skin)for(let row=0;row<segmentRows;row++)for(let column=0;column<segmentColumns;column++){
       fractures.push(fractureGeometry(row,column,produce,colors));
     }
-    const model={skin,fractures};
+    if(details?.clustered)details.geometry.computeBoundingBox();
+    const model={skin,fractures,details};
     models.set(produce.id,model);
     return model;
   }
-  const skinMesh=mesh(root,getModel(defaultProduce).skin,outer);
-  const fruit={root,outer,inner,flesh,stem,stemGeo,select(produce){
+  const originalShell=getModel(defaultProduce).skin;
+  const skinMesh=mesh(root,originalShell,outer);
+  const detailMesh=mesh(root,originalShell,detailSurface);
+  const fruit={root,outer,inner,flesh,stem,stemGeo,detailSurface,select(produce){
     const original=produce.id===defaultProduce.id;
     const model=getModel(produce);
     fruit.produce=produce;
     fruit.fractures=model.fractures;
+    fruit.clusterPieces=model.details?.pieces||[];
+    fruit.seatLift=model.details?.clustered?Math.max(0,-model.details.geometry.boundingBox.min.y-.53)*produce.scale[1]:0;
     root.scale.set(...produce.scale);
-    skinMesh.geometry=model.skin;
+    skinMesh.visible=Boolean(model.skin);
+    skinMesh.geometry=model.skin||originalShell;
+    detailMesh.visible=Boolean(model.details);
+    detailMesh.geometry=model.details?.geometry||originalShell;
     outer.map=original?skinMap.map:skinMap.bumpMap;
+    const profile=fruitProfile(produce);
+    const coarse=['coconut','kiwi','cantaloupe','rambutan','durian','jackfruit','breadfruit','soursop','lychee'].includes(profile) ||
+      ['tuber','root','garlic','scaly'].includes(vegetableProfile(produce));
+    outer.roughness=coarse?.73:original?.42:.37;
+    outer.clearcoat=coarse?.10:original?.48:.52;
+    detailSurface.roughness=coarse||['leafHead','florets','spears'].includes(vegetableProfile(produce))?.69:.44;
     inner.color.set(original?'#f89e48':produce.flesh);
     flesh.color.set(original?'#ffd17e':produce.flesh).lerp(new THREE.Color('#fff1ce'),original?0:.28);
     const accent=produce.body.accent;
     stem.color.set(accent==='leaf'||accent==='crown'||accent==='husk'||accent==='sprigs'||accent==='stalk'?'#628148':'#777341');
-    stemMesh.visible=accent==='stem'||accent==='tip'||accent==='stalk';
+    const customStem=model.details?.customStem||profile==='banana';
+    stemMesh.visible=!customStem&&(accent==='stem'||accent==='tip'||accent==='stalk');
     stemMesh.position.set(accent==='tip'&&produce.shape==='banana'?.20:0,accent==='stalk'?-.39:original?.54:.50,0);
     stemMesh.rotation.set(0,0,accent==='stalk'?Math.PI:0);
     stemMesh.scale.setScalar(accent==='stalk'?1.65:original?1:accent==='tip'?.54:.69);
     fruit.stemMesh=stemMesh;
-    const count=accent==='crown'?9:accent==='sprigs'?7:accent==='leaf'?5:accent==='husk'?4:0;
+    const count=customStem?0:accent==='crown'?9:accent==='sprigs'?7:accent==='leaf'?5:accent==='husk'?4:0;
     leaves.forEach((leaf,i)=>{
       leaf.visible=i<count;
       if(i>=count)return;
@@ -230,8 +255,10 @@ export function makePumpkin(scene, skinMap) {
     if(models.size>5){
       const oldest=[...models.keys()].find(id=>id!==defaultProduce.id&&id!==produce.id);
       const expired=models.get(oldest);
-      expired.skin.dispose();
+      expired.skin?.dispose();
       for(const part of expired.fractures)part.geo.dispose();
+      expired.details?.geometry.dispose();
+      if(expired.details)for(const part of expired.details.pieces)part.geometry.dispose();
       models.delete(oldest);
     }
   }};
@@ -352,10 +379,12 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
   const debris=new THREE.Group();
   debris.visible=false;
   scene.add(debris);
-  for(const [index,part] of pumpkin.fractures.entries()){
-    const piece=mesh(debris,part.geo,[pumpkin.outer,pumpkin.inner,pumpkin.flesh],0,0,0,!mobile);
+  const clustered=pumpkin.clusterPieces.length>0;
+  const pieces=clustered?pumpkin.clusterPieces:pumpkin.fractures;
+  for(const [index,part] of pieces.entries()){
+    const piece=mesh(debris,clustered?part.geometry:part.geo,clustered?pumpkin.detailSurface:[pumpkin.outer,pumpkin.inner,pumpkin.flesh],0,0,0,!mobile);
     piece.scale.copy(size);
-    const offset=part.pivot.clone().multiply(size).applyQuaternion(rotation);
+    const offset=(clustered?part.position:part.pivot).clone().multiply(size).applyQuaternion(rotation);
     piece.position.copy(hit.center).add(offset);
     if(hit.onBoard)piece.position.z=Math.max(piece.position.z,hit.contact.z+.18);
     piece.quaternion.copy(rotation);
@@ -363,7 +392,8 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
       .addScaledVector(normal,(2+rng()*4.1)*energy)
       .addScaledVector(tangent,.29+rng()*.10);
     velocity.y+=.7+rng()*2.2;
-    rigid.push({piece,vel:velocity,spin:v3((rng()-.5)*10,(rng()-.5)*13,(rng()-.5)*12),radius:.12+index%3*.036});
+    const radius=clustered?part.radius*Math.max(size.x,size.z):.12+index%3*.036;
+    rigid.push({piece,vel:velocity,spin:v3((rng()-.5)*10,(rng()-.5)*13,(rng()-.5)*12),radius,form:clustered?part.form:'rind',tint:part.color});
   }
   if(pumpkin.stemMesh.visible){
     const stem=mesh(debris,pumpkin.stemGeo,pumpkin.stem,0,0,0,false);
@@ -435,8 +465,8 @@ export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canv
     update(dt){
       age+=dt;
       for(const obj of rigid){
-        const {piece,vel,spin,radius}=obj;
-        const onSurface=advance(piece.position,vel,dt,radius,style.drag,style.bounce);
+        const {piece,vel,spin,radius,form}=obj;
+        const onSurface=advance(piece.position,vel,dt,form==='leaf'?Math.min(radius,.11):radius,style.drag,style.bounce);
         if(onSurface)spin.multiplyScalar(.77);
         piece.rotateX(spin.x*dt);piece.rotateY(spin.y*dt);piece.rotateZ(spin.z*dt);
       }

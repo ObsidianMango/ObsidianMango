@@ -1,5 +1,6 @@
 import { THREE, v3, lerp, clamp, random, groundHeight, TAU } from './field.js';
-import { skinPoint } from './pumpkin.js?v=produce-1';
+import { skinPoint } from './pumpkin.js?v=fruit-2';
+import { produceSprite } from './produce-sprite.js';
 
 const palette = ['#353320','#5e4229','#784625','#96502b','#a55d30','#b87641','#9d6838'];
 const sine = Math.sin, cosine = Math.cos;
@@ -136,6 +137,26 @@ export function canvasRenderer(view) {
   const clouds=Array.from({length:44},()=>({x:rng(),y:rng()*.49,w:.02+rng()*.14,h:.016+rng()*.06,alpha:.03+rng()*.09}));
   const world=v3();
   const instance=new THREE.Matrix4();
+  const produceSprites=new Map();
+
+  function prepareFruit(fruit){
+    const {id}=fruit.produce;
+    if(id==='pumpkin')return;
+    const sprite=produceSprites.get(id)||produceSprite(fruit);
+    produceSprites.delete(id);
+    produceSprites.set(id,sprite);
+    if(produceSprites.size>6)produceSprites.delete(produceSprites.keys().next().value);
+  }
+
+  function drawProjectile(point,fruit){
+    const sprite=produceSprites.get(fruit.produce.id);
+    if(!sprite){drawProduce(ctx,point,fruit);return;}
+    ctx.save();
+    ctx.translate(point.x,point.y);
+    ctx.rotate(fruit.root.rotation.x*.18);
+    ctx.drawImage(sprite.canvas,sprite.x*point.scale,sprite.y*point.scale,sprite.width*point.scale,sprite.height*point.scale);
+    ctx.restore();
+  }
 
   function project(point,camera){
     cameraSpace.copy(point).applyMatrix4(camera.matrixWorldInverse);
@@ -261,9 +282,10 @@ export function canvasRenderer(view) {
     }
     ctx.globalAlpha=1;
     const particles=[];
-    for(const {piece,radius} of fx.rigid){
+    for(const {piece,radius,form='rind',tint} of fx.rigid){
       const p=project(piece.position,camera);
-      if(p)particles.push({...p,size:radius*p.scale*1.62,angle:piece.rotation.z,kind:'rind'});
+      if(p)particles.push({...p,size:radius*p.scale*(form==='rind'?1.62:.89),angle:piece.rotation.z,
+        kind:form,color:tint?'#'+tint.getHexString():undefined});
     }
     for(const bank of fx.banks){
       for(const [index,drop] of bank.particles.entries()){
@@ -283,6 +305,15 @@ export function canvasRenderer(view) {
         const light=ctx.createLinearGradient(0,-size*.7,0,size*.62);
         light.addColorStop(0,fx.produce.flesh);light.addColorStop(.52,fx.produce.skin);light.addColorStop(1,fx.produce.accent);
         ctx.fillStyle=light;
+      }else if(kind==='leaf'){
+        ctx.moveTo(0,size*.72);ctx.quadraticCurveTo(-size*.76,-size*.13,-size*.02,-size);
+        ctx.quadraticCurveTo(size*.84,-size*.22,0,size*.72);ctx.fillStyle=color;ctx.fill();
+        ctx.strokeStyle=fx.produce.flesh;ctx.lineWidth=Math.max(.45,size*.041);
+        ctx.beginPath();ctx.moveTo(0,size*.60);ctx.quadraticCurveTo(-size*.13,-size*.21,-size*.02,-size*.86);ctx.stroke();
+      }else if(kind==='round'||kind==='floret'||kind==='stalk'){
+        const light=ctx.createRadialGradient(-size*.27,-size*.37,0,0,0,size*1.19);
+        light.addColorStop(0,'#f7ddbb');light.addColorStop(.33,color);light.addColorStop(1,fx.produce.skin);
+        ctx.ellipse(0,0,size*(kind==='stalk'?.44:.84),size*(kind==='floret'?.81:1.03),0,0,TAU);ctx.fillStyle=light;
       }else{
         ctx.ellipse(0,0,size*(kind==='seed'?1.48:1.13),size*(kind==='seed'?.50:.63),0,0,TAU);ctx.fillStyle=color;
       }
@@ -290,6 +321,7 @@ export function canvasRenderer(view) {
     }
   }
   return {
+    prepareFruit,
     setSize(w,h){
       const scale=Math.min(devicePixelRatio,1.6);
       width=w;height=h;canvas.width=w*scale;canvas.height=h*scale;
@@ -303,7 +335,7 @@ export function canvasRenderer(view) {
       if(rig)launcher(camera,rig);
       if(fruit.root.visible){
         const p=project(fruit.root.position,camera);
-        if(p&&p.scale>0)drawProduce(ctx,p,fruit);
+        if(p&&p.scale>0)drawProjectile(p,fruit);
       }
       if(path.visible){
         ctx.fillStyle='#ffdeaa';

@@ -1,6 +1,6 @@
 import { THREE, v3, clamp, lerp, random, buildField, groundHeight, buildLauncher, buildTarget } from './field.js';
-import { canvasRenderer } from './canvas.js?v=produce-1';
-import { makePumpkin, pumpkinRadius, prepareImpact, clearSmear } from './pumpkin.js?v=produce-1';
+import { canvasRenderer } from './canvas.js?v=fruit-2';
+import { makePumpkin, pumpkinRadius, prepareImpact, clearSmear } from './pumpkin.js?v=fruit-2';
 import { defaultProduce, findProduce, bindProducePicker } from './produce.js';
 
 const $ = id => document.getElementById(id);
@@ -73,6 +73,7 @@ async function setup() {
   const impactDuration=()=>playback?replayImpactDuration:liveImpactDuration;
   function activateProduce(entry){
     if(fruit.produce!==entry)fruit.select(entry);
+    fallback?.prepareFruit(fruit);
   }
   function chooseProduce(entry){
     selectedProduce=entry;
@@ -117,7 +118,7 @@ async function setup() {
     if(phase==='aim')seatPumpkin();
   }
   function seatPumpkin(){
-    const anchor=v3(0,.46+(fruit.produce.scale[1]-1)*.39,-.92);
+    const anchor=v3(0,.46+(fruit.produce.scale[1]-1)*.39+fruit.seatLift,-.92);
     launcher.arm.updateWorldMatrix(true,false);
     fruit.root.position.copy(launcher.arm.localToWorld(anchor));
     fruit.root.rotation.set(.07,launcher.stand.rotation.y+.21,.13);
