@@ -164,8 +164,8 @@ function addSmear(scene,target,hit,power,seed) {
   const g=new THREE.PlaneGeometry(width,width);
   if(hit.onBoard){
     // Clip the decal to the circular face while leaving its clear outer edges intact.
-    const localX=hit.contact.x-target.stand.position.x;
-    const localY=hit.contact.y-target.stand.position.y-target.center;
+    const localX=hit.contact.x-hit.boardX;
+    const localY=hit.contact.y-hit.boardY;
     const ctx=tex.image.getContext('2d');
     const canvasSize=tex.image.width;
     ctx.globalCompositeOperation='destination-in';
@@ -220,7 +220,7 @@ function makePlume(scene, hit, rng, mobile) {
   return {sprites,tex};
 }
 
-export function impact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly) {
+export function prepareImpact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly) {
   const rng=random(seed);
   const speed=hit.velocity.length();
   const energy=clamp(speed/22,.66,1.45);
@@ -228,9 +228,11 @@ export function impact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly)
   const tangent=hit.velocity.clone().addScaledVector(normal,-hit.velocity.dot(normal));
   const splashOrigin=hit.contact.clone().addScaledVector(normal,.178);
   const rigid=[];
-  const fractureGroup=new THREE.Group();scene.add(fractureGroup);
+  const debris=new THREE.Group();
+  debris.visible=false;
+  scene.add(debris);
   for(const [index,part] of pumpkin.fractures.entries()){
-    const piece=mesh(fractureGroup,part.geo,[pumpkin.outer,pumpkin.inner,pumpkin.flesh],0,0,0,!mobile);
+    const piece=mesh(debris,part.geo,[pumpkin.outer,pumpkin.inner,pumpkin.flesh],0,0,0,!mobile);
     const offset=part.pivot.clone().applyQuaternion(rotation);
     piece.position.copy(hit.center).add(offset);
     if(hit.onBoard)piece.position.z=Math.max(piece.position.z,hit.contact.z+.18);
@@ -241,7 +243,7 @@ export function impact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly)
     velocity.y+=.7+rng()*2.2;
     rigid.push({piece,vel:velocity,spin:v3((rng()-.5)*10,(rng()-.5)*13,(rng()-.5)*12),radius:.12+index%3*.036});
   }
-  const stem=mesh(fractureGroup,pumpkin.stemGeo,pumpkin.stem,0,0,0,false);
+  const stem=mesh(debris,pumpkin.stemGeo,pumpkin.stem,0,0,0,false);
   stem.position.copy(v3(0,.54,0).applyQuaternion(rotation)).add(hit.center);
   stem.quaternion.copy(rotation);
   rigid.push({piece:stem,vel:normal.clone().multiplyScalar(6.1).addScaledVector(tangent,.37).add(v3(1.1,5.8,.1)),spin:v3(-8,10,4),radius:.115});
@@ -249,7 +251,7 @@ export function impact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly)
   const strands = [];
   const strandGeo = new THREE.SphereGeometry(1,10,6);
   for(let i=0;i<(mobile?11:19);i++){
-    const part=mesh(fractureGroup,strandGeo,pumpkin.flesh,0,0,0,false);
+    const part=mesh(debris,strandGeo,pumpkin.flesh,0,0,0,false);
     const vel=v3((rng()-.5)*11,rng()*7,(rng()-.5)*8).multiplyScalar(energy).addScaledVector(normal,2+rng()*2.9).addScaledVector(tangent,.38);
     part.position.copy(splashOrigin);
     strands.push({part,vel,width:.019+rng()*.024,length:.16+rng()*.64,spin:(rng()-.5)*8,life:.37+rng()*.72});
@@ -270,11 +272,12 @@ export function impact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly)
       batch.setColorAt(i,bank.colors[i%bank.colors.length]);
       return {position,vel,size,angle:rng()*TAU,spin:(rng()-.5)*20,flick:rng()*.55,bounces:0};
     });
-    scene.add(batch);
+    debris.add(batch);
     return {...bank,batch,particles};
   });
-  const mist=makePlume(scene,hit,rng,mobile);
+  const mist=makePlume(debris,hit,rng,mobile);
   const mark=addSmear(scene,target,hit,speed,seed);
+  mark.visible=false;
   let age=0;
   const up=v3(0,1,0), scratch=v3(), zero=v3(0,0,0);
 
@@ -283,7 +286,7 @@ export function impact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly)
     vel.y-=9.81*dt;
     pos.addScaledVector(vel,dt);
     if(hit.onBoard && pos.z<hit.contact.z+radius && pos.z>hit.contact.z-.48 && vel.z<0 &&
-      Math.hypot(pos.x-target.stand.position.x,pos.y-target.stand.position.y-target.center)<target.radius){
+      Math.hypot(pos.x-hit.boardX,pos.y-hit.boardY)<target.radius){
       pos.z=hit.contact.z+radius;
       vel.z*=-.39;
       vel.multiplyScalar(.83);
@@ -298,7 +301,12 @@ export function impact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly)
 
   return {
     mark,
+    textures: [mark.material.map,mist.tex],
     preview: { rigid,banks,sprites:mist.sprites },
+    setVisible(visible){
+      debris.visible=visible;
+      mark.visible=visible;
+    },
     update(dt){
       age+=dt;
       for(const obj of rigid){
@@ -318,10 +326,25 @@ export function impact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly)
         part.scale.set(width*fade,length*fade*(.77+.46*Math.sin(age*31)),width*fade);
       }
       for(const bank of banks){
-        bank.particles.forEach((p,i)=>{
+        for(const p of bank.particles){
           if(p.bounces<=3&&advance(p.position,p.vel,dt,p.size*.51,bank.drag,bank.seed?.38:.22))p.bounces++;
           p.angle+=dt*p.spin;
-          if(canvasOnly)return;
+        }
+      }
+      for(const {item,vel,life,delay} of mist.sprites){
+        const localAge=age-delay;
+        item.visible=localAge>0&&localAge<life;
+        if(!item.visible)continue;
+        item.position.addScaledVector(vel,dt*.62);
+        vel.multiplyScalar(Math.exp(-2*dt));
+        item.scale.addScalar(dt*1.51);
+        item.material.opacity=Math.sin(clamp(localAge/life,0,1)*Math.PI)*(hit.onBoard?.59:.80);
+      }
+    },
+    syncParticles(){
+      if(canvasOnly)return;
+      for(const bank of banks){
+        bank.particles.forEach((p,i)=>{
           dummy.position.copy(p.position);
           dummy.rotation.set(p.angle,p.angle*.51,p.angle*.38);
           if(bank.seed)dummy.scale.set(p.size*.61,p.size*1.42,p.size*.22);
@@ -336,20 +359,11 @@ export function impact(scene,target,hit,rotation,pumpkin,seed,mobile,canvasOnly)
           dummy.updateMatrix();
           bank.batch.setMatrixAt(i,dummy.matrix);
         });
-        if(!canvasOnly)bank.batch.instanceMatrix.needsUpdate=true;
-      }
-      for(const {item,vel,life,delay} of mist.sprites){
-        const localAge=age-delay;
-        item.visible=localAge>0&&localAge<life;
-        if(!item.visible)continue;
-        item.position.addScaledVector(vel,dt*.62);
-        vel.multiplyScalar(Math.exp(-2*dt));
-        item.scale.addScalar(dt*1.51);
-        item.material.opacity=Math.sin(clamp(localAge/life,0,1)*Math.PI)*(hit.onBoard?.59:.80);
+        bank.batch.instanceMatrix.needsUpdate=true;
       }
     },
     disposeDebris(){
-      fractureGroup.removeFromParent();strandGeo.dispose();
+      debris.removeFromParent();strandGeo.dispose();
       for(const bank of banks){bank.batch.removeFromParent();bank.batch.dispose();bank.geo.dispose();bank.mat.dispose();}
       for(const {item} of mist.sprites){item.removeFromParent();item.material.dispose();}
       mist.tex.dispose();

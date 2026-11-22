@@ -1,6 +1,6 @@
 import { THREE, v3, clamp, lerp, random, buildField, groundHeight, buildLauncher, buildTarget } from './field.js';
 import { canvasRenderer } from './canvas.js';
-import { makePumpkin, pumpkinRadius, impact, clearSmear } from './pumpkin.js';
+import { makePumpkin, pumpkinRadius, prepareImpact, clearSmear } from './pumpkin.js?v=impact-2';
 
 const $ = id => document.getElementById(id);
 const ui = Object.fromEntries([
@@ -20,8 +20,10 @@ const lessMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const gravity = 9.81;
 const stepSize = 1/120;
 const attemptsPerRound = 3;
+const liveImpactDuration = 1.28;
+const replayImpactDuration = 2.67;
 
-function setup() {
+async function setup() {
   const scene = new THREE.Scene();
   let renderer, fallback;
   const canvas = document.createElement('canvas');
@@ -52,13 +54,15 @@ function setup() {
 
   let roundIndex=0, tries=0, roundScores=[0,0,0], best=0, phase='aim', volley=0;
   let animation=0, elapsed=0, rangeTime=0, flightTime=0, debt=0, effect=null, shot=null, lastShot=null, playback=false;
-  let targetTime=0, position=v3(), velocity=v3(), rotation=new THREE.Quaternion();
+  let bestChanged=false;
+  const position=v3(), rotation=new THREE.Quaternion(), spin=new THREE.Euler();
   let portrait=false, aimDirty=true, time=0, nextPreview=0;
   const marks=[];
   try { best=Number(localStorage.getItem(bestKey))||0; } catch {}
 
   const current=()=>rounds[roundIndex];
   const total=()=>roundScores.reduce((sum,n)=>sum+n,0);
+  const impactDuration=()=>playback?replayImpactDuration:liveImpactDuration;
   const targetX=(seconds,round=current())=>round.x+Math.sin(seconds*round.rate)*round.travel;
   function rackTarget(seconds){
     target.stand.position.set(targetX(seconds),groundHeight(targetX(seconds),-current().distance),-current().distance);
@@ -160,11 +164,13 @@ function setup() {
     return out.copy(throwData.initial).multiplyScalar(t).add(throwData.origin).addScaledVector(down,.5*gravity*t*t);
   }
   const down=v3(0,-1,0);
+  function spinAt(throwData,t){
+    return spin.set(.16+t*8.66,-throwData.aim+t*2.95,t*3.3);
+  }
   function setFruit(t){
     placeAt(shot,t,position);
-    velocity.copy(shot.initial).addScaledVector(down,gravity*t);
     fruit.root.position.copy(position);
-    fruit.root.rotation.set(.16+t*8.66,-shot.aim+t*2.95,t*3.3);
+    fruit.root.rotation.copy(spinAt(shot,t));
   }
   function collision(a,b,seconds,round,throwData){
     const boardZ=-round.distance+.126;
@@ -173,12 +179,12 @@ function setup() {
       const fraction=(a.z-front)/(a.z-b.z);
       const center=a.clone().lerp(b,fraction);
       const x=targetX(throwData.start+seconds-(1-fraction)*stepSize,round);
-      const floor=groundHeight(x,-round.distance);
-      const radial=Math.hypot(center.x-x,center.y-floor-target.center);
+      const y=groundHeight(x,-round.distance)+target.center;
+      const radial=Math.hypot(center.x-x,center.y-y);
       if(radial<target.radius+.34){
         const reach=clamp((target.radius-.02)/Math.max(radial,.001),0,1);
-        const contact=v3(x+(center.x-x)*reach,floor+target.center+(center.y-floor-target.center)*reach,boardZ);
-        return {center,contact,onBoard:true,radial,fraction};
+        const contact=v3(x+(center.x-x)*reach,y+(center.y-y)*reach,boardZ);
+        return {center,contact,onBoard:true,radial,fraction,boardX:x,boardY:y};
       }
     }
     const floor=groundHeight(b.x,b.z);
@@ -191,16 +197,39 @@ function setup() {
     }
     return null;
   }
+  function traceShot(throwData){
+    const prior=throwData.origin.clone(), next=v3(), round=current();
+    for(let t=stepSize;;t+=stepSize){
+      placeAt(throwData,t,next);
+      const hit=collision(prior,next,t,round,throwData);
+      if(hit){
+        hit.time=t-(1-hit.fraction)*stepSize;
+        hit.velocity=throwData.initial.clone().addScaledVector(down,gravity*hit.time);
+        return hit;
+      }
+      prior.copy(next);
+    }
+  }
+  function stageImpact(throwData){
+    const hit=throwData.hit;
+    rotation.setFromEuler(spinAt(throwData,hit.time));
+    const prepared=prepareImpact(scene,target,hit,rotation,fruit,throwData.seed,mobile,Boolean(fallback));
+    if(renderer)for(const texture of prepared.textures)renderer.initTexture(texture);
+    return prepared;
+  }
   function begin(){
+    if(ui.fire.disabled)return;
     if(phase==='roundEnd'){nextRound();return;}
     if(phase!=='aim'||ui.instructions.open)return;
     clearEffect();
     const seed=(Date.now()+ ++volley*75) | 0;
     shot=newShot(seed,rangeTime+.31);
+    shot.hit=traceShot(shot);
     phase='windup';elapsed=0;playback=false;
     ui.feedback.hidden=true;
     sounds.unlock();
     repaint();
+    effect=stageImpact(shot);
   }
   function launch(){
     phase='flight';elapsed=0;flightTime=0;debt=0;
@@ -213,6 +242,7 @@ function setup() {
     if(!lastShot||(phase!=='aim'&&phase!=='roundEnd')||ui.instructions.open)return;
     clearEffect();
     shot=lastShot;
+    effect=stageImpact(shot);
     playback=true;phase='flight';elapsed=0;debt=0;
     flightTime=Math.max(0,shot.hit.time-.69);
     rackTarget(shot.start+flightTime);
@@ -239,19 +269,26 @@ function setup() {
     roundScores[roundIndex]=Math.max(points,roundScores[roundIndex]);
     if(total()>best){
       best=total();
-      try{localStorage.setItem(bestKey,String(best));}catch{}
+      bestChanged=true;
     }
     return {points,title,improvement};
   }
-  function shatter(hit){
+  function advanceDebris(seconds){
+    debt+=seconds;
+    while(debt>=stepSize){
+      debt-=stepSize;
+      effect.update(stepSize);
+    }
+    effect.syncParticles();
+  }
+  function shatter(overrun){
+    const hit=shot.hit;
     phase='impact';elapsed=0;debt=0;
     fruit.root.visible=false;
-    rackTarget(shot.start+hit.time);
-    rotation.setFromEuler(fruit.root.rotation);
-    effect=impact(scene,target,hit,rotation,fruit,shot.seed,mobile,Boolean(fallback));
-    effect.update(0);
+    advanceDebris(Math.max(stepSize,playback?overrun*.158:overrun));
+    effect.setVisible(true);
     if(!playback){
-      shot.hit=hit;
+      rangeTime=shot.start+hit.time;
       shot.result=applyScore(hit);
       lastShot=shot;
       marks.push({mark:effect.mark,seed:shot.seed});
@@ -275,6 +312,10 @@ function setup() {
     ui.feedback.hidden=false;
   }
   function finishImpact(){
+    if(bestChanged){
+      try{localStorage.setItem(bestKey,String(best));}catch{}
+      bestChanged=false;
+    }
     showResult();
     const wasReplay=playback;
     clearEffect();
@@ -294,7 +335,6 @@ function setup() {
     repaint();
   }
 
-  const prev=v3();
   function simulate(dt){
     switch(phase){
       case 'aim':
@@ -312,35 +352,16 @@ function setup() {
         break;
       case 'flight':
         launcher.arm.rotation.x=lerp(.74,-.12,clamp(flightTime/.65,0,1));
-        debt+=dt*(playback?.65:1);
-        while(debt>=stepSize){
-          debt-=stepSize;
-          prev.copy(position);
-          flightTime+=stepSize;
-          if(playback&&flightTime>=shot.hit.time){
-            setFruit(shot.hit.time);
-            shatter(shot.hit);
-            break;
-          }
-          setFruit(flightTime);
-          rackTarget(shot.start+flightTime);
-          if(playback)continue;
-          const hit=collision(prev,position,flightTime,current(),shot);
-          if(hit){
-            hit.time=flightTime-(1-hit.fraction)*stepSize;
-            setFruit(hit.time);
-            hit.velocity=velocity.clone();
-            rangeTime=shot.start+hit.time;
-            shatter(hit);
-            break;
-          }
-        }
+        flightTime+=dt*(playback?.65:1);
+        const t=Math.min(shot.hit.time,flightTime);
+        setFruit(t);
+        rackTarget(shot.start+t);
+        if(flightTime>=shot.hit.time)shatter(flightTime-shot.hit.time);
         break;
       case 'impact':
         elapsed+=dt;
-        debt+=dt*(elapsed<1.46?.158:lerp(.158,.78,clamp((elapsed-1.46)/.59,0,1)));
-        while(debt>=stepSize){debt-=stepSize;effect.update(stepSize);}
-        if(elapsed>=2.67)finishImpact();
+        advanceDebris(dt*(playback?lerp(.158,.78,clamp((elapsed-1.46)/.59,0,1)):1));
+        if(elapsed>=impactDuration())finishImpact();
         break;
     }
   }
@@ -402,8 +423,8 @@ function setup() {
       follow=playback?12:8;
     } else {
       const point=shot.hit.contact;
-      const view=phase==='roundEnd'?2.67:elapsed;
-      const sweep=lessMotion?0:clamp(view/2.7,0,1);
+      const view=phase==='roundEnd'?liveImpactDuration:elapsed;
+      const sweep=lessMotion?0:clamp(view/impactDuration(),0,1);
       const angle=lerp(-.58,-.23,sweep);
       const radius=(portrait?6.65:5.55)+sweep*1.25;
       cameraGoal.copy(point).add(v3(Math.sin(angle)*radius,shot.hit.onBoard?1.10+sweep*.50:1.57+sweep*.40,Math.cos(angle)*radius));
@@ -466,13 +487,33 @@ function setup() {
   function render(){
     if(renderer)renderer.render(scene,camera);
     else fallback.render(camera,phase==='aim'||phase==='windup'?launcher:null,target,fruit,path,
-      [...marks.map(record=>record.mark),...(playback&&effect?[effect.mark]:[])],effect);
+      [...marks.map(record=>record.mark),...(playback&&effect?[effect.mark]:[])],phase==='impact'?effect:null);
   }
-  frameCamera(0,true);drawGuide();render();
+  frameCamera(0,true);drawGuide();
+  if(renderer){
+    ui.fire.disabled=true;
+    const warmupShot=newShot(0,0);
+    warmupShot.hit=traceShot(warmupShot);
+    const warmup=stageImpact(warmupShot);
+    const warmupCamera=camera.clone();
+    warmupCamera.position.copy(warmupShot.hit.contact).add(v3(-2,2,6));
+    warmupCamera.lookAt(warmupShot.hit.contact);
+    warmup.setVisible(true);
+    warmup.update(.14);
+    warmup.syncParticles();
+    renderer.domElement.style.visibility='hidden';
+    // Keep the warmed materials in the scene so Three.js retains their shader programs.
+    await renderer.compileAsync(scene,warmupCamera);
+    renderer.render(scene,warmupCamera);
+    warmup.setVisible(false);
+    renderer.domElement.style.visibility='';
+    repaint();
+  }
+  render();
   ui.loading.hidden=true;
   let then=performance.now();
   function frame(now){
-    const dt=Math.min((now-then)/1000,.135);
+    const dt=clamp((now-then)/1000,0,.25);
     then=now;time+=dt;
     simulate(dt);
     frameCamera(dt);
@@ -484,7 +525,7 @@ function setup() {
 }
 
 function createSound(){
-  let ctx,master,muted=false;
+  let ctx,master,noiseBuffer,muted=false;
   function unlock(){
     if(muted)return;
     const Audio=window.AudioContext||window.webkitAudioContext;
@@ -492,15 +533,15 @@ function createSound(){
     if(!ctx){
       ctx=new Audio();
       master=ctx.createGain();master.gain.value=.57;master.connect(ctx.destination);
+      noiseBuffer=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);
+      const samples=noiseBuffer.getChannelData(0), rng=random(3918);
+      for(let i=0;i<samples.length;i++)samples[i]=rng()*2-1;
     }
     if(ctx.state==='suspended')ctx.resume().catch(()=>{});
   }
   function noise(seed,delay,duration,startHz,endHz,amplitude,accent='lowpass'){
-    const t=ctx.currentTime+delay,rng=random(seed),floatCount=Math.ceil(duration*ctx.sampleRate);
-    const buffer=ctx.createBuffer(1,floatCount,ctx.sampleRate);
-    const samples=buffer.getChannelData(0);
-    for(let i=0;i<floatCount;i++)samples[i]=(rng()*2-1);
-    const source=ctx.createBufferSource();source.buffer=buffer;
+    const t=ctx.currentTime+delay;
+    const source=ctx.createBufferSource();source.buffer=noiseBuffer;
     const filter=ctx.createBiquadFilter();filter.type=accent;
     filter.frequency.setValueAtTime(startHz,t);
     filter.frequency.exponentialRampToValueAtTime(endHz,t+duration);
@@ -509,7 +550,7 @@ function createSound(){
     gain.gain.linearRampToValueAtTime(amplitude,t+.006);
     gain.gain.exponentialRampToValueAtTime(.001,t+duration);
     source.connect(filter);filter.connect(gain);gain.connect(master);
-    source.start(t);source.stop(t+duration);
+    source.start(t,random(seed)()*.58);source.stop(t+duration);
   }
   function thump(delay,duration,startHz,endHz,amplitude){
     const t=ctx.currentTime+delay,osc=ctx.createOscillator(),gain=ctx.createGain();
@@ -547,9 +588,7 @@ function createSound(){
   };
 }
 
-try {
-  setup();
-} catch(error) {
+setup().catch(error=>{
   console.error(error);
   ui.loading.textContent='The 3D field could not start. Try a browser with WebGL 2 enabled.';
-}
+});
